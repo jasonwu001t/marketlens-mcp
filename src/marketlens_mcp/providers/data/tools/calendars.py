@@ -1,7 +1,8 @@
 """Market calendars (capability ``calendars``, off by default): Nasdaq's
 economic and earnings calendars and earnings history, an unofficial endpoint
-that may change or refuse without notice, and the US market holidays NYSE,
-SIFMA and OPM publish."""
+that may change or refuse without notice. Also calendar_us_holidays, the US
+market holidays NYSE, SIFMA and OPM publish (capability ``holidays``, on by
+default, keyless)."""
 
 from __future__ import annotations
 
@@ -22,6 +23,10 @@ from .common import AsOf, Inputs, Ticker, Tickers
 GOLDEN = "tests/data/test_calendars.py"
 MAX_DAYS = 31
 UNOFFICIAL = "Nasdaq's endpoint is unofficial: it may change or refuse without notice."
+NOT_CHECKED = (
+    "NYSE's dates were fetched without ALPACA_API_KEY and ALPACA_SECRET_KEY set, so they are not "
+    "cross-checked against Alpaca's trading calendar."
+)
 
 
 class EconomicInputs(Inputs):
@@ -389,6 +394,8 @@ async def calendar_us_holidays(ctx: ToolContext, args: HolidaysInputs) -> ToolOu
                 )
             )
     rows.sort(key=lambda r: (r.holiday_date, order[r.market], r.name))
+    if any(r.crosscheck == "not_checked" for r in rows):
+        notes.append(NOT_CHECKED)
     prov = common.provenance(
         ctx,
         provider=",".join(PUBLISHERS[m][0] for m in markets),
@@ -411,10 +418,22 @@ HANDLERS = {
 }
 
 
-def _spec(name, title, description, readme, inputs, model, provider, route, *, env=(), risk="api_structured"):
+def _spec(
+    name,
+    title,
+    description,
+    readme,
+    inputs,
+    model,
+    provider,
+    route,
+    *,
+    capability="calendars",
+    risk="api_structured",
+):
     return ToolSpec(
         name=name,
-        capability="calendars",
+        capability=capability,
         title=title,
         description=description,
         readme=readme,
@@ -424,7 +443,6 @@ def _spec(name, title, description, readme, inputs, model, provider, route, *, e
         route=route,
         handler=HANDLERS[name],
         golden_test=GOLDEN,
-        env=env,
         output_risk=risk,
     )
 
@@ -482,10 +500,11 @@ SPECS: tuple[ToolSpec, ...] = (
         "calendar_us_holidays",
         "US market holidays",
         common.describe(
-            "US market closures and early closes as their publishers state them: stocks from NYSE (each row "
-            "cross-checked against Alpaca's trading calendar when ALPACA_API_KEY and ALPACA_SECRET_KEY are "
-            "set), bonds from SIFMA's recommendations, federal holidays from OPM. Early closes carry the "
-            "Eastern time and the UTC instant.",
+            "US market closures and early closes as their publishers state them: stocks from NYSE, bonds "
+            "from SIFMA's recommendations, federal holidays from OPM. Early closes carry the Eastern time "
+            "and the UTC instant. Keyless; when ALPACA_API_KEY and ALPACA_SECRET_KEY are set, each NYSE row "
+            "is also cross-checked against Alpaca's trading calendar (without them the answer says it was "
+            "not).",
             "forward_known",
             stored=False,
         ),
@@ -494,7 +513,7 @@ SPECS: tuple[ToolSpec, ...] = (
         MarketHoliday,
         "nyse,sifma,opm",
         "omni nyse.holidays, sifma.holidays, opm.federal_holidays <- nyse.com, sifma.org, opm.gov",
-        env=("ALPACA_API_KEY", "ALPACA_SECRET_KEY"),
+        capability="holidays",
     ),
 )
 

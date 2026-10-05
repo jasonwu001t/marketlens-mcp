@@ -1,4 +1,4 @@
-"""The four capabilities of the data provider. They are declared whether or
+"""The five capabilities of the data provider. They are declared whether or
 not marketlens-data is installed, so a config file that names them is never
 refused; their tools are listed only when the extra is installed."""
 
@@ -29,13 +29,21 @@ FED_TREASURY = CapabilitySpec(
     f"curve, Treasury auctions, debt to the penny and the Treasury's cash balance. {NEEDS}",
     True,
 )
+HOLIDAYS = CapabilitySpec(
+    "holidays",
+    "US market holidays",
+    "Market closures and early closes from their publishers: NYSE (stocks), SIFMA (bonds) and OPM "
+    "(federal holidays). Keyless; with Alpaca keys, NYSE's dates are also cross-checked against Alpaca's "
+    f"trading calendar. {NEEDS}",
+    True,
+)
 CALENDARS = CapabilitySpec(
     "calendars",
     "Market calendars (Nasdaq; unofficial)",
     "Nasdaq's economic calendar (PMI and other actual and consensus figures), earnings calendar and "
-    "earnings history, and US market holidays (NYSE, SIFMA, OPM). Off by default: the Nasdaq endpoint "
-    f"is unofficial and may change or refuse without notice. {NEEDS}",
+    "earnings history. Off by default: the Nasdaq endpoint is unofficial and may change or refuse "
+    f"without notice. {NEEDS}",
     False,
 )
 
-CAPABILITIES: tuple[CapabilitySpec, ...] = (MACRO, FILINGS, FED_TREASURY, CALENDARS)
+CAPABILITIES: tuple[CapabilitySpec, ...] = (MACRO, FILINGS, FED_TREASURY, HOLIDAYS, CALENDARS)

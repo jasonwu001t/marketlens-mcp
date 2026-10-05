@@ -53,6 +53,7 @@ PARITY: dict[str, Mapped | Excluded] = {
     "nasdaq.economic_events": Mapped(("calendar_economic",)),
     "nasdaq.earnings": Mapped(("calendar_earnings",)),
     "nasdaq.earnings_surprise": Mapped(("calendar_earnings_history",)),
+    # holidays
     "nyse.holidays": Mapped(("calendar_us_holidays",)),
     "sifma.holidays": Mapped(("calendar_us_holidays",)),
     "opm.federal_holidays": Mapped(("calendar_us_holidays",)),
