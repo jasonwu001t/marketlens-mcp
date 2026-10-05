@@ -297,6 +297,48 @@ def _network_check(rt) -> tuple[bool, str]:
     return True, "Alpaca clock: ok"
 
 
+DATA_NOT_INSTALLED = (
+    "data extra: not installed; install marketlens-mcp[data] (Python 3.13 or later) to list the macro, "
+    "filings, fed_treasury and calendars tools"
+)
+
+
+def data_doctor(rt) -> tuple[list[str], int]:
+    """The data extra's lines (contract: after the existing lines) and how many count as failures."""
+    from .providers.data import runtime as data_runtime
+    from .providers.data import sources as data_sources
+
+    if not data_runtime.available():
+        return [DATA_NOT_INSTALLED], 0
+    data_runtime.prepare_environment()
+    problems = data_runtime.api_problems()
+    if problems:
+        return [
+            f"data extra: FAILED (omni is importable but its API is incomplete: {', '.join(problems)})"
+        ], 1
+    dist, version = data_runtime.distribution()
+    if dist == data_runtime.DIST:
+        lines = [f"data extra: installed ({dist} {version}; omni API ok)"]
+    else:
+        lines = [f"data extra: installed from a pre-release omni ({dist} {version}; omni API ok)"]
+    failures = 0
+    settings = data_runtime.settings_of(rt.config.provider_settings("data"))
+    path = data_runtime.store_path(settings)
+    shown = paths.display_path(path)
+    try:
+        paths.ensure_private_dir(path)
+        probe = path / ".doctor-probe"
+        probe.write_text("ok", encoding="utf-8")
+        probe.unlink()
+        lines.append(f"data store: ok ({shown}; mode {settings.mode})")
+    except OSError as exc:
+        lines.append(f"data store: FAILED ({shown} is not writable: {type(exc).__name__})")
+        failures += 1 if settings.mode == "auto" else 0
+    for status in data_sources.readiness(os.environ, rt.policy.enabled, mode=settings.mode):
+        lines.append(status.line)
+    return lines, failures
+
+
 def cmd_doctor(args: argparse.Namespace) -> int:
     from .server import enabled_entries, startup_notices
 
@@ -342,6 +384,10 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     loaded = [p.name for p in rt.catalog.plugins if p.loaded]
     print(f"plugins: {', '.join(loaded) if loaded else 'none loaded'}")
     print(f"tools enabled: {len(enabled_entries(rt))}")
+    data_lines, data_failures = data_doctor(rt)
+    for line in data_lines:
+        print(line)
+    failures += data_failures
     if args.network:
         ok, line = _network_check(rt)
         print(line)

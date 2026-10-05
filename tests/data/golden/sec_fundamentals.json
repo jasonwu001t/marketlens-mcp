@@ -1,0 +1,1076 @@
+{
+ "absent": {},
+ "model": "marketlens.FundamentalValue",
+ "notes": [],
+ "offload": "auto",
+ "pagination": null,
+ "provenance": {
+  "as_of": null,
+  "authority": [
+   "official"
+  ],
+  "cached": false,
+  "dataset": "sec.company_facts,sec.fundamentals",
+  "delay": "unknown",
+  "derived_from": [],
+  "environment": null,
+  "feed": null,
+  "knowledge_time": "2026-02-10T21:00:00Z",
+  "lag_days": 244.0,
+  "operation": null,
+  "pages_fetched": 2,
+  "provider": "sec",
+  "request": {
+   "as_of": null,
+   "end": null,
+   "metrics": null,
+   "start": null,
+   "ticker": "TESTCO"
+  },
+  "route": "omni sec.fundamentals <- sec.company_facts (computed locally)",
+  "schema_version": "1.1.0",
+  "stale": null,
+  "truncated": false,
+  "truncation_note": null,
+  "upstream_request_id": null
+ },
+ "risk": null,
+ "rows": [
+  {
+   "absent": {
+    "reason": "not_applicable"
+   },
+   "accession_numbers": [
+    "0009999901-25-000003"
+   ],
+   "basis": "ttm",
+   "cik": "0009999901",
+   "concepts": [
+    "Revenues"
+   ],
+   "derived": false,
+   "fiscal_label": "FY2024",
+   "knowledge_time": "2025-02-13T04:59:59.999999Z",
+   "metric": "revenue",
+   "note": "FY2024 as filed (Revenues)",
+   "period_end": "2024-12-31",
+   "period_start": "2024-01-01",
+   "reason": null,
+   "ticker": "TESTCO",
+   "unit": "USD",
+   "value": 1000000000.0
+  },
+  {
+   "absent": {
+    "reason": "not_applicable"
+   },
+   "accession_numbers": [
+    "0009999901-26-000002"
+   ],
+   "basis": "ttm",
+   "cik": "0009999901",
+   "concepts": [
+    "Revenues"
+   ],
+   "derived": false,
+   "fiscal_label": "FY2025",
+   "knowledge_time": "2026-02-10T21:00:00Z",
+   "metric": "revenue",
+   "note": "FY2025 as filed (Revenues)",
+   "period_end": "2025-12-31",
+   "period_start": "2025-01-01",
+   "reason": null,
+   "ticker": "TESTCO",
+   "unit": "USD",
+   "value": 1200000000.0
+  },
+  {
+   "absent": {
+    "fiscal_label": "not_applicable",
+    "period_start": "not_applicable",
+    "value": "not_provided_by_source"
+   },
+   "accession_numbers": [],
+   "basis": "ttm",
+   "cik": "0009999901",
+   "concepts": [],
+   "derived": false,
+   "fiscal_label": null,
+   "knowledge_time": "2025-02-13T04:59:59.999999Z",
+   "metric": "gross_profit",
+   "note": "not filed in XBRL: GrossProfit, CostOfRevenue, CostOfGoodsAndServicesSold",
+   "period_end": "2024-12-31",
+   "period_start": null,
+   "reason": "concept_not_filed",
+   "ticker": "TESTCO",
+   "unit": "USD",
+   "value": null
+  },
+  {
+   "absent": {
+    "reason": "not_applicable"
+   },
+   "accession_numbers": [
+    "0009999901-26-000002"
+   ],
+   "basis": "ttm",
+   "cik": "0009999901",
+   "concepts": [
+    "GrossProfit"
+   ],
+   "derived": false,
+   "fiscal_label": "FY2025",
+   "knowledge_time": "2026-02-10T21:00:00Z",
+   "metric": "gross_profit",
+   "note": "FY2025 as filed (GrossProfit)",
+   "period_end": "2025-12-31",
+   "period_start": "2025-01-01",
+   "reason": null,
+   "ticker": "TESTCO",
+   "unit": "USD",
+   "value": 480000000.0
+  },
+  {
+   "absent": {
+    "fiscal_label": "not_applicable",
+    "period_start": "not_applicable",
+    "value": "not_provided_by_source"
+   },
+   "accession_numbers": [],
+   "basis": "ttm",
+   "cik": "0009999901",
+   "concepts": [],
+   "derived": false,
+   "fiscal_label": null,
+   "knowledge_time": "2025-02-13T04:59:59.999999Z",
+   "metric": "operating_income",
+   "note": "not filed in XBRL: OperatingIncomeLoss",
+   "period_end": "2024-12-31",
+   "period_start": null,
+   "reason": "concept_not_filed",
+   "ticker": "TESTCO",
+   "unit": "USD",
+   "value": null
+  },
+  {
+   "absent": {
+    "fiscal_label": "not_applicable",
+    "period_start": "not_applicable",
+    "value": "not_provided_by_source"
+   },
+   "accession_numbers": [],
+   "basis": "ttm",
+   "cik": "0009999901",
+   "concepts": [],
+   "derived": false,
+   "fiscal_label": null,
+   "knowledge_time": "2026-02-10T21:00:00Z",
+   "metric": "operating_income",
+   "note": "not filed in XBRL: OperatingIncomeLoss",
+   "period_end": "2025-12-31",
+   "period_start": null,
+   "reason": "concept_not_filed",
+   "ticker": "TESTCO",
+   "unit": "USD",
+   "value": null
+  },
+  {
+   "absent": {
+    "fiscal_label": "not_applicable",
+    "period_start": "not_applicable",
+    "value": "not_provided_by_source"
+   },
+   "accession_numbers": [],
+   "basis": "ttm",
+   "cik": "0009999901",
+   "concepts": [],
+   "derived": false,
+   "fiscal_label": null,
+   "knowledge_time": "2025-02-13T04:59:59.999999Z",
+   "metric": "d_and_a",
+   "note": "not filed in XBRL: DepreciationDepletionAndAmortization, DepreciationAmortizationAndAccretionNet, DepreciationAndAmortization, Depreciation, AmortizationOfIntangibleAssets",
+   "period_end": "2024-12-31",
+   "period_start": null,
+   "reason": "concept_not_filed",
+   "ticker": "TESTCO",
+   "unit": "USD",
+   "value": null
+  },
+  {
+   "absent": {
+    "fiscal_label": "not_applicable",
+    "period_start": "not_applicable",
+    "value": "not_provided_by_source"
+   },
+   "accession_numbers": [],
+   "basis": "ttm",
+   "cik": "0009999901",
+   "concepts": [],
+   "derived": false,
+   "fiscal_label": null,
+   "knowledge_time": "2026-02-10T21:00:00Z",
+   "metric": "d_and_a",
+   "note": "not filed in XBRL: DepreciationDepletionAndAmortization, DepreciationAmortizationAndAccretionNet, DepreciationAndAmortization, Depreciation, AmortizationOfIntangibleAssets",
+   "period_end": "2025-12-31",
+   "period_start": null,
+   "reason": "concept_not_filed",
+   "ticker": "TESTCO",
+   "unit": "USD",
+   "value": null
+  },
+  {
+   "absent": {
+    "fiscal_label": "not_applicable",
+    "period_start": "not_applicable",
+    "value": "not_provided_by_source"
+   },
+   "accession_numbers": [],
+   "basis": "ttm",
+   "cik": "0009999901",
+   "concepts": [],
+   "derived": false,
+   "fiscal_label": null,
+   "knowledge_time": "2025-02-13T04:59:59.999999Z",
+   "metric": "ebit",
+   "note": "not filed in XBRL: OperatingIncomeLoss, IncomeLossFromContinuingOperationsBeforeIncomeTaxesExtraordinaryItemsNoncontrollingInterest, IncomeLossFromContinuingOperationsBeforeIncomeTaxesMinorityInterestAndIncomeLossFromEquityMethodInvestments, InterestExpense, InterestExpenseNonoperating",
+   "period_end": "2024-12-31",
+   "period_start": null,
+   "reason": "concept_not_filed",
+   "ticker": "TESTCO",
+   "unit": "USD",
+   "value": null
+  },
+  {
+   "absent": {
+    "fiscal_label": "not_applicable",
+    "period_start": "not_applicable",
+    "value": "not_provided_by_source"
+   },
+   "accession_numbers": [],
+   "basis": "ttm",
+   "cik": "0009999901",
+   "concepts": [],
+   "derived": false,
+   "fiscal_label": null,
+   "knowledge_time": "2026-02-10T21:00:00Z",
+   "metric": "ebit",
+   "note": "not filed in XBRL: OperatingIncomeLoss, IncomeLossFromContinuingOperationsBeforeIncomeTaxesExtraordinaryItemsNoncontrollingInterest, IncomeLossFromContinuingOperationsBeforeIncomeTaxesMinorityInterestAndIncomeLossFromEquityMethodInvestments, InterestExpense, InterestExpenseNonoperating",
+   "period_end": "2025-12-31",
+   "period_start": null,
+   "reason": "concept_not_filed",
+   "ticker": "TESTCO",
+   "unit": "USD",
+   "value": null
+  },
+  {
+   "absent": {
+    "fiscal_label": "not_applicable",
+    "period_start": "not_applicable",
+    "value": "insufficient_data"
+   },
+   "accession_numbers": [],
+   "basis": "ttm",
+   "cik": "0009999901",
+   "concepts": [],
+   "derived": false,
+   "fiscal_label": null,
+   "knowledge_time": "2025-02-13T04:59:59.999999Z",
+   "metric": "ebitda",
+   "note": "needs EBIT, which is absent",
+   "period_end": "2024-12-31",
+   "period_start": null,
+   "reason": "missing_input",
+   "ticker": "TESTCO",
+   "unit": "USD",
+   "value": null
+  },
+  {
+   "absent": {
+    "fiscal_label": "not_applicable",
+    "period_start": "not_applicable",
+    "value": "insufficient_data"
+   },
+   "accession_numbers": [],
+   "basis": "ttm",
+   "cik": "0009999901",
+   "concepts": [],
+   "derived": false,
+   "fiscal_label": null,
+   "knowledge_time": "2026-02-10T21:00:00Z",
+   "metric": "ebitda",
+   "note": "needs EBIT, which is absent",
+   "period_end": "2025-12-31",
+   "period_start": null,
+   "reason": "missing_input",
+   "ticker": "TESTCO",
+   "unit": "USD",
+   "value": null
+  },
+  {
+   "absent": {
+    "fiscal_label": "not_applicable",
+    "period_start": "not_applicable",
+    "value": "not_provided_by_source"
+   },
+   "accession_numbers": [],
+   "basis": "ttm",
+   "cik": "0009999901",
+   "concepts": [],
+   "derived": false,
+   "fiscal_label": null,
+   "knowledge_time": "2025-02-13T04:59:59.999999Z",
+   "metric": "net_income",
+   "note": "not filed in XBRL: NetIncomeLoss, NetIncomeLossAvailableToCommonStockholdersBasic",
+   "period_end": "2024-12-31",
+   "period_start": null,
+   "reason": "concept_not_filed",
+   "ticker": "TESTCO",
+   "unit": "USD",
+   "value": null
+  },
+  {
+   "absent": {
+    "reason": "not_applicable"
+   },
+   "accession_numbers": [
+    "0009999901-26-000002"
+   ],
+   "basis": "ttm",
+   "cik": "0009999901",
+   "concepts": [
+    "NetIncomeLoss"
+   ],
+   "derived": false,
+   "fiscal_label": "FY2025",
+   "knowledge_time": "2026-02-10T21:00:00Z",
+   "metric": "net_income",
+   "note": "FY2025 as filed (NetIncomeLoss)",
+   "period_end": "2025-12-31",
+   "period_start": "2025-01-01",
+   "reason": null,
+   "ticker": "TESTCO",
+   "unit": "USD",
+   "value": 150000000.0
+  },
+  {
+   "absent": {
+    "fiscal_label": "not_applicable",
+    "period_start": "not_applicable",
+    "value": "not_provided_by_source"
+   },
+   "accession_numbers": [],
+   "basis": "ttm",
+   "cik": "0009999901",
+   "concepts": [],
+   "derived": false,
+   "fiscal_label": null,
+   "knowledge_time": "2025-02-13T04:59:59.999999Z",
+   "metric": "eps_diluted",
+   "note": "not filed in XBRL: EarningsPerShareDiluted, EarningsPerShareBasicAndDiluted",
+   "period_end": "2024-12-31",
+   "period_start": null,
+   "reason": "concept_not_filed",
+   "ticker": "TESTCO",
+   "unit": "USD/shares",
+   "value": null
+  },
+  {
+   "absent": {
+    "reason": "not_applicable"
+   },
+   "accession_numbers": [
+    "0009999901-26-000002"
+   ],
+   "basis": "ttm",
+   "cik": "0009999901",
+   "concepts": [
+    "EarningsPerShareDiluted"
+   ],
+   "derived": false,
+   "fiscal_label": "FY2025",
+   "knowledge_time": "2026-02-10T21:00:00Z",
+   "metric": "eps_diluted",
+   "note": "FY2025 as filed (EarningsPerShareDiluted)",
+   "period_end": "2025-12-31",
+   "period_start": "2025-01-01",
+   "reason": null,
+   "ticker": "TESTCO",
+   "unit": "USD/shares",
+   "value": 1.48
+  },
+  {
+   "absent": {
+    "fiscal_label": "not_applicable",
+    "period_start": "not_applicable",
+    "value": "not_provided_by_source"
+   },
+   "accession_numbers": [],
+   "basis": "period",
+   "cik": "0009999901",
+   "concepts": [],
+   "derived": false,
+   "fiscal_label": null,
+   "knowledge_time": "2025-02-13T04:59:59.999999Z",
+   "metric": "shares_diluted",
+   "note": "not filed in XBRL: WeightedAverageNumberOfDilutedSharesOutstanding",
+   "period_end": "2024-12-31",
+   "period_start": null,
+   "reason": "concept_not_filed",
+   "ticker": "TESTCO",
+   "unit": "shares",
+   "value": null
+  },
+  {
+   "absent": {
+    "fiscal_label": "not_applicable",
+    "period_start": "not_applicable",
+    "value": "not_provided_by_source"
+   },
+   "accession_numbers": [],
+   "basis": "period",
+   "cik": "0009999901",
+   "concepts": [],
+   "derived": false,
+   "fiscal_label": null,
+   "knowledge_time": "2026-02-10T21:00:00Z",
+   "metric": "shares_diluted",
+   "note": "not filed in XBRL: WeightedAverageNumberOfDilutedSharesOutstanding",
+   "period_end": "2025-12-31",
+   "period_start": null,
+   "reason": "concept_not_filed",
+   "ticker": "TESTCO",
+   "unit": "shares",
+   "value": null
+  },
+  {
+   "absent": {
+    "fiscal_label": "not_applicable",
+    "period_start": "not_applicable",
+    "value": "not_provided_by_source"
+   },
+   "accession_numbers": [],
+   "basis": "instant",
+   "cik": "0009999901",
+   "concepts": [],
+   "derived": false,
+   "fiscal_label": null,
+   "knowledge_time": "2025-02-13T04:59:59.999999Z",
+   "metric": "shares_outstanding",
+   "note": "not filed in XBRL: EntityCommonStockSharesOutstanding, CommonStockSharesOutstanding",
+   "period_end": "2024-12-31",
+   "period_start": null,
+   "reason": "concept_not_filed",
+   "ticker": "TESTCO",
+   "unit": "shares",
+   "value": null
+  },
+  {
+   "absent": {
+    "fiscal_label": "not_applicable",
+    "period_start": "not_applicable",
+    "reason": "not_applicable"
+   },
+   "accession_numbers": [
+    "0009999901-26-000002"
+   ],
+   "basis": "instant",
+   "cik": "0009999901",
+   "concepts": [
+    "EntityCommonStockSharesOutstanding"
+   ],
+   "derived": false,
+   "fiscal_label": null,
+   "knowledge_time": "2026-02-10T21:00:00Z",
+   "metric": "shares_outstanding",
+   "note": "as filed (EntityCommonStockSharesOutstanding, 2026-01-31)",
+   "period_end": "2026-01-31",
+   "period_start": null,
+   "reason": null,
+   "ticker": "TESTCO",
+   "unit": "shares",
+   "value": 100000000.0
+  },
+  {
+   "absent": {
+    "fiscal_label": "not_applicable",
+    "period_start": "not_applicable",
+    "value": "not_provided_by_source"
+   },
+   "accession_numbers": [],
+   "basis": "ttm",
+   "cik": "0009999901",
+   "concepts": [],
+   "derived": false,
+   "fiscal_label": null,
+   "knowledge_time": "2025-02-13T04:59:59.999999Z",
+   "metric": "operating_cash_flow",
+   "note": "not filed in XBRL: NetCashProvidedByUsedInOperatingActivities, NetCashProvidedByUsedInOperatingActivitiesContinuingOperations",
+   "period_end": "2024-12-31",
+   "period_start": null,
+   "reason": "concept_not_filed",
+   "ticker": "TESTCO",
+   "unit": "USD",
+   "value": null
+  },
+  {
+   "absent": {
+    "fiscal_label": "not_applicable",
+    "period_start": "not_applicable",
+    "value": "not_provided_by_source"
+   },
+   "accession_numbers": [],
+   "basis": "ttm",
+   "cik": "0009999901",
+   "concepts": [],
+   "derived": false,
+   "fiscal_label": null,
+   "knowledge_time": "2026-02-10T21:00:00Z",
+   "metric": "operating_cash_flow",
+   "note": "not filed in XBRL: NetCashProvidedByUsedInOperatingActivities, NetCashProvidedByUsedInOperatingActivitiesContinuingOperations",
+   "period_end": "2025-12-31",
+   "period_start": null,
+   "reason": "concept_not_filed",
+   "ticker": "TESTCO",
+   "unit": "USD",
+   "value": null
+  },
+  {
+   "absent": {
+    "fiscal_label": "not_applicable",
+    "period_start": "not_applicable",
+    "value": "not_provided_by_source"
+   },
+   "accession_numbers": [],
+   "basis": "ttm",
+   "cik": "0009999901",
+   "concepts": [],
+   "derived": false,
+   "fiscal_label": null,
+   "knowledge_time": "2025-02-13T04:59:59.999999Z",
+   "metric": "capex",
+   "note": "not filed in XBRL: PaymentsToAcquirePropertyPlantAndEquipment, PaymentsToAcquireProductiveAssets",
+   "period_end": "2024-12-31",
+   "period_start": null,
+   "reason": "concept_not_filed",
+   "ticker": "TESTCO",
+   "unit": "USD",
+   "value": null
+  },
+  {
+   "absent": {
+    "fiscal_label": "not_applicable",
+    "period_start": "not_applicable",
+    "value": "not_provided_by_source"
+   },
+   "accession_numbers": [],
+   "basis": "ttm",
+   "cik": "0009999901",
+   "concepts": [],
+   "derived": false,
+   "fiscal_label": null,
+   "knowledge_time": "2026-02-10T21:00:00Z",
+   "metric": "capex",
+   "note": "not filed in XBRL: PaymentsToAcquirePropertyPlantAndEquipment, PaymentsToAcquireProductiveAssets",
+   "period_end": "2025-12-31",
+   "period_start": null,
+   "reason": "concept_not_filed",
+   "ticker": "TESTCO",
+   "unit": "USD",
+   "value": null
+  },
+  {
+   "absent": {
+    "fiscal_label": "not_applicable",
+    "period_start": "not_applicable",
+    "value": "insufficient_data"
+   },
+   "accession_numbers": [],
+   "basis": "ttm",
+   "cik": "0009999901",
+   "concepts": [],
+   "derived": false,
+   "fiscal_label": null,
+   "knowledge_time": "2025-02-13T04:59:59.999999Z",
+   "metric": "free_cash_flow",
+   "note": "needs operating cash flow, which is absent",
+   "period_end": "2024-12-31",
+   "period_start": null,
+   "reason": "missing_input",
+   "ticker": "TESTCO",
+   "unit": "USD",
+   "value": null
+  },
+  {
+   "absent": {
+    "fiscal_label": "not_applicable",
+    "period_start": "not_applicable",
+    "value": "insufficient_data"
+   },
+   "accession_numbers": [],
+   "basis": "ttm",
+   "cik": "0009999901",
+   "concepts": [],
+   "derived": false,
+   "fiscal_label": null,
+   "knowledge_time": "2026-02-10T21:00:00Z",
+   "metric": "free_cash_flow",
+   "note": "needs operating cash flow, which is absent",
+   "period_end": "2025-12-31",
+   "period_start": null,
+   "reason": "missing_input",
+   "ticker": "TESTCO",
+   "unit": "USD",
+   "value": null
+  },
+  {
+   "absent": {
+    "fiscal_label": "not_applicable",
+    "period_start": "not_applicable",
+    "value": "not_provided_by_source"
+   },
+   "accession_numbers": [],
+   "basis": "ttm",
+   "cik": "0009999901",
+   "concepts": [],
+   "derived": false,
+   "fiscal_label": null,
+   "knowledge_time": "2025-02-13T04:59:59.999999Z",
+   "metric": "dividends_per_share",
+   "note": "not filed in XBRL: CommonStockDividendsPerShareDeclared, CommonStockDividendsPerShareCashPaid",
+   "period_end": "2024-12-31",
+   "period_start": null,
+   "reason": "concept_not_filed",
+   "ticker": "TESTCO",
+   "unit": "USD/shares",
+   "value": null
+  },
+  {
+   "absent": {
+    "fiscal_label": "not_applicable",
+    "period_start": "not_applicable",
+    "value": "not_provided_by_source"
+   },
+   "accession_numbers": [],
+   "basis": "ttm",
+   "cik": "0009999901",
+   "concepts": [],
+   "derived": false,
+   "fiscal_label": null,
+   "knowledge_time": "2026-02-10T21:00:00Z",
+   "metric": "dividends_per_share",
+   "note": "not filed in XBRL: CommonStockDividendsPerShareDeclared, CommonStockDividendsPerShareCashPaid",
+   "period_end": "2025-12-31",
+   "period_start": null,
+   "reason": "concept_not_filed",
+   "ticker": "TESTCO",
+   "unit": "USD/shares",
+   "value": null
+  },
+  {
+   "absent": {
+    "fiscal_label": "not_applicable",
+    "period_start": "not_applicable",
+    "value": "not_provided_by_source"
+   },
+   "accession_numbers": [],
+   "basis": "instant",
+   "cik": "0009999901",
+   "concepts": [],
+   "derived": false,
+   "fiscal_label": null,
+   "knowledge_time": "2025-02-13T04:59:59.999999Z",
+   "metric": "total_equity",
+   "note": "not filed in XBRL: StockholdersEquity, StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest",
+   "period_end": "2024-12-31",
+   "period_start": null,
+   "reason": "concept_not_filed",
+   "ticker": "TESTCO",
+   "unit": "USD",
+   "value": null
+  },
+  {
+   "absent": {
+    "fiscal_label": "not_applicable",
+    "period_start": "not_applicable",
+    "value": "not_provided_by_source"
+   },
+   "accession_numbers": [],
+   "basis": "instant",
+   "cik": "0009999901",
+   "concepts": [],
+   "derived": false,
+   "fiscal_label": null,
+   "knowledge_time": "2026-02-10T21:00:00Z",
+   "metric": "total_equity",
+   "note": "not filed in XBRL: StockholdersEquity, StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest",
+   "period_end": "2025-12-31",
+   "period_start": null,
+   "reason": "concept_not_filed",
+   "ticker": "TESTCO",
+   "unit": "USD",
+   "value": null
+  },
+  {
+   "absent": {
+    "fiscal_label": "not_applicable",
+    "period_start": "not_applicable",
+    "value": "not_provided_by_source"
+   },
+   "accession_numbers": [],
+   "basis": "instant",
+   "cik": "0009999901",
+   "concepts": [],
+   "derived": false,
+   "fiscal_label": null,
+   "knowledge_time": "2025-02-13T04:59:59.999999Z",
+   "metric": "total_debt",
+   "note": "not filed in XBRL: LongTermDebt, LongTermDebtNoncurrent",
+   "period_end": "2024-12-31",
+   "period_start": null,
+   "reason": "concept_not_filed",
+   "ticker": "TESTCO",
+   "unit": "USD",
+   "value": null
+  },
+  {
+   "absent": {
+    "fiscal_label": "not_applicable",
+    "period_start": "not_applicable",
+    "value": "not_provided_by_source"
+   },
+   "accession_numbers": [],
+   "basis": "instant",
+   "cik": "0009999901",
+   "concepts": [],
+   "derived": false,
+   "fiscal_label": null,
+   "knowledge_time": "2026-02-10T21:00:00Z",
+   "metric": "total_debt",
+   "note": "not filed in XBRL: LongTermDebt, LongTermDebtNoncurrent",
+   "period_end": "2025-12-31",
+   "period_start": null,
+   "reason": "concept_not_filed",
+   "ticker": "TESTCO",
+   "unit": "USD",
+   "value": null
+  },
+  {
+   "absent": {
+    "fiscal_label": "not_applicable",
+    "period_start": "not_applicable",
+    "value": "not_provided_by_source"
+   },
+   "accession_numbers": [],
+   "basis": "instant",
+   "cik": "0009999901",
+   "concepts": [],
+   "derived": false,
+   "fiscal_label": null,
+   "knowledge_time": "2025-02-13T04:59:59.999999Z",
+   "metric": "cash",
+   "note": "not filed in XBRL: CashAndCashEquivalentsAtCarryingValue, CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents, Cash",
+   "period_end": "2024-12-31",
+   "period_start": null,
+   "reason": "concept_not_filed",
+   "ticker": "TESTCO",
+   "unit": "USD",
+   "value": null
+  },
+  {
+   "absent": {
+    "fiscal_label": "not_applicable",
+    "period_start": "not_applicable",
+    "value": "not_provided_by_source"
+   },
+   "accession_numbers": [],
+   "basis": "instant",
+   "cik": "0009999901",
+   "concepts": [],
+   "derived": false,
+   "fiscal_label": null,
+   "knowledge_time": "2026-02-10T21:00:00Z",
+   "metric": "cash",
+   "note": "not filed in XBRL: CashAndCashEquivalentsAtCarryingValue, CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents, Cash",
+   "period_end": "2025-12-31",
+   "period_start": null,
+   "reason": "concept_not_filed",
+   "ticker": "TESTCO",
+   "unit": "USD",
+   "value": null
+  },
+  {
+   "absent": {
+    "fiscal_label": "not_applicable",
+    "period_start": "not_applicable",
+    "value": "not_provided_by_source"
+   },
+   "accession_numbers": [],
+   "basis": "instant",
+   "cik": "0009999901",
+   "concepts": [],
+   "derived": false,
+   "fiscal_label": null,
+   "knowledge_time": "2025-02-13T04:59:59.999999Z",
+   "metric": "current_assets",
+   "note": "not filed in XBRL: AssetsCurrent",
+   "period_end": "2024-12-31",
+   "period_start": null,
+   "reason": "concept_not_filed",
+   "ticker": "TESTCO",
+   "unit": "USD",
+   "value": null
+  },
+  {
+   "absent": {
+    "fiscal_label": "not_applicable",
+    "period_start": "not_applicable",
+    "value": "not_provided_by_source"
+   },
+   "accession_numbers": [],
+   "basis": "instant",
+   "cik": "0009999901",
+   "concepts": [],
+   "derived": false,
+   "fiscal_label": null,
+   "knowledge_time": "2026-02-10T21:00:00Z",
+   "metric": "current_assets",
+   "note": "not filed in XBRL: AssetsCurrent",
+   "period_end": "2025-12-31",
+   "period_start": null,
+   "reason": "concept_not_filed",
+   "ticker": "TESTCO",
+   "unit": "USD",
+   "value": null
+  },
+  {
+   "absent": {
+    "fiscal_label": "not_applicable",
+    "period_start": "not_applicable",
+    "value": "not_provided_by_source"
+   },
+   "accession_numbers": [],
+   "basis": "instant",
+   "cik": "0009999901",
+   "concepts": [],
+   "derived": false,
+   "fiscal_label": null,
+   "knowledge_time": "2025-02-13T04:59:59.999999Z",
+   "metric": "current_liabilities",
+   "note": "not filed in XBRL: LiabilitiesCurrent",
+   "period_end": "2024-12-31",
+   "period_start": null,
+   "reason": "concept_not_filed",
+   "ticker": "TESTCO",
+   "unit": "USD",
+   "value": null
+  },
+  {
+   "absent": {
+    "fiscal_label": "not_applicable",
+    "period_start": "not_applicable",
+    "value": "not_provided_by_source"
+   },
+   "accession_numbers": [],
+   "basis": "instant",
+   "cik": "0009999901",
+   "concepts": [],
+   "derived": false,
+   "fiscal_label": null,
+   "knowledge_time": "2026-02-10T21:00:00Z",
+   "metric": "current_liabilities",
+   "note": "not filed in XBRL: LiabilitiesCurrent",
+   "period_end": "2025-12-31",
+   "period_start": null,
+   "reason": "concept_not_filed",
+   "ticker": "TESTCO",
+   "unit": "USD",
+   "value": null
+  },
+  {
+   "absent": {
+    "fiscal_label": "not_applicable",
+    "period_start": "not_applicable",
+    "value": "not_provided_by_source"
+   },
+   "accession_numbers": [],
+   "basis": "instant",
+   "cik": "0009999901",
+   "concepts": [],
+   "derived": false,
+   "fiscal_label": null,
+   "knowledge_time": "2025-02-13T04:59:59.999999Z",
+   "metric": "total_assets",
+   "note": "not filed in XBRL: Assets",
+   "period_end": "2024-12-31",
+   "period_start": null,
+   "reason": "concept_not_filed",
+   "ticker": "TESTCO",
+   "unit": "USD",
+   "value": null
+  },
+  {
+   "absent": {
+    "fiscal_label": "not_applicable",
+    "period_start": "not_applicable",
+    "reason": "not_applicable"
+   },
+   "accession_numbers": [
+    "0009999901-26-000002"
+   ],
+   "basis": "instant",
+   "cik": "0009999901",
+   "concepts": [
+    "Assets"
+   ],
+   "derived": false,
+   "fiscal_label": null,
+   "knowledge_time": "2026-02-10T21:00:00Z",
+   "metric": "total_assets",
+   "note": "as filed (Assets, 2025-12-31)",
+   "period_end": "2025-12-31",
+   "period_start": null,
+   "reason": null,
+   "ticker": "TESTCO",
+   "unit": "USD",
+   "value": 2500000000.0
+  },
+  {
+   "absent": {
+    "fiscal_label": "not_applicable",
+    "period_start": "not_applicable",
+    "value": "insufficient_data"
+   },
+   "accession_numbers": [],
+   "basis": "ttm",
+   "cik": "0009999901",
+   "concepts": [],
+   "derived": false,
+   "fiscal_label": null,
+   "knowledge_time": "2025-02-13T04:59:59.999999Z",
+   "metric": "gross_margin",
+   "note": "needs gross profit, which is absent",
+   "period_end": "2024-12-31",
+   "period_start": null,
+   "reason": "missing_input",
+   "ticker": "TESTCO",
+   "unit": "fraction",
+   "value": null
+  },
+  {
+   "absent": {
+    "reason": "not_applicable"
+   },
+   "accession_numbers": [
+    "0009999901-26-000002"
+   ],
+   "basis": "ttm",
+   "cik": "0009999901",
+   "concepts": [
+    "GrossProfit",
+    "Revenues"
+   ],
+   "derived": true,
+   "fiscal_label": "FY2025",
+   "knowledge_time": "2026-02-10T21:00:00Z",
+   "metric": "gross_margin",
+   "note": "gross profit / revenue x 100 (TTM to 2025-12-31)",
+   "period_end": "2025-12-31",
+   "period_start": "2025-01-01",
+   "reason": null,
+   "ticker": "TESTCO",
+   "unit": "fraction",
+   "value": 0.4
+  },
+  {
+   "absent": {
+    "fiscal_label": "not_applicable",
+    "period_start": "not_applicable",
+    "value": "insufficient_data"
+   },
+   "accession_numbers": [],
+   "basis": "ttm",
+   "cik": "0009999901",
+   "concepts": [],
+   "derived": false,
+   "fiscal_label": null,
+   "knowledge_time": "2025-02-13T04:59:59.999999Z",
+   "metric": "operating_margin",
+   "note": "needs operating income, which is absent",
+   "period_end": "2024-12-31",
+   "period_start": null,
+   "reason": "missing_input",
+   "ticker": "TESTCO",
+   "unit": "fraction",
+   "value": null
+  },
+  {
+   "absent": {
+    "fiscal_label": "not_applicable",
+    "period_start": "not_applicable",
+    "value": "insufficient_data"
+   },
+   "accession_numbers": [],
+   "basis": "ttm",
+   "cik": "0009999901",
+   "concepts": [],
+   "derived": false,
+   "fiscal_label": null,
+   "knowledge_time": "2026-02-10T21:00:00Z",
+   "metric": "operating_margin",
+   "note": "needs operating income, which is absent",
+   "period_end": "2025-12-31",
+   "period_start": null,
+   "reason": "missing_input",
+   "ticker": "TESTCO",
+   "unit": "fraction",
+   "value": null
+  },
+  {
+   "absent": {
+    "fiscal_label": "not_applicable",
+    "period_start": "not_applicable",
+    "value": "insufficient_data"
+   },
+   "accession_numbers": [],
+   "basis": "ttm",
+   "cik": "0009999901",
+   "concepts": [],
+   "derived": false,
+   "fiscal_label": null,
+   "knowledge_time": "2025-02-13T04:59:59.999999Z",
+   "metric": "net_margin",
+   "note": "needs net income, which is absent",
+   "period_end": "2024-12-31",
+   "period_start": null,
+   "reason": "missing_input",
+   "ticker": "TESTCO",
+   "unit": "fraction",
+   "value": null
+  },
+  {
+   "absent": {
+    "reason": "not_applicable"
+   },
+   "accession_numbers": [
+    "0009999901-26-000002"
+   ],
+   "basis": "ttm",
+   "cik": "0009999901",
+   "concepts": [
+    "NetIncomeLoss",
+    "Revenues"
+   ],
+   "derived": true,
+   "fiscal_label": "FY2025",
+   "knowledge_time": "2026-02-10T21:00:00Z",
+   "metric": "net_margin",
+   "note": "net income / revenue x 100 (TTM to 2025-12-31)",
+   "period_end": "2025-12-31",
+   "period_start": "2025-01-01",
+   "reason": null,
+   "ticker": "TESTCO",
+   "unit": "fraction",
+   "value": 0.125
+  }
+ ]
+}

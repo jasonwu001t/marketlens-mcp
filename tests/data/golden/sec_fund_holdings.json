@@ -1,0 +1,92 @@
+{
+ "absent": {},
+ "model": "marketlens.FundHolding",
+ "notes": [],
+ "offload": "auto",
+ "pagination": null,
+ "provenance": {
+  "as_of": null,
+  "authority": [
+   "official"
+  ],
+  "cached": false,
+  "dataset": "sec.fund_nport_holdings",
+  "delay": "unknown",
+  "derived_from": [],
+  "environment": null,
+  "feed": null,
+  "knowledge_time": "2026-08-28T16:00:05Z",
+  "lag_days": 94.0,
+  "operation": null,
+  "pages_fetched": 2,
+  "provider": "sec",
+  "request": {
+   "accession_number": "0009999970-26-000005",
+   "as_of": null,
+   "ticker": "TFUND"
+  },
+  "route": "omni sec.fund_nport_holdings <- www.sec.gov/Archives (N-PORT)",
+  "schema_version": "1.1.0",
+  "stale": null,
+  "truncated": false,
+  "truncation_note": null,
+  "upstream_request_id": null
+ },
+ "risk": null,
+ "rows": [
+  {
+   "absent": {
+    "ticker": "no_data"
+   },
+   "accession_number": "0009999970-26-000005",
+   "asset_category": "EC",
+   "balance": 100000.0,
+   "cik": "0009999970",
+   "country": "US",
+   "currency": "USD",
+   "cusip": "99999T101",
+   "isin": "US99999T1015",
+   "issuer_category": "CORP",
+   "knowledge_time": "2026-08-28T16:00:05Z",
+   "lei": "5493000000000000TST1",
+   "line": 1,
+   "name": "Testco Synthetic Corp",
+   "payoff_profile": "Long",
+   "pct_value": 0.012625,
+   "report_date": "2026-06-30",
+   "series_id": "S000099991",
+   "ticker": null,
+   "title": "Testco Synthetic Corp",
+   "units": "NS",
+   "value_usd": 5025000.0
+  },
+  {
+   "absent": {
+    "cusip": "no_data",
+    "lei": "no_data",
+    "ticker": "no_data"
+   },
+   "accession_number": "0009999970-26-000005",
+   "asset_category": "DBT",
+   "balance": 2000000.0,
+   "cik": "0009999970",
+   "country": "US",
+   "currency": "USD",
+   "cusip": null,
+   "isin": "US912797SX61",
+   "issuer_category": "UST",
+   "knowledge_time": "2026-08-28T16:00:05Z",
+   "lei": null,
+   "line": 2,
+   "name": "US Treasury Bill",
+   "payoff_profile": "Long",
+   "pct_value": 0.005,
+   "report_date": "2026-06-30",
+   "series_id": "S000099991",
+   "ticker": null,
+   "title": "US Treasury Bill",
+   "units": "PA",
+   "value_usd": 1990000.0
+  }
+ ]
+}

@@ -1,0 +1,195 @@
+{
+  "$defs": {
+    "AbsenceCode": {
+      "description": "Why a value is None. Never served as 0.",
+      "enum": [
+        "not_provided_by_source",
+        "not_applicable",
+        "not_entitled",
+        "no_data",
+        "insufficient_data",
+        "not_recovered",
+        "no_match",
+        "withheld",
+        "source_error",
+        "unparseable"
+      ],
+      "title": "AbsenceCode",
+      "type": "string"
+    }
+  },
+  "$id": "urn:marketlens:schema:1:marketlens.FundReport",
+  "additionalProperties": false,
+  "description": "One Form N-PORT header of a fund series (net assets span every share class).",
+  "properties": {
+    "absent": {
+      "anyOf": [
+        {
+          "additionalProperties": {
+            "$ref": "#/$defs/AbsenceCode"
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Per-row reasons for None fields: field name -> AbsenceCode",
+      "title": "Absent"
+    },
+    "accession_number": {
+      "title": "Accession Number",
+      "type": "string"
+    },
+    "cik": {
+      "title": "Cik",
+      "type": "string"
+    },
+    "class_ids": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Class Ids",
+      "type": "array"
+    },
+    "filing_date": {
+      "format": "date",
+      "title": "Filing Date",
+      "type": "string"
+    },
+    "form": {
+      "title": "Form",
+      "type": "string"
+    },
+    "holdings_count": {
+      "title": "Holdings Count",
+      "type": "integer",
+      "x-unit": "count"
+    },
+    "is_final": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Is Final"
+    },
+    "knowledge_time": {
+      "description": "When the value became knowable under the dataset's point-in-time policy",
+      "format": "date-time",
+      "title": "Knowledge Time",
+      "type": "string",
+      "x-unit": "UTC"
+    },
+    "net_assets": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Net Assets",
+      "x-unit": "USD"
+    },
+    "primary_doc_url": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Primary Doc Url"
+    },
+    "report_date": {
+      "format": "date",
+      "title": "Report Date",
+      "type": "string"
+    },
+    "report_period_end": {
+      "anyOf": [
+        {
+          "format": "date",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The fiscal year end",
+      "title": "Report Period End"
+    },
+    "series_id": {
+      "title": "Series Id",
+      "type": "string"
+    },
+    "series_name": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Series Name"
+    },
+    "ticker": {
+      "description": "The fund or ETF symbol requested",
+      "title": "Ticker",
+      "type": "string"
+    },
+    "total_assets": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Total Assets",
+      "x-unit": "USD"
+    },
+    "total_liabilities": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Total Liabilities",
+      "x-unit": "USD"
+    }
+  },
+  "required": [
+    "ticker",
+    "cik",
+    "series_id",
+    "accession_number",
+    "form",
+    "report_date",
+    "filing_date",
+    "holdings_count",
+    "knowledge_time"
+  ],
+  "title": "FundReport",
+  "type": "object",
+  "x-schema-version": "1.1.0"
+}

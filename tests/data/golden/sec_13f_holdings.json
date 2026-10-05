@@ -1,0 +1,92 @@
+{
+ "absent": {},
+ "model": "marketlens.InstitutionalHolding",
+ "notes": [],
+ "offload": "auto",
+ "pagination": null,
+ "provenance": {
+  "as_of": null,
+  "authority": [
+   "official"
+  ],
+  "cached": false,
+  "dataset": "sec13f.holdings",
+  "delay": "unknown",
+  "derived_from": [],
+  "environment": null,
+  "feed": null,
+  "knowledge_time": "2026-08-10T21:02:00Z",
+  "lag_days": 94.0,
+  "operation": null,
+  "pages_fetched": 1,
+  "provider": "sec13f",
+  "request": {
+   "as_of": null,
+   "cusips": null,
+   "filer_cik": "0009999950",
+   "period_end": "2026-06-30"
+  },
+  "route": "omni sec13f.holdings <- www.sec.gov/Archives (13F-HR)",
+  "schema_version": "1.1.0",
+  "stale": null,
+  "truncated": false,
+  "truncation_note": null,
+  "upstream_request_id": null
+ },
+ "risk": null,
+ "rows": [
+  {
+   "absent": {
+    "amendment_type": "not_applicable",
+    "put_call": "not_applicable"
+   },
+   "accession_number": "0009999950-26-000003",
+   "amendment_type": null,
+   "cusip": "99999T101",
+   "filer_cik": "0009999950",
+   "filer_name": "Synthetic Capital LP",
+   "filing_date": "2026-08-10",
+   "form": "13F-HR",
+   "investment_discretion": "SOLE",
+   "is_amendment": false,
+   "issuer_name": "TESTCO SYNTHETIC CORP",
+   "knowledge_time": "2026-08-10T21:02:00Z",
+   "line": 1,
+   "no_voting": 0.0,
+   "period_end": "2026-06-30",
+   "put_call": null,
+   "share_type": "SH",
+   "shared_voting": 0.0,
+   "shares": 100000.0,
+   "sole_voting": 100000.0,
+   "title_of_class": "COM",
+   "value_usd": 5025000.0
+  },
+  {
+   "absent": {
+    "amendment_type": "not_applicable"
+   },
+   "accession_number": "0009999950-26-000003",
+   "amendment_type": null,
+   "cusip": "99999O102",
+   "filer_cik": "0009999950",
+   "filer_name": "Synthetic Capital LP",
+   "filing_date": "2026-08-10",
+   "form": "13F-HR",
+   "investment_discretion": "DFND",
+   "is_amendment": false,
+   "issuer_name": "OTHERCO SYNTHETIC INC",
+   "knowledge_time": "2026-08-10T21:02:00Z",
+   "line": 2,
+   "no_voting": 0.0,
+   "period_end": "2026-06-30",
+   "put_call": "Put",
+   "share_type": "SH",
+   "shared_voting": 30000.0,
+   "shares": 30000.0,
+   "sole_voting": 0.0,
+   "title_of_class": "COM",
+   "value_usd": 1200000.0
+  }
+ ]
+}

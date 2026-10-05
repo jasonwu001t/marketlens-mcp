@@ -67,6 +67,10 @@ def test_default_text_is_the_init_file_and_round_trips(tmp_path):
         "reference": True,
         "news": True,
         "analytics": True,
+        "macro": True,
+        "filings": True,
+        "fed_treasury": True,
+        "calendars": False,
         "portfolio": False,
         "results.export": False,
         "provider.docs": False,
@@ -110,7 +114,7 @@ def test_r2_unknown_nested_key(tmp_path):
     msg = refusal(tmp_path, "providers:\n  polygon: {}\n")
     assert (
         msg
-        == f"marketlens config {shown(tmp_path)}: unknown setting 'providers.polygon'. Known settings here: alpaca."
+        == f"marketlens config {shown(tmp_path)}: unknown setting 'providers.polygon'. Known settings here: alpaca, data."
     )
 
 

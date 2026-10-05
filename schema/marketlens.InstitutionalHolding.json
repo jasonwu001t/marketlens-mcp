@@ -1,0 +1,231 @@
+{
+  "$defs": {
+    "AbsenceCode": {
+      "description": "Why a value is None. Never served as 0.",
+      "enum": [
+        "not_provided_by_source",
+        "not_applicable",
+        "not_entitled",
+        "no_data",
+        "insufficient_data",
+        "not_recovered",
+        "no_match",
+        "withheld",
+        "source_error",
+        "unparseable"
+      ],
+      "title": "AbsenceCode",
+      "type": "string"
+    }
+  },
+  "$id": "urn:marketlens:schema:1:marketlens.InstitutionalHolding",
+  "additionalProperties": false,
+  "description": "One position of a 13F-HR information table.",
+  "properties": {
+    "absent": {
+      "anyOf": [
+        {
+          "additionalProperties": {
+            "$ref": "#/$defs/AbsenceCode"
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Per-row reasons for None fields: field name -> AbsenceCode",
+      "title": "Absent"
+    },
+    "accession_number": {
+      "title": "Accession Number",
+      "type": "string"
+    },
+    "amendment_type": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "RESTATEMENT or NEW HOLDINGS",
+      "title": "Amendment Type"
+    },
+    "cusip": {
+      "title": "Cusip",
+      "type": "string"
+    },
+    "filer_cik": {
+      "title": "Filer Cik",
+      "type": "string"
+    },
+    "filer_name": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Filer Name"
+    },
+    "filing_date": {
+      "format": "date",
+      "title": "Filing Date",
+      "type": "string"
+    },
+    "form": {
+      "description": "13F-HR or 13F-HR/A",
+      "title": "Form",
+      "type": "string"
+    },
+    "investment_discretion": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Investment Discretion"
+    },
+    "is_amendment": {
+      "title": "Is Amendment",
+      "type": "boolean"
+    },
+    "issuer_name": {
+      "title": "Issuer Name",
+      "type": "string"
+    },
+    "knowledge_time": {
+      "description": "When the value became knowable under the dataset's point-in-time policy",
+      "format": "date-time",
+      "title": "Knowledge Time",
+      "type": "string",
+      "x-unit": "UTC"
+    },
+    "line": {
+      "description": "Position in the information table (1 = first)",
+      "title": "Line",
+      "type": "integer",
+      "x-unit": "ordinal"
+    },
+    "no_voting": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "No Voting",
+      "x-unit": "shares"
+    },
+    "period_end": {
+      "format": "date",
+      "title": "Period End",
+      "type": "string"
+    },
+    "put_call": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Put Call"
+    },
+    "share_type": {
+      "description": "SH (shares) or PRN (principal)",
+      "title": "Share Type",
+      "type": "string"
+    },
+    "shared_voting": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Shared Voting",
+      "x-unit": "shares"
+    },
+    "shares": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Shares, or principal in USD when share_type is PRN",
+      "title": "Shares",
+      "x-unit": "as_published"
+    },
+    "sole_voting": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Sole Voting",
+      "x-unit": "shares"
+    },
+    "title_of_class": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Title Of Class"
+    },
+    "value_usd": {
+      "title": "Value Usd",
+      "type": "number",
+      "x-unit": "USD"
+    }
+  },
+  "required": [
+    "filer_cik",
+    "accession_number",
+    "line",
+    "form",
+    "period_end",
+    "filing_date",
+    "is_amendment",
+    "issuer_name",
+    "cusip",
+    "value_usd",
+    "share_type",
+    "knowledge_time"
+  ],
+  "title": "InstitutionalHolding",
+  "type": "object",
+  "x-schema-version": "1.1.0"
+}

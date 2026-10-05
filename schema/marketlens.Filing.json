@@ -1,0 +1,161 @@
+{
+  "$defs": {
+    "AbsenceCode": {
+      "description": "Why a value is None. Never served as 0.",
+      "enum": [
+        "not_provided_by_source",
+        "not_applicable",
+        "not_entitled",
+        "no_data",
+        "insufficient_data",
+        "not_recovered",
+        "no_match",
+        "withheld",
+        "source_error",
+        "unparseable"
+      ],
+      "title": "AbsenceCode",
+      "type": "string"
+    }
+  },
+  "$id": "urn:marketlens:schema:1:marketlens.Filing",
+  "additionalProperties": false,
+  "description": "One EDGAR filing (the filings index, not its content).",
+  "properties": {
+    "absent": {
+      "anyOf": [
+        {
+          "additionalProperties": {
+            "$ref": "#/$defs/AbsenceCode"
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Per-row reasons for None fields: field name -> AbsenceCode",
+      "title": "Absent"
+    },
+    "accepted_at": {
+      "description": "EDGAR acceptance; the end of the filing day in New York when EDGAR states none",
+      "format": "date-time",
+      "title": "Accepted At",
+      "type": "string",
+      "x-unit": "UTC"
+    },
+    "accession_number": {
+      "title": "Accession Number",
+      "type": "string"
+    },
+    "cik": {
+      "description": "10-digit, zero-padded",
+      "title": "Cik",
+      "type": "string"
+    },
+    "company_name": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Company Name"
+    },
+    "filing_date": {
+      "format": "date",
+      "title": "Filing Date",
+      "type": "string"
+    },
+    "form": {
+      "description": "10-K, 10-Q, 8-K, 4, DEF 14A, ...",
+      "title": "Form",
+      "type": "string"
+    },
+    "items": {
+      "description": "8-K item codes, e.g. 2.02",
+      "items": {
+        "type": "string"
+      },
+      "title": "Items",
+      "type": "array"
+    },
+    "knowledge_time": {
+      "description": "When the value became knowable under the dataset's point-in-time policy",
+      "format": "date-time",
+      "title": "Knowledge Time",
+      "type": "string",
+      "x-unit": "UTC"
+    },
+    "primary_doc_url": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Primary Doc Url"
+    },
+    "report_date": {
+      "anyOf": [
+        {
+          "format": "date",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Report Date"
+    },
+    "sic": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Sic"
+    },
+    "sic_description": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Sic Description"
+    },
+    "ticker": {
+      "description": "SEC style, e.g. BRK-B",
+      "title": "Ticker",
+      "type": "string"
+    }
+  },
+  "required": [
+    "ticker",
+    "cik",
+    "form",
+    "filing_date",
+    "accepted_at",
+    "accession_number",
+    "knowledge_time"
+  ],
+  "title": "Filing",
+  "type": "object",
+  "x-schema-version": "1.1.0"
+}

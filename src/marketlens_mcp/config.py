@@ -34,6 +34,10 @@ capabilities:
   reference: true         # assets, contracts, calendar, clock, corporate actions
   news: true              # news (third-party text, marked untrusted)
   analytics: true         # returns, volatility, correlation, ... on stored results
+  macro: true             # FRED, BLS, BEA (needs the data extra)
+  filings: true           # SEC EDGAR (needs the data extra)
+  fed_treasury: true      # FOMC, NY Fed rates, Treasury curve and auctions (needs the data extra)
+  calendars: false        # Nasdaq calendars: an unofficial endpoint (needs the data extra)
   portfolio: false        # brokerage account reads; what the model reads leaves your machine
   results.export: false   # write stored results to files in results.export_dir
   provider.docs: false    # search the provider's documentation (outbound call)
@@ -49,6 +53,12 @@ providers:
     rate_limit_per_minute: 190
     trading_url: null     # override; default by portfolio.environment
     data_url: null        # override; default https://data.alpaca.markets
+  data:
+    mode: auto            # auto (fetch and keep) | local (read only what is stored)
+    data_dir: null        # absolute folder for the data store; default: the per-user data folder
+    ttl_hours: 12         # how long a fetched slice is reused before it is fetched again
+    calendar_ttl_minutes: 60
+    call_timeout_seconds: 120
 
 results:
   inline_max_rows: 200
@@ -74,7 +84,17 @@ http:
 """
 
 #: The secrets marketlens reads, only ever from the environment.
-SECRET_ENV = ("ALPACA_API_KEY", "ALPACA_SECRET_KEY", "MARKETLENS_HTTP_TOKEN")
+SECRET_ENV = (
+    "ALPACA_API_KEY",
+    "ALPACA_SECRET_KEY",
+    "MARKETLENS_HTTP_TOKEN",
+    "FRED_API_KEY",
+    "BEA_API_KEY",
+    "BLS_API_KEY",
+)
+#: Shown as set/unset by ``config show``: the secrets, and the contact address
+#: SEC EDGAR asks for (personal, so its value is not shown either).
+SHOWN_ENV = (*SECRET_ENV, "SEC_CONTACT_EMAIL")
 
 
 class ConfigError(Exception):
@@ -131,6 +151,13 @@ class _OptStr(_Rule):
         return value is None or isinstance(value, str)
 
 
+class _AbsPathOrNull(_Rule):
+    type_text = "an absolute path"
+
+    def check(self, value: Any) -> bool:
+        return value is None or (isinstance(value, str) and pathlib.Path(value).expanduser().is_absolute())
+
+
 _SIZE_RE = re.compile(r"^\d+(?:\.\d+)?\s*(?:KB|MB|GB|TB|KiB|MiB|GiB|TiB)$")
 
 
@@ -167,7 +194,14 @@ SCHEMA: dict[str, Any] = {
             "rate_limit_per_minute": _Int(1, 199),
             "trading_url": _OptStr(),
             "data_url": _OptStr(),
-        }
+        },
+        "data": {
+            "mode": _Choice("auto", "local"),
+            "data_dir": _AbsPathOrNull(),
+            "ttl_hours": _Num(1, 168),
+            "calendar_ttl_minutes": _Int(5, 1440),
+            "call_timeout_seconds": _Int(10, 600),
+        },
     },
     "results": {
         "inline_max_rows": _Int(1, 1000),
@@ -255,7 +289,7 @@ class Config:
         text = f"# effective marketlens config (file: {self.display_path}{'' if self.exists else ', not present'})\n"
         text += yaml.safe_dump(body, sort_keys=False, default_flow_style=False)
         text += "# environment (values never shown):\n"
-        for name in SECRET_ENV:
+        for name in SHOWN_ENV:
             text += f"# {name}: {'set' if e.get(name) else 'unset'}\n"
         return text
 

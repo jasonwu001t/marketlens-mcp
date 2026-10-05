@@ -1,0 +1,103 @@
+{
+ "absent": {},
+ "model": "marketlens.EconomicObservation",
+ "notes": [],
+ "offload": "auto",
+ "pagination": null,
+ "provenance": {
+  "as_of": null,
+  "authority": [
+   "official"
+  ],
+  "cached": false,
+  "dataset": "bea.nipa",
+  "delay": "unknown",
+  "derived_from": [],
+  "environment": null,
+  "feed": null,
+  "knowledge_time": "2026-07-30T00:00:00Z",
+  "lag_days": 184.0,
+  "operation": null,
+  "pages_fetched": 1,
+  "provider": "bea",
+  "request": {
+   "as_of": null,
+   "end": null,
+   "frequency": "Q",
+   "line_numbers": null,
+   "start": null,
+   "table_name": "T10101"
+  },
+  "route": "omni bea.nipa <- apps.bea.gov/api/data (NIPA GetData)",
+  "schema_version": "1.1.0",
+  "stale": null,
+  "truncated": false,
+  "truncation_note": null,
+  "upstream_request_id": null
+ },
+ "risk": null,
+ "rows": [
+  {
+   "absent": null,
+   "date": "2026-01-01",
+   "frequency": "Q",
+   "knowledge_time": "2026-04-30T00:00:00Z",
+   "line_number": 1,
+   "period": "Q1",
+   "pit": "lagged",
+   "series_id": "A191RL",
+   "source": "bea",
+   "table_name": "T10101",
+   "title": "Gross domestic product",
+   "units": "Percent change, annual rate",
+   "value": 1.4
+  },
+  {
+   "absent": null,
+   "date": "2026-04-01",
+   "frequency": "Q",
+   "knowledge_time": "2026-07-30T00:00:00Z",
+   "line_number": 1,
+   "period": "Q2",
+   "pit": "lagged",
+   "series_id": "A191RL",
+   "source": "bea",
+   "table_name": "T10101",
+   "title": "Gross domestic product",
+   "units": "Percent change, annual rate",
+   "value": 2.1
+  },
+  {
+   "absent": null,
+   "date": "2026-01-01",
+   "frequency": "Q",
+   "knowledge_time": "2026-04-30T00:00:00Z",
+   "line_number": 2,
+   "period": "Q1",
+   "pit": "lagged",
+   "series_id": "DPCERL",
+   "source": "bea",
+   "table_name": "T10101",
+   "title": "Personal consumption expenditures",
+   "units": "Percent change, annual rate",
+   "value": 0.9
+  },
+  {
+   "absent": {
+    "value": "no_data"
+   },
+   "date": "2026-04-01",
+   "frequency": "Q",
+   "knowledge_time": "2026-07-30T00:00:00Z",
+   "line_number": 2,
+   "period": "Q2",
+   "pit": "lagged",
+   "series_id": "DPCERL",
+   "source": "bea",
+   "table_name": "T10101",
+   "title": "Personal consumption expenditures",
+   "units": "Percent change, annual rate",
+   "value": null
+  }
+ ]
+}

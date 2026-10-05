@@ -1,0 +1,86 @@
+{
+ "absent": {},
+ "model": "marketlens.FomcMeeting",
+ "notes": [],
+ "offload": "auto",
+ "pagination": null,
+ "provenance": {
+  "as_of": null,
+  "authority": [
+   "official"
+  ],
+  "cached": false,
+  "dataset": "fomc.meetings",
+  "delay": "unknown",
+  "derived_from": [],
+  "environment": null,
+  "feed": null,
+  "knowledge_time": "2026-10-02T20:00:00Z",
+  "lag_days": -116.0,
+  "operation": null,
+  "pages_fetched": 1,
+  "provider": "fomc",
+  "request": {
+   "as_of": null,
+   "end": "2027-12-31",
+   "start": "2026-01-01"
+  },
+  "route": "omni fomc.meetings <- www.federalreserve.gov/monetarypolicy/fomccalendars.htm",
+  "schema_version": "1.1.0",
+  "stale": null,
+  "truncated": false,
+  "truncation_note": null,
+  "upstream_request_id": null
+ },
+ "risk": null,
+ "rows": [
+  {
+   "absent": null,
+   "end_date": "2026-01-28",
+   "has_projection": false,
+   "knowledge_time": "2026-10-02T20:00:00Z",
+   "start_date": "2026-01-27",
+   "year": 2026
+  },
+  {
+   "absent": null,
+   "end_date": "2026-03-18",
+   "has_projection": true,
+   "knowledge_time": "2026-10-02T20:00:00Z",
+   "start_date": "2026-03-17",
+   "year": 2026
+  },
+  {
+   "absent": null,
+   "end_date": "2026-07-29",
+   "has_projection": false,
+   "knowledge_time": "2026-10-02T20:00:00Z",
+   "start_date": "2026-07-28",
+   "year": 2026
+  },
+  {
+   "absent": null,
+   "end_date": "2026-09-16",
+   "has_projection": true,
+   "knowledge_time": "2026-10-02T20:00:00Z",
+   "start_date": "2026-09-15",
+   "year": 2026
+  },
+  {
+   "absent": null,
+   "end_date": "2026-12-09",
+   "has_projection": true,
+   "knowledge_time": "2026-10-02T20:00:00Z",
+   "start_date": "2026-12-08",
+   "year": 2026
+  },
+  {
+   "absent": null,
+   "end_date": "2027-01-27",
+   "has_projection": false,
+   "knowledge_time": "2026-10-02T20:00:00Z",
+   "start_date": "2027-01-26",
+   "year": 2027
+  }
+ ]
+}

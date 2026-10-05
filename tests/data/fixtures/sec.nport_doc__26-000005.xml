@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- synthetic Form N-PORT primary document -->
+<edgarSubmission xmlns="http://www.sec.gov/edgar/nport">
+ <headerData>
+  <submissionType>NPORT-P</submissionType>
+  <filerInfo>
+   <seriesClassInfo><seriesId>S000099991</seriesId><classId>C000099991</classId><classId>C000099992</classId></seriesClassInfo>
+  </filerInfo>
+ </headerData>
+ <formData>
+  <genInfo>
+   <regName>Synthetic Index Funds Trust</regName>
+   <seriesName>Synthetic Total Market Index Fund</seriesName>
+   <seriesId>S000099991</seriesId>
+   <repPdEnd>2026-12-31</repPdEnd>
+   <repPdDate>2026-06-30</repPdDate>
+   <isFinalFiling>N</isFinalFiling>
+  </genInfo>
+  <fundInfo>
+   <totAssets>399000000</totAssets>
+   <totLiabs>1000000</totLiabs>
+   <netAssets>398000000</netAssets>
+  </fundInfo>
+  <invstOrSecs>
+   <invstOrSec>
+    <name>Testco Synthetic Corp</name><lei>5493000000000000TST1</lei><title>Testco Synthetic Corp</title><cusip>99999T101</cusip>
+    <identifiers><isin value="US99999T1015"/></identifiers>
+    <balance>100000</balance><units>NS</units><curCd>USD</curCd><valUSD>5025000</valUSD><pctVal>1.2625</pctVal>
+    <payoffProfile>Long</payoffProfile><assetCat>EC</assetCat><issuerCat>CORP</issuerCat><invCountry>US</invCountry>
+   </invstOrSec>
+   <invstOrSec>
+    <name>US Treasury Bill</name><lei>N/A</lei><title>US Treasury Bill</title><cusip>000000000</cusip>
+    <identifiers><isin value="US912797SX61"/></identifiers>
+    <balance>2000000</balance><units>PA</units><curCd>USD</curCd><valUSD>1990000</valUSD><pctVal>0.5</pctVal>
+    <payoffProfile>Long</payoffProfile><assetCat>DBT</assetCat><issuerCat>UST</issuerCat><invCountry>US</invCountry>
+   </invstOrSec>
+  </invstOrSecs>
+ </formData>
+</edgarSubmission>

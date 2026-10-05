@@ -27,7 +27,7 @@
   "provider": "alpaca",
   "request": {},
   "route": "GET /v1beta1/options/meta/exchanges",
-  "schema_version": "1.0.0",
+  "schema_version": "1.1.0",
   "stale": null,
   "truncated": false,
   "truncation_note": null,

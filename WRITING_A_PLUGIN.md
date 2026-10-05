@@ -189,7 +189,7 @@ What the example shows:
 
 ## Naming rules
 
-- Plugin names (entry-point names): `^[a-z][a-z0-9_]{1,31}$`, not `results`, `alpaca`, `analytics`, `core` or `marketlens`.
+- Plugin names (entry-point names): `^[a-z][a-z0-9_]{1,31}$`, not `results`, `alpaca`, `analytics`, `data`, `core` or `marketlens`.
 - Tool names: snake_case, domain first, at most 40 characters (`<domain>_<thing>`), so that a client's prefix still fits provider limits.
 - Capability ids: `research`, `myplugin.extra` (lower case, at most one dot).
 - Model schema names: `<plugin>.<Model>`.

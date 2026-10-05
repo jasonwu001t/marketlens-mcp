@@ -1,0 +1,9 @@
+{
+ "_synthetic": true,
+ "data": [
+  {"record_date": "2025-06-30", "debt_held_public_amt": "29000000000000.00", "intragov_hold_amt": "7200000000000.00", "tot_pub_debt_out_amt": "36200000000000.00"},
+  {"record_date": "2026-09-29", "debt_held_public_amt": "29990000000000.00", "intragov_hold_amt": "7490000000000.00", "tot_pub_debt_out_amt": "37480000000000.00"},
+  {"record_date": "2026-09-30", "debt_held_public_amt": "30000000000000.00", "intragov_hold_amt": "7500000000000.00", "tot_pub_debt_out_amt": "37500000000000.00"}
+ ],
+ "meta": {"count": 3}
+}

@@ -8,10 +8,45 @@ and skipped unless MARKETLENS_RUN_NETWORK=1.
 
 from __future__ import annotations
 
+import atexit
+import contextlib
+import importlib.util
 import os
+import shutil
 import socket
+import tempfile
 
 import pytest
+
+# The data extra (marketlens-data, import name omni) may be installed. Before
+# anything imports it: no key from the developer's shell, and none from a .env
+# an installed omni might read (an omni that predates OMNI_ENV_FILE loads its
+# checkout's .env with override=False, and a present empty value counts as set);
+# its test-run marker on; its store under the OS temp directory.
+for _name in (
+    "FRED_API_KEY",
+    "BLS_API_KEY",
+    "BEA_API_KEY",
+    "EIA_API_KEY",
+    "CENSUS_API_KEY",
+    "SEC_CONTACT_EMAIL",
+    "ALPACA_API_KEY",
+    "ALPACA_SECRET_KEY",
+    "ALPACA_API_SECRET",
+    "APCA_API_KEY_ID",
+    "APCA_API_SECRET_KEY",
+):
+    os.environ[_name] = ""
+os.environ["OMNI_ENV_FILE"] = ""
+os.environ["OMNI_TEST_RUN"] = "1"
+_OMNI_DATA = tempfile.mkdtemp(prefix="marketlens-test-omni-")
+os.environ["OMNI_DATA_DIR"] = _OMNI_DATA
+atexit.register(shutil.rmtree, _OMNI_DATA, True)
+if importlib.util.find_spec("omni") is not None:
+    # Import it now, while every key is blank, rather than inside a test that
+    # removed one (the shared fixture below deletes the Alpaca keys per test).
+    with contextlib.suppress(Exception):  # a broken install is reported by the data tests and doctor
+        import omni.config  # noqa: F401
 
 
 @pytest.fixture(autouse=True)

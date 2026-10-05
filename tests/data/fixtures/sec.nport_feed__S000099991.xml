@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="ISO-8859-1" ?>
+<!-- synthetic EDGAR browse feed of a fund series -->
+<feed xmlns="http://www.w3.org/2005/Atom">
+ <title>Synthetic Index Fund series filings</title>
+ <entry>
+  <category label="form type" scheme="https://www.sec.gov/" term="NPORT-P"/>
+  <content type="text/xml">
+   <accession-number>0009999970-26-000005</accession-number>
+   <filing-date>2026-08-28</filing-date>
+   <filing-type>NPORT-P</filing-type>
+  </content>
+ </entry>
+ <entry>
+  <category label="form type" scheme="https://www.sec.gov/" term="NPORT-P"/>
+  <content type="text/xml">
+   <accession-number>0009999970-26-000002</accession-number>
+   <filing-date>2026-05-29</filing-date>
+   <filing-type>NPORT-P</filing-type>
+  </content>
+ </entry>
+</feed>

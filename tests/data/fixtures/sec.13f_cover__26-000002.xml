@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- synthetic 13F cover page -->
+<edgarSubmission xmlns="http://www.sec.gov/edgar/thirteenffiler">
+ <formData>
+  <coverPage><reportCalendarOrQuarter>03-31-2026</reportCalendarOrQuarter><isAmendment>false</isAmendment></coverPage>
+  <summaryPage><tableEntryTotal>2</tableEntryTotal></summaryPage>
+ </formData>
+</edgarSubmission>

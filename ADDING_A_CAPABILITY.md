@@ -95,6 +95,16 @@ One commit per sync or endpoint, with a message that lists:
 - breaking changes (removed or renamed endpoints and tools);
 - that README, schemas, fixtures, golden files and the pinned hashes were updated.
 
+## Adding an official-data tool (the data extra)
+
+The `data` provider (`src/marketlens_mcp/providers/data/`) reads publishers through marketlens-data (import name `omni`) rather than calling them itself, so a new official-data tool starts from a marketlens-data dataset:
+
+1. **Find the dataset and its identity.** `omni.list_datasets()` names every dataset; `src/marketlens_mcp/providers/data/parity.py` says which are mapped and why the rest are not. The tool's *identity* is the set of fetch params it passes (`{"series_id": ...}`, `{"ticker": ...}`, or `{}`): freshness is kept per identity, so pass only what names the slice and filter dates and columns after the read.
+2. **Write the tool** in `providers/data/tools/<module>.py`: an input model on `tools.common.Inputs` (with `as_of`), a handler that runs its omni work through `common.run(...)` (the single worker thread, the timeout and the error mapping), `Session.refresh(dataset_id, identity)` then `Session.read(dataset_id, as_of=..., **column_filters)`, canonical rows built with `common.row(...)` (every `None` explained), and `common.provenance(...)` / `common.output(...)` (row cap included). Convert units in the handler: percents to fractions, millions and billions to USD.
+3. **Describe it**: its description carries the dataset's point-in-time line (`common.describe(text, policy)`), the key it needs, and the "stored" note; `ToolSpec.env` names the key; `DATASETS` maps the tool to its dataset ids.
+4. **Account for it** in `parity.PARITY` (Mapped), and the key in `sources.SOURCES` if the source is new (doctor prints its line).
+5. **Test it** in `tests/data/test_<module>.py` with a synthetic fixture in the publisher's own shape, served by the fake publisher of `tests/data/data_harness.py` behind marketlens-data's HTTP client, and a golden file (`MARKETLENS_UPDATE_GOLDEN=1`, then read it). `make test-data` runs them; they need the extra installed.
+
 ## Adding a provider instead
 
 A different vendor (another broker, a data API, a local database) is a plugin, not a change to this provider: map its responses onto the existing canonical models, prefix its tools with its own name, set `provenance.provider` to the vendor, keep its own exclusion list and parity test against the vendor's API. See [WRITING_A_PLUGIN.md](WRITING_A_PLUGIN.md).

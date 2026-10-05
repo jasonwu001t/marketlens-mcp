@@ -30,7 +30,7 @@
    "start": "2026-10-01"
   },
   "route": "GET /v1/locates",
-  "schema_version": "1.0.0",
+  "schema_version": "1.1.0",
   "stale": null,
   "truncated": false,
   "truncation_note": null,

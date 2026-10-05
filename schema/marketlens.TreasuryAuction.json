@@ -1,0 +1,205 @@
+{
+  "$defs": {
+    "AbsenceCode": {
+      "description": "Why a value is None. Never served as 0.",
+      "enum": [
+        "not_provided_by_source",
+        "not_applicable",
+        "not_entitled",
+        "no_data",
+        "insufficient_data",
+        "not_recovered",
+        "no_match",
+        "withheld",
+        "source_error",
+        "unparseable"
+      ],
+      "title": "AbsenceCode",
+      "type": "string"
+    }
+  },
+  "$id": "urn:marketlens:schema:1:marketlens.TreasuryAuction",
+  "additionalProperties": false,
+  "properties": {
+    "absent": {
+      "anyOf": [
+        {
+          "additionalProperties": {
+            "$ref": "#/$defs/AbsenceCode"
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Per-row reasons for None fields: field name -> AbsenceCode",
+      "title": "Absent"
+    },
+    "auction_date": {
+      "format": "date",
+      "title": "Auction Date",
+      "type": "string"
+    },
+    "bid_to_cover": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Bid To Cover",
+      "x-unit": "times"
+    },
+    "cusip": {
+      "title": "Cusip",
+      "type": "string"
+    },
+    "high_discount_rate": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "High Discount Rate",
+      "x-unit": "fraction_per_year"
+    },
+    "high_investment_rate": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "High Investment Rate",
+      "x-unit": "fraction_per_year"
+    },
+    "high_yield": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "High Yield",
+      "x-unit": "fraction_per_year"
+    },
+    "interest_rate": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Interest Rate",
+      "x-unit": "fraction_per_year"
+    },
+    "issue_date": {
+      "anyOf": [
+        {
+          "format": "date",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Issue Date"
+    },
+    "knowledge_time": {
+      "description": "When the value became knowable under the dataset's point-in-time policy",
+      "format": "date-time",
+      "title": "Knowledge Time",
+      "type": "string",
+      "x-unit": "UTC"
+    },
+    "maturity_date": {
+      "anyOf": [
+        {
+          "format": "date",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Maturity Date"
+    },
+    "offering_amount": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Offering Amount",
+      "x-unit": "USD"
+    },
+    "price_per_100": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Price Per 100",
+      "x-unit": "percent_of_par"
+    },
+    "security_term": {
+      "title": "Security Term",
+      "type": "string"
+    },
+    "security_type": {
+      "title": "Security Type",
+      "type": "string"
+    },
+    "total_accepted": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Total Accepted",
+      "x-unit": "USD"
+    }
+  },
+  "required": [
+    "cusip",
+    "auction_date",
+    "security_type",
+    "security_term",
+    "knowledge_time"
+  ],
+  "title": "TreasuryAuction",
+  "type": "object",
+  "x-schema-version": "1.1.0"
+}

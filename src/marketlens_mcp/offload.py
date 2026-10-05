@@ -40,12 +40,15 @@ def estimate_tokens(rows: Sequence[Mapping[str, Any]]) -> int:
 
 
 def truncation_note(tool: str, pagination: PaginationState, limits: FetchLimits) -> str:
-    """R16."""
-    return (
+    """R16; without a page token there is nothing to continue from, so the
+    note asks for a narrower request instead."""
+    stopped = (
         f"Stopped after {pagination.pages_fetched} pages and {pagination.rows_fetched} rows (limits "
-        f"fetch.max_pages={limits.max_pages}, fetch.max_rows={limits.max_rows}). The data is incomplete; call "
-        f'{tool} again with page_token="{pagination.next_page_token}" to continue.'
+        f"fetch.max_pages={limits.max_pages}, fetch.max_rows={limits.max_rows}). The data is incomplete; "
     )
+    if not pagination.next_page_token:
+        return stopped + "narrow the request."
+    return stopped + f'call {tool} again with page_token="{pagination.next_page_token}" to continue.'
 
 
 def _row_json(row: CanonicalModel) -> dict[str, Any]:
@@ -84,7 +87,15 @@ def finalize(
     notes = list(out.notes)
     provenance: Provenance = out.provenance
     p = out.pagination
-    if p is not None and not p.complete and (p.row_cap_hit or p.page_cap_hit):
+    # Without a page token (a result read at once and cut at fetch.max_rows) the
+    # handler's own truncation note stands; a handler that gave none gets the
+    # token-free note, so a cut answer is always flagged.
+    if (
+        p is not None
+        and not p.complete
+        and (p.row_cap_hit or p.page_cap_hit)
+        and (p.next_page_token or not provenance.truncation_note)
+    ):
         note = truncation_note(tool, p, limits)
         if note not in notes:
             notes.append(note)

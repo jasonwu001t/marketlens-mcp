@@ -1,0 +1,140 @@
+{
+  "$defs": {
+    "AbsenceCode": {
+      "description": "Why a value is None. Never served as 0.",
+      "enum": [
+        "not_provided_by_source",
+        "not_applicable",
+        "not_entitled",
+        "no_data",
+        "insufficient_data",
+        "not_recovered",
+        "no_match",
+        "withheld",
+        "source_error",
+        "unparseable"
+      ],
+      "title": "AbsenceCode",
+      "type": "string"
+    }
+  },
+  "$id": "urn:marketlens:schema:1:marketlens.EarningsFigure",
+  "additionalProperties": false,
+  "description": "One EPS figure read from a table of an earnings press release (EX-99.1).\n``source_text`` is UNTRUSTED company text.",
+  "properties": {
+    "absent": {
+      "anyOf": [
+        {
+          "additionalProperties": {
+            "$ref": "#/$defs/AbsenceCode"
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Per-row reasons for None fields: field name -> AbsenceCode",
+      "title": "Absent"
+    },
+    "accepted_at": {
+      "description": "The 8-K's EDGAR acceptance",
+      "format": "date-time",
+      "title": "Accepted At",
+      "type": "string",
+      "x-unit": "UTC"
+    },
+    "accession_number": {
+      "title": "Accession Number",
+      "type": "string"
+    },
+    "basis": {
+      "description": "gaap or non_gaap",
+      "title": "Basis",
+      "type": "string"
+    },
+    "cik": {
+      "title": "Cik",
+      "type": "string"
+    },
+    "exhibit": {
+      "description": "EX-99.1, EX-99, ...",
+      "title": "Exhibit",
+      "type": "string"
+    },
+    "exhibit_url": {
+      "title": "Exhibit Url",
+      "type": "string"
+    },
+    "fiscal_period_label": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The table's column header, as stated",
+      "title": "Fiscal Period Label"
+    },
+    "knowledge_time": {
+      "description": "When the value became knowable under the dataset's point-in-time policy",
+      "format": "date-time",
+      "title": "Knowledge Time",
+      "type": "string",
+      "x-unit": "UTC"
+    },
+    "metric": {
+      "enum": [
+        "eps_diluted_gaap",
+        "eps_adjusted"
+      ],
+      "title": "Metric",
+      "type": "string"
+    },
+    "parse_rule": {
+      "title": "Parse Rule",
+      "type": "string"
+    },
+    "source_text": {
+      "description": "The table row the figure came from (untrusted text)",
+      "title": "Source Text",
+      "type": "string"
+    },
+    "ticker": {
+      "title": "Ticker",
+      "type": "string"
+    },
+    "unit": {
+      "description": "As the parser states it: USD/share",
+      "title": "Unit",
+      "type": "string"
+    },
+    "value": {
+      "title": "Value",
+      "type": "number",
+      "x-unit": "USD_per_share"
+    }
+  },
+  "required": [
+    "ticker",
+    "cik",
+    "accession_number",
+    "accepted_at",
+    "exhibit",
+    "exhibit_url",
+    "metric",
+    "value",
+    "unit",
+    "basis",
+    "source_text",
+    "parse_rule",
+    "knowledge_time"
+  ],
+  "title": "EarningsFigure",
+  "type": "object",
+  "x-schema-version": "1.1.0"
+}

@@ -1,0 +1,52 @@
+{
+ "absent": {},
+ "model": "marketlens.TreasuryCashBalance",
+ "notes": [],
+ "offload": "auto",
+ "pagination": null,
+ "provenance": {
+  "as_of": null,
+  "authority": [
+   "official"
+  ],
+  "cached": false,
+  "dataset": "fiscaldata.tga_balance",
+  "delay": "unknown",
+  "derived_from": [],
+  "environment": null,
+  "feed": null,
+  "knowledge_time": "2026-10-01T21:00:00Z",
+  "lag_days": 2.0,
+  "operation": null,
+  "pages_fetched": 1,
+  "provider": "fiscaldata",
+  "request": {
+   "as_of": null,
+   "end": "2026-10-02",
+   "start": "2025-10-02"
+  },
+  "route": "omni fiscaldata.tga_balance <- api.fiscaldata.treasury.gov/v1/accounting/dts/operating_cash_balance",
+  "schema_version": "1.1.0",
+  "stale": null,
+  "truncated": false,
+  "truncation_note": null,
+  "upstream_request_id": null
+ },
+ "risk": null,
+ "rows": [
+  {
+   "absent": null,
+   "account_type": "Treasury General Account (TGA) Closing Balance",
+   "closing_balance": 830500000000.0,
+   "date": "2026-09-29",
+   "knowledge_time": "2026-09-30T21:00:00Z"
+  },
+  {
+   "absent": null,
+   "account_type": "Treasury General Account (TGA) Closing Balance",
+   "closing_balance": 850123456000.0,
+   "date": "2026-09-30",
+   "knowledge_time": "2026-10-01T21:00:00Z"
+  }
+ ]
+}

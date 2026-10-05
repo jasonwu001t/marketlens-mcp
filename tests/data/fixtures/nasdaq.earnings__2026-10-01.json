@@ -1,0 +1,45 @@
+{
+ "_synthetic": true,
+ "data": {
+  "headers": {
+   "time": "Time",
+   "symbol": "Symbol",
+   "name": "Company Name",
+   "marketCap": "Market Cap",
+   "fiscalQuarterEnding": "Fiscal Quarter Ending",
+   "epsForecast": "Consensus EPS* Forecast",
+   "noOfEsts": "# of Ests",
+   "eps": "EPS",
+   "surprise": "% Surprise"
+  },
+  "rows": [
+   {
+    "time": "time-pre-market",
+    "symbol": "OTHRCO",
+    "name": "Otherco Synthetic Inc.",
+    "marketCap": "$2,500,000,000",
+    "fiscalQuarterEnding": "Aug/2026",
+    "epsForecast": "$0.45",
+    "noOfEsts": "6",
+    "eps": "$0.47",
+    "surprise": "4.44"
+   },
+   {
+    "time": "time-not-supplied",
+    "symbol": "LOSSCO",
+    "name": "Lossco Synthetic Ltd",
+    "marketCap": "N/A",
+    "fiscalQuarterEnding": "Aug/2026",
+    "epsForecast": "($0.10)",
+    "noOfEsts": "2",
+    "eps": "($0.12)",
+    "surprise": "-20"
+   }
+  ]
+ },
+ "status": {
+  "rCode": 200,
+  "bCodeMessage": null,
+  "developerMessage": null
+ }
+}

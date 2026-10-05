@@ -1,0 +1,58 @@
+{
+ "_synthetic": true,
+ "data": {
+  "headers": {
+   "gmt": "Time (ET)",
+   "country": "Country",
+   "eventName": "Event",
+   "actual": "Actual",
+   "consensus": "Consensus",
+   "previous": "Previous",
+   "description": "Description"
+  },
+  "rows": [
+   {
+    "gmt": "08:30",
+    "country": "United States",
+    "eventName": "Initial Jobless Claims",
+    "actual": "225K",
+    "consensus": "230K",
+    "previous": "218K",
+    "description": "The number of first-time claims for unemployment insurance.&lt;br&gt;Synthetic description."
+   },
+   {
+    "gmt": "09:45",
+    "country": "United States",
+    "eventName": "S&amp;P Global Manufacturing PMI",
+    "actual": "51.2",
+    "consensus": "51.0",
+    "previous": "50.8",
+    "description": "A synthetic survey of purchasing managers."
+   },
+   {
+    "gmt": "10:00",
+    "country": "United States",
+    "eventName": "ISM Manufacturing PMI",
+    "actual": "49.1",
+    "consensus": "49.5",
+    "previous": "48.7",
+    "description": "A synthetic diffusion index; above 50 means expansion."
+   },
+   {
+    "gmt": "04:00",
+    "country": "Germany",
+    "eventName": "Unemployment Rate",
+    "actual": "6.3%",
+    "consensus": "6.3%",
+    "previous": "6.3%",
+    "description": "Not a US row."
+   }
+  ]
+ },
+ "message": null,
+ "status": {
+  "rCode": 200,
+  "bCodeMessage": null,
+  "developerMessage": null
+ }
+}

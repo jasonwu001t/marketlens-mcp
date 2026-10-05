@@ -39,7 +39,7 @@
    ]
   },
   "route": "GET /v1/corporate-actions",
-  "schema_version": "1.0.0",
+  "schema_version": "1.1.0",
   "stale": null,
   "truncated": false,
   "truncation_note": null,

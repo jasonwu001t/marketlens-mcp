@@ -1,0 +1,37 @@
+{
+ "_synthetic": true,
+ "data": {
+  "symbol": "TESTCO",
+  "earningsSurpriseTable": {
+   "headers": {
+    "fiscalQtrEnd": "Fiscal Quarter End",
+    "dateReported": "Date Reported",
+    "eps": "Earnings Per Share*",
+    "consensusForecast": "Consensus EPS* Forecast",
+    "percentageSurprise": "% Surprise"
+   },
+   "rows": [
+    {
+     "fiscalQtrEnd": "Jun 2026",
+     "dateReported": "7/30/2026",
+     "eps": 0.42,
+     "consensusForecast": "0.40",
+     "percentageSurprise": "5"
+    },
+    {
+     "fiscalQtrEnd": "Mar 2026",
+     "dateReported": "4/29/2026",
+     "eps": 0.38,
+     "consensusForecast": "0.39",
+     "percentageSurprise": "-2.56"
+    }
+   ]
+  }
+ },
+ "message": null,
+ "status": {
+  "rCode": 200,
+  "bCodeMessage": null,
+  "developerMessage": null
+ }
+}

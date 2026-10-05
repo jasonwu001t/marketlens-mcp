@@ -1,0 +1,121 @@
+{
+ "absent": {},
+ "model": "marketlens.ReferenceRate",
+ "notes": [],
+ "offload": "auto",
+ "pagination": null,
+ "provenance": {
+  "as_of": null,
+  "authority": [
+   "official"
+  ],
+  "cached": false,
+  "dataset": "nyfed.reference_rates",
+  "delay": "unknown",
+  "derived_from": [],
+  "environment": null,
+  "feed": null,
+  "knowledge_time": "2026-10-02T13:00:00Z",
+  "lag_days": 1.0,
+  "operation": null,
+  "pages_fetched": 1,
+  "provider": "nyfed",
+  "request": {
+   "as_of": null,
+   "end": "2026-10-02",
+   "rate_types": [
+    "SOFR",
+    "EFFR",
+    "OBFR",
+    "TGCR",
+    "BGCR"
+   ],
+   "start": "2025-10-02"
+  },
+  "route": "omni nyfed.reference_rates <- markets.newyorkfed.org/api/rates/all/search.json",
+  "schema_version": "1.1.0",
+  "stale": null,
+  "truncated": false,
+  "truncation_note": null,
+  "upstream_request_id": null
+ },
+ "risk": null,
+ "rows": [
+  {
+   "absent": {
+    "target_from": "not_applicable",
+    "target_to": "not_applicable",
+    "volume_usd": "no_data"
+   },
+   "date": "2026-09-30",
+   "knowledge_time": "2026-10-01T13:00:00Z",
+   "rate": 0.0441,
+   "rate_type": "SOFR",
+   "target_from": null,
+   "target_to": null,
+   "volume_usd": null
+  },
+  {
+   "absent": {
+    "target_from": "not_applicable",
+    "target_to": "not_applicable"
+   },
+   "date": "2026-10-01",
+   "knowledge_time": "2026-10-02T13:00:00Z",
+   "rate": 0.0433,
+   "rate_type": "SOFR",
+   "target_from": null,
+   "target_to": null,
+   "volume_usd": 2615000000000.0
+  },
+  {
+   "absent": null,
+   "date": "2026-10-01",
+   "knowledge_time": "2026-10-02T13:00:00Z",
+   "rate": 0.0433,
+   "rate_type": "EFFR",
+   "target_from": 0.0425,
+   "target_to": 0.045,
+   "volume_usd": 89000000000.0
+  },
+  {
+   "absent": {
+    "target_from": "not_applicable",
+    "target_to": "not_applicable"
+   },
+   "date": "2026-10-01",
+   "knowledge_time": "2026-10-02T13:00:00Z",
+   "rate": 0.0432,
+   "rate_type": "OBFR",
+   "target_from": null,
+   "target_to": null,
+   "volume_usd": 201000000000.0
+  },
+  {
+   "absent": {
+    "target_from": "not_applicable",
+    "target_to": "not_applicable"
+   },
+   "date": "2026-10-01",
+   "knowledge_time": "2026-10-02T13:00:00Z",
+   "rate": 0.043,
+   "rate_type": "TGCR",
+   "target_from": null,
+   "target_to": null,
+   "volume_usd": 1003000000000.0
+  },
+  {
+   "absent": {
+    "target_from": "not_applicable",
+    "target_to": "not_applicable"
+   },
+   "date": "2026-10-01",
+   "knowledge_time": "2026-10-02T13:00:00Z",
+   "rate": 0.043,
+   "rate_type": "BGCR",
+   "target_from": null,
+   "target_to": null,
+   "volume_usd": 1021000000000.0
+  }
+ ]
+}

@@ -1,0 +1,77 @@
+{
+ "absent": {},
+ "model": "marketlens.XbrlFact",
+ "notes": [],
+ "offload": "auto",
+ "pagination": null,
+ "provenance": {
+  "as_of": null,
+  "authority": [
+   "official"
+  ],
+  "cached": false,
+  "dataset": "sec.company_facts",
+  "delay": "unknown",
+  "derived_from": [],
+  "environment": null,
+  "feed": null,
+  "knowledge_time": "2026-02-10T21:00:00Z",
+  "lag_days": 275.0,
+  "operation": null,
+  "pages_fetched": 1,
+  "provider": "sec",
+  "request": {
+   "as_of": null,
+   "end": null,
+   "forms": null,
+   "include_vintages": false,
+   "metrics": [
+    "Revenues"
+   ],
+   "start": null,
+   "taxonomy": null,
+   "ticker": "TESTCO"
+  },
+  "route": "omni sec.company_facts <- data.sec.gov/api/xbrl/companyfacts",
+  "schema_version": "1.1.0",
+  "stale": null,
+  "truncated": false,
+  "truncation_note": null,
+  "upstream_request_id": null
+ },
+ "risk": null,
+ "rows": [
+  {
+   "absent": null,
+   "accession_number": "0009999901-26-000002",
+   "cik": "0009999901",
+   "fiscal_period": "FY",
+   "fiscal_year": 2025,
+   "form": "10-K",
+   "knowledge_time": "2026-02-10T21:00:00Z",
+   "metric": "Revenues",
+   "period_end": "2024-12-31",
+   "period_start": "2024-01-01",
+   "taxonomy": "us-gaap",
+   "ticker": "TESTCO",
+   "unit": "USD",
+   "value": 1010000000.0
+  },
+  {
+   "absent": null,
+   "accession_number": "0009999901-26-000002",
+   "cik": "0009999901",
+   "fiscal_period": "FY",
+   "fiscal_year": 2025,
+   "form": "10-K",
+   "knowledge_time": "2026-02-10T21:00:00Z",
+   "metric": "Revenues",
+   "period_end": "2025-12-31",
+   "period_start": "2025-01-01",
+   "taxonomy": "us-gaap",
+   "ticker": "TESTCO",
+   "unit": "USD",
+   "value": 1200000000.0
+  }
+ ]
+}

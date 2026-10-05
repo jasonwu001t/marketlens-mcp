@@ -1,0 +1,55 @@
+{
+ "absent": {},
+ "model": "marketlens.FomcStatement",
+ "notes": [],
+ "offload": "auto",
+ "pagination": null,
+ "provenance": {
+  "as_of": null,
+  "authority": [
+   "official"
+  ],
+  "cached": false,
+  "dataset": "fomc.statement",
+  "delay": "unknown",
+  "derived_from": [],
+  "environment": null,
+  "feed": null,
+  "knowledge_time": "2026-09-16T19:00:00Z",
+  "lag_days": 16.0,
+  "operation": null,
+  "pages_fetched": 1,
+  "provider": "fomc",
+  "request": {
+   "as_of": null,
+   "end": "2026-10-02",
+   "include_text": true,
+   "start": "2026-01-01"
+  },
+  "route": "omni fomc.statement <- www.federalreserve.gov (statements linked from the FOMC calendar)",
+  "schema_version": "1.1.0",
+  "stale": null,
+  "truncated": false,
+  "truncation_note": null,
+  "upstream_request_id": null
+ },
+ "risk": null,
+ "rows": [
+  {
+   "absent": null,
+   "knowledge_time": "2026-09-16T19:00:00Z",
+   "meeting_date": "2026-09-16",
+   "n_paragraphs": 3,
+   "text": "Synthetic statement for testing. Recent indicators suggest that economic activity has continued to expand at a solid pace. Job gains have picked up, and the unemployment rate has remained low.\n\nThe Committee seeks to achieve maximum employment and inflation at the rate of 2 percent over the longer run. In support of its goals, the Committee decided to lower the target range for the federal funds rate.\n\nIn assessing the appropriate stance of monetary policy, the Committee will continue to monitor the implications of incoming information for the economic outlook.",
+   "url": "https://www.federalreserve.gov/newsevents/pressreleases/monetary20260916a.htm"
+  },
+  {
+   "absent": null,
+   "knowledge_time": "2026-07-29T19:00:00Z",
+   "meeting_date": "2026-07-29",
+   "n_paragraphs": 3,
+   "text": "Synthetic statement for testing. Recent indicators suggest that economic activity has continued to expand at a solid pace. Job gains have slowed, and the unemployment rate has remained low.\n\nThe Committee seeks to achieve maximum employment and inflation at the rate of 2 percent over the longer run. In support of its goals, the Committee decided to maintain the target range for the federal funds rate.\n\nIn assessing the appropriate stance of monetary policy, the Committee will continue to monitor the implications of incoming information for the economic outlook.",
+   "url": "https://www.federalreserve.gov/newsevents/pressreleases/monetary20260729a.htm"
+  }
+ ]
+}

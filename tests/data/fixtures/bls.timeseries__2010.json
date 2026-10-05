@@ -1,0 +1,13 @@
+{
+ "_synthetic": true,
+ "status": "REQUEST_SUCCEEDED",
+ "responseTime": 41,
+ "message": [],
+ "Results": {"series": [{"seriesID": "LNS14000000", "data": [
+  {"year": "2019", "period": "M13", "periodName": "Annual", "value": "3.7", "footnotes": [{}]},
+  {"year": "2019", "period": "M12", "periodName": "December", "value": "3.6", "footnotes": [{}]},
+  {"year": "2016", "period": "M11", "periodName": "November", "value": "4.7", "footnotes": [{}]},
+  {"year": "2016", "period": "M10", "periodName": "October", "value": "4.9", "footnotes": [{}]},
+  {"year": "2016", "period": "M09", "periodName": "September", "value": "5.0", "footnotes": [{}]}
+ ]}]}
+}

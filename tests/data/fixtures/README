@@ -1,0 +1,16 @@
+Every file in this folder is SYNTHETIC: written by hand for these tests in the
+shape of each publisher's payload (FRED/ALFRED JSON, BLS v2 JSON, BEA NIPA JSON,
+SEC EDGAR submissions, company facts, filing indexes, Form 4/144 XML, 13F
+information tables and cover pages, N-PORT documents and the EDGAR browse feed,
+the Federal Reserve's FOMC calendar and statements, NY Fed JSON, Treasury CSV,
+FiscalData JSON, Nasdaq calendar JSON, NYSE, SIFMA and OPM holiday pages).
+
+No file is a recording of a live response, and no value is real: the companies
+(TESTCO, OTHRCO, LOSSCO), the managers (CIKs 9999950 and 9999951), the fund (series
+S000099991, TFUND), every CIK, CUSIP, accession number, name, figure and
+statement are invented. Structured files carry "_synthetic": true where the
+format allows it; the SEC ticker lists cannot (their shape has no room for a
+marker) and are listed here instead: sec.company_tickers.json and
+sec.company_tickers_mf.json. Page fixtures say "synthetic" in a comment.
+
+No key appears anywhere: the tests use the obvious fakes in data_harness.KEYS.

@@ -12,6 +12,8 @@ make lint            # ruff check + ruff format --check
 
 `make check` runs lint, the tests and the generated-file checks that CI runs.
 
+The data provider's tests (`tests/data`) need the `data` extra (Python 3.13): `make install-data`, then `make test-data`. Without the extra they are skipped. Before marketlens-data is on PyPI, install it from a checkout: `make install-data MARKETLENS_DATA_SRC=../omni`.
+
 ## Ground rules
 
 - **Read-only.** v1 maps read operations only. A pull request that adds a tool which places, changes or cancels anything upstream will not be merged, and no setting may make one possible.

@@ -124,7 +124,7 @@ def test_marker_shape_and_preview(store):
     )
     assert isinstance(out, ResultMarker)
     m = ResultMarker.model_validate(out.model_dump(mode="json"))
-    assert m.kind == "stored" and m.model == "marketlens.Bar" and m.schema_version == "1.0.0"
+    assert m.kind == "stored" and m.model == "marketlens.Bar" and m.schema_version == "1.1.0"
     assert m.preview.time_column == "t" and m.preview.group_column == "ticker"
     assert m.preview.time_span_start == T0
     assert m.preview.groups_count == 3 and m.preview.groups_sample == ["AAPL", "MSFT", "NVDA"]
@@ -202,6 +202,48 @@ def test_truncated_fetch_gets_the_r16_note(store):
         'incomplete; call market_bars again with page_token="abc" to continue.'
     )
     assert note in out.notes
+    assert out.provenance.truncated is True
+    assert out.provenance.truncation_note == note
+
+
+def test_a_row_cap_without_a_token_keeps_the_handlers_own_note(store):
+    # A source read at once (no upstream pages) cut at fetch.max_rows has nothing
+    # to continue from: R16's 'call again with page_token=...' would be false.
+    own = "Stopped at 5 rows (fetch.max_rows); narrow the request."
+    p = PaginationState(
+        complete=False, pages_fetched=1, rows_fetched=5, next_page_token=None, row_cap_hit=True
+    )
+    out = finalize(
+        store,
+        ToolOutput(
+            model=Bar,
+            provenance=provenance().model_copy(update={"truncated": True, "truncation_note": own}),
+            rows=bar_rows(n=5),
+            pagination=p,
+            notes=[own],
+        ),
+        limits=FetchLimits(max_rows=5, max_pages=20),
+    )
+    assert out.notes == [own]
+    assert not any("page_token" in n for n in out.notes)
+    assert out.provenance.truncation_note == own
+
+
+@pytest.mark.parametrize("cap", ["row_cap_hit", "page_cap_hit"])
+def test_a_cap_without_a_token_or_a_note_of_its_own_is_still_flagged(store, cap):
+    # A plugin that caps rows by hand and says nothing: the model must still learn
+    # the data is incomplete, without a page_token it could not use.
+    p = PaginationState(complete=False, pages_fetched=1, rows_fetched=5, next_page_token=None, **{cap: True})
+    out = finalize(
+        store,
+        ToolOutput(model=Bar, provenance=provenance(), rows=bar_rows(n=5), pagination=p, notes=["kept"]),
+        limits=FetchLimits(max_rows=5, max_pages=20),
+    )
+    note = (
+        "Stopped after 1 pages and 5 rows (limits fetch.max_pages=20, fetch.max_rows=5). The data is "
+        "incomplete; narrow the request."
+    )
+    assert out.notes == ["kept", note]
     assert out.provenance.truncated is True
     assert out.provenance.truncation_note == note
 

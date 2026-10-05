@@ -4,14 +4,14 @@ build-backend = "hatchling.build"
 
 [project]
 name = "marketlens-mcp"
-version = "0.1.0"
+version = "0.2.0"
 description = "A read-only MCP server for market data and analytics: one vendor-neutral schema, large results kept out of the context window in a local DuckDB store, capabilities you switch on and off."
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
 license-files = ["LICENSE", "THIRD_PARTY_NOTICES"]
 authors = [{ name = "Jason Wu" }]
-keywords = ["mcp", "model-context-protocol", "market-data", "alpaca", "duckdb", "analytics", "llm", "finance"]
+keywords = ["mcp", "model-context-protocol", "market-data", "alpaca", "duckdb", "analytics", "llm", "finance", "sec-edgar", "fred", "economics"]
 classifiers = [
   "Development Status :: 3 - Alpha",
   "Intended Audience :: Developers",
@@ -37,6 +37,9 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=8.3", "pytest-asyncio>=0.24", "ruff>=0.6"]
+# Official macro, SEC EDGAR, Fed and Treasury data (marketlens-data needs Python 3.13 or later;
+# on an older Python the resolver refuses the extra, which is the message we want).
+data = ["marketlens-data>=0.1,<0.2"]
 
 [project.scripts]
 marketlens-mcp = "marketlens_mcp.cli:main"

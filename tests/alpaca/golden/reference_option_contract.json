@@ -29,7 +29,7 @@
    "occ_symbol": "AAPL261016C00250000"
   },
   "route": "GET /v2/options/contracts/{symbol_or_id}",
-  "schema_version": "1.0.0",
+  "schema_version": "1.1.0",
   "stale": null,
   "truncated": false,
   "truncation_note": null,

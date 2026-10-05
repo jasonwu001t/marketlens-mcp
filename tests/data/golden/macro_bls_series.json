@@ -1,0 +1,150 @@
+{
+ "absent": {
+  "line_number": {
+   "code": "not_applicable",
+   "detail": "BEA tables only"
+  },
+  "table_name": {
+   "code": "not_applicable",
+   "detail": "BEA tables only"
+  },
+  "title": {
+   "code": "not_provided_by_source",
+   "detail": "BLS's data API returns no series title"
+  },
+  "units": {
+   "code": "not_provided_by_source",
+   "detail": "BLS's data API returns no unit"
+  }
+ },
+ "model": "marketlens.EconomicObservation",
+ "notes": [],
+ "offload": "auto",
+ "pagination": null,
+ "provenance": {
+  "as_of": null,
+  "authority": [
+   "official"
+  ],
+  "cached": false,
+  "dataset": "bls.timeseries",
+  "delay": "unknown",
+  "derived_from": [],
+  "environment": null,
+  "feed": null,
+  "knowledge_time": "2026-10-06T00:00:00Z",
+  "lag_days": 31.0,
+  "operation": null,
+  "pages_fetched": 2,
+  "provider": "bls",
+  "request": {
+   "as_of": null,
+   "end": "2026-10-02",
+   "series_ids": [
+    "LNS14000000"
+   ],
+   "start": "2016-10-01"
+  },
+  "route": "omni bls.timeseries <- api.bls.gov/publicAPI/v2/timeseries/data",
+  "schema_version": "1.1.0",
+  "stale": null,
+  "truncated": false,
+  "truncation_note": null,
+  "upstream_request_id": null
+ },
+ "risk": null,
+ "rows": [
+  {
+   "absent": null,
+   "date": "2016-10-01",
+   "frequency": "M",
+   "knowledge_time": "2016-11-05T00:00:00Z",
+   "line_number": null,
+   "period": "M10",
+   "pit": "lagged",
+   "series_id": "LNS14000000",
+   "source": "bls",
+   "table_name": null,
+   "title": null,
+   "units": null,
+   "value": 4.9
+  },
+  {
+   "absent": null,
+   "date": "2016-11-01",
+   "frequency": "M",
+   "knowledge_time": "2016-12-06T00:00:00Z",
+   "line_number": null,
+   "period": "M11",
+   "pit": "lagged",
+   "series_id": "LNS14000000",
+   "source": "bls",
+   "table_name": null,
+   "title": null,
+   "units": null,
+   "value": 4.7
+  },
+  {
+   "absent": null,
+   "date": "2019-12-01",
+   "frequency": "M",
+   "knowledge_time": "2020-01-05T00:00:00Z",
+   "line_number": null,
+   "period": "M12",
+   "pit": "lagged",
+   "series_id": "LNS14000000",
+   "source": "bls",
+   "table_name": null,
+   "title": null,
+   "units": null,
+   "value": 3.6
+  },
+  {
+   "absent": null,
+   "date": "2020-04-01",
+   "frequency": "M",
+   "knowledge_time": "2020-05-06T00:00:00Z",
+   "line_number": null,
+   "period": "M04",
+   "pit": "lagged",
+   "series_id": "LNS14000000",
+   "source": "bls",
+   "table_name": null,
+   "title": null,
+   "units": null,
+   "value": 14.8
+  },
+  {
+   "absent": {
+    "value": "no_data"
+   },
+   "date": "2026-08-01",
+   "frequency": "M",
+   "knowledge_time": "2026-09-05T00:00:00Z",
+   "line_number": null,
+   "period": "M08",
+   "pit": "lagged",
+   "series_id": "LNS14000000",
+   "source": "bls",
+   "table_name": null,
+   "title": null,
+   "units": null,
+   "value": null
+  },
+  {
+   "absent": null,
+   "date": "2026-09-01",
+   "frequency": "M",
+   "knowledge_time": "2026-10-06T00:00:00Z",
+   "line_number": null,
+   "period": "M09",
+   "pit": "lagged",
+   "series_id": "LNS14000000",
+   "source": "bls",
+   "table_name": null,
+   "title": null,
+   "units": null,
+   "value": 4.3
+  }
+ ]
+}

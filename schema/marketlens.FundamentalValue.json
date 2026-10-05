@@ -1,0 +1,181 @@
+{
+  "$defs": {
+    "AbsenceCode": {
+      "description": "Why a value is None. Never served as 0.",
+      "enum": [
+        "not_provided_by_source",
+        "not_applicable",
+        "not_entitled",
+        "no_data",
+        "insufficient_data",
+        "not_recovered",
+        "no_match",
+        "withheld",
+        "source_error",
+        "unparseable"
+      ],
+      "title": "AbsenceCode",
+      "type": "string"
+    }
+  },
+  "$id": "urn:marketlens:schema:1:marketlens.FundamentalValue",
+  "additionalProperties": false,
+  "description": "One point-in-time fundamentals figure computed from the stored XBRL facts.",
+  "properties": {
+    "absent": {
+      "anyOf": [
+        {
+          "additionalProperties": {
+            "$ref": "#/$defs/AbsenceCode"
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Per-row reasons for None fields: field name -> AbsenceCode",
+      "title": "Absent"
+    },
+    "accession_numbers": {
+      "description": "Filings the inputs came from",
+      "items": {
+        "type": "string"
+      },
+      "title": "Accession Numbers",
+      "type": "array"
+    },
+    "basis": {
+      "enum": [
+        "ttm",
+        "instant",
+        "period"
+      ],
+      "title": "Basis",
+      "type": "string"
+    },
+    "cik": {
+      "title": "Cik",
+      "type": "string"
+    },
+    "concepts": {
+      "description": "XBRL concepts used",
+      "items": {
+        "type": "string"
+      },
+      "title": "Concepts",
+      "type": "array"
+    },
+    "derived": {
+      "description": "Arithmetic on filed facts (TTM roll-forward, margins, EBITDA)",
+      "title": "Derived",
+      "type": "boolean"
+    },
+    "fiscal_label": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "e.g. 2026-Q3 or FY2025",
+      "title": "Fiscal Label"
+    },
+    "knowledge_time": {
+      "description": "When the value became knowable under the dataset's point-in-time policy",
+      "format": "date-time",
+      "title": "Knowledge Time",
+      "type": "string",
+      "x-unit": "UTC"
+    },
+    "metric": {
+      "description": "revenue, net_income, eps_diluted, gross_margin, ... (23 metrics)",
+      "title": "Metric",
+      "type": "string"
+    },
+    "note": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "How the value was computed, or why it is absent",
+      "title": "Note"
+    },
+    "period_end": {
+      "format": "date",
+      "title": "Period End",
+      "type": "string"
+    },
+    "period_start": {
+      "anyOf": [
+        {
+          "format": "date",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Period Start"
+    },
+    "reason": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Why value is None (marketlens-data's code)",
+      "title": "Reason"
+    },
+    "ticker": {
+      "title": "Ticker",
+      "type": "string"
+    },
+    "unit": {
+      "description": "USD, USD/shares, shares or fraction (margins)",
+      "title": "Unit",
+      "type": "string"
+    },
+    "value": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "In the row's `unit`",
+      "title": "Value",
+      "x-unit": "as_published"
+    }
+  },
+  "required": [
+    "ticker",
+    "cik",
+    "metric",
+    "unit",
+    "basis",
+    "period_end",
+    "derived",
+    "knowledge_time"
+  ],
+  "title": "FundamentalValue",
+  "type": "object",
+  "x-schema-version": "1.1.0"
+}

@@ -1,0 +1,31 @@
+{
+ "_synthetic": true,
+ "cik": 9999901,
+ "entityName": "Testco Synthetic Corp",
+ "facts": {
+  "dei": {
+   "EntityCommonStockSharesOutstanding": {"label": "Entity Common Stock, Shares Outstanding", "units": {"shares": [
+    {"end": "2026-01-31", "val": 100000000, "accn": "0009999901-26-000002", "fy": 2025, "fp": "FY", "form": "10-K", "filed": "2026-02-10"}
+   ]}}
+  },
+  "us-gaap": {
+   "Revenues": {"label": "Revenues", "units": {"USD": [
+    {"start": "2024-01-01", "end": "2024-12-31", "val": 1000000000, "accn": "0009999901-25-000003", "fy": 2024, "fp": "FY", "form": "10-K", "filed": "2025-02-12"},
+    {"start": "2024-01-01", "end": "2024-12-31", "val": 1010000000, "accn": "0009999901-26-000002", "fy": 2025, "fp": "FY", "form": "10-K", "filed": "2026-02-10"},
+    {"start": "2025-01-01", "end": "2025-12-31", "val": 1200000000, "accn": "0009999901-26-000002", "fy": 2025, "fp": "FY", "form": "10-K", "filed": "2026-02-10"}
+   ]}},
+   "GrossProfit": {"label": "Gross Profit", "units": {"USD": [
+    {"start": "2025-01-01", "end": "2025-12-31", "val": 480000000, "accn": "0009999901-26-000002", "fy": 2025, "fp": "FY", "form": "10-K", "filed": "2026-02-10"}
+   ]}},
+   "NetIncomeLoss": {"label": "Net Income (Loss)", "units": {"USD": [
+    {"start": "2025-01-01", "end": "2025-12-31", "val": 150000000, "accn": "0009999901-26-000002", "fy": 2025, "fp": "FY", "form": "10-K", "filed": "2026-02-10"}
+   ]}},
+   "EarningsPerShareDiluted": {"label": "Earnings Per Share, Diluted", "units": {"USD/shares": [
+    {"start": "2025-01-01", "end": "2025-12-31", "val": 1.48, "accn": "0009999901-26-000002", "fy": 2025, "fp": "FY", "form": "10-K", "filed": "2026-02-10"}
+   ]}},
+   "Assets": {"label": "Assets", "units": {"USD": [
+    {"end": "2025-12-31", "val": 2500000000, "accn": "0009999901-26-000002", "fy": 2025, "fp": "FY", "form": "10-K", "filed": "2026-02-10"}
+   ]}}
+  }
+ }
+}

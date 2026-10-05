@@ -1,0 +1,83 @@
+{
+ "absent": {},
+ "model": "marketlens.FundReport",
+ "notes": [],
+ "offload": "auto",
+ "pagination": null,
+ "provenance": {
+  "as_of": null,
+  "authority": [
+   "official"
+  ],
+  "cached": false,
+  "dataset": "sec.fund_nport",
+  "delay": "unknown",
+  "derived_from": [],
+  "environment": null,
+  "feed": null,
+  "knowledge_time": "2026-08-28T16:00:05Z",
+  "lag_days": 94.0,
+  "operation": null,
+  "pages_fetched": 2,
+  "provider": "sec",
+  "request": {
+   "as_of": null,
+   "ticker": "TFUND"
+  },
+  "route": "omni sec.fund_nport <- www.sec.gov/Archives (N-PORT)",
+  "schema_version": "1.1.0",
+  "stale": null,
+  "truncated": false,
+  "truncation_note": null,
+  "upstream_request_id": null
+ },
+ "risk": null,
+ "rows": [
+  {
+   "absent": null,
+   "accession_number": "0009999970-26-000005",
+   "cik": "0009999970",
+   "class_ids": [
+    "C000099991",
+    "C000099992"
+   ],
+   "filing_date": "2026-08-28",
+   "form": "NPORT-P",
+   "holdings_count": 2,
+   "is_final": false,
+   "knowledge_time": "2026-08-28T16:00:05Z",
+   "net_assets": 398000000.0,
+   "primary_doc_url": "https://www.sec.gov/Archives/edgar/data/9999970/000999997026000005/primary_doc.xml",
+   "report_date": "2026-06-30",
+   "report_period_end": "2026-12-31",
+   "series_id": "S000099991",
+   "series_name": "Synthetic Total Market Index Fund",
+   "ticker": "TFUND",
+   "total_assets": 399000000.0,
+   "total_liabilities": 1000000.0
+  },
+  {
+   "absent": null,
+   "accession_number": "0009999970-26-000002",
+   "cik": "0009999970",
+   "class_ids": [
+    "C000099991",
+    "C000099992"
+   ],
+   "filing_date": "2026-05-29",
+   "form": "NPORT-P",
+   "holdings_count": 2,
+   "is_final": false,
+   "knowledge_time": "2026-05-29T16:10:00Z",
+   "net_assets": 380000000.0,
+   "primary_doc_url": "https://www.sec.gov/Archives/edgar/data/9999970/000999997026000002/primary_doc.xml",
+   "report_date": "2026-03-31",
+   "report_period_end": "2026-12-31",
+   "series_id": "S000099991",
+   "series_name": "Synthetic Total Market Index Fund",
+   "ticker": "TFUND",
+   "total_assets": 381000000.0,
+   "total_liabilities": 1000000.0
+  }
+ ]
+}

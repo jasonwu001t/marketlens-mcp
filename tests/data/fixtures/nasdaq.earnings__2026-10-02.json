@@ -1,0 +1,45 @@
+{
+ "_synthetic": true,
+ "data": {
+  "headers": {
+   "time": "Time",
+   "symbol": "Symbol",
+   "name": "Company Name",
+   "marketCap": "Market Cap",
+   "fiscalQuarterEnding": "Fiscal Quarter Ending",
+   "epsForecast": "Consensus EPS* Forecast",
+   "noOfEsts": "# of Ests",
+   "lastYearRptDt": "Last Year's Report Date",
+   "lastYearEPS": "Last year's EPS"
+  },
+  "rows": [
+   {
+    "time": "time-after-hours",
+    "symbol": "TESTCO",
+    "name": "Testco Synthetic Corp",
+    "marketCap": "$19,296,256,000",
+    "fiscalQuarterEnding": "Sep/2026",
+    "epsForecast": "$0.45",
+    "noOfEsts": "8",
+    "lastYearRptDt": "10/30/2025",
+    "lastYearEPS": "$0.38"
+   },
+   {
+    "time": "time-pre-market",
+    "symbol": "BRK.B",
+    "name": "Berkshire Synthetic",
+    "marketCap": "$900,000,000,000",
+    "fiscalQuarterEnding": "Sep/2026",
+    "epsForecast": "$5.10",
+    "noOfEsts": "3",
+    "lastYearRptDt": "N/A",
+    "lastYearEPS": "N/A"
+   }
+  ]
+ },
+ "status": {
+  "rCode": 200,
+  "bCodeMessage": null,
+  "developerMessage": null
+ }
+}

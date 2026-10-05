@@ -40,7 +40,7 @@
    "timeframe": "1d"
   },
   "route": "GET /v2/stocks/bars",
-  "schema_version": "1.0.0",
+  "schema_version": "1.1.0",
   "stale": null,
   "truncated": true,
   "truncation_note": "Stopped after 1 pages and 2 rows (limits fetch.max_pages=20, fetch.max_rows=2). The data is incomplete; call market_bars again with page_token=\"QUFQTHxEfDIwMjYtMTAtMDE=\" to continue.",

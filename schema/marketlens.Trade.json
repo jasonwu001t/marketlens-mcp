@@ -157,5 +157,5 @@
   ],
   "title": "Trade",
   "type": "object",
-  "x-schema-version": "1.0.0"
+  "x-schema-version": "1.1.0"
 }

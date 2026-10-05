@@ -1,0 +1,77 @@
+{
+ "absent": {},
+ "model": "marketlens.EarningsFigure",
+ "notes": [],
+ "offload": "auto",
+ "pagination": null,
+ "provenance": {
+  "as_of": null,
+  "authority": [
+   "official"
+  ],
+  "cached": false,
+  "dataset": "sec.earnings_press_release_figures",
+  "delay": "unknown",
+  "derived_from": [],
+  "environment": null,
+  "feed": null,
+  "knowledge_time": "2026-07-30T20:05:00Z",
+  "lag_days": 64.0,
+  "operation": null,
+  "pages_fetched": 1,
+  "provider": "sec",
+  "request": {
+   "as_of": null,
+   "end": "2026-10-02",
+   "metrics": [
+    "eps_diluted_gaap",
+    "eps_adjusted"
+   ],
+   "start": "2023-10-02",
+   "ticker": "TESTCO"
+  },
+  "route": "omni sec.earnings_press_release_figures <- www.sec.gov/Archives (EX-99.1)",
+  "schema_version": "1.1.0",
+  "stale": null,
+  "truncated": false,
+  "truncation_note": null,
+  "upstream_request_id": null
+ },
+ "risk": null,
+ "rows": [
+  {
+   "absent": null,
+   "accepted_at": "2026-07-30T20:05:00Z",
+   "accession_number": "0009999901-26-000009",
+   "basis": "non_gaap",
+   "cik": "0009999901",
+   "exhibit": "EX-99.1",
+   "exhibit_url": "https://www.sec.gov/Archives/edgar/data/9999901/000999990126000009/tc-ex991.htm",
+   "fiscal_period_label": "Three Months Ended June 30, 2026",
+   "knowledge_time": "2026-07-30T20:05:00Z",
+   "metric": "eps_adjusted",
+   "parse_rule": "table.eps_adjusted.row",
+   "source_text": "Adjusted diluted EPS (non-GAAP) | $ | 0.51",
+   "ticker": "TESTCO",
+   "unit": "USD/share",
+   "value": 0.51
+  },
+  {
+   "absent": null,
+   "accepted_at": "2026-07-30T20:05:00Z",
+   "accession_number": "0009999901-26-000009",
+   "basis": "gaap",
+   "cik": "0009999901",
+   "exhibit": "EX-99.1",
+   "exhibit_url": "https://www.sec.gov/Archives/edgar/data/9999901/000999990126000009/tc-ex991.htm",
+   "fiscal_period_label": "Three Months Ended June 30, 2026",
+   "knowledge_time": "2026-07-30T20:05:00Z",
+   "metric": "eps_diluted_gaap",
+   "parse_rule": "table.eps_diluted.row",
+   "source_text": "Diluted EPS | $ | 0.42",
+   "ticker": "TESTCO",
+   "unit": "USD/share",
+   "value": 0.42
+  }
+ ]
+}

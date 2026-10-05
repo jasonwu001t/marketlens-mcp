@@ -1,0 +1,158 @@
+{
+  "$defs": {
+    "AbsenceCode": {
+      "description": "Why a value is None. Never served as 0.",
+      "enum": [
+        "not_provided_by_source",
+        "not_applicable",
+        "not_entitled",
+        "no_data",
+        "insufficient_data",
+        "not_recovered",
+        "no_match",
+        "withheld",
+        "source_error",
+        "unparseable"
+      ],
+      "title": "AbsenceCode",
+      "type": "string"
+    }
+  },
+  "$id": "urn:marketlens:schema:1:marketlens.MarketHoliday",
+  "additionalProperties": false,
+  "properties": {
+    "absent": {
+      "anyOf": [
+        {
+          "additionalProperties": {
+            "$ref": "#/$defs/AbsenceCode"
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Per-row reasons for None fields: field name -> AbsenceCode",
+      "title": "Absent"
+    },
+    "close_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Close At",
+      "x-unit": "UTC"
+    },
+    "close_time_et": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "HH:MM Eastern, early closes only",
+      "title": "Close Time Et"
+    },
+    "crosscheck": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "NYSE rows: agrees, disagrees, alpaca_only, not_covered or not_checked (Alpaca's calendar)",
+      "title": "Crosscheck"
+    },
+    "crosscheck_note": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Crosscheck Note"
+    },
+    "holiday_date": {
+      "format": "date",
+      "title": "Holiday Date",
+      "type": "string"
+    },
+    "knowledge_time": {
+      "description": "When the value became knowable under the dataset's point-in-time policy",
+      "format": "date-time",
+      "title": "Knowledge Time",
+      "type": "string",
+      "x-unit": "UTC"
+    },
+    "market": {
+      "enum": [
+        "stocks",
+        "bonds",
+        "federal"
+      ],
+      "title": "Market",
+      "type": "string"
+    },
+    "name": {
+      "title": "Name",
+      "type": "string"
+    },
+    "note": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Note"
+    },
+    "publisher": {
+      "enum": [
+        "nyse",
+        "sifma",
+        "opm"
+      ],
+      "title": "Publisher",
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "closed",
+        "early_close"
+      ],
+      "title": "Status",
+      "type": "string"
+    }
+  },
+  "required": [
+    "publisher",
+    "market",
+    "holiday_date",
+    "name",
+    "status",
+    "knowledge_time"
+  ],
+  "title": "MarketHoliday",
+  "type": "object",
+  "x-schema-version": "1.1.0"
+}

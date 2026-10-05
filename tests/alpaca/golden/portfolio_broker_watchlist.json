@@ -29,7 +29,7 @@
    "watchlist_id": "3174d6df-7726-44b4-a5bd-7fda5ae6e009"
   },
   "route": "GET /v2/watchlists/{watchlist_id}",
-  "schema_version": "1.0.0",
+  "schema_version": "1.1.0",
   "stale": null,
   "truncated": false,
   "truncation_note": null,

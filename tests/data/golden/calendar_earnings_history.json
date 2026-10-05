@@ -1,0 +1,62 @@
+{
+ "absent": {},
+ "model": "marketlens.EarningsSurprise",
+ "notes": [
+  "Nasdaq has no earnings history for ZZZZ"
+ ],
+ "offload": "auto",
+ "pagination": null,
+ "provenance": {
+  "as_of": null,
+  "authority": [
+   "third-party"
+  ],
+  "cached": false,
+  "dataset": "nasdaq.earnings_surprise",
+  "delay": "unknown",
+  "derived_from": [],
+  "environment": null,
+  "feed": null,
+  "knowledge_time": "2026-10-02T20:00:00Z",
+  "lag_days": 64.0,
+  "operation": null,
+  "pages_fetched": 1,
+  "provider": "nasdaq",
+  "request": {
+   "as_of": null,
+   "tickers": [
+    "TESTCO",
+    "ZZZZ"
+   ]
+  },
+  "route": "omni nasdaq.earnings_surprise <- api.nasdaq.com/api/company/{symbol}/earnings-surprise (unofficial)",
+  "schema_version": "1.1.0",
+  "stale": null,
+  "truncated": false,
+  "truncation_note": null,
+  "upstream_request_id": null
+ },
+ "risk": null,
+ "rows": [
+  {
+   "absent": null,
+   "eps_actual": 0.42,
+   "eps_forecast": 0.4,
+   "fiscal_quarter": "2026-06",
+   "knowledge_time": "2026-10-02T20:00:00Z",
+   "report_date": "2026-07-30",
+   "surprise_pct": 0.05,
+   "ticker": "TESTCO"
+  },
+  {
+   "absent": null,
+   "eps_actual": 0.38,
+   "eps_forecast": 0.39,
+   "fiscal_quarter": "2026-03",
+   "knowledge_time": "2026-10-02T20:00:00Z",
+   "report_date": "2026-04-29",
+   "surprise_pct": -0.0256,
+   "ticker": "TESTCO"
+  }
+ ]
+}

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- synthetic 13F information table of a new-holdings amendment filed after the restatement -->
+<informationTable xmlns="http://www.sec.gov/edgar/document/thirteenf/informationtable">
+ <infoTable>
+  <nameOfIssuer>XENOCO SYNTHETIC INC</nameOfIssuer><titleOfClass>COM</titleOfClass><cusip>99999X202</cusip>
+  <value>250000</value>
+  <shrsOrPrnAmt><sshPrnamt>5000</sshPrnamt><sshPrnamtType>SH</sshPrnamtType></shrsOrPrnAmt>
+  <investmentDiscretion>SOLE</investmentDiscretion>
+  <votingAuthority><Sole>5000</Sole><Shared>0</Shared><None>0</None></votingAuthority>
+ </infoTable>
+</informationTable>
