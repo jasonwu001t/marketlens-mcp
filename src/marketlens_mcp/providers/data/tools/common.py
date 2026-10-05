@@ -202,9 +202,6 @@ class Session:
             return self.omni.read_raw(dataset_id, as_of=as_of, **filters)
         return self.omni.query(dataset_id, as_of=as_of, mode="local", **filters)
 
-    def columns(self, dataset_id: str) -> set[str]:
-        return set(self.omni.resolve(dataset_id)[1].record.model_fields)
-
 
 # --- rows, provenance, output ------------------------------------------------------------------
 
@@ -351,7 +348,3 @@ async def run(
         return work(session), session
 
     return await runtime.call(settings, job, source=source, tool=ctx.tool, subject=subject)
-
-
-async def not_built(ctx: ToolContext, args: BaseModel) -> ToolOutput:
-    raise ToolError("not_implemented", f"{ctx.tool} is not built yet.")

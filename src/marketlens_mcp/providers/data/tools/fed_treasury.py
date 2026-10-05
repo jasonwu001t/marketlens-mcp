@@ -96,7 +96,7 @@ ROUTES = {
 }
 
 
-async def _simple(ctx: ToolContext, tool: str, dataset_id: str, source: str, as_of_text, identities=({},)):
+async def _simple(ctx: ToolContext, dataset_id: str, source: str, as_of_text, identities=({},)):
     """Refresh the identities, then read the whole dataset (point in time)."""
     s = runtime.settings_of(ctx.settings)
     as_of = common.as_of_of(as_of_text)
@@ -133,7 +133,7 @@ async def fed_fomc_meetings(ctx: ToolContext, args: MeetingsInputs) -> ToolOutpu
         default_start=date(today.year, 1, 1),
         default_end=date(today.year + 1, 12, 31),
     )
-    s, as_of, records, session = await _simple(ctx, ctx.tool, "fomc.meetings", "fomc", args.as_of)
+    s, as_of, records, session = await _simple(ctx, "fomc.meetings", "fomc", args.as_of)
     rows = [
         common.row(
             FomcMeeting,
@@ -167,7 +167,7 @@ async def fed_fomc_statements(ctx: ToolContext, args: StatementsInputs) -> ToolO
     start, end = common.window(
         ctx.tool, args.start, args.end, default_start=common.years_ago(today, 2), default_end=today
     )
-    s, as_of, records, session = await _simple(ctx, ctx.tool, "fomc.statement", "fomc", args.as_of)
+    s, as_of, records, session = await _simple(ctx, "fomc.statement", "fomc", args.as_of)
     rows = [
         common.row(
             FomcStatement,
@@ -202,7 +202,7 @@ async def fed_reference_rates(ctx: ToolContext, args: RatesInputs) -> ToolOutput
     start, end = common.window(
         ctx.tool, args.start, args.end, default_start=common.years_ago(today, 1), default_end=today
     )
-    s, as_of, records, session = await _simple(ctx, ctx.tool, "nyfed.reference_rates", "nyfed", args.as_of)
+    s, as_of, records, session = await _simple(ctx, "nyfed.reference_rates", "nyfed", args.as_of)
     wanted = set(args.rate_types)
     rows = []
     for r in records:
@@ -307,7 +307,7 @@ async def treasury_auctions(ctx: ToolContext, args: AuctionsInputs) -> ToolOutpu
     start, end = common.window(
         ctx.tool, args.start, args.end, default_start=common.years_ago(today, 1), default_end=today
     )
-    s, as_of, records, session = await _simple(ctx, ctx.tool, "fiscaldata.auctions", "fiscaldata", args.as_of)
+    s, as_of, records, session = await _simple(ctx, "fiscaldata.auctions", "fiscaldata", args.as_of)
     wanted = set(args.security_types or [])
     rows = []
     for r in records:
@@ -356,9 +356,7 @@ async def treasury_debt(ctx: ToolContext, args: DailyInputs) -> ToolOutput:
     start, end = common.window(
         ctx.tool, args.start, args.end, default_start=common.years_ago(today, 1), default_end=today
     )
-    s, as_of, records, session = await _simple(
-        ctx, ctx.tool, "fiscaldata.debt_to_penny", "fiscaldata", args.as_of
-    )
+    s, as_of, records, session = await _simple(ctx, "fiscaldata.debt_to_penny", "fiscaldata", args.as_of)
     rows = [
         common.row(
             TreasuryDebt,
@@ -392,9 +390,7 @@ async def treasury_tga(ctx: ToolContext, args: DailyInputs) -> ToolOutput:
     start, end = common.window(
         ctx.tool, args.start, args.end, default_start=common.years_ago(today, 1), default_end=today
     )
-    s, as_of, records, session = await _simple(
-        ctx, ctx.tool, "fiscaldata.tga_balance", "fiscaldata", args.as_of
-    )
+    s, as_of, records, session = await _simple(ctx, "fiscaldata.tga_balance", "fiscaldata", args.as_of)
     rows = [
         common.row(
             TreasuryCashBalance,
