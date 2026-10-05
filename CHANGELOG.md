@@ -18,7 +18,7 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Changed
 
-- A fetch cut at `fetch.max_rows` without a page token no longer carries the R16 "call again with page_token" note; the tool's own note says how to narrow the request.
+- A fetch cut at `fetch.max_rows` or `fetch.max_pages` without a page token no longer carries the R16 "call again with page_token" note: the tool's own truncation note stands, and a tool that gave none gets "The data is incomplete; narrow the request." (the answer is still flagged `truncated`).
 - The name `data` is reserved for the built-in provider; a plugin may not take it.
 
 ## [0.1.0] - Unreleased

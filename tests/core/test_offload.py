@@ -229,6 +229,25 @@ def test_a_row_cap_without_a_token_keeps_the_handlers_own_note(store):
     assert out.provenance.truncation_note == own
 
 
+@pytest.mark.parametrize("cap", ["row_cap_hit", "page_cap_hit"])
+def test_a_cap_without_a_token_or_a_note_of_its_own_is_still_flagged(store, cap):
+    # A plugin that caps rows by hand and says nothing: the model must still learn
+    # the data is incomplete, without a page_token it could not use.
+    p = PaginationState(complete=False, pages_fetched=1, rows_fetched=5, next_page_token=None, **{cap: True})
+    out = finalize(
+        store,
+        ToolOutput(model=Bar, provenance=provenance(), rows=bar_rows(n=5), pagination=p, notes=["kept"]),
+        limits=FetchLimits(max_rows=5, max_pages=20),
+    )
+    note = (
+        "Stopped after 1 pages and 5 rows (limits fetch.max_pages=20, fetch.max_rows=5). The data is "
+        "incomplete; narrow the request."
+    )
+    assert out.notes == ["kept", note]
+    assert out.provenance.truncated is True
+    assert out.provenance.truncation_note == note
+
+
 def test_stored_output_returns_the_existing_marker(store):
     info = store.put(
         rows_to_table(bar_rows(n=5), Bar),
