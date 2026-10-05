@@ -36,7 +36,7 @@ def test_no_connection_is_attempted(tmp_path, monkeypatch):
 
     p = tmp_path / "xdg" / "marketlens" / "config.yaml"
     p.parent.mkdir(parents=True)
-    p.write_text("plugins:\n  enabled: [example]\ncapabilities:\n  example: true\n")
+    p.write_text("plugins:\n  enabled: [example]\ncapabilities:\n  example: true\n", encoding="utf-8")
     rt = server.build_runtime(discover=lambda: [EP()])
     mcp = server.build_server(rt)
 

@@ -27,7 +27,7 @@ class EP:
 def runtime(tmp_path, text="", eps=()):
     p = tmp_path / "xdg" / "marketlens" / "config.yaml"
     p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(text)
+    p.write_text(text, encoding="utf-8")
     return server.build_runtime(discover=lambda: list(eps))
 
 

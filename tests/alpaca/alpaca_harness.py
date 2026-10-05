@@ -304,7 +304,7 @@ def alpaca():
 
 
 def load_fixture(name: str) -> Any:
-    data = json.loads((FIXTURES / f"{name}.json").read_text())
+    data = json.loads((FIXTURES / f"{name}.json").read_text(encoding="utf-8"))
     return data
 
 
@@ -346,11 +346,13 @@ def check_golden(out: ToolOutput, name: str) -> dict[str, Any]:
     doc = output_doc(out)
     path = GOLDEN / f"{name}.json"
     if os.environ.get("MARKETLENS_UPDATE_GOLDEN") == "1":
-        path.write_text(json.dumps(doc, indent=1, sort_keys=True, ensure_ascii=False) + "\n")
+        path.write_text(
+            json.dumps(doc, indent=1, sort_keys=True, ensure_ascii=False) + "\n", encoding="utf-8"
+        )
     assert path.exists(), (
         f"missing golden file {path.name}; run with MARKETLENS_UPDATE_GOLDEN=1 and review it"
     )
-    expected = json.loads(path.read_text())
+    expected = json.loads(path.read_text(encoding="utf-8"))
     assert doc == expected
     return doc
 

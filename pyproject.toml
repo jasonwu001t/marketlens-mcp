@@ -60,6 +60,9 @@ addopts = ["-ra", "--strict-markers"]
 markers = [
   "network: needs real network and credentials (never run in CI by default)",
 ]
+# Text I/O must name its encoding (Windows defaults to cp1252). The warning is
+# emitted when PYTHONWARNDEFAULTENCODING=1, which CI and `make test` set.
+filterwarnings = ["error::EncodingWarning"]
 
 [tool.ruff]
 line-length = 110

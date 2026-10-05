@@ -21,7 +21,7 @@ def main(*argv):
 def write_config(tmp_path, text):
     p = tmp_path / "xdg" / "marketlens" / "config.yaml"
     p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(text)
+    p.write_text(text, encoding="utf-8")
     return p
 
 
@@ -119,7 +119,7 @@ def test_config_path_show_init(capsys, tmp_path):
     assert main("config", "path") == 0
     assert capsys.readouterr().out.strip() == str(target)
     assert main("config", "init") == 0
-    assert target.read_text() == config.DEFAULT_CONFIG_TEXT
+    assert target.read_text(encoding="utf-8") == config.DEFAULT_CONFIG_TEXT
     if sys.platform != "win32":
         assert stat.S_IMODE(target.stat().st_mode) == 0o600
     capsys.readouterr()
@@ -145,10 +145,10 @@ def test_schema_command(capsys, tmp_path):
     assert index["models"]["marketlens.Bar"] == "marketlens.Bar.json"
     out = tmp_path / "schemas"
     assert main("schema", "--out", str(out)) == 0
-    bar = json.loads((out / "marketlens.Bar.json").read_text())
+    bar = json.loads((out / "marketlens.Bar.json").read_text(encoding="utf-8"))
     assert bar["$id"] == "urn:marketlens:schema:1:marketlens.Bar"
     assert bar["x-schema-version"] == "1.0.0"
-    assert json.loads((out / "index.json").read_text()) == index
+    assert json.loads((out / "index.json").read_text(encoding="utf-8")) == index
 
 
 def test_results_list_and_purge(capsys, tmp_path):

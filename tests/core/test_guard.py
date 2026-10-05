@@ -21,7 +21,7 @@ CORPUS = pathlib.Path(__file__).parent / "fixtures" / "sql_attacks.txt"
 
 def corpus() -> list[tuple[str, str]]:
     cases = []
-    for line in CORPUS.read_text().splitlines():
+    for line in CORPUS.read_text(encoding="utf-8").splitlines():
         if not line or line.startswith("#"):
             continue
         code, _, sql = line.partition("\t")

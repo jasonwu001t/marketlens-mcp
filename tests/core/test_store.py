@@ -179,12 +179,12 @@ def test_stale_lock_is_broken_and_a_held_lock_times_out(tmp_path):
     s = root.session("s")
     lock = tmp_path / "cache" / "results" / ".lock"
     lock.parent.mkdir(parents=True, exist_ok=True)
-    lock.write_text("x")
+    lock.write_text("x", encoding="utf-8")
     old = time.time() - 120
     os.utime(lock, (old, old))
     put_bars(s)  # stale lock (older than 60 s) is broken
     assert not lock.exists()
-    lock.write_text("x")
+    lock.write_text("x", encoding="utf-8")
     with pytest.raises(StoreLockTimeout):
         root.evict()
     lock.unlink()
@@ -195,7 +195,7 @@ def test_sidecar_has_no_path_and_files_are_private(tmp_path):
     s = root.session("s")
     info = put_bars(s)
     sidecar = tmp_path / "cache" / "results" / "s" / f"{info.result_id}.json"
-    text = sidecar.read_text()
+    text = sidecar.read_text(encoding="utf-8")
     assert str(tmp_path) not in text
     ResultInfo.model_validate(json.loads(text)["info"])
     assert str(tmp_path) not in info.model_dump_json()
@@ -256,7 +256,7 @@ def test_put_survives_a_busy_lock(tmp_path):
     s = root.session("s")
     lock = tmp_path / "cache" / "results" / ".lock"
     lock.parent.mkdir(parents=True, exist_ok=True)
-    lock.write_text("held by another process")
+    lock.write_text("held by another process", encoding="utf-8")
     info = put_bars(s)  # eviction is skipped (it runs again later), the result is kept
     assert s.info(info.result_id).row_count == 30
     lock.unlink()

@@ -76,7 +76,7 @@ def test_update_between_markers():
 def test_builtin_table_ignores_the_owners_config(tmp_path):
     p = tmp_path / "xdg" / "marketlens" / "config.yaml"
     p.parent.mkdir(parents=True)
-    p.write_text("capabilities:\n  results.export: false\n  news: false\n")
+    p.write_text("capabilities:\n  results.export: false\n  news: false\n", encoding="utf-8")
     table = readme.builtin_table()
     assert "`results_export`" in table and "results.export (off)" in table
 

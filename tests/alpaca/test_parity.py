@@ -57,7 +57,7 @@ def spec_operations() -> dict[str, tuple[str, str, str]]:
     """operationId -> (spec file, METHOD, path) over both pinned specs."""
     out: dict[str, tuple[str, str, str]] = {}
     for name in PINNED_SHA256:
-        spec = json.loads((SPECS_DIR / name).read_text())
+        spec = json.loads((SPECS_DIR / name).read_text(encoding="utf-8"))
         for path, item in spec["paths"].items():
             for method, op in item.items():
                 if method in METHODS:
@@ -67,7 +67,7 @@ def spec_operations() -> dict[str, tuple[str, str, str]]:
 
 
 def pinned_tools() -> list[dict]:
-    return json.loads((FIXTURES / "alpaca_mcp_server_tools.json").read_text())["tools"]
+    return json.loads((FIXTURES / "alpaca_mcp_server_tools.json").read_text(encoding="utf-8"))["tools"]
 
 
 def check_operations(specs, excluded, operations) -> list[str]:

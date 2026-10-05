@@ -24,7 +24,7 @@ SPEC = {
 def checkout(tmp_path, monkeypatch):
     specs = tmp_path / "src" / "marketlens_mcp" / "providers" / "alpaca" / "specs"
     specs.mkdir(parents=True)
-    (specs / "market-data-api.json").write_text(json.dumps(SPEC))
+    (specs / "market-data-api.json").write_text(json.dumps(SPEC), encoding="utf-8")
     monkeypatch.chdir(tmp_path)
     return tmp_path
 
@@ -60,9 +60,11 @@ def test_alpaca_tool_from_an_operation(checkout, capsys):
     golden = checkout / "tests/alpaca/golden/market_auctions.json"
     for f in (tool, test, fixture, golden):
         assert f.is_file(), f
-    assert json.loads(fixture.read_text()) == {"_synthetic": True}
-    assert json.loads(golden.read_text()) == {}
-    assert "market_auctions" in test.read_text() and "pytest.mark.skip" in test.read_text()
+    assert json.loads(fixture.read_text(encoding="utf-8")) == {"_synthetic": True}
+    assert json.loads(golden.read_text(encoding="utf-8")) == {}
+    assert "market_auctions" in test.read_text(encoding="utf-8") and "pytest.mark.skip" in test.read_text(
+        encoding="utf-8"
+    )
     out = capsys.readouterr().out.strip()
     assert out == (
         "Add 'market_auctions' to MODULES in src/marketlens_mcp/providers/alpaca/tools/__init__.py, implement the "

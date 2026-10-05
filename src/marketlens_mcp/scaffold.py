@@ -131,8 +131,8 @@ GOLDEN = HERE / "golden" / "{name}.json"
 
 @pytest.mark.skip(reason="{name}: fill the fixture and the golden file, then remove this skip")
 def test_{name}_golden():
-    raw = json.loads(FIXTURE.read_text())
-    expected = json.loads(GOLDEN.read_text())
+    raw = json.loads(FIXTURE.read_text(encoding="utf-8"))
+    expected = json.loads(GOLDEN.read_text(encoding="utf-8"))
     # Run {name} on `raw` (an httpx.MockTransport serving it) with
     # marketlens_mcp.testing.call_tool and compare rows, absent, pagination and
     # provenance (minus fetched_at) with `expected`; assert the absence rule:

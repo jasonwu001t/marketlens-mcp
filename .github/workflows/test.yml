@@ -30,4 +30,5 @@ jobs:
       - name: Test (no network, no secrets)
         env:
           MARKETLENS_CHECK_GENERATED: "1"
+          PYTHONWARNDEFAULTENCODING: "1"   # with filterwarnings, an open() without encoding fails
         run: uv run --no-sync pytest

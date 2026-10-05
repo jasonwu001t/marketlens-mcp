@@ -39,7 +39,7 @@ def test_the_documented_plugin_registers(tmp_path):
 
     p = tmp_path / "xdg" / "marketlens" / "config.yaml"
     p.parent.mkdir(parents=True)
-    p.write_text("plugins:\n  enabled: [myplugin]\n")
+    p.write_text("plugins:\n  enabled: [myplugin]\n", encoding="utf-8")
     cat = registry.build_catalog(cfg.load_config(), discover=lambda: [EP()])
     status = next(s for s in cat.plugins if s.name == "myplugin")
     assert status.loaded, status.error

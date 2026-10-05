@@ -15,10 +15,10 @@ install:
 	uv pip install --python $(PY) -e ".[dev]"
 
 test:
-	$(RUN) pytest
+	PYTHONWARNDEFAULTENCODING=1 $(RUN) pytest
 
 test-all:
-	MARKETLENS_CHECK_GENERATED=1 $(RUN) pytest
+	PYTHONWARNDEFAULTENCODING=1 MARKETLENS_CHECK_GENERATED=1 $(RUN) pytest
 
 lint:
 	$(RUN) ruff check src tests

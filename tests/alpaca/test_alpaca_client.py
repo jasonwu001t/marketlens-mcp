@@ -342,7 +342,7 @@ def test_no_write_call_appears_anywhere_in_the_provider():
     offenders = []
     for p in sorted(root.rglob("*.py")):
         rel = p.relative_to(root).as_posix()
-        for i, line in enumerate(p.read_text().splitlines(), 1):
+        for i, line in enumerate(p.read_text(encoding="utf-8").splitlines(), 1):
             if calls.search(line) or (methods.search(line) and not _docs_method_argument(rel, line)):
                 offenders.append(f"{rel}:{i}: {line.strip()}")
     assert offenders == []

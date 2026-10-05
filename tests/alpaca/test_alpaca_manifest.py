@@ -258,7 +258,7 @@ def test_spec_integrity(specs, name):
         assert field in spec.input_model.model_fields, f"{name} lacks input {field}"
     golden = REPO / spec.golden_test
     assert golden.is_file(), spec.golden_test
-    assert name in golden.read_text(), f"{spec.golden_test} never mentions {name}"
+    assert name in golden.read_text(encoding="utf-8"), f"{spec.golden_test} never mentions {name}"
 
 
 def test_capability_counts(specs):
@@ -296,7 +296,7 @@ def test_the_provider_names_no_product_of_its_own():
     # (tests/core/test_no_vendor_names.py scans the whole repository for them).
     needles = ["alpha" + "research", "quant" + "ai", "at" + "las", "127.0.0.1" + ":8000"]
     pattern = re.compile("|".join(re.escape(n) for n in needles), re.IGNORECASE)
-    hits = [str(p) for p in root.rglob("*.py") if pattern.search(p.read_text())]
+    hits = [str(p) for p in root.rglob("*.py") if pattern.search(p.read_text(encoding="utf-8"))]
     assert hits == []
 
 
@@ -314,7 +314,7 @@ def test_the_specs_ship_in_the_wheel():
     pyproject = REPO / "pyproject.toml"
     if not pyproject.exists():
         pytest.skip("pyproject.toml arrives with the seed commit (contract S0)")
-    wheel = tomllib.loads(pyproject.read_text())["tool"]["hatch"]["build"]["targets"]["wheel"]
+    wheel = tomllib.loads(pyproject.read_text(encoding="utf-8"))["tool"]["hatch"]["build"]["targets"]["wheel"]
     assert "src/marketlens_mcp" in wheel["packages"]
     assert "only-include" not in wheel
     for pattern in wheel.get("exclude", []):

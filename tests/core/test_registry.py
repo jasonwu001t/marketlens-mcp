@@ -35,7 +35,7 @@ class FakeEntryPoint:
 def conf(tmp_path, text=""):
     p = tmp_path / "xdg" / "marketlens" / "config.yaml"
     p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(text)
+    p.write_text(text, encoding="utf-8")
     return cfg.load_config()
 
 

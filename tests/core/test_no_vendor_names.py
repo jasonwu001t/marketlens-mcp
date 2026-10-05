@@ -26,6 +26,7 @@ def repository_files() -> list[pathlib.Path]:
             cwd=REPO,
             capture_output=True,
             text=True,
+            encoding="utf-8",
             check=True,
         ).stdout
         files = [REPO / line for line in out.splitlines() if line]

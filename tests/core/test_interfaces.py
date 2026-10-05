@@ -121,7 +121,7 @@ def _subset_problems(expected: typing.Any, actual: typing.Any, where: str) -> li
 
 
 def test_seeded_interfaces_are_unchanged_or_only_extended():
-    expected = json.loads(SNAPSHOT.read_text())
+    expected = json.loads(SNAPSHOT.read_text(encoding="utf-8"))
     problems = _subset_problems(expected, snapshot(), "")
     assert problems == []
 
@@ -147,5 +147,5 @@ def test_testing_helpers_have_the_contract_signatures():
 
 
 if __name__ == "__main__" and "--write" in sys.argv:
-    SNAPSHOT.write_text(json.dumps(snapshot(), indent=1, sort_keys=True) + "\n")
+    SNAPSHOT.write_text(json.dumps(snapshot(), indent=1, sort_keys=True) + "\n", encoding="utf-8")
     print(f"wrote {SNAPSHOT}")

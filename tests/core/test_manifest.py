@@ -39,7 +39,9 @@ def test_every_builtin_spec_is_sound():
         assert out_name in cat.models or out_name in (ALIGNED_SCHEMA_NAME, QUERY_ROW_SCHEMA_NAME), name
         golden = REPO / spec.golden_test
         assert golden.is_file(), f"{name}: golden test {spec.golden_test} is missing"
-        assert name in golden.read_text(), f"{name}: {spec.golden_test} does not mention the tool"
+        assert name in golden.read_text(encoding="utf-8"), (
+            f"{name}: {spec.golden_test} does not mention the tool"
+        )
         assert spec.readme.strip(), name
 
 

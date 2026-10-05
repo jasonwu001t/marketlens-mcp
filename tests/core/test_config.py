@@ -15,7 +15,7 @@ from marketlens_schema import Environment
 def write(tmp_path: pathlib.Path, text: str) -> pathlib.Path:
     p = tmp_path / "xdg" / "marketlens" / "config.yaml"
     p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(text)
+    p.write_text(text, encoding="utf-8")
     return p
 
 
@@ -214,7 +214,7 @@ def test_r7_marketlens_config_missing(tmp_path, monkeypatch):
 
 def test_marketlens_config_is_used_when_it_exists(tmp_path, monkeypatch):
     target = tmp_path / "mine.yaml"
-    target.write_text("http:\n  port: 9000\n")
+    target.write_text("http:\n  port: 9000\n", encoding="utf-8")
     monkeypatch.setenv("MARKETLENS_CONFIG", str(target))
     assert cfg.load_config().http_port == 9000
 
@@ -245,7 +245,7 @@ def test_home_is_shown_as_tilde(tmp_path, monkeypatch):
     monkeypatch.delenv("XDG_CONFIG_HOME")
     p = home / ".config" / "marketlens" / "config.yaml"
     p.parent.mkdir(parents=True)
-    p.write_text("bogus: 1\n")
+    p.write_text("bogus: 1\n", encoding="utf-8")
     with pytest.raises(cfg.ConfigError) as info:
         cfg.load_config()
     assert str(info.value).startswith(

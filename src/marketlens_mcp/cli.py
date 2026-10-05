@@ -318,7 +318,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     try:
         paths.ensure_private_dir(rt.store_root.results_dir)
         probe = rt.store_root.results_dir / ".doctor-probe"
-        probe.write_text("ok")
+        probe.write_text("ok", encoding="utf-8")
         probe.unlink()
         usage = rt.store_root.usage()
         print(
