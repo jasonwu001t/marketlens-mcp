@@ -5,6 +5,8 @@ sec_fund_holdings against a synthetic EDGAR: the fictional company TESTCO
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 import httpx
 import pytest
 from data_harness import KEYS, call, check_golden, context, fixture_text, refused
@@ -103,6 +105,18 @@ def test_sec_xbrl_facts_golden_and_restatement(tmp_path, edgar):
         "sec_xbrl_facts", context(tmp_path), ticker="TESTCO", metrics=["Revenues"], include_vintages=True
     )
     assert [r.value for r in every.rows] == [1000000000.0, 1010000000.0, 1200000000.0]
+    # every vintage, but only those knowable at as_of: the 2026-02-10 restatement stays hidden
+    then = call(
+        "sec_xbrl_facts",
+        context(tmp_path),
+        ticker="TESTCO",
+        metrics=["Revenues"],
+        include_vintages=True,
+        as_of="2025-06-01",
+    )
+    assert [(r.period_end.isoformat(), r.value) for r in then.rows] == [("2024-12-31", 1000000000.0)]
+    assert all(r.knowledge_time <= datetime(2025, 6, 1, tzinfo=UTC) for r in then.rows)
+    assert 1010000000.0 not in [r.value for r in then.rows]
     dei = call("sec_xbrl_facts", context(tmp_path), ticker="TESTCO", taxonomy="dei")
     assert [(r.metric, r.unit, r.period_start) for r in dei.rows] == [
         ("EntityCommonStockSharesOutstanding", "shares", None)

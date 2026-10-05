@@ -89,6 +89,33 @@ def test_macro_series_vintages_and_window(tmp_path, upstream, keys):
     assert [r.date.isoformat() for r in out.rows] == ["2024-02-01"]
 
 
+@pytest.mark.parametrize(
+    ("as_of", "expected"),
+    [
+        # between the January print (2024-02-13) and its revision (2024-03-12)
+        ("2024-03-01", [("2024-01-01", 308.417)]),
+        # the revision day: both January vintages and February's first print, nothing from 2024-04-10
+        ("2024-03-12T00:00:00Z", [("2024-01-01", 308.417), ("2024-01-01", 308.5), ("2024-02-01", 310.326)]),
+    ],
+)
+def test_macro_series_vintages_never_show_one_published_after_as_of(tmp_path, upstream, keys, as_of, expected):
+    from marketlens_mcp.providers.data.tools.common import parse_instant
+
+    fred_routes(upstream)
+    out = call("macro_series", context(tmp_path), series_ids=["CPIAUCSL"], include_vintages=True, as_of=as_of)
+    assert [(r.date.isoformat(), r.value) for r in out.rows] == expected
+    assert all(r.knowledge_time <= parse_instant(as_of) for r in out.rows)
+    assert 310.1 not in [r.value for r in out.rows]  # the 2024-04-10 revision
+
+
+def test_macro_series_end_is_inclusive(tmp_path, upstream, keys):
+    fred_routes(upstream)
+    out = call(
+        "macro_series", context(tmp_path), series_ids=["CPIAUCSL"], start="2024-01-01", end="2024-02-01"
+    )
+    assert [r.date.isoformat() for r in out.rows] == ["2024-01-01", "2024-02-01"]
+
+
 def test_macro_series_refuses_bad_ids_and_windows(tmp_path):
     from pydantic import ValidationError
 
