@@ -189,6 +189,33 @@ def test_store_folder_is_created_owner_only(tmp_path, upstream):
     assert os.environ["OMNI_ENV_FILE"] == ""
 
 
+# --- marketlens never lets omni read a .env -----------------------------------------------------------
+# tests/conftest.py sets OMNI_ENV_FILE="" for every test, so each test here first
+# puts back what a user's shell may hold: nothing, or a path to a .env.
+
+
+@pytest.mark.parametrize("shell", [None, "a path"])
+def test_prepare_environment_turns_the_env_file_off(tmp_path, monkeypatch, shell):
+    if shell is None:
+        monkeypatch.delenv("OMNI_ENV_FILE")
+    else:
+        monkeypatch.setenv("OMNI_ENV_FILE", str(tmp_path / "keys.env"))
+    runtime.prepare_environment()
+    assert os.environ["OMNI_ENV_FILE"] == ""
+
+
+def test_the_first_tool_call_and_doctor_turn_the_env_file_off(tmp_path, monkeypatch, capsys):
+    from marketlens_mcp import cli
+
+    monkeypatch.setenv("OMNI_ENV_FILE", str(tmp_path / "keys.env"))
+    runtime.ensure(runtime.settings_of({"data_dir": str(tmp_path / "store")}))
+    assert os.environ["OMNI_ENV_FILE"] == ""
+    monkeypatch.delenv("OMNI_ENV_FILE")
+    cli.main(["doctor"])
+    assert "data extra: installed" in capsys.readouterr().out
+    assert os.environ["OMNI_ENV_FILE"] == ""
+
+
 # --- freshness, mode local, row cap -----------------------------------------------------------------
 
 
