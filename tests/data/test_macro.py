@@ -212,6 +212,30 @@ def test_macro_bea_table_golden(tmp_path, upstream, keys):
     assert {r.line_number for r in only.rows} == {2}
 
 
+BEA_LEVEL_NOTE = (
+    "BEA states each value's multiplier (UNIT_MULT) separately and it is not stored, so a value whose units "
+    "is 'Level' is not in ones: NIPA dollar levels are usually in millions of dollars. Check the table's "
+    "header on bea.gov before reading a magnitude."
+)
+
+
+def test_macro_bea_table_level_values_say_their_multiplier_is_not_stored(tmp_path, upstream, keys):
+    # A dollar-level table: BEA sends 31,012,345 with UNIT_MULT 6 (millions); the
+    # stored row keeps only units 'Level', so the answer must say the scale is lost.
+    upstream.json_file(BEA, "bea.nipa__T10105.json")
+    out = call("macro_bea_table", context(tmp_path), table_name="T10105")
+    assert out.notes == [BEA_LEVEL_NOTE]
+    doc = check_golden(out, "macro_bea_table__level")
+    assert [(r["series_id"], r["units"], r["value"]) for r in doc["rows"]][:2] == [
+        ("A191RC", "Level", 31012345.0),
+        ("A191RC", "Level", 31456789.0),
+    ]
+    from marketlens_mcp.providers.data.tools.macro import SPECS
+
+    description = next(s for s in SPECS if s.name == "macro_bea_table").description
+    assert "multiplier" in description and "millions" in description
+
+
 def test_macro_bea_table_needs_its_key(tmp_path, upstream):
     upstream.json_file(BEA, "bea.nipa__T10101.json")
     err = refused("macro_bea_table", context(tmp_path), table_name="T10101")

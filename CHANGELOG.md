@@ -7,7 +7,7 @@ All notable changes to this project are documented here. The format follows [Kee
 ### Added
 
 - The `data` extra (`pip install "marketlens-mcp[data]"`, Python 3.13 or later): a built-in provider over marketlens-data (import name `omni`) for official data, 25 tools under four new capabilities:
-  - `macro` (on): FRED/ALFRED series with vintages and `as_of` reads, BLS series, BEA NIPA tables, BLS release schedules, the FRED series catalogue.
+  - `macro` (on): FRED/ALFRED series with vintages and `as_of` reads, BLS series, BEA NIPA tables (a `Level` value carries a note that BEA's multiplier is not stored), BLS release schedules, the FRED series catalogue.
   - `filings` (on): SEC EDGAR filings, XBRL facts with restatement vintages, point-in-time fundamentals, 8-K Item 2.02 earnings releases and press-release EPS, Form 4 and 144 insider transactions, 13F holdings, fund N-PORT reports and holdings.
   - `fed_treasury` (on): FOMC meetings and statements, NY Fed reference rates (SOFR, EFFR, OBFR, TGCR, BGCR), the Treasury par yield curve, Treasury auctions, debt to the penny and the Treasury General Account.
   - `calendars` (off: the Nasdaq endpoint is unofficial): the economic calendar with PMI and other actual and consensus figures, the earnings calendar and earnings history, and US market holidays from NYSE, SIFMA and OPM.

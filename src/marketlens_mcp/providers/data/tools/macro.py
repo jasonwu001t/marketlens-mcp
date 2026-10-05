@@ -119,6 +119,12 @@ ROUTES = {
     "schedule": "omni bls.cpi_schedule, bls.empsit_schedule <- www.bls.gov/schedule/news_release",
 }
 SCHEDULES = {"cpi": "bls.cpi_schedule", "employment_situation": "bls.empsit_schedule"}
+#: marketlens-data keeps BEA's CL_UNIT but not its UNIT_MULT, so a level's scale is lost.
+BEA_LEVEL_NOTE = (
+    "BEA states each value's multiplier (UNIT_MULT) separately and it is not stored, so a value whose units "
+    "is 'Level' is not in ones: NIPA dollar levels are usually in millions of dollars. Check the table's "
+    "header on bea.gov before reading a magnitude."
+)
 
 
 def _window_check(start: date | None, end: date | None) -> None:
@@ -365,6 +371,7 @@ async def macro_bea_table(ctx: ToolContext, args: BeaInputs) -> ToolOutput:
             )
         )
     rows.sort(key=lambda r: (r.line_number or 0, r.series_id, r.date))
+    levels = any((r.units or "").strip().lower() == "level" for r in rows)
     prov = common.provenance(
         ctx,
         provider="bea",
@@ -383,7 +390,8 @@ async def macro_bea_table(ctx: ToolContext, args: BeaInputs) -> ToolOutput:
         session=session,
         authority=["official"],
     )
-    return common.output(ctx, s, EconomicObservation, rows, prov)
+    notes = [BEA_LEVEL_NOTE] if levels else []
+    return common.output(ctx, s, EconomicObservation, rows, prov, notes=notes)
 
 
 async def macro_release_schedule(ctx: ToolContext, args: ScheduleInputs) -> ToolOutput:
@@ -511,8 +519,10 @@ SPECS: tuple[ToolSpec, ...] = (
         description=common.describe(
             "Every line of a BEA NIPA table (GDP T10101, PCE, personal income, corporate profits) at annual, "
             "quarterly or monthly frequency; series_id is the line's series code, title its description, "
-            "units the publisher's unit. BEA serves the latest revision only, so knowledge_time is period end "
-            "plus a release lag. Needs BEA_API_KEY (free).",
+            "units the publisher's unit. BEA states a value's multiplier separately and it is not stored: a "
+            "units of 'Level' is not in ones (NIPA dollar levels are usually millions of dollars; check the "
+            "table's header). BEA serves the latest revision only, so knowledge_time is period end plus a "
+            "release lag. Needs BEA_API_KEY (free).",
             "lagged",
         ),
         readme="BEA NIPA tables (GDP, PCE, income, profits)",
