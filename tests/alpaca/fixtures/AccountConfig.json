@@ -1,0 +1,12 @@
+{
+ "disable_overnight_trading": false,
+ "fractional_trading": true,
+ "max_margin_multiplier": "4",
+ "no_shorting": false,
+ "suspend_trade": false,
+ "trade_confirm_email": "all",
+ "dtbp_check": "entry",
+ "pdt_check": "entry",
+ "ptp_no_exception_entry": false,
+ "max_options_trading_level": 2
+}

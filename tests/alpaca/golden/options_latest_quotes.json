@@ -1,0 +1,77 @@
+{
+ "absent": {},
+ "model": "marketlens.OptionQuote",
+ "notes": [],
+ "offload": "auto",
+ "pagination": {
+  "complete": true,
+  "next_page_token": null,
+  "page_cap_hit": false,
+  "pages_fetched": 1,
+  "row_cap_hit": false,
+  "rows_fetched": 2
+ },
+ "provenance": {
+  "as_of": "2026-10-02T19:59:59.046330Z",
+  "authority": null,
+  "cached": false,
+  "dataset": null,
+  "delay": "realtime",
+  "derived_from": [],
+  "environment": null,
+  "feed": "opra",
+  "knowledge_time": null,
+  "lag_days": null,
+  "operation": "OptionLatestQuotes",
+  "pages_fetched": 1,
+  "provider": "alpaca",
+  "request": {
+   "feed": "opra",
+   "occ_symbols": [
+    "AAPL261016C00250000",
+    "AAPL261016C00260000"
+   ]
+  },
+  "route": "GET /v1beta1/options/quotes/latest",
+  "schema_version": "1.0.0",
+  "stale": null,
+  "truncated": false,
+  "truncation_note": null,
+  "upstream_request_id": null
+ },
+ "risk": null,
+ "rows": [
+  {
+   "absent": null,
+   "ask_exchange": "w",
+   "ask_price": 10.65,
+   "ask_size": 669.0,
+   "bid_exchange": "W",
+   "bid_price": 10.55,
+   "bid_size": 164.0,
+   "condition": "A",
+   "currency": "USD",
+   "occ_symbol": "AAPL261016C00250000",
+   "t": "2026-10-02T19:59:59.046330Z",
+   "underlying": "AAPL"
+  },
+  {
+   "absent": {
+    "bid_exchange": "no_data",
+    "bid_price": "no_data",
+    "bid_size": "no_data"
+   },
+   "ask_exchange": "C",
+   "ask_price": 0.05,
+   "ask_size": 10.0,
+   "bid_exchange": null,
+   "bid_price": null,
+   "bid_size": null,
+   "condition": "A",
+   "currency": "USD",
+   "occ_symbol": "AAPL261016C00260000",
+   "t": "2026-10-02T19:59:59Z",
+   "underlying": "AAPL"
+  }
+ ]
+}

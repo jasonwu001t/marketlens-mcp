@@ -1,0 +1,78 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "marketlens-mcp"
+version = "0.1.0"
+description = "A read-only MCP server for market data and analytics: one vendor-neutral schema, large results kept out of the context window in a local DuckDB store, capabilities you switch on and off."
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+license-files = ["LICENSE", "THIRD_PARTY_NOTICES"]
+authors = [{ name = "Jason Wu" }]
+keywords = ["mcp", "model-context-protocol", "market-data", "alpaca", "duckdb", "analytics", "llm", "finance"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "Intended Audience :: Financial and Insurance Industry",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Office/Business :: Financial :: Investment",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+  "fastmcp==3.4.7",
+  "pydantic>=2.11,<3",
+  "httpx>=0.28.1,<1",
+  "duckdb>=1.5.5,<2",
+  "pyarrow>=25.0",
+  "sqlglot>=30.21,<31",
+  "pyyaml>=6.0.3,<7",
+  "tzdata>=2025.2; sys_platform == 'win32'",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.3", "pytest-asyncio>=0.24", "ruff>=0.6"]
+
+[project.scripts]
+marketlens-mcp = "marketlens_mcp.cli:main"
+
+[project.urls]
+Repository = "https://github.com/jasonwu001t/marketlens-mcp"
+Issues = "https://github.com/jasonwu001t/marketlens-mcp/issues"
+Changelog = "https://github.com/jasonwu001t/marketlens-mcp/blob/main/CHANGELOG.md"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/marketlens_mcp", "src/marketlens_schema"]
+
+[tool.hatch.build.targets.sdist]
+include = ["src", "tests", "schema", "README.md", "LICENSE", "THIRD_PARTY_NOTICES", "CHANGELOG.md",
+           "ADDING_A_CAPABILITY.md", "WRITING_A_PLUGIN.md", "CONTRIBUTING.md", "SECURITY.md", "Makefile"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+addopts = ["-ra", "--strict-markers"]
+markers = [
+  "network: needs real network and credentials (never run in CI by default)",
+]
+
+[tool.ruff]
+line-length = 110
+target-version = "py311"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM", "S"]
+ignore = ["S101", "E501"]  # long Field descriptions; layout is ruff format's job
+
+[tool.ruff.lint.per-file-ignores]
+# Server-authored SQL built from validated identifiers (result ids, quoted column
+# names); SQL written by the model goes through the query guard instead.
+"src/marketlens_mcp/results/**" = ["S608"]
+"src/marketlens_mcp/analytics/**" = ["S608"]
+"tests/**" = ["S104", "S105", "S106", "S108", "S608", "B008", "SIM117"]

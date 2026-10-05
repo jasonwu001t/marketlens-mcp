@@ -1,0 +1,127 @@
+{
+  "$defs": {
+    "AbsenceCode": {
+      "description": "Why a value is None. Never served as 0.",
+      "enum": [
+        "not_provided_by_source",
+        "not_applicable",
+        "not_entitled",
+        "no_data",
+        "insufficient_data",
+        "not_recovered",
+        "no_match",
+        "withheld",
+        "source_error",
+        "unparseable"
+      ],
+      "title": "AbsenceCode",
+      "type": "string"
+    },
+    "Environment": {
+      "description": "Which brokerage account a portfolio read came from.",
+      "enum": [
+        "paper",
+        "live"
+      ],
+      "title": "Environment",
+      "type": "string"
+    }
+  },
+  "$id": "urn:marketlens:schema:1:marketlens.PortfolioHistoryPoint",
+  "additionalProperties": false,
+  "properties": {
+    "absent": {
+      "anyOf": [
+        {
+          "additionalProperties": {
+            "$ref": "#/$defs/AbsenceCode"
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Per-row reasons for None fields: field name -> AbsenceCode",
+      "title": "Absent"
+    },
+    "base_value": {
+      "anyOf": [
+        {
+          "pattern": "^-?\\d+(\\.\\d+)?$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Base Value",
+      "x-unit": "USD"
+    },
+    "environment": {
+      "$ref": "#/$defs/Environment"
+    },
+    "equity": {
+      "anyOf": [
+        {
+          "pattern": "^-?\\d+(\\.\\d+)?$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Equity",
+      "x-unit": "USD"
+    },
+    "profit_loss": {
+      "anyOf": [
+        {
+          "pattern": "^-?\\d+(\\.\\d+)?$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Profit Loss",
+      "x-unit": "USD"
+    },
+    "profit_loss_pct": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Profit Loss Pct",
+      "x-unit": "fraction"
+    },
+    "t": {
+      "format": "date-time",
+      "title": "T",
+      "type": "string",
+      "x-unit": "UTC"
+    },
+    "timeframe": {
+      "pattern": "^(?:(?:[1-9]|[1-5][0-9])min|(?:[1-9]|1[0-9]|2[0-3])h|1d|1w|(?:1|2|3|4|6|12)mo)$",
+      "title": "Timeframe",
+      "type": "string"
+    }
+  },
+  "required": [
+    "environment",
+    "timeframe",
+    "t"
+  ],
+  "title": "PortfolioHistoryPoint",
+  "type": "object",
+  "x-schema-version": "1.0.0"
+}

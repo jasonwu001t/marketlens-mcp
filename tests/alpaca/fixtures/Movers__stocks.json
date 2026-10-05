@@ -1,0 +1,20 @@
+{
+ "gainers": [
+  {
+   "symbol": "AGRI",
+   "percent_change": 145.56,
+   "change": 2.46,
+   "price": 4.15
+  }
+ ],
+ "losers": [
+  {
+   "symbol": "BRK.B",
+   "percent_change": -5.25,
+   "change": -26.4,
+   "price": 476.5
+  }
+ ],
+ "market_type": "stocks",
+ "last_updated": "2026-10-02T19:55:00Z"
+}

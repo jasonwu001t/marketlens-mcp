@@ -1,0 +1,31 @@
+[
+ {
+  "ca_sub_type": "DIV",
+  "ca_type": "Dividend",
+  "cash": "0.018",
+  "corporate_action_id": "F58684224_XY37",
+  "declaration_date": "2026-09-05",
+  "effective_date": "2026-09-08",
+  "ex_date": "2026-09-12",
+  "id": "be3c368a-4c7c-4384-808e-f02c9f5a8afe",
+  "initiating_original_cusip": "55275E101",
+  "initiating_symbol": "MLLAX",
+  "new_rate": "1",
+  "old_rate": "1",
+  "payable_date": "2026-09-14",
+  "record_date": "2026-09-13",
+  "target_original_cusip": "55275E101",
+  "target_symbol": "MLLAX"
+ },
+ {
+  "ca_sub_type": "",
+  "ca_type": "Reorg",
+  "corporate_action_id": "R12345",
+  "id": "ce3c368a-4c7c-4384-808e-f02c9f5a8b00",
+  "initiating_original_cusip": "084670702",
+  "initiating_symbol": "BRK.B",
+  "effective_date": "2026-09-20",
+  "new_rate": "2",
+  "old_rate": "1"
+ }
+]

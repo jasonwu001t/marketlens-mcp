@@ -1,0 +1,106 @@
+{
+  "$defs": {
+    "AbsenceCode": {
+      "description": "Why a value is None. Never served as 0.",
+      "enum": [
+        "not_provided_by_source",
+        "not_applicable",
+        "not_entitled",
+        "no_data",
+        "insufficient_data",
+        "not_recovered",
+        "no_match",
+        "withheld",
+        "source_error",
+        "unparseable"
+      ],
+      "title": "AbsenceCode",
+      "type": "string"
+    }
+  },
+  "$id": "urn:marketlens:schema:1:marketlens.OptionTrade",
+  "additionalProperties": false,
+  "properties": {
+    "absent": {
+      "anyOf": [
+        {
+          "additionalProperties": {
+            "$ref": "#/$defs/AbsenceCode"
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Per-row reasons for None fields: field name -> AbsenceCode",
+      "title": "Absent"
+    },
+    "condition": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Condition"
+    },
+    "currency": {
+      "default": "USD",
+      "title": "Currency",
+      "type": "string"
+    },
+    "exchange": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Exchange"
+    },
+    "occ_symbol": {
+      "pattern": "^(?P<root>[A-Z]{1,6})(?P<yymmdd>\\d{6})(?P<cp>[CP])(?P<strike>\\d{8})$",
+      "title": "Occ Symbol",
+      "type": "string"
+    },
+    "price": {
+      "title": "Price",
+      "type": "number",
+      "x-unit": "price"
+    },
+    "size": {
+      "title": "Size",
+      "type": "number",
+      "x-unit": "contracts"
+    },
+    "t": {
+      "format": "date-time",
+      "title": "T",
+      "type": "string",
+      "x-unit": "UTC"
+    },
+    "underlying": {
+      "pattern": "^(?:[A-Z][A-Z0-9]{0,9}(?:-[A-Z0-9]{1,5})?|[A-Z0-9]{2,10}/[A-Z0-9]{2,10})$",
+      "title": "Underlying",
+      "type": "string"
+    }
+  },
+  "required": [
+    "occ_symbol",
+    "underlying",
+    "t",
+    "price",
+    "size"
+  ],
+  "title": "OptionTrade",
+  "type": "object",
+  "x-schema-version": "1.0.0"
+}

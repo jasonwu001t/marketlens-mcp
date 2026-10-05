@@ -1,0 +1,77 @@
+{
+  "$defs": {
+    "AbsenceCode": {
+      "description": "Why a value is None. Never served as 0.",
+      "enum": [
+        "not_provided_by_source",
+        "not_applicable",
+        "not_entitled",
+        "no_data",
+        "insufficient_data",
+        "not_recovered",
+        "no_match",
+        "withheld",
+        "source_error",
+        "unparseable"
+      ],
+      "title": "AbsenceCode",
+      "type": "string"
+    }
+  },
+  "$id": "urn:marketlens:schema:1:marketlens.DrawdownPoint",
+  "additionalProperties": false,
+  "properties": {
+    "absent": {
+      "anyOf": [
+        {
+          "additionalProperties": {
+            "$ref": "#/$defs/AbsenceCode"
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Per-row reasons for None fields: field name -> AbsenceCode",
+      "title": "Absent"
+    },
+    "drawdown": {
+      "description": "value / running_peak - 1 (0 at a new peak, negative below it)",
+      "title": "Drawdown",
+      "type": "number",
+      "x-unit": "fraction"
+    },
+    "running_peak": {
+      "title": "Running Peak",
+      "type": "number",
+      "x-unit": "price"
+    },
+    "series": {
+      "title": "Series",
+      "type": "string"
+    },
+    "t": {
+      "format": "date-time",
+      "title": "T",
+      "type": "string",
+      "x-unit": "UTC"
+    },
+    "value": {
+      "title": "Value",
+      "type": "number",
+      "x-unit": "price"
+    }
+  },
+  "required": [
+    "series",
+    "t",
+    "value",
+    "running_peak",
+    "drawdown"
+  ],
+  "title": "DrawdownPoint",
+  "type": "object",
+  "x-schema-version": "1.0.0"
+}

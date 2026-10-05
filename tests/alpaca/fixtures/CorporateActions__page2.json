@@ -1,0 +1,64 @@
+{
+ "corporate_actions": {
+  "stock_and_cash_mergers": [
+   {
+    "acquiree_cusip": "561409103",
+    "acquiree_rate": 1,
+    "acquiree_symbol": "MLVF",
+    "acquirer_cusip": "31931U102",
+    "acquirer_rate": 0.7733,
+    "acquirer_symbol": "FRBA",
+    "cash_rate": 7.8,
+    "effective_date": "2026-07-18",
+    "id": "e5248356-2c06-42cf-aeb9-1595bd616cdb",
+    "payable_date": "2026-07-18",
+    "process_date": "2026-07-18"
+   }
+  ],
+  "spin_offs": [
+   {
+    "ex_date": "2026-08-15",
+    "id": "82e602f6-35bc-4651-a5dd-f6d88ff37c55",
+    "new_cusip": "85237B101",
+    "new_rate": 1,
+    "new_symbol": "SRM",
+    "process_date": "2026-08-15",
+    "record_date": "2026-08-15",
+    "source_cusip": "48208F105",
+    "source_rate": 19.35,
+    "source_symbol": "JUPW"
+   }
+  ],
+  "capital_gains_distributions": [
+   {
+    "currency": "USD",
+    "cusip": "36261K509",
+    "ex_date": "2025-12-26",
+    "id": "98c905a1-08c7-450c-8669-b8e7aee8b44d",
+    "isin": "US36261K5090",
+    "long_term_rate": 0.45855,
+    "payable_date": "2026-01-09",
+    "process_date": "2026-01-08",
+    "record_date": "2025-12-29",
+    "short_term_rate": 0.11019,
+    "symbol": "GCAD"
+   }
+  ],
+  "rights_distributions": [
+   {
+    "ex_date": "2026-04-17",
+    "expiration_date": "2026-05-14",
+    "id": "69794cfd-0adc-4e11-9211-9210a9cf8932",
+    "new_cusip": "454089111",
+    "new_symbol": "IFN.RTWI",
+    "payable_date": "2026-04-19",
+    "process_date": "2026-04-19",
+    "rate": 1,
+    "record_date": "2026-04-18",
+    "source_cusip": "454089103",
+    "source_symbol": "IFN"
+   }
+  ]
+ },
+ "next_page_token": null
+}

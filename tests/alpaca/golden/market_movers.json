@@ -1,0 +1,64 @@
+{
+ "absent": {},
+ "model": "marketlens.Mover",
+ "notes": [],
+ "offload": "auto",
+ "pagination": {
+  "complete": true,
+  "next_page_token": null,
+  "page_cap_hit": false,
+  "pages_fetched": 1,
+  "row_cap_hit": false,
+  "rows_fetched": 2
+ },
+ "provenance": {
+  "as_of": "2026-10-02T19:55:00Z",
+  "authority": null,
+  "cached": false,
+  "dataset": null,
+  "delay": "unknown",
+  "derived_from": [],
+  "environment": null,
+  "feed": null,
+  "knowledge_time": null,
+  "lag_days": null,
+  "operation": "Movers",
+  "pages_fetched": 1,
+  "provider": "alpaca",
+  "request": {
+   "market_type": "stocks",
+   "top": 1
+  },
+  "route": "GET /v1beta1/screener/{market_type}/movers",
+  "schema_version": "1.0.0",
+  "stale": null,
+  "truncated": false,
+  "truncation_note": null,
+  "upstream_request_id": null
+ },
+ "risk": null,
+ "rows": [
+  {
+   "absent": null,
+   "as_of": "2026-10-02T19:55:00Z",
+   "change": 2.46,
+   "direction": "gainer",
+   "market_type": "stocks",
+   "percent_change": 1.4556,
+   "price": 4.15,
+   "rank": 1,
+   "ticker": "AGRI"
+  },
+  {
+   "absent": null,
+   "as_of": "2026-10-02T19:55:00Z",
+   "change": -26.4,
+   "direction": "loser",
+   "market_type": "stocks",
+   "percent_change": -0.0525,
+   "price": 476.5,
+   "rank": 1,
+   "ticker": "BRK-B"
+  }
+ ]
+}

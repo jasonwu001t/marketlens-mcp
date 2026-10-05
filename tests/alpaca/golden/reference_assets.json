@@ -1,0 +1,123 @@
+{
+ "absent": {},
+ "model": "marketlens.Asset",
+ "notes": [],
+ "offload": "auto",
+ "pagination": {
+  "complete": true,
+  "next_page_token": null,
+  "page_cap_hit": false,
+  "pages_fetched": 1,
+  "row_cap_hit": false,
+  "rows_fetched": 3
+ },
+ "provenance": {
+  "as_of": null,
+  "authority": null,
+  "cached": false,
+  "dataset": null,
+  "delay": "unknown",
+  "derived_from": [],
+  "environment": null,
+  "feed": null,
+  "knowledge_time": null,
+  "lag_days": null,
+  "operation": "get-v2-assets",
+  "pages_fetched": 1,
+  "provider": "alpaca",
+  "request": {
+   "attributes": [
+    "has_options"
+   ],
+   "status": "active"
+  },
+  "route": "GET /v2/assets",
+  "schema_version": "1.0.0",
+  "stale": null,
+  "truncated": false,
+  "truncation_note": null,
+  "upstream_request_id": null
+ },
+ "risk": null,
+ "rows": [
+  {
+   "absent": {
+    "min_order_size": "not_applicable",
+    "min_trade_increment": "not_applicable",
+    "price_increment": "not_applicable"
+   },
+   "asset_class": "us_equity",
+   "attributes": [
+    "has_options",
+    "fractional_eh_enabled"
+   ],
+   "cusip": "037833100",
+   "easy_to_borrow": true,
+   "exchange": "NASDAQ",
+   "fractionable": true,
+   "margin_requirement_long": 0.3,
+   "margin_requirement_short": 0.3,
+   "marginable": true,
+   "min_order_size": null,
+   "min_trade_increment": null,
+   "name": "Apple Inc. Common Stock",
+   "price_increment": null,
+   "provider_asset_id": "b0b6dd9d-8b9b-48a9-ba46-b9d54906e415",
+   "shortable": true,
+   "status": "active",
+   "ticker": "AAPL",
+   "tradable": true
+  },
+  {
+   "absent": {
+    "cusip": "not_provided_by_source",
+    "min_order_size": "not_applicable",
+    "min_trade_increment": "not_applicable",
+    "price_increment": "not_applicable"
+   },
+   "asset_class": "us_equity",
+   "attributes": [],
+   "cusip": null,
+   "easy_to_borrow": true,
+   "exchange": "NYSE",
+   "fractionable": true,
+   "margin_requirement_long": 0.25,
+   "margin_requirement_short": 1.0,
+   "marginable": true,
+   "min_order_size": null,
+   "min_trade_increment": null,
+   "name": "Berkshire Hathaway Inc. Class B",
+   "price_increment": null,
+   "provider_asset_id": "1e1e1e1e-0000-4000-8000-000000000001",
+   "shortable": true,
+   "status": "active",
+   "ticker": "BRK-B",
+   "tradable": true
+  },
+  {
+   "absent": {
+    "cusip": "not_applicable",
+    "margin_requirement_long": "not_applicable",
+    "margin_requirement_short": "not_applicable"
+   },
+   "asset_class": "crypto",
+   "attributes": [],
+   "cusip": null,
+   "easy_to_borrow": false,
+   "exchange": "CRYPTO",
+   "fractionable": true,
+   "margin_requirement_long": null,
+   "margin_requirement_short": null,
+   "marginable": false,
+   "min_order_size": "0.0001",
+   "min_trade_increment": "0.000000001",
+   "name": "Bitcoin  / US Dollar",
+   "price_increment": "1",
+   "provider_asset_id": "276e2673-764b-4ab6-a611-caf665ca6340",
+   "shortable": false,
+   "status": "active",
+   "ticker": "BTC/USD",
+   "tradable": true
+  }
+ ]
+}

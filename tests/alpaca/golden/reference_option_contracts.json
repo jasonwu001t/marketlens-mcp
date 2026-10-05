@@ -1,0 +1,99 @@
+{
+ "absent": {
+  "deliverables": {
+   "code": "not_provided_by_source",
+   "detail": "Not requested: pass show_deliverables=true."
+  }
+ },
+ "model": "marketlens.OptionContract",
+ "notes": [],
+ "offload": "auto",
+ "pagination": {
+  "complete": true,
+  "next_page_token": null,
+  "page_cap_hit": false,
+  "pages_fetched": 2,
+  "row_cap_hit": false,
+  "rows_fetched": 2
+ },
+ "provenance": {
+  "as_of": null,
+  "authority": null,
+  "cached": false,
+  "dataset": null,
+  "delay": "unknown",
+  "derived_from": [],
+  "environment": null,
+  "feed": null,
+  "knowledge_time": null,
+  "lag_days": null,
+  "operation": "get-options-contracts",
+  "pages_fetched": 2,
+  "provider": "alpaca",
+  "request": {
+   "expiration_to": "2026-10-31",
+   "show_deliverables": false,
+   "strike_min": 100.0,
+   "underlyings": [
+    "AAPL",
+    "BRK-B"
+   ]
+  },
+  "route": "GET /v2/options/contracts",
+  "schema_version": "1.0.0",
+  "stale": null,
+  "truncated": false,
+  "truncation_note": null,
+  "upstream_request_id": null
+ },
+ "risk": null,
+ "rows": [
+  {
+   "absent": null,
+   "close_price": 10.15,
+   "close_price_date": "2026-10-01",
+   "deliverables": null,
+   "expiration_date": "2026-10-16",
+   "multiplier": 100.0,
+   "name": "AAPL Oct 16 2026 250 Call",
+   "occ_symbol": "AAPL261016C00250000",
+   "open_interest": 12011,
+   "open_interest_date": "2026-10-01",
+   "option_type": "call",
+   "provider_contract_id": "6e58f870-fe73-4583-81e4-b9a37892c36f",
+   "root_symbol": "AAPL",
+   "size": 100.0,
+   "status": "active",
+   "strike": 250.0,
+   "style": "american",
+   "tradable": true,
+   "underlying": "AAPL"
+  },
+  {
+   "absent": {
+    "close_price": "not_provided_by_source",
+    "close_price_date": "not_provided_by_source",
+    "open_interest": "not_provided_by_source",
+    "open_interest_date": "not_provided_by_source"
+   },
+   "close_price": null,
+   "close_price_date": null,
+   "deliverables": null,
+   "expiration_date": "2026-10-16",
+   "multiplier": 100.0,
+   "name": "BRK.B Oct 16 2026 480 Put",
+   "occ_symbol": "BRKB261016P00480000",
+   "open_interest": null,
+   "open_interest_date": null,
+   "option_type": "put",
+   "provider_contract_id": "7e58f870-fe73-4583-81e4-b9a37892c370",
+   "root_symbol": "BRKB",
+   "size": 100.0,
+   "status": "active",
+   "strike": 480.0,
+   "style": "american",
+   "tradable": true,
+   "underlying": "BRK-B"
+  }
+ ]
+}

@@ -1,0 +1,75 @@
+{
+ "absent": {},
+ "model": "marketlens.FixedIncomeQuote",
+ "notes": [],
+ "offload": "auto",
+ "pagination": {
+  "complete": true,
+  "next_page_token": null,
+  "page_cap_hit": false,
+  "pages_fetched": 1,
+  "row_cap_hit": false,
+  "rows_fetched": 2
+ },
+ "provenance": {
+  "as_of": "2026-10-02T06:56:01.882466Z",
+  "authority": null,
+  "cached": false,
+  "dataset": null,
+  "delay": "unknown",
+  "derived_from": [],
+  "environment": null,
+  "feed": null,
+  "knowledge_time": null,
+  "lag_days": null,
+  "operation": "FixedIncomeLatestQuotes",
+  "pages_fetched": 1,
+  "provider": "alpaca",
+  "request": {
+   "isins": [
+    "US912797SX61",
+    "US91282CJL54"
+   ]
+  },
+  "route": "GET /v1beta1/fixed_income/latest/quotes",
+  "schema_version": "1.0.0",
+  "stale": null,
+  "truncated": false,
+  "truncation_note": null,
+  "upstream_request_id": null
+ },
+ "risk": null,
+ "rows": [
+  {
+   "absent": null,
+   "ask_price": 99.91958333,
+   "ask_size": 1000000.0,
+   "ask_ytm": 0.02226923,
+   "ask_ytw": 0.02226923,
+   "bid_price": 99.81091667,
+   "bid_size": 1000000.0,
+   "bid_ytm": 0.05236154,
+   "bid_ytw": 0.05236154,
+   "isin": "US912797SX61",
+   "t": "2026-10-02T06:56:01.882466Z"
+  },
+  {
+   "absent": {
+    "bid_price": "no_data",
+    "bid_size": "no_data",
+    "bid_ytm": "no_data",
+    "bid_ytw": "no_data"
+   },
+   "ask_price": 98.5,
+   "ask_size": 250000.0,
+   "ask_ytm": 0.0401,
+   "ask_ytw": 0.039900000000000005,
+   "bid_price": null,
+   "bid_size": null,
+   "bid_ytm": null,
+   "bid_ytw": null,
+   "isin": "US91282CJL54",
+   "t": "2026-10-02T06:55:00Z"
+  }
+ ]
+}

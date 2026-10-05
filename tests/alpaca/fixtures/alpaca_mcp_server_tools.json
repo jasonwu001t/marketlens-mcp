@@ -1,0 +1,366 @@
+{
+ "_source": "alpacahq/alpaca-mcp-server at a82ad1ccb740609abc99e10376e42d8e9c1037a1 (v2.3.2): every tool the server exposes with all toolsets enabled (asserted by its tests/test_server_construction.py). Pinned for marketlens-mcp's parity test; update deliberately when re-syncing.",
+ "commit": "a82ad1ccb740609abc99e10376e42d8e9c1037a1",
+ "tools": [
+  {
+   "name": "get_account_info",
+   "rw": "read",
+   "api": "GET /v2/account"
+  },
+  {
+   "name": "get_account_config",
+   "rw": "read",
+   "api": "GET /v2/account/configurations"
+  },
+  {
+   "name": "update_account_config",
+   "rw": "write",
+   "api": "PATCH /v2/account/configurations"
+  },
+  {
+   "name": "get_portfolio_history",
+   "rw": "read",
+   "api": "GET /v2/account/portfolio/history"
+  },
+  {
+   "name": "get_account_activities",
+   "rw": "read",
+   "api": "GET /v2/account/activities"
+  },
+  {
+   "name": "get_account_activities_by_type",
+   "rw": "read",
+   "api": "GET /v2/account/activities/{activity_type}"
+  },
+  {
+   "name": "get_orders",
+   "rw": "read",
+   "api": "GET /v2/orders"
+  },
+  {
+   "name": "get_order_by_id",
+   "rw": "read",
+   "api": "GET /v2/orders/{order_id}"
+  },
+  {
+   "name": "get_order_by_client_id",
+   "rw": "read",
+   "api": "GET /v2/orders:by_client_order_id"
+  },
+  {
+   "name": "replace_order_by_id",
+   "rw": "write",
+   "api": "PATCH /v2/orders/{order_id}"
+  },
+  {
+   "name": "cancel_order_by_id",
+   "rw": "write",
+   "api": "DELETE /v2/orders/{order_id}"
+  },
+  {
+   "name": "cancel_all_orders",
+   "rw": "write",
+   "api": "DELETE /v2/orders"
+  },
+  {
+   "name": "place_stock_order",
+   "rw": "write",
+   "api": "POST /v2/orders"
+  },
+  {
+   "name": "place_crypto_order",
+   "rw": "write",
+   "api": "POST /v2/orders"
+  },
+  {
+   "name": "place_option_order",
+   "rw": "write",
+   "api": "POST /v2/orders"
+  },
+  {
+   "name": "get_all_positions",
+   "rw": "read",
+   "api": "GET /v2/positions"
+  },
+  {
+   "name": "get_open_position",
+   "rw": "read",
+   "api": "GET /v2/positions/{symbol_or_asset_id}"
+  },
+  {
+   "name": "close_position",
+   "rw": "write",
+   "api": "DELETE /v2/positions/{symbol_or_asset_id}"
+  },
+  {
+   "name": "close_all_positions",
+   "rw": "write",
+   "api": "DELETE /v2/positions"
+  },
+  {
+   "name": "exercise_options_position",
+   "rw": "write",
+   "api": "POST /v2/positions/{symbol_or_contract_id}/exercise"
+  },
+  {
+   "name": "do_not_exercise_options_position",
+   "rw": "write",
+   "api": "POST /v2/positions/{symbol_or_contract_id}/do-not-exercise"
+  },
+  {
+   "name": "get_watchlists",
+   "rw": "read",
+   "api": "GET /v2/watchlists"
+  },
+  {
+   "name": "create_watchlist",
+   "rw": "write",
+   "api": "POST /v2/watchlists"
+  },
+  {
+   "name": "get_watchlist_by_id",
+   "rw": "read",
+   "api": "GET /v2/watchlists/{watchlist_id}"
+  },
+  {
+   "name": "update_watchlist_by_id",
+   "rw": "write",
+   "api": "PUT /v2/watchlists/{watchlist_id}"
+  },
+  {
+   "name": "delete_watchlist_by_id",
+   "rw": "write",
+   "api": "DELETE /v2/watchlists/{watchlist_id}"
+  },
+  {
+   "name": "add_asset_to_watchlist_by_id",
+   "rw": "write",
+   "api": "POST /v2/watchlists/{watchlist_id}"
+  },
+  {
+   "name": "remove_asset_from_watchlist_by_id",
+   "rw": "write",
+   "api": "DELETE /v2/watchlists/{watchlist_id}/{symbol}"
+  },
+  {
+   "name": "get_all_assets",
+   "rw": "read",
+   "api": "GET /v2/assets"
+  },
+  {
+   "name": "get_asset",
+   "rw": "read",
+   "api": "GET /v2/assets/{symbol_or_asset_id}"
+  },
+  {
+   "name": "get_option_contracts",
+   "rw": "read",
+   "api": "GET /v2/options/contracts"
+  },
+  {
+   "name": "get_option_contract",
+   "rw": "read",
+   "api": "GET /v2/options/contracts/{symbol_or_id}"
+  },
+  {
+   "name": "get_calendar",
+   "rw": "read",
+   "api": "GET /v2/calendar"
+  },
+  {
+   "name": "get_clock",
+   "rw": "read",
+   "api": "GET /v2/clock"
+  },
+  {
+   "name": "get_corporate_action_announcements",
+   "rw": "read",
+   "api": "GET /v2/corporate_actions/announcements"
+  },
+  {
+   "name": "get_corporate_action_announcement",
+   "rw": "read",
+   "api": "GET /v2/corporate_actions/announcements/{id}"
+  },
+  {
+   "name": "get_stock_bars",
+   "rw": "read",
+   "api": "GET /v2/stocks/bars"
+  },
+  {
+   "name": "get_stock_quotes",
+   "rw": "read",
+   "api": "GET /v2/stocks/quotes"
+  },
+  {
+   "name": "get_stock_trades",
+   "rw": "read",
+   "api": "GET /v2/stocks/trades"
+  },
+  {
+   "name": "get_stock_latest_bar",
+   "rw": "read",
+   "api": "GET /v2/stocks/bars/latest"
+  },
+  {
+   "name": "get_stock_latest_quote",
+   "rw": "read",
+   "api": "GET /v2/stocks/quotes/latest"
+  },
+  {
+   "name": "get_stock_latest_trade",
+   "rw": "read",
+   "api": "GET /v2/stocks/trades/latest"
+  },
+  {
+   "name": "get_stock_snapshot",
+   "rw": "read",
+   "api": "GET /v2/stocks/snapshots"
+  },
+  {
+   "name": "get_most_active_stocks",
+   "rw": "read",
+   "api": "GET /v1beta1/screener/stocks/most-actives"
+  },
+  {
+   "name": "get_market_movers",
+   "rw": "read",
+   "api": "GET /v1beta1/screener/{market_type}/movers"
+  },
+  {
+   "name": "get_crypto_bars",
+   "rw": "read",
+   "api": "GET /v1beta3/crypto/us/bars"
+  },
+  {
+   "name": "get_crypto_quotes",
+   "rw": "read",
+   "api": "GET /v1beta3/crypto/us/quotes"
+  },
+  {
+   "name": "get_crypto_trades",
+   "rw": "read",
+   "api": "GET /v1beta3/crypto/us/trades"
+  },
+  {
+   "name": "get_crypto_latest_bar",
+   "rw": "read",
+   "api": "GET /v1beta3/crypto/{loc}/latest/bars"
+  },
+  {
+   "name": "get_crypto_latest_quote",
+   "rw": "read",
+   "api": "GET /v1beta3/crypto/{loc}/latest/quotes"
+  },
+  {
+   "name": "get_crypto_latest_trade",
+   "rw": "read",
+   "api": "GET /v1beta3/crypto/{loc}/latest/trades"
+  },
+  {
+   "name": "get_crypto_snapshot",
+   "rw": "read",
+   "api": "GET /v1beta3/crypto/{loc}/snapshots"
+  },
+  {
+   "name": "get_crypto_latest_orderbook",
+   "rw": "read",
+   "api": "GET /v1beta3/crypto/{loc}/latest/orderbooks"
+  },
+  {
+   "name": "get_option_bars",
+   "rw": "read",
+   "api": "GET /v1beta1/options/bars"
+  },
+  {
+   "name": "get_option_trades",
+   "rw": "read",
+   "api": "GET /v1beta1/options/trades"
+  },
+  {
+   "name": "get_option_latest_trade",
+   "rw": "read",
+   "api": "GET /v1beta1/options/trades/latest"
+  },
+  {
+   "name": "get_option_latest_quote",
+   "rw": "read",
+   "api": "GET /v1beta1/options/quotes/latest"
+  },
+  {
+   "name": "get_option_snapshot",
+   "rw": "read",
+   "api": "GET /v1beta1/options/snapshots"
+  },
+  {
+   "name": "get_option_chain",
+   "rw": "read",
+   "api": "GET /v1beta1/options/snapshots/{underlying_symbol}"
+  },
+  {
+   "name": "get_option_exchange_codes",
+   "rw": "read",
+   "api": "GET /v1beta1/options/meta/exchanges"
+  },
+  {
+   "name": "get_corporate_actions",
+   "rw": "read",
+   "api": "GET /v1/corporate-actions"
+  },
+  {
+   "name": "get_news",
+   "rw": "read",
+   "api": "GET /v1beta1/news"
+  },
+  {
+   "name": "get_fixed_income_latest_quotes",
+   "rw": "read",
+   "api": "GET /v1beta1/fixed_income/latest/quotes"
+  },
+  {
+   "name": "get_locates",
+   "rw": "read",
+   "api": "GET /v1/locates"
+  },
+  {
+   "name": "create_locate",
+   "rw": "write",
+   "api": "POST /v1/locates"
+  },
+  {
+   "name": "get_locate",
+   "rw": "read",
+   "api": "GET /v1/locates/{locate_id}"
+  },
+  {
+   "name": "get_locate_quotes",
+   "rw": "read",
+   "api": "GET /v1/locates/quotes"
+  },
+  {
+   "name": "search_alpaca_docs",
+   "rw": "read",
+   "api": "remote ReadMe MCP tool 'search' at https://docs.alpaca.markets/mcp?project=us"
+  },
+  {
+   "name": "fetch_alpaca_doc",
+   "rw": "read",
+   "api": "ReadMe MCP 'fetch'"
+  },
+  {
+   "name": "search_alpaca_api_specs",
+   "rw": "read",
+   "api": "ReadMe MCP 'search-endpoints'"
+  },
+  {
+   "name": "list_alpaca_api_endpoints",
+   "rw": "read",
+   "api": "ReadMe MCP 'list-endpoints'"
+  },
+  {
+   "name": "get_alpaca_endpoint_docs",
+   "rw": "read",
+   "api": "ReadMe MCP 'get-endpoint'"
+  }
+ ]
+}

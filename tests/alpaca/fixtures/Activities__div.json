@@ -1,0 +1,15 @@
+[
+ {
+  "activity_sub_type": "SDIV",
+  "activity_type": "DIV",
+  "created_at": "2026-09-10T14:01:04.650275Z",
+  "currency": "USD",
+  "date": "2026-09-09",
+  "id": "20260909011955195::5f596936-6f23-4cef-bdf1-3806aae57dbf",
+  "net_amount": "1.02",
+  "per_share_amount": "0.51",
+  "qty": "2",
+  "status": "executed",
+  "symbol": "T"
+ }
+]

@@ -1,0 +1,20 @@
+{
+ "asset_class": "us_equity",
+ "asset_id": "1e1e1e1e-0000-4000-8000-000000000001",
+ "asset_marginable": true,
+ "avg_entry_price": "100.0",
+ "change_today": "0.0084",
+ "cost_basis": "500.0",
+ "current_price": "120.0",
+ "exchange": "NYSE",
+ "lastday_price": "119.0",
+ "market_value": "600.0",
+ "qty": "5",
+ "qty_available": "4",
+ "side": "long",
+ "symbol": "BRK.B",
+ "unrealized_intraday_pl": "10.0",
+ "unrealized_intraday_plpc": "0.0084",
+ "unrealized_pl": "100.0",
+ "unrealized_plpc": "0.20"
+}

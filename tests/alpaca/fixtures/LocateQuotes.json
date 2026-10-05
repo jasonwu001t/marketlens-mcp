@@ -1,0 +1,22 @@
+{
+ "errors": [
+  {
+   "code": "symbol_not_found",
+   "message": "symbol not found",
+   "symbol": "META"
+  }
+ ],
+ "quotes": [
+  {
+   "available_qty": 1000,
+   "price": "0.0123",
+   "quoted_at": "2026-10-02T15:04:05Z",
+   "symbol": "TSLA"
+  },
+  {
+   "available_qty": 0,
+   "quoted_at": "2026-10-02T15:04:05Z",
+   "symbol": "BRK.B"
+  }
+ ]
+}

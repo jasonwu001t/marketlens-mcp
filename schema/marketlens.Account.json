@@ -1,0 +1,468 @@
+{
+  "$defs": {
+    "AbsenceCode": {
+      "description": "Why a value is None. Never served as 0.",
+      "enum": [
+        "not_provided_by_source",
+        "not_applicable",
+        "not_entitled",
+        "no_data",
+        "insufficient_data",
+        "not_recovered",
+        "no_match",
+        "withheld",
+        "source_error",
+        "unparseable"
+      ],
+      "title": "AbsenceCode",
+      "type": "string"
+    },
+    "Environment": {
+      "description": "Which brokerage account a portfolio read came from.",
+      "enum": [
+        "paper",
+        "live"
+      ],
+      "title": "Environment",
+      "type": "string"
+    }
+  },
+  "$id": "urn:marketlens:schema:1:marketlens.Account",
+  "additionalProperties": false,
+  "description": "Balances and status. The account number is masked to its last four\ncharacters (``****1234``); the full number is never served (withheld).",
+  "properties": {
+    "absent": {
+      "anyOf": [
+        {
+          "additionalProperties": {
+            "$ref": "#/$defs/AbsenceCode"
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Per-row reasons for None fields: field name -> AbsenceCode",
+      "title": "Absent"
+    },
+    "account_blocked": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Account Blocked"
+    },
+    "account_id": {
+      "description": "The provider's opaque account id",
+      "title": "Account Id",
+      "type": "string"
+    },
+    "account_number_masked": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Account Number Masked"
+    },
+    "accrued_fees": {
+      "anyOf": [
+        {
+          "pattern": "^-?\\d+(\\.\\d+)?$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Accrued Fees",
+      "x-unit": "USD"
+    },
+    "balance_as_of": {
+      "anyOf": [
+        {
+          "format": "date",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Balance As Of"
+    },
+    "buying_power": {
+      "pattern": "^-?\\d+(\\.\\d+)?$",
+      "title": "Buying Power",
+      "type": "string",
+      "x-unit": "USD"
+    },
+    "cash": {
+      "pattern": "^-?\\d+(\\.\\d+)?$",
+      "title": "Cash",
+      "type": "string",
+      "x-unit": "USD"
+    },
+    "created_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Created At",
+      "x-unit": "UTC"
+    },
+    "crypto_status": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Crypto Status"
+    },
+    "currency": {
+      "default": "USD",
+      "title": "Currency",
+      "type": "string"
+    },
+    "daytrade_count": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Daytrade Count",
+      "x-unit": "count"
+    },
+    "daytrading_buying_power": {
+      "anyOf": [
+        {
+          "pattern": "^-?\\d+(\\.\\d+)?$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Daytrading Buying Power",
+      "x-unit": "USD"
+    },
+    "environment": {
+      "$ref": "#/$defs/Environment"
+    },
+    "equity": {
+      "pattern": "^-?\\d+(\\.\\d+)?$",
+      "title": "Equity",
+      "type": "string",
+      "x-unit": "USD"
+    },
+    "initial_margin": {
+      "anyOf": [
+        {
+          "pattern": "^-?\\d+(\\.\\d+)?$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Initial Margin",
+      "x-unit": "USD"
+    },
+    "last_equity": {
+      "anyOf": [
+        {
+          "pattern": "^-?\\d+(\\.\\d+)?$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Last Equity",
+      "x-unit": "USD"
+    },
+    "last_maintenance_margin": {
+      "anyOf": [
+        {
+          "pattern": "^-?\\d+(\\.\\d+)?$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Last Maintenance Margin",
+      "x-unit": "USD"
+    },
+    "long_market_value": {
+      "anyOf": [
+        {
+          "pattern": "^-?\\d+(\\.\\d+)?$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Long Market Value",
+      "x-unit": "USD"
+    },
+    "maintenance_margin": {
+      "anyOf": [
+        {
+          "pattern": "^-?\\d+(\\.\\d+)?$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Maintenance Margin",
+      "x-unit": "USD"
+    },
+    "multiplier": {
+      "anyOf": [
+        {
+          "pattern": "^-?\\d+(\\.\\d+)?$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Margin multiplier (1, 2 or 4)",
+      "title": "Multiplier",
+      "x-unit": "multiplier"
+    },
+    "non_marginable_buying_power": {
+      "anyOf": [
+        {
+          "pattern": "^-?\\d+(\\.\\d+)?$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Non Marginable Buying Power",
+      "x-unit": "USD"
+    },
+    "options_approved_level": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Options Approved Level"
+    },
+    "options_buying_power": {
+      "anyOf": [
+        {
+          "pattern": "^-?\\d+(\\.\\d+)?$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Options Buying Power",
+      "x-unit": "USD"
+    },
+    "options_trading_level": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Options Trading Level"
+    },
+    "pattern_day_trader": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Pattern Day Trader"
+    },
+    "pending_transfer_in": {
+      "anyOf": [
+        {
+          "pattern": "^-?\\d+(\\.\\d+)?$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Pending Transfer In",
+      "x-unit": "USD"
+    },
+    "pending_transfer_out": {
+      "anyOf": [
+        {
+          "pattern": "^-?\\d+(\\.\\d+)?$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Pending Transfer Out",
+      "x-unit": "USD"
+    },
+    "regt_buying_power": {
+      "anyOf": [
+        {
+          "pattern": "^-?\\d+(\\.\\d+)?$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Regt Buying Power",
+      "x-unit": "USD"
+    },
+    "short_market_value": {
+      "anyOf": [
+        {
+          "pattern": "^-?\\d+(\\.\\d+)?$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Short Market Value",
+      "x-unit": "USD"
+    },
+    "shorting_enabled": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Shorting Enabled"
+    },
+    "sma": {
+      "anyOf": [
+        {
+          "pattern": "^-?\\d+(\\.\\d+)?$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Sma",
+      "x-unit": "USD"
+    },
+    "status": {
+      "title": "Status",
+      "type": "string"
+    },
+    "trade_suspended_by_user": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Trade Suspended By User"
+    },
+    "trading_blocked": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Trading Blocked"
+    },
+    "transfers_blocked": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Transfers Blocked"
+    }
+  },
+  "required": [
+    "environment",
+    "account_id",
+    "status",
+    "cash",
+    "equity",
+    "buying_power"
+  ],
+  "title": "Account",
+  "type": "object",
+  "x-schema-version": "1.0.0"
+}

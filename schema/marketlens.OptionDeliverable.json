@@ -1,0 +1,125 @@
+{
+  "$defs": {
+    "AbsenceCode": {
+      "description": "Why a value is None. Never served as 0.",
+      "enum": [
+        "not_provided_by_source",
+        "not_applicable",
+        "not_entitled",
+        "no_data",
+        "insufficient_data",
+        "not_recovered",
+        "no_match",
+        "withheld",
+        "source_error",
+        "unparseable"
+      ],
+      "title": "AbsenceCode",
+      "type": "string"
+    }
+  },
+  "$id": "urn:marketlens:schema:1:marketlens.OptionDeliverable",
+  "additionalProperties": false,
+  "properties": {
+    "absent": {
+      "anyOf": [
+        {
+          "additionalProperties": {
+            "$ref": "#/$defs/AbsenceCode"
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Per-row reasons for None fields: field name -> AbsenceCode",
+      "title": "Absent"
+    },
+    "allocation_pct": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Allocation Pct",
+      "x-unit": "fraction"
+    },
+    "amount": {
+      "description": "Shares (equity) or USD (cash) delivered per contract",
+      "pattern": "^-?\\d+(\\.\\d+)?$",
+      "title": "Amount",
+      "type": "string",
+      "x-unit": "by_asset_class"
+    },
+    "delayed_settlement": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Delayed Settlement"
+    },
+    "settlement_method": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Settlement Method"
+    },
+    "settlement_type": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Settlement Type"
+    },
+    "ticker": {
+      "anyOf": [
+        {
+          "pattern": "^(?:[A-Z][A-Z0-9]{0,9}(?:-[A-Z0-9]{1,5})?|[A-Z0-9]{2,10}/[A-Z0-9]{2,10})$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Ticker"
+    },
+    "type": {
+      "enum": [
+        "cash",
+        "equity"
+      ],
+      "title": "Type",
+      "type": "string"
+    }
+  },
+  "required": [
+    "type",
+    "amount"
+  ],
+  "title": "OptionDeliverable",
+  "type": "object",
+  "x-schema-version": "1.0.0"
+}

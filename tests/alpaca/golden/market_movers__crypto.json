@@ -1,0 +1,64 @@
+{
+ "absent": {},
+ "model": "marketlens.Mover",
+ "notes": [],
+ "offload": "auto",
+ "pagination": {
+  "complete": true,
+  "next_page_token": null,
+  "page_cap_hit": false,
+  "pages_fetched": 1,
+  "row_cap_hit": false,
+  "rows_fetched": 2
+ },
+ "provenance": {
+  "as_of": "2026-10-02T19:55:00Z",
+  "authority": null,
+  "cached": false,
+  "dataset": null,
+  "delay": "unknown",
+  "derived_from": [],
+  "environment": null,
+  "feed": null,
+  "knowledge_time": null,
+  "lag_days": null,
+  "operation": "Movers",
+  "pages_fetched": 1,
+  "provider": "alpaca",
+  "request": {
+   "market_type": "crypto",
+   "top": 1
+  },
+  "route": "GET /v1beta1/screener/{market_type}/movers",
+  "schema_version": "1.0.0",
+  "stale": null,
+  "truncated": false,
+  "truncation_note": null,
+  "upstream_request_id": null
+ },
+ "risk": null,
+ "rows": [
+  {
+   "absent": null,
+   "as_of": "2026-10-02T19:55:00Z",
+   "change": 11.9,
+   "direction": "gainer",
+   "market_type": "crypto",
+   "percent_change": 0.085,
+   "price": 151.9,
+   "rank": 1,
+   "ticker": "SOL/USD"
+  },
+  {
+   "absent": null,
+   "as_of": "2026-10-02T19:55:00Z",
+   "change": -0.0042,
+   "direction": "loser",
+   "market_type": "crypto",
+   "percent_change": -0.03,
+   "price": 0.1358,
+   "rank": 1,
+   "ticker": "DOGE/USD"
+  }
+ ]
+}

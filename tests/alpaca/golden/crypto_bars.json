@@ -1,0 +1,78 @@
+{
+ "absent": {},
+ "model": "marketlens.Bar",
+ "notes": [],
+ "offload": "auto",
+ "pagination": {
+  "complete": true,
+  "next_page_token": null,
+  "page_cap_hit": false,
+  "pages_fetched": 1,
+  "row_cap_hit": false,
+  "rows_fetched": 2
+ },
+ "provenance": {
+  "as_of": "2026-10-02T20:00:00Z",
+  "authority": null,
+  "cached": false,
+  "dataset": null,
+  "delay": "realtime",
+  "derived_from": [],
+  "environment": null,
+  "feed": "us",
+  "knowledge_time": null,
+  "lag_days": null,
+  "operation": "CryptoBars",
+  "pages_fetched": 1,
+  "provider": "alpaca",
+  "request": {
+   "location": "us",
+   "lookback": "P1D",
+   "sort": "asc",
+   "start": "2026-10-01T20:00:00Z",
+   "tickers": [
+    "BTC/USD"
+   ],
+   "timeframe": "1h"
+  },
+  "route": "GET /v1beta3/crypto/{loc}/bars",
+  "schema_version": "1.0.0",
+  "stale": null,
+  "truncated": false,
+  "truncation_note": null,
+  "upstream_request_id": null
+ },
+ "risk": null,
+ "rows": [
+  {
+   "absent": null,
+   "asset_class": "crypto",
+   "close": 62080.0,
+   "currency": "USD",
+   "high": 62110.5,
+   "low": 61950.25,
+   "open": 61999.0,
+   "t": "2026-10-02T18:00:00Z",
+   "ticker": "BTC/USD",
+   "timeframe": "1h",
+   "trade_count": 803,
+   "volume": 12.0451,
+   "vwap": 62040.1
+  },
+  {
+   "absent": null,
+   "asset_class": "crypto",
+   "close": 62150.75,
+   "currency": "USD",
+   "high": 62200.0,
+   "low": 62001.0,
+   "open": 62080.0,
+   "t": "2026-10-02T19:00:00Z",
+   "ticker": "BTC/USD",
+   "timeframe": "1h",
+   "trade_count": 640,
+   "volume": 9.82,
+   "vwap": 62101.9
+  }
+ ]
+}

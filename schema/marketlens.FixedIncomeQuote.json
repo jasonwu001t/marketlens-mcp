@@ -1,0 +1,165 @@
+{
+  "$defs": {
+    "AbsenceCode": {
+      "description": "Why a value is None. Never served as 0.",
+      "enum": [
+        "not_provided_by_source",
+        "not_applicable",
+        "not_entitled",
+        "no_data",
+        "insufficient_data",
+        "not_recovered",
+        "no_match",
+        "withheld",
+        "source_error",
+        "unparseable"
+      ],
+      "title": "AbsenceCode",
+      "type": "string"
+    }
+  },
+  "$id": "urn:marketlens:schema:1:marketlens.FixedIncomeQuote",
+  "additionalProperties": false,
+  "properties": {
+    "absent": {
+      "anyOf": [
+        {
+          "additionalProperties": {
+            "$ref": "#/$defs/AbsenceCode"
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Per-row reasons for None fields: field name -> AbsenceCode",
+      "title": "Absent"
+    },
+    "ask_price": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Ask Price",
+      "x-unit": "percent_of_par"
+    },
+    "ask_size": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Face value",
+      "title": "Ask Size",
+      "x-unit": "USD"
+    },
+    "ask_ytm": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Ask Ytm",
+      "x-unit": "fraction"
+    },
+    "ask_ytw": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Ask Ytw",
+      "x-unit": "fraction"
+    },
+    "bid_price": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Bid Price",
+      "x-unit": "percent_of_par"
+    },
+    "bid_size": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Face value",
+      "title": "Bid Size",
+      "x-unit": "USD"
+    },
+    "bid_ytm": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Bid Ytm",
+      "x-unit": "fraction"
+    },
+    "bid_ytw": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Bid Ytw",
+      "x-unit": "fraction"
+    },
+    "isin": {
+      "pattern": "^[A-Z]{2}[A-Z0-9]{9}\\d$",
+      "title": "Isin",
+      "type": "string"
+    },
+    "t": {
+      "format": "date-time",
+      "title": "T",
+      "type": "string",
+      "x-unit": "UTC"
+    }
+  },
+  "required": [
+    "isin",
+    "t"
+  ],
+  "title": "FixedIncomeQuote",
+  "type": "object",
+  "x-schema-version": "1.0.0"
+}

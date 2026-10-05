@@ -1,0 +1,22 @@
+{
+ "option_contracts": [
+  {
+   "id": "7e58f870-fe73-4583-81e4-b9a37892c370",
+   "symbol": "BRKB261016P00480000",
+   "name": "BRK.B Oct 16 2026 480 Put",
+   "status": "active",
+   "tradable": true,
+   "expiration_date": "2026-10-16",
+   "root_symbol": "BRKB",
+   "underlying_symbol": "BRK.B",
+   "underlying_asset_id": "1e1e1e1e-0000-4000-8000-000000000001",
+   "type": "put",
+   "style": "american",
+   "strike_price": "480",
+   "multiplier": "100",
+   "size": "100",
+   "ppind": false
+  }
+ ],
+ "next_page_token": null
+}

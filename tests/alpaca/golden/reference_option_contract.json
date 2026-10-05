@@ -1,0 +1,73 @@
+{
+ "absent": {},
+ "model": "marketlens.OptionContract",
+ "notes": [],
+ "offload": "auto",
+ "pagination": {
+  "complete": true,
+  "next_page_token": null,
+  "page_cap_hit": false,
+  "pages_fetched": 1,
+  "row_cap_hit": false,
+  "rows_fetched": 1
+ },
+ "provenance": {
+  "as_of": null,
+  "authority": null,
+  "cached": false,
+  "dataset": null,
+  "delay": "unknown",
+  "derived_from": [],
+  "environment": null,
+  "feed": null,
+  "knowledge_time": null,
+  "lag_days": null,
+  "operation": "get-option-contract-symbol_or_id",
+  "pages_fetched": 1,
+  "provider": "alpaca",
+  "request": {
+   "occ_symbol": "AAPL261016C00250000"
+  },
+  "route": "GET /v2/options/contracts/{symbol_or_id}",
+  "schema_version": "1.0.0",
+  "stale": null,
+  "truncated": false,
+  "truncation_note": null,
+  "upstream_request_id": null
+ },
+ "risk": null,
+ "rows": [
+  {
+   "absent": null,
+   "close_price": 10.15,
+   "close_price_date": "2026-10-01",
+   "deliverables": [
+    {
+     "absent": null,
+     "allocation_pct": 1.0,
+     "amount": "100",
+     "delayed_settlement": false,
+     "settlement_method": "CCC",
+     "settlement_type": "T+1",
+     "ticker": "AAPL",
+     "type": "equity"
+    }
+   ],
+   "expiration_date": "2026-10-16",
+   "multiplier": 100.0,
+   "name": "AAPL Oct 16 2026 250 Call",
+   "occ_symbol": "AAPL261016C00250000",
+   "open_interest": 12011,
+   "open_interest_date": "2026-10-01",
+   "option_type": "call",
+   "provider_contract_id": "6e58f870-fe73-4583-81e4-b9a37892c36f",
+   "root_symbol": "AAPL",
+   "size": 100.0,
+   "status": "active",
+   "strike": 250.0,
+   "style": "american",
+   "tradable": true,
+   "underlying": "AAPL"
+  }
+ ]
+}

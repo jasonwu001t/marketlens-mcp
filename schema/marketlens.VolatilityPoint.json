@@ -1,0 +1,87 @@
+{
+  "$defs": {
+    "AbsenceCode": {
+      "description": "Why a value is None. Never served as 0.",
+      "enum": [
+        "not_provided_by_source",
+        "not_applicable",
+        "not_entitled",
+        "no_data",
+        "insufficient_data",
+        "not_recovered",
+        "no_match",
+        "withheld",
+        "source_error",
+        "unparseable"
+      ],
+      "title": "AbsenceCode",
+      "type": "string"
+    }
+  },
+  "$id": "urn:marketlens:schema:1:marketlens.VolatilityPoint",
+  "additionalProperties": false,
+  "properties": {
+    "absent": {
+      "anyOf": [
+        {
+          "additionalProperties": {
+            "$ref": "#/$defs/AbsenceCode"
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Per-row reasons for None fields: field name -> AbsenceCode",
+      "title": "Absent"
+    },
+    "periods_per_year": {
+      "title": "Periods Per Year",
+      "type": "number"
+    },
+    "return_kind": {
+      "enum": [
+        "simple",
+        "log"
+      ],
+      "title": "Return Kind",
+      "type": "string"
+    },
+    "series": {
+      "title": "Series",
+      "type": "string"
+    },
+    "t": {
+      "description": "Last observation in the window",
+      "format": "date-time",
+      "title": "T",
+      "type": "string",
+      "x-unit": "UTC"
+    },
+    "volatility": {
+      "description": "stddev_samp of the window's returns x sqrt(periods_per_year)",
+      "title": "Volatility",
+      "type": "number",
+      "x-unit": "fraction_per_year"
+    },
+    "window": {
+      "description": "Observations (returns) per window",
+      "minimum": 2,
+      "title": "Window",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "series",
+    "t",
+    "volatility",
+    "window",
+    "periods_per_year",
+    "return_kind"
+  ],
+  "title": "VolatilityPoint",
+  "type": "object",
+  "x-schema-version": "1.0.0"
+}

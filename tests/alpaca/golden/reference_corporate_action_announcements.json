@@ -1,0 +1,94 @@
+{
+ "absent": {},
+ "model": "marketlens.CorporateActionAnnouncement",
+ "notes": [],
+ "offload": "auto",
+ "pagination": {
+  "complete": true,
+  "next_page_token": null,
+  "page_cap_hit": false,
+  "pages_fetched": 1,
+  "row_cap_hit": false,
+  "rows_fetched": 2
+ },
+ "provenance": {
+  "as_of": null,
+  "authority": null,
+  "cached": false,
+  "dataset": null,
+  "delay": "unknown",
+  "derived_from": [],
+  "environment": null,
+  "feed": null,
+  "knowledge_time": null,
+  "lag_days": null,
+  "operation": "get-v2-corporate_actions-announcements",
+  "pages_fetched": 1,
+  "provider": "alpaca",
+  "request": {
+   "ca_types": [
+    "dividend",
+    "merger"
+   ],
+   "since": "2026-09-01",
+   "ticker": "BRK-B",
+   "until": "2026-09-30"
+  },
+  "route": "GET /v2/corporate_actions/announcements",
+  "schema_version": "1.0.0",
+  "stale": null,
+  "truncated": false,
+  "truncation_note": null,
+  "upstream_request_id": null
+ },
+ "risk": null,
+ "rows": [
+  {
+   "absent": null,
+   "announcement_id": "be3c368a-4c7c-4384-808e-f02c9f5a8afe",
+   "ca_sub_type": "DIV",
+   "ca_type": "dividend",
+   "cash": "0.018",
+   "corporate_action_id": "F58684224_XY37",
+   "declaration_date": "2026-09-05",
+   "effective_date": "2026-09-08",
+   "ex_date": "2026-09-12",
+   "initiating_cusip": "55275E101",
+   "initiating_ticker": "MLLAX",
+   "new_rate": "1",
+   "old_rate": "1",
+   "payable_date": "2026-09-14",
+   "record_date": "2026-09-13",
+   "target_cusip": "55275E101",
+   "target_ticker": "MLLAX"
+  },
+  {
+   "absent": {
+    "ca_sub_type": "not_provided_by_source",
+    "cash": "not_provided_by_source",
+    "declaration_date": "not_provided_by_source",
+    "ex_date": "not_provided_by_source",
+    "payable_date": "not_provided_by_source",
+    "record_date": "not_provided_by_source",
+    "target_cusip": "not_provided_by_source",
+    "target_ticker": "not_provided_by_source"
+   },
+   "announcement_id": "ce3c368a-4c7c-4384-808e-f02c9f5a8b00",
+   "ca_sub_type": null,
+   "ca_type": "other",
+   "cash": null,
+   "corporate_action_id": "R12345",
+   "declaration_date": null,
+   "effective_date": "2026-09-20",
+   "ex_date": null,
+   "initiating_cusip": "084670702",
+   "initiating_ticker": "BRK-B",
+   "new_rate": "2",
+   "old_rate": "1",
+   "payable_date": null,
+   "record_date": null,
+   "target_cusip": null,
+   "target_ticker": null
+  }
+ ]
+}

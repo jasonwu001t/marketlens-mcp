@@ -1,0 +1,24 @@
+Alpaca test fixtures
+====================
+
+Every JSON file in this directory except alpaca_mcp_server_tools.json is
+SYNTHETIC ("_synthetic": true applies to all of them). They were written by
+hand in the shape of the response schemas and examples of the pinned OpenAPI
+specs (src/marketlens_mcp/providers/alpaca/specs/), with invented values. None
+is a recording of a live response, none contains an API key, account number or
+personal data of anyone. Ids are made-up UUIDs; tickers are public symbols.
+
+Naming: <operationId>[__case].json, e.g. StockBars__page1.json is the first
+page of a two-page StockBars response. Cases cover: multi-page responses and
+cursors, both fetch caps, an empty quote (0 prices), BRK.B -> BRK-B, nanosecond
+timestamps, quote sizes in round lots before 2025-11-03, canceled trades,
+multi-leg orders, null entries in portfolio history, rejected locates, and
+documentation-server payloads.
+
+alpaca_mcp_server_tools.json is the list of the 72 tools alpacahq/alpaca-mcp-server
+exposes at commit a82ad1c (name, read or write, route), pinned for the parity
+test. Update it deliberately when re-syncing against a newer alpaca-mcp-server.
+
+The golden outputs in ../golden/ are what the mappers must produce from these
+fixtures (rows, response absent map, pagination, notes, provenance minus
+fetched_at). Regenerate with MARKETLENS_UPDATE_GOLDEN=1 and review the diff.

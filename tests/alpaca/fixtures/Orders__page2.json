@@ -1,0 +1,23 @@
+[
+ {
+  "asset_class": "crypto",
+  "asset_id": "a1733398-6acc-4e92-af24-0d0667f78713",
+  "client_order_id": "5b5d3d67-06ad-4ffa-af65-a117d0fc5a59",
+  "created_at": "2026-09-01T22:36:51.337711497Z",
+  "extended_hours": false,
+  "filled_qty": "0",
+  "hwm": "62000.5",
+  "id": "38e482f3-79a8-4f75-a057-f07a1ec6a397",
+  "legs": null,
+  "order_class": "",
+  "qty": "0.02",
+  "side": "sell",
+  "status": "new",
+  "submitted_at": "2026-09-01T22:36:51.313261061Z",
+  "symbol": "BTC/USD",
+  "time_in_force": "gtc",
+  "trail_percent": "1.5",
+  "type": "trailing_stop",
+  "updated_at": "2026-09-01T22:36:51.337754768Z"
+ }
+]

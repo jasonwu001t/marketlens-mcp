@@ -1,0 +1,22 @@
+{
+ "news": [
+  {
+   "id": 24843171,
+   "headline": "Apple leads phone sales in China for a second month",
+   "author": "Charles Gross",
+   "created_at": "2026-10-02T11:08:42Z",
+   "updated_at": "2026-10-02T11:08:43Z",
+   "summary": "A synthetic summary.",
+   "content": "",
+   "images": [],
+   "symbols": [
+    "AAPL",
+    "BRK.B",
+    "not a ticker!"
+   ],
+   "source": "benzinga",
+   "url": "https://www.example.com/news/24843171"
+  }
+ ],
+ "next_page_token": "TkVXU3wy"
+}

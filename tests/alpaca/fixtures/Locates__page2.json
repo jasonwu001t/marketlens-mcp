@@ -1,0 +1,14 @@
+{
+ "locates": [
+  {
+   "all_or_none": true,
+   "created_at": "2026-10-01T16:00:00Z",
+   "id": "650e8400-e29b-41d4-a716-446655440001",
+   "requested_qty": 5000,
+   "rejection_reason": "insufficient_availability",
+   "status": "rejected",
+   "symbol": "BRK.B"
+  }
+ ],
+ "next_page_token": null
+}

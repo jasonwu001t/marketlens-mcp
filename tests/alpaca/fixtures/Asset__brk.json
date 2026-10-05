@@ -1,0 +1,17 @@
+{
+ "id": "1e1e1e1e-0000-4000-8000-000000000001",
+ "class": "us_equity",
+ "exchange": "NYSE",
+ "symbol": "BRK.B",
+ "name": "Berkshire Hathaway Inc. Class B",
+ "status": "active",
+ "tradable": true,
+ "marginable": true,
+ "shortable": true,
+ "borrow_status": "easy_to_borrow",
+ "fractionable": true,
+ "cusip": null,
+ "margin_requirement_long": "25",
+ "margin_requirement_short": "100",
+ "attributes": []
+}

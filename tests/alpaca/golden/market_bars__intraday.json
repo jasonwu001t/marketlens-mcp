@@ -1,0 +1,65 @@
+{
+ "absent": {},
+ "model": "marketlens.Bar",
+ "notes": [],
+ "offload": "auto",
+ "pagination": {
+  "complete": true,
+  "next_page_token": null,
+  "page_cap_hit": false,
+  "pages_fetched": 1,
+  "row_cap_hit": false,
+  "rows_fetched": 1
+ },
+ "provenance": {
+  "as_of": "2026-10-02T20:00:00Z",
+  "authority": null,
+  "cached": false,
+  "dataset": null,
+  "delay": "realtime",
+  "derived_from": [],
+  "environment": null,
+  "feed": "iex",
+  "knowledge_time": null,
+  "lag_days": null,
+  "operation": "StockBars",
+  "pages_fetched": 1,
+  "provider": "alpaca",
+  "request": {
+   "adjustment": "raw",
+   "end": "2026-10-02T20:00:00Z",
+   "feed": "iex",
+   "lookback": "P5D",
+   "sort": "asc",
+   "start": "2026-09-27T20:00:00Z",
+   "tickers": [
+    "MSFT"
+   ],
+   "timeframe": "1h"
+  },
+  "route": "GET /v2/stocks/bars",
+  "schema_version": "1.0.0",
+  "stale": null,
+  "truncated": false,
+  "truncation_note": null,
+  "upstream_request_id": null
+ },
+ "risk": null,
+ "rows": [
+  {
+   "absent": null,
+   "asset_class": "us_equity",
+   "close": 431.1,
+   "currency": "USD",
+   "high": 431.5,
+   "low": 429.8,
+   "open": 430.0,
+   "t": "2026-10-02T13:30:00Z",
+   "ticker": "MSFT",
+   "timeframe": "1h",
+   "trade_count": 30111,
+   "volume": 2210044.0,
+   "vwap": 430.7
+  }
+ ]
+}

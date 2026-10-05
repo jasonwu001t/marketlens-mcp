@@ -1,0 +1,55 @@
+{
+ "absent": {},
+ "model": "marketlens.OptionTrade",
+ "notes": [],
+ "offload": "auto",
+ "pagination": {
+  "complete": true,
+  "next_page_token": null,
+  "page_cap_hit": false,
+  "pages_fetched": 1,
+  "row_cap_hit": false,
+  "rows_fetched": 1
+ },
+ "provenance": {
+  "as_of": "2026-10-02T19:59:44Z",
+  "authority": null,
+  "cached": false,
+  "dataset": null,
+  "delay": "delayed",
+  "derived_from": [],
+  "environment": null,
+  "feed": "indicative",
+  "knowledge_time": null,
+  "lag_days": null,
+  "operation": "OptionLatestTrades",
+  "pages_fetched": 1,
+  "provider": "alpaca",
+  "request": {
+   "feed": "indicative",
+   "occ_symbols": [
+    "AAPL261016C00250000"
+   ]
+  },
+  "route": "GET /v1beta1/options/trades/latest",
+  "schema_version": "1.0.0",
+  "stale": null,
+  "truncated": false,
+  "truncation_note": null,
+  "upstream_request_id": null
+ },
+ "risk": null,
+ "rows": [
+  {
+   "absent": null,
+   "condition": "a",
+   "currency": "USD",
+   "exchange": "C",
+   "occ_symbol": "AAPL261016C00250000",
+   "price": 10.6,
+   "size": 3.0,
+   "t": "2026-10-02T19:59:44Z",
+   "underlying": "AAPL"
+  }
+ ]
+}

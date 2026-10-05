@@ -1,0 +1,134 @@
+{
+  "$defs": {
+    "AbsenceCode": {
+      "description": "Why a value is None. Never served as 0.",
+      "enum": [
+        "not_provided_by_source",
+        "not_applicable",
+        "not_entitled",
+        "no_data",
+        "insufficient_data",
+        "not_recovered",
+        "no_match",
+        "withheld",
+        "source_error",
+        "unparseable"
+      ],
+      "title": "AbsenceCode",
+      "type": "string"
+    }
+  },
+  "$id": "urn:marketlens:schema:1:marketlens.OptionBar",
+  "additionalProperties": false,
+  "properties": {
+    "absent": {
+      "anyOf": [
+        {
+          "additionalProperties": {
+            "$ref": "#/$defs/AbsenceCode"
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Per-row reasons for None fields: field name -> AbsenceCode",
+      "title": "Absent"
+    },
+    "close": {
+      "title": "Close",
+      "type": "number",
+      "x-unit": "price"
+    },
+    "currency": {
+      "default": "USD",
+      "title": "Currency",
+      "type": "string"
+    },
+    "high": {
+      "title": "High",
+      "type": "number",
+      "x-unit": "price"
+    },
+    "low": {
+      "title": "Low",
+      "type": "number",
+      "x-unit": "price"
+    },
+    "occ_symbol": {
+      "pattern": "^(?P<root>[A-Z]{1,6})(?P<yymmdd>\\d{6})(?P<cp>[CP])(?P<strike>\\d{8})$",
+      "title": "Occ Symbol",
+      "type": "string"
+    },
+    "open": {
+      "description": "Premium per share",
+      "title": "Open",
+      "type": "number",
+      "x-unit": "price"
+    },
+    "t": {
+      "description": "Bar start",
+      "format": "date-time",
+      "title": "T",
+      "type": "string",
+      "x-unit": "UTC"
+    },
+    "timeframe": {
+      "pattern": "^(?:(?:[1-9]|[1-5][0-9])min|(?:[1-9]|1[0-9]|2[0-3])h|1d|1w|(?:1|2|3|4|6|12)mo)$",
+      "title": "Timeframe",
+      "type": "string"
+    },
+    "trade_count": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Trade Count",
+      "x-unit": "count"
+    },
+    "underlying": {
+      "pattern": "^(?:[A-Z][A-Z0-9]{0,9}(?:-[A-Z0-9]{1,5})?|[A-Z0-9]{2,10}/[A-Z0-9]{2,10})$",
+      "title": "Underlying",
+      "type": "string"
+    },
+    "volume": {
+      "title": "Volume",
+      "type": "number",
+      "x-unit": "contracts"
+    },
+    "vwap": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Vwap",
+      "x-unit": "price"
+    }
+  },
+  "required": [
+    "occ_symbol",
+    "underlying",
+    "timeframe",
+    "t",
+    "open",
+    "high",
+    "low",
+    "close",
+    "volume"
+  ],
+  "title": "OptionBar",
+  "type": "object",
+  "x-schema-version": "1.0.0"
+}

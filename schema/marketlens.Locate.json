@@ -1,0 +1,188 @@
+{
+  "$defs": {
+    "AbsenceCode": {
+      "description": "Why a value is None. Never served as 0.",
+      "enum": [
+        "not_provided_by_source",
+        "not_applicable",
+        "not_entitled",
+        "no_data",
+        "insufficient_data",
+        "not_recovered",
+        "no_match",
+        "withheld",
+        "source_error",
+        "unparseable"
+      ],
+      "title": "AbsenceCode",
+      "type": "string"
+    },
+    "Environment": {
+      "description": "Which brokerage account a portfolio read came from.",
+      "enum": [
+        "paper",
+        "live"
+      ],
+      "title": "Environment",
+      "type": "string"
+    }
+  },
+  "$id": "urn:marketlens:schema:1:marketlens.Locate",
+  "additionalProperties": false,
+  "properties": {
+    "absent": {
+      "anyOf": [
+        {
+          "additionalProperties": {
+            "$ref": "#/$defs/AbsenceCode"
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Per-row reasons for None fields: field name -> AbsenceCode",
+      "title": "Absent"
+    },
+    "all_or_none": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "All Or None"
+    },
+    "created_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Created At",
+      "x-unit": "UTC"
+    },
+    "environment": {
+      "$ref": "#/$defs/Environment"
+    },
+    "expires_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Expires At",
+      "x-unit": "UTC"
+    },
+    "limit_price": {
+      "anyOf": [
+        {
+          "pattern": "^-?\\d+(\\.\\d+)?$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Limit Price",
+      "x-unit": "USD"
+    },
+    "locate_id": {
+      "title": "Locate Id",
+      "type": "string"
+    },
+    "located_price": {
+      "anyOf": [
+        {
+          "pattern": "^-?\\d+(\\.\\d+)?$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Located Price",
+      "x-unit": "USD"
+    },
+    "located_qty": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Located Qty",
+      "x-unit": "shares"
+    },
+    "rejection_reason": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Rejection Reason"
+    },
+    "requested_qty": {
+      "title": "Requested Qty",
+      "type": "integer",
+      "x-unit": "shares"
+    },
+    "status": {
+      "title": "Status",
+      "type": "string"
+    },
+    "ticker": {
+      "pattern": "^(?:[A-Z][A-Z0-9]{0,9}(?:-[A-Z0-9]{1,5})?|[A-Z0-9]{2,10}/[A-Z0-9]{2,10})$",
+      "title": "Ticker",
+      "type": "string"
+    },
+    "total_fee": {
+      "anyOf": [
+        {
+          "pattern": "^-?\\d+(\\.\\d+)?$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Total Fee",
+      "x-unit": "USD"
+    }
+  },
+  "required": [
+    "environment",
+    "locate_id",
+    "ticker",
+    "status",
+    "requested_qty"
+  ],
+  "title": "Locate",
+  "type": "object",
+  "x-schema-version": "1.0.0"
+}

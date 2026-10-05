@@ -1,0 +1,30 @@
+[
+ {
+  "activity_type": "FILL",
+  "cum_qty": "2",
+  "id": "20261001135509981::2d7be4ff-d1f3-43e9-856a-0f5cf5c5088e",
+  "leaves_qty": "0",
+  "order_id": "b5abe576-6a8a-49f3-a353-46b72c1ccae9",
+  "order_status": "filled",
+  "price": "174.78",
+  "qty": "2",
+  "side": "buy",
+  "symbol": "BRK.B",
+  "transaction_time": "2026-10-01T18:55:09.981482Z",
+  "type": "fill"
+ },
+ {
+  "activity_type": "FILL",
+  "cum_qty": "1",
+  "id": "20261001140000000::3d7be4ff-d1f3-43e9-856a-0f5cf5c5088f",
+  "leaves_qty": "0",
+  "order_id": "c5abe576-6a8a-49f3-a353-46b72c1ccaea",
+  "order_status": "filled",
+  "price": "10.15",
+  "qty": "1",
+  "side": "sell",
+  "symbol": "AAPL261016C00250000",
+  "transaction_time": "2026-10-01T19:00:00.000000123Z",
+  "type": "fill"
+ }
+]

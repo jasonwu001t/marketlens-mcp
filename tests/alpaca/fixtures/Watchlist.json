@@ -1,0 +1,33 @@
+{
+ "account_id": "abe25343-a7ba-4255-bdeb-f7e013e9ee5d",
+ "created_at": "2026-01-31T21:49:05.14628Z",
+ "id": "3174d6df-7726-44b4-a5bd-7fda5ae6e009",
+ "name": "Primary Watchlist",
+ "updated_at": "2026-02-01T10:00:00Z",
+ "assets": [
+  {
+   "class": "us_equity",
+   "exchange": "NASDAQ",
+   "id": "8ccae427-5dd0-45b3-b5fe-7ba5e422c766",
+   "symbol": "TSLA",
+   "status": "active",
+   "tradable": true
+  },
+  {
+   "class": "us_equity",
+   "exchange": "NYSE",
+   "id": "1e1e1e1e-0000-4000-8000-000000000001",
+   "symbol": "BRK.B",
+   "status": "active",
+   "tradable": true
+  },
+  {
+   "class": "crypto",
+   "exchange": "CRYPTO",
+   "id": "276e2673-764b-4ab6-a611-caf665ca6340",
+   "symbol": "BTC/USD",
+   "status": "active",
+   "tradable": true
+  }
+ ]
+}

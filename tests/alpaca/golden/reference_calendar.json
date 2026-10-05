@@ -1,0 +1,74 @@
+{
+ "absent": {},
+ "model": "marketlens.MarketCalendarDay",
+ "notes": [
+  "Session times are New York wall-clock times converted to UTC."
+ ],
+ "offload": "auto",
+ "pagination": {
+  "complete": true,
+  "next_page_token": null,
+  "page_cap_hit": false,
+  "pages_fetched": 1,
+  "row_cap_hit": false,
+  "rows_fetched": 3
+ },
+ "provenance": {
+  "as_of": null,
+  "authority": null,
+  "cached": false,
+  "dataset": null,
+  "delay": "unknown",
+  "derived_from": [],
+  "environment": null,
+  "feed": null,
+  "knowledge_time": null,
+  "lag_days": null,
+  "operation": "LegacyCalendar",
+  "pages_fetched": 1,
+  "provider": "alpaca",
+  "request": {
+   "end": "2026-06-24",
+   "start": "2025-12-23"
+  },
+  "route": "GET /v2/calendar",
+  "schema_version": "1.0.0",
+  "stale": null,
+  "truncated": false,
+  "truncation_note": null,
+  "upstream_request_id": null
+ },
+ "risk": null,
+ "rows": [
+  {
+   "absent": null,
+   "close": "2025-12-23T21:00:00Z",
+   "date": "2025-12-23",
+   "market": "US equities",
+   "open": "2025-12-23T14:30:00Z",
+   "session_close": "2025-12-24T01:00:00Z",
+   "session_open": "2025-12-23T09:00:00Z",
+   "settlement_date": "2025-12-24"
+  },
+  {
+   "absent": null,
+   "close": "2025-12-24T18:00:00Z",
+   "date": "2025-12-24",
+   "market": "US equities",
+   "open": "2025-12-24T14:30:00Z",
+   "session_close": "2025-12-24T22:00:00Z",
+   "session_open": "2025-12-24T09:00:00Z",
+   "settlement_date": "2025-12-26"
+  },
+  {
+   "absent": null,
+   "close": "2026-06-24T20:00:00Z",
+   "date": "2026-06-24",
+   "market": "US equities",
+   "open": "2026-06-24T13:30:00Z",
+   "session_close": "2026-06-25T00:00:00Z",
+   "session_open": "2026-06-24T08:00:00Z",
+   "settlement_date": "2026-06-25"
+  }
+ ]
+}

@@ -1,0 +1,328 @@
+{
+  "$defs": {
+    "AbsenceCode": {
+      "description": "Why a value is None. Never served as 0.",
+      "enum": [
+        "not_provided_by_source",
+        "not_applicable",
+        "not_entitled",
+        "no_data",
+        "insufficient_data",
+        "not_recovered",
+        "no_match",
+        "withheld",
+        "source_error",
+        "unparseable"
+      ],
+      "title": "AbsenceCode",
+      "type": "string"
+    },
+    "OptionDeliverable": {
+      "additionalProperties": false,
+      "properties": {
+        "absent": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "$ref": "#/$defs/AbsenceCode"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Per-row reasons for None fields: field name -> AbsenceCode",
+          "title": "Absent"
+        },
+        "allocation_pct": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Allocation Pct",
+          "x-unit": "fraction"
+        },
+        "amount": {
+          "description": "Shares (equity) or USD (cash) delivered per contract",
+          "pattern": "^-?\\d+(\\.\\d+)?$",
+          "title": "Amount",
+          "type": "string",
+          "x-unit": "by_asset_class"
+        },
+        "delayed_settlement": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Delayed Settlement"
+        },
+        "settlement_method": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Settlement Method"
+        },
+        "settlement_type": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Settlement Type"
+        },
+        "ticker": {
+          "anyOf": [
+            {
+              "pattern": "^(?:[A-Z][A-Z0-9]{0,9}(?:-[A-Z0-9]{1,5})?|[A-Z0-9]{2,10}/[A-Z0-9]{2,10})$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ticker"
+        },
+        "type": {
+          "enum": [
+            "cash",
+            "equity"
+          ],
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "amount"
+      ],
+      "title": "OptionDeliverable",
+      "type": "object"
+    },
+    "OptionStyle": {
+      "enum": [
+        "american",
+        "european"
+      ],
+      "title": "OptionStyle",
+      "type": "string"
+    },
+    "OptionType": {
+      "enum": [
+        "call",
+        "put"
+      ],
+      "title": "OptionType",
+      "type": "string"
+    }
+  },
+  "$id": "urn:marketlens:schema:1:marketlens.OptionContract",
+  "additionalProperties": false,
+  "properties": {
+    "absent": {
+      "anyOf": [
+        {
+          "additionalProperties": {
+            "$ref": "#/$defs/AbsenceCode"
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Per-row reasons for None fields: field name -> AbsenceCode",
+      "title": "Absent"
+    },
+    "close_price": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Close Price",
+      "x-unit": "price"
+    },
+    "close_price_date": {
+      "anyOf": [
+        {
+          "format": "date",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Close Price Date"
+    },
+    "deliverables": {
+      "anyOf": [
+        {
+          "items": {
+            "$ref": "#/$defs/OptionDeliverable"
+          },
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Deliverables"
+    },
+    "expiration_date": {
+      "format": "date",
+      "title": "Expiration Date",
+      "type": "string"
+    },
+    "multiplier": {
+      "title": "Multiplier",
+      "type": "number",
+      "x-unit": "multiplier"
+    },
+    "name": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Name"
+    },
+    "occ_symbol": {
+      "pattern": "^(?P<root>[A-Z]{1,6})(?P<yymmdd>\\d{6})(?P<cp>[CP])(?P<strike>\\d{8})$",
+      "title": "Occ Symbol",
+      "type": "string"
+    },
+    "open_interest": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Open Interest",
+      "x-unit": "contracts"
+    },
+    "open_interest_date": {
+      "anyOf": [
+        {
+          "format": "date",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Open Interest Date"
+    },
+    "option_type": {
+      "$ref": "#/$defs/OptionType"
+    },
+    "provider_contract_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Provider Contract Id"
+    },
+    "root_symbol": {
+      "title": "Root Symbol",
+      "type": "string"
+    },
+    "size": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Contract size in shares",
+      "title": "Size",
+      "x-unit": "multiplier"
+    },
+    "status": {
+      "enum": [
+        "active",
+        "inactive"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "strike": {
+      "title": "Strike",
+      "type": "number",
+      "x-unit": "price"
+    },
+    "style": {
+      "$ref": "#/$defs/OptionStyle"
+    },
+    "tradable": {
+      "title": "Tradable",
+      "type": "boolean"
+    },
+    "underlying": {
+      "pattern": "^(?:[A-Z][A-Z0-9]{0,9}(?:-[A-Z0-9]{1,5})?|[A-Z0-9]{2,10}/[A-Z0-9]{2,10})$",
+      "title": "Underlying",
+      "type": "string"
+    }
+  },
+  "required": [
+    "occ_symbol",
+    "underlying",
+    "root_symbol",
+    "status",
+    "tradable",
+    "expiration_date",
+    "strike",
+    "option_type",
+    "style",
+    "multiplier"
+  ],
+  "title": "OptionContract",
+  "type": "object",
+  "x-schema-version": "1.0.0"
+}

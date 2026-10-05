@@ -1,0 +1,86 @@
+{
+ "absent": {
+  "conditions": {
+   "code": "not_applicable",
+   "detail": "Alpaca crypto trades carry no exchange, conditions or tape."
+  },
+  "exchange": {
+   "code": "not_applicable",
+   "detail": "Alpaca crypto trades carry no exchange, conditions or tape."
+  },
+  "tape": {
+   "code": "not_applicable",
+   "detail": "Alpaca crypto trades carry no exchange, conditions or tape."
+  }
+ },
+ "model": "marketlens.Trade",
+ "notes": [],
+ "offload": "auto",
+ "pagination": {
+  "complete": true,
+  "next_page_token": null,
+  "page_cap_hit": false,
+  "pages_fetched": 1,
+  "row_cap_hit": false,
+  "rows_fetched": 2
+ },
+ "provenance": {
+  "as_of": "2026-10-02T19:59:59.900000Z",
+  "authority": null,
+  "cached": false,
+  "dataset": null,
+  "delay": "realtime",
+  "derived_from": [],
+  "environment": null,
+  "feed": "us",
+  "knowledge_time": null,
+  "lag_days": null,
+  "operation": "CryptoLatestTrades",
+  "pages_fetched": 1,
+  "provider": "alpaca",
+  "request": {
+   "location": "us",
+   "tickers": [
+    "BTC/USD",
+    "ETH/BTC"
+   ]
+  },
+  "route": "GET /v1beta3/crypto/{loc}/latest/trades",
+  "schema_version": "1.0.0",
+  "stale": null,
+  "truncated": false,
+  "truncation_note": null,
+  "upstream_request_id": null
+ },
+ "risk": null,
+ "rows": [
+  {
+   "absent": null,
+   "asset_class": "crypto",
+   "conditions": null,
+   "currency": "USD",
+   "exchange": null,
+   "price": 62150.75,
+   "size": 0.002,
+   "t": "2026-10-02T19:59:59.900000Z",
+   "taker_side": "buy",
+   "tape": null,
+   "ticker": "BTC/USD",
+   "trade_id": "9001"
+  },
+  {
+   "absent": null,
+   "asset_class": "crypto",
+   "conditions": null,
+   "currency": "BTC",
+   "exchange": null,
+   "price": 0.03878,
+   "size": 0.75,
+   "t": "2026-10-02T19:59:58Z",
+   "taker_side": "sell",
+   "tape": null,
+   "ticker": "ETH/BTC",
+   "trade_id": "77"
+  }
+ ]
+}

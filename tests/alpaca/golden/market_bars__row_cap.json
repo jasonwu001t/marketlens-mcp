@@ -1,0 +1,82 @@
+{
+ "absent": {},
+ "model": "marketlens.Bar",
+ "notes": [
+  "Stopped after 1 pages and 2 rows (limits fetch.max_pages=20, fetch.max_rows=2). The data is incomplete; call market_bars again with page_token=\"QUFQTHxEfDIwMjYtMTAtMDE=\" to continue."
+ ],
+ "offload": "auto",
+ "pagination": {
+  "complete": false,
+  "next_page_token": "QUFQTHxEfDIwMjYtMTAtMDE=",
+  "page_cap_hit": false,
+  "pages_fetched": 1,
+  "row_cap_hit": true,
+  "rows_fetched": 2
+ },
+ "provenance": {
+  "as_of": "2026-10-02T20:00:00Z",
+  "authority": null,
+  "cached": false,
+  "dataset": null,
+  "delay": "realtime",
+  "derived_from": [],
+  "environment": null,
+  "feed": "iex",
+  "knowledge_time": null,
+  "lag_days": null,
+  "operation": "StockBars",
+  "pages_fetched": 1,
+  "provider": "alpaca",
+  "request": {
+   "adjustment": "all",
+   "feed": "iex",
+   "lookback": "P1Y",
+   "sort": "asc",
+   "start": "2025-10-02T20:00:00Z",
+   "tickers": [
+    "AAPL",
+    "BRK-B"
+   ],
+   "timeframe": "1d"
+  },
+  "route": "GET /v2/stocks/bars",
+  "schema_version": "1.0.0",
+  "stale": null,
+  "truncated": true,
+  "truncation_note": "Stopped after 1 pages and 2 rows (limits fetch.max_pages=20, fetch.max_rows=2). The data is incomplete; call market_bars again with page_token=\"QUFQTHxEfDIwMjYtMTAtMDE=\" to continue.",
+  "upstream_request_id": null
+ },
+ "risk": null,
+ "rows": [
+  {
+   "absent": null,
+   "asset_class": "us_equity",
+   "close": 255.8,
+   "currency": "USD",
+   "high": 256.2,
+   "low": 253.0,
+   "open": 254.1,
+   "t": "2026-09-30T04:00:00Z",
+   "ticker": "AAPL",
+   "timeframe": "1d",
+   "trade_count": 512201,
+   "volume": 41203311.0,
+   "vwap": 255.012
+  },
+  {
+   "absent": null,
+   "asset_class": "us_equity",
+   "close": 257.4,
+   "currency": "USD",
+   "high": 258.0,
+   "low": 255.1,
+   "open": 255.9,
+   "t": "2026-10-01T04:00:00Z",
+   "ticker": "AAPL",
+   "timeframe": "1d",
+   "trade_count": 498003,
+   "volume": 39001200.0,
+   "vwap": 256.77
+  }
+ ]
+}

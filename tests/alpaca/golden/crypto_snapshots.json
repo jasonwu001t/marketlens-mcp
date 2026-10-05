@@ -1,0 +1,74 @@
+{
+ "absent": {},
+ "model": "marketlens.Snapshot",
+ "notes": [
+  "No data from Alpaca for: ETH/USD."
+ ],
+ "offload": "auto",
+ "pagination": {
+  "complete": true,
+  "next_page_token": null,
+  "page_cap_hit": false,
+  "pages_fetched": 1,
+  "row_cap_hit": false,
+  "rows_fetched": 1
+ },
+ "provenance": {
+  "as_of": "2026-10-02T19:59:59.900000Z",
+  "authority": null,
+  "cached": false,
+  "dataset": null,
+  "delay": "realtime",
+  "derived_from": [],
+  "environment": null,
+  "feed": "us",
+  "knowledge_time": null,
+  "lag_days": null,
+  "operation": "CryptoSnapshots",
+  "pages_fetched": 1,
+  "provider": "alpaca",
+  "request": {
+   "location": "us",
+   "tickers": [
+    "BTC/USD",
+    "ETH/USD"
+   ]
+  },
+  "route": "GET /v1beta3/crypto/{loc}/snapshots",
+  "schema_version": "1.0.0",
+  "stale": null,
+  "truncated": false,
+  "truncation_note": null,
+  "upstream_request_id": null
+ },
+ "risk": null,
+ "rows": [
+  {
+   "absent": null,
+   "ask_price": 62151.0,
+   "ask_size": 3.252,
+   "asset_class": "crypto",
+   "bid_price": 62149.5,
+   "bid_size": 0.3544,
+   "change": 1150.75,
+   "change_pct": 0.018864754098360657,
+   "currency": "USD",
+   "day_close": 62150.75,
+   "day_high": 62300.0,
+   "day_low": 60800.0,
+   "day_open": 61000.0,
+   "day_volume": 410.2,
+   "day_vwap": 61712.4,
+   "last_price": 62150.75,
+   "last_size": 0.002,
+   "last_t": "2026-10-02T19:59:59.900000Z",
+   "minute_close": 62150.75,
+   "minute_t": "2026-10-02T19:59:00Z",
+   "prev_close": 61000.0,
+   "prev_volume": 380.9,
+   "quote_t": "2026-10-02T19:59:59.500000Z",
+   "t": "2026-10-02T19:59:59.900000Z",
+   "ticker": "BTC/USD"
+  }
+ ]
+}

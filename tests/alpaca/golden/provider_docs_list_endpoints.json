@@ -1,0 +1,64 @@
+{
+ "absent": {},
+ "model": "marketlens.ProviderDocument",
+ "notes": [],
+ "offload": "auto",
+ "pagination": null,
+ "provenance": {
+  "as_of": null,
+  "authority": null,
+  "cached": false,
+  "dataset": null,
+  "delay": "unknown",
+  "derived_from": [],
+  "environment": null,
+  "feed": null,
+  "knowledge_time": null,
+  "lag_days": null,
+  "operation": "list-endpoints",
+  "pages_fetched": 1,
+  "provider": "alpaca-docs",
+  "request": {
+   "api": "market_data"
+  },
+  "route": "mcp:list-endpoints",
+  "schema_version": "1.0.0",
+  "stale": null,
+  "truncated": false,
+  "truncation_note": null,
+  "upstream_request_id": null
+ },
+ "risk": null,
+ "rows": [
+  {
+   "absent": {
+    "doc_id": "not_provided_by_source",
+    "text": "not_provided_by_source",
+    "url": "not_provided_by_source"
+   },
+   "doc_id": null,
+   "kind": "endpoint_list",
+   "method": "GET",
+   "path": "/v2/stocks/bars",
+   "provider": "alpaca",
+   "text": null,
+   "title": "Historical bars",
+   "url": null
+  },
+  {
+   "absent": {
+    "doc_id": "not_provided_by_source",
+    "text": "not_provided_by_source",
+    "url": "not_provided_by_source"
+   },
+   "doc_id": null,
+   "kind": "endpoint_list",
+   "method": "GET",
+   "path": "/v1beta1/news",
+   "provider": "alpaca",
+   "text": null,
+   "title": "News articles",
+   "url": null
+  }
+ ]
+}

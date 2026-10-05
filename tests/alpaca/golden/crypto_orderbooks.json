@@ -1,0 +1,91 @@
+{
+ "absent": {},
+ "model": "marketlens.OrderBookLevel",
+ "notes": [
+  "Dropped 2 price level(s) of size 0 (no liquidity)."
+ ],
+ "offload": "auto",
+ "pagination": {
+  "complete": true,
+  "next_page_token": null,
+  "page_cap_hit": false,
+  "pages_fetched": 1,
+  "row_cap_hit": false,
+  "rows_fetched": 4
+ },
+ "provenance": {
+  "as_of": "2026-10-02T19:59:59.137774Z",
+  "authority": null,
+  "cached": false,
+  "dataset": null,
+  "delay": "realtime",
+  "derived_from": [],
+  "environment": null,
+  "feed": "us",
+  "knowledge_time": null,
+  "lag_days": null,
+  "operation": "CryptoLatestOrderbooks",
+  "pages_fetched": 1,
+  "provider": "alpaca",
+  "request": {
+   "depth": 2,
+   "location": "us",
+   "tickers": [
+    "BTC/USD"
+   ]
+  },
+  "route": "GET /v1beta3/crypto/{loc}/latest/orderbooks",
+  "schema_version": "1.0.0",
+  "stale": null,
+  "truncated": false,
+  "truncation_note": null,
+  "upstream_request_id": null
+ },
+ "risk": null,
+ "rows": [
+  {
+   "absent": null,
+   "asset_class": "crypto",
+   "currency": "USD",
+   "level": 0,
+   "price": 62149.5,
+   "side": "bid",
+   "size": 0.3544,
+   "t": "2026-10-02T19:59:59.137774Z",
+   "ticker": "BTC/USD"
+  },
+  {
+   "absent": null,
+   "asset_class": "crypto",
+   "currency": "USD",
+   "level": 1,
+   "price": 62140.0,
+   "side": "bid",
+   "size": 0.5,
+   "t": "2026-10-02T19:59:59.137774Z",
+   "ticker": "BTC/USD"
+  },
+  {
+   "absent": null,
+   "asset_class": "crypto",
+   "currency": "USD",
+   "level": 0,
+   "price": 62151.0,
+   "side": "ask",
+   "size": 3.252,
+   "t": "2026-10-02T19:59:59.137774Z",
+   "ticker": "BTC/USD"
+  },
+  {
+   "absent": null,
+   "asset_class": "crypto",
+   "currency": "USD",
+   "level": 1,
+   "price": 62160.0,
+   "side": "ask",
+   "size": 1.0,
+   "t": "2026-10-02T19:59:59.137774Z",
+   "ticker": "BTC/USD"
+  }
+ ]
+}

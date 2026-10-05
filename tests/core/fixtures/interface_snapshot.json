@@ -1,0 +1,4694 @@
+{
+ "marketlens_mcp": {
+  "ENTRY_POINT_GROUP": {
+   "kind": "value",
+   "repr": "'marketlens.plugins'"
+  },
+  "PLUGIN_API_VERSION": {
+   "kind": "value",
+   "repr": "(1, 0)"
+  },
+  "__version__": {
+   "kind": "value",
+   "repr": "'0.1.0'"
+  }
+ },
+ "marketlens_mcp.plugin_api": {
+  "BUILTIN_CAPABILITIES": {
+   "kind": "value",
+   "repr": "(CapabilitySpec(id='market', title='Market data', description='Stock, option, crypto and fixed-income bars, quotes, trades, snapshots, latest values, option chains with greeks, crypto order books, screeners.', default_enabled=True, locked=False, declared_by='builtin'), CapabilitySpec(id='reference', title='Reference data', description='Assets, option contracts and exchanges, market calendar and clock, corporate actions and announcements.', default_enabled=True, locked=False, declared_by='builtin'), CapabilitySpec(id='news', title='News', description='News articles. Third-party text: every response is marked untrusted.', default_enabled=True, locked=False, declared_by='builtin'), CapabilitySpec(id='analytics', title='Analytics on stored results', description='Returns, rolling volatility, correlation, resample, as-of align, drawdown and beta, computed locally on result handles.', default_enabled=True, locked=False, declared_by='builtin'), CapabilitySpec(id='portfolio', title='Brokerage account reads', description=\"Account, balances, positions, orders, activities, portfolio history, account configuration, broker watchlists and locates (paper account unless portfolio.environment is live). Off by default: what the model reads leaves the machine with the model's requests.\", default_enabled=False, locked=False, declared_by='builtin'), CapabilitySpec(id='results', title='Session results', description='Query, describe, sample, list and drop results stored by this session.', default_enabled=True, locked=True, declared_by='builtin'), CapabilitySpec(id='results.export', title='Export results to files', description='Writes a stored result to CSV or Parquet in the configured export folder. The only tool that writes a file.', default_enabled=False, locked=False, declared_by='builtin'), CapabilitySpec(id='provider.docs', title='Provider documentation', description=\"Searches the data provider's documentation service (an outbound call to a third party). Third-party text, marked untrusted.\", default_enabled=False, locked=False, declared_by='builtin'))"
+  },
+  "CapabilitySpec": {
+   "fields": {
+    "declared_by": "str",
+    "default_enabled": "bool",
+    "description": "str",
+    "id": "str",
+    "locked": "bool",
+    "title": "str"
+   },
+   "kind": "dataclass",
+   "methods": {
+    "__init__": "(self, id: 'str', title: 'str', description: 'str', default_enabled: 'bool', locked: 'bool' = False, declared_by: 'str' = 'builtin') -> None"
+   }
+  },
+  "ENTRY_POINT_GROUP": {
+   "kind": "value",
+   "repr": "'marketlens.plugins'"
+  },
+  "FetchLimits": {
+   "fields": {
+    "max_pages": "int",
+    "max_rows": "int"
+   },
+   "kind": "dataclass",
+   "methods": {
+    "__init__": "(self, max_rows: 'int' = 50000, max_pages: 'int' = 20) -> None"
+   }
+  },
+  "PLUGIN_API_VERSION": {
+   "kind": "value",
+   "repr": "(1, 0)"
+  },
+  "PageResult": {
+   "fields": {
+    "next_page_token": "str | None",
+    "page_cap_hit": "bool",
+    "pages_fetched": "int",
+    "row_cap_hit": "bool",
+    "rows": "list[T]"
+   },
+   "kind": "dataclass",
+   "methods": {
+    "__init__": "(self, rows: 'list[T]', pages_fetched: 'int', next_page_token: 'str | None', row_cap_hit: 'bool', page_cap_hit: 'bool') -> None",
+    "complete": "property",
+    "state": "(self) -> 'PaginationState'"
+   }
+  },
+  "PluginContext": {
+   "bases": [
+    "Protocol"
+   ],
+   "kind": "class",
+   "methods": {
+    "__init__": "(self, *args, **kwargs)",
+    "env": "(self, name: 'str') -> 'str | None'",
+    "log": "property",
+    "name": "property",
+    "on_shutdown": "(self, callback: 'Callable[[], Awaitable[None]]') -> 'None'",
+    "portfolio_environment": "property",
+    "server_version": "property",
+    "settings": "property"
+   }
+  },
+  "PluginInfo": {
+   "fields": {
+    "api_version": "tuple[int, int]",
+    "description": "str",
+    "env": "tuple[str, ...]",
+    "name": "str",
+    "register": "Callable[[Registry, PluginContext], None]"
+   },
+   "kind": "dataclass",
+   "methods": {
+    "__init__": "(self, name: 'str', api_version: 'tuple[int, int]', register: 'Callable[[Registry, PluginContext], None]', description: 'str' = '', env: 'tuple[str, ...]' = ()) -> None"
+   }
+  },
+  "RateLimiter": {
+   "bases": [
+    "Protocol"
+   ],
+   "kind": "class",
+   "methods": {
+    "__init__": "(self, *args, **kwargs)",
+    "acquire": "(self) -> 'None'"
+   }
+  },
+  "RegistrationError": {
+   "bases": [
+    "ValueError"
+   ],
+   "kind": "class",
+   "methods": {}
+  },
+  "Registry": {
+   "bases": [
+    "Protocol"
+   ],
+   "kind": "class",
+   "methods": {
+    "__init__": "(self, *args, **kwargs)",
+    "add_capability": "(self, spec: 'CapabilitySpec') -> 'None'",
+    "add_model": "(self, model: 'type[CanonicalModel]') -> 'None'",
+    "add_tool": "(self, spec: 'ToolSpec') -> 'None'"
+   }
+  },
+  "T": {
+   "kind": "other",
+   "type": "TypeVar"
+  },
+  "TOOL_NAME_MAX": {
+   "kind": "value",
+   "repr": "40"
+  },
+  "TYPE_CHECKING": {
+   "kind": "value",
+   "repr": "False"
+  },
+  "ToolContext": {
+   "bases": [
+    "Protocol"
+   ],
+   "kind": "class",
+   "methods": {
+    "__init__": "(self, *args, **kwargs)",
+    "capabilities": "property",
+    "env": "(self, name: 'str') -> 'str | None'",
+    "limiter": "(self, key: 'str', per_minute: 'int') -> 'RateLimiter'",
+    "limits": "property",
+    "log": "property",
+    "now": "(self) -> 'datetime'",
+    "paginate": "(self, fetch_page: 'FetchPage[T]', *, start_token: 'str | None' = None) -> 'PageResult[T]'",
+    "portfolio_environment": "property",
+    "results": "property",
+    "session_id": "property",
+    "settings": "property",
+    "tool": "property"
+   }
+  },
+  "ToolError": {
+   "bases": [
+    "Exception"
+   ],
+   "kind": "class",
+   "methods": {
+    "__init__": "(self, code: 'str', message: 'str', *, hint: 'str | None' = None, retryable: 'bool' = False)"
+   }
+  },
+  "ToolOutput": {
+   "fields": {
+    "absent": "dict[str, AbsenceReason]",
+    "model": "type[CanonicalModel] | str",
+    "notes": "list[str]",
+    "offload": "Literal['auto', 'always', 'never']",
+    "pagination": "PaginationState | None",
+    "provenance": "Provenance",
+    "risk": "OutputRisk | None",
+    "rows": "Sequence[CanonicalModel] | None",
+    "stored": "ResultInfo | None",
+    "table": "pa.Table | None"
+   },
+   "kind": "dataclass",
+   "methods": {
+    "__init__": "(self, model: 'type[CanonicalModel] | str', provenance: 'Provenance', rows: 'Sequence[CanonicalModel] | None' = None, table: 'pa.Table | None' = None, stored: 'ResultInfo | None' = None, absent: 'dict[str, AbsenceReason]' = <factory>, pagination: 'PaginationState | None' = None, notes: 'list[str]' = <factory>, risk: 'OutputRisk | None' = None, offload: \"Literal['auto', 'always', 'never']\" = 'auto') -> None"
+   }
+  },
+  "ToolSpec": {
+   "fields": {
+    "capability": "str",
+    "description": "str",
+    "env": "tuple[str, ...]",
+    "golden_test": "str",
+    "handler": "Handler",
+    "input_model": "type[BaseModel]",
+    "name": "str",
+    "output_model": "type[CanonicalModel] | str",
+    "output_risk": "OutputRisk",
+    "parity_names": "tuple[str, ...]",
+    "provider": "str",
+    "readme": "str",
+    "route": "str",
+    "title": "str",
+    "upstream_operations": "tuple[str, ...]"
+   },
+   "kind": "dataclass",
+   "methods": {
+    "__init__": "(self, name: 'str', capability: 'str', title: 'str', description: 'str', readme: 'str', input_model: 'type[BaseModel]', output_model: 'type[CanonicalModel] | str', provider: 'str', route: 'str', handler: 'Handler', golden_test: 'str', upstream_operations: 'tuple[str, ...]' = (), parity_names: 'tuple[str, ...]' = (), env: 'tuple[str, ...]' = (), output_risk: 'OutputRisk' = 'api_structured') -> None"
+   }
+  }
+ },
+ "marketlens_mcp.results_api": {
+  "ColumnInfo": {
+   "classvars": {},
+   "config": {
+    "extra": "'forbid'",
+    "frozen": "True"
+   },
+   "fields": {
+    "description": {
+     "annotation": "str | None",
+     "default": "None",
+     "required": false
+    },
+    "max": {
+     "annotation": "str | int | float | bool | None",
+     "default": "None",
+     "required": false
+    },
+    "min": {
+     "annotation": "str | int | float | bool | None",
+     "default": "None",
+     "required": false
+    },
+    "name": {
+     "annotation": "<class 'str'>",
+     "default": null,
+     "required": true
+    },
+    "null_reason": {
+     "annotation": "marketlens_schema.base.AbsenceReason | None",
+     "default": "None",
+     "required": false
+    },
+    "nullable": {
+     "annotation": "<class 'bool'>",
+     "default": "True",
+     "required": false
+    },
+    "nulls": {
+     "annotation": "int | None",
+     "default": "None",
+     "required": false
+    },
+    "type": {
+     "annotation": "<class 'str'>",
+     "default": null,
+     "required": true
+    },
+    "unit": {
+     "annotation": "str | None",
+     "default": "None",
+     "required": false
+    }
+   },
+   "kind": "model"
+  },
+  "INLINE_KIND": {
+   "kind": "value",
+   "repr": "'inline'"
+  },
+  "InlineResult": {
+   "classvars": {},
+   "config": {
+    "extra": "'forbid'",
+    "frozen": "True"
+   },
+   "fields": {
+    "absent": {
+     "annotation": "dict[str, marketlens_schema.base.AbsenceReason]",
+     "default": "{}",
+     "required": false
+    },
+    "columns": {
+     "annotation": "list[marketlens_mcp.results_api.ColumnInfo]",
+     "default": null,
+     "required": true
+    },
+    "kind": {
+     "annotation": "typing.Literal['inline']",
+     "default": "'inline'",
+     "required": false
+    },
+    "model": {
+     "annotation": "<class 'str'>",
+     "default": null,
+     "required": true
+    },
+    "notes": {
+     "annotation": "list[str]",
+     "default": "[]",
+     "required": false
+    },
+    "pagination": {
+     "annotation": "marketlens_schema.base.PaginationState | None",
+     "default": "None",
+     "required": false
+    },
+    "provenance": {
+     "annotation": "<class 'marketlens_schema.base.Provenance'>",
+     "default": null,
+     "required": true
+    },
+    "row_count": {
+     "annotation": "<class 'int'>",
+     "default": null,
+     "required": true
+    },
+    "rows": {
+     "annotation": "list[dict[str, typing.Any]]",
+     "default": null,
+     "required": true
+    },
+    "schema_version": {
+     "annotation": "<class 'str'>",
+     "default": null,
+     "required": true
+    },
+    "tool": {
+     "annotation": "<class 'str'>",
+     "default": null,
+     "required": true
+    }
+   },
+   "kind": "model"
+  },
+  "Preview": {
+   "classvars": {},
+   "config": {
+    "extra": "'forbid'",
+    "frozen": "True"
+   },
+   "fields": {
+    "first_rows": {
+     "annotation": "list[dict[str, typing.Any]]",
+     "default": "[]",
+     "required": false
+    },
+    "group_column": {
+     "annotation": "str | None",
+     "default": "None",
+     "required": false
+    },
+    "groups_count": {
+     "annotation": "int | None",
+     "default": "None",
+     "required": false
+    },
+    "groups_sample": {
+     "annotation": "list[str]",
+     "default": "[]",
+     "required": false
+    },
+    "last_rows": {
+     "annotation": "list[dict[str, typing.Any]]",
+     "default": "[]",
+     "required": false
+    },
+    "time_column": {
+     "annotation": "str | None",
+     "default": "None",
+     "required": false
+    },
+    "time_span_end": {
+     "annotation": "typing.Optional[typing.Annotated[datetime.datetime, AfterValidator(func=<function _to_utc>), PlainSerializer(func=<function _iso_z>, return_type=<class 'str'>, when_used='json')]]",
+     "default": "None",
+     "required": false
+    },
+    "time_span_start": {
+     "annotation": "typing.Optional[typing.Annotated[datetime.datetime, AfterValidator(func=<function _to_utc>), PlainSerializer(func=<function _iso_z>, return_type=<class 'str'>, when_used='json')]]",
+     "default": "None",
+     "required": false
+    }
+   },
+   "kind": "model"
+  },
+  "QueryRefused": {
+   "bases": [
+    "ValueError"
+   ],
+   "kind": "class",
+   "methods": {
+    "__init__": "(self, code: 'str', message: 'str')"
+   }
+  },
+  "ReadyQuery": {
+   "classvars": {},
+   "config": {
+    "extra": "'forbid'",
+    "frozen": "True"
+   },
+   "fields": {
+    "purpose": {
+     "annotation": "<class 'str'>",
+     "default": null,
+     "required": true
+    },
+    "sql": {
+     "annotation": "<class 'str'>",
+     "default": null,
+     "required": true
+    }
+   },
+   "kind": "model"
+  },
+  "ResultInfo": {
+   "classvars": {},
+   "config": {
+    "extra": "'forbid'",
+    "frozen": "True"
+   },
+   "fields": {
+    "absent": {
+     "annotation": "dict[str, marketlens_schema.base.AbsenceReason]",
+     "default": "{}",
+     "required": false
+    },
+    "bytes": {
+     "annotation": "<class 'int'>",
+     "default": null,
+     "required": true
+    },
+    "columns": {
+     "annotation": "list[marketlens_mcp.results_api.ColumnInfo]",
+     "default": null,
+     "required": true
+    },
+    "created_at": {
+     "annotation": "<class 'datetime.datetime'>",
+     "default": null,
+     "required": true
+    },
+    "expires_at": {
+     "annotation": "<class 'datetime.datetime'>",
+     "default": null,
+     "required": true
+    },
+    "group_column": {
+     "annotation": "str | None",
+     "default": "None",
+     "required": false
+    },
+    "model": {
+     "annotation": "<class 'str'>",
+     "default": null,
+     "required": true
+    },
+    "pagination": {
+     "annotation": "marketlens_schema.base.PaginationState | None",
+     "default": "None",
+     "required": false
+    },
+    "parents": {
+     "annotation": "list[str]",
+     "default": "[]",
+     "required": false
+    },
+    "provenance": {
+     "annotation": "<class 'marketlens_schema.base.Provenance'>",
+     "default": null,
+     "required": true
+    },
+    "result_id": {
+     "annotation": "<class 'str'>",
+     "default": null,
+     "required": true
+    },
+    "risk": {
+     "annotation": "typing.Literal['api_structured', 'external_text']",
+     "default": "'api_structured'",
+     "required": false
+    },
+    "row_count": {
+     "annotation": "<class 'int'>",
+     "default": null,
+     "required": true
+    },
+    "schema_version": {
+     "annotation": "<class 'str'>",
+     "default": null,
+     "required": true
+    },
+    "time_column": {
+     "annotation": "str | None",
+     "default": "None",
+     "required": false
+    },
+    "tool": {
+     "annotation": "<class 'str'>",
+     "default": null,
+     "required": true
+    }
+   },
+   "kind": "model"
+  },
+  "ResultMarker": {
+   "classvars": {},
+   "config": {
+    "extra": "'forbid'",
+    "frozen": "True"
+   },
+   "fields": {
+    "absent": {
+     "annotation": "dict[str, marketlens_schema.base.AbsenceReason]",
+     "default": "{}",
+     "required": false
+    },
+    "bytes": {
+     "annotation": "<class 'int'>",
+     "default": null,
+     "required": true
+    },
+    "columns": {
+     "annotation": "list[marketlens_mcp.results_api.ColumnInfo]",
+     "default": null,
+     "required": true
+    },
+    "expires_at": {
+     "annotation": "<class 'datetime.datetime'>",
+     "default": null,
+     "required": true
+    },
+    "how_to": {
+     "annotation": "<class 'str'>",
+     "default": null,
+     "required": true
+    },
+    "kind": {
+     "annotation": "typing.Literal['stored']",
+     "default": "'stored'",
+     "required": false
+    },
+    "model": {
+     "annotation": "<class 'str'>",
+     "default": null,
+     "required": true
+    },
+    "notes": {
+     "annotation": "list[str]",
+     "default": "[]",
+     "required": false
+    },
+    "pagination": {
+     "annotation": "marketlens_schema.base.PaginationState | None",
+     "default": "None",
+     "required": false
+    },
+    "parents": {
+     "annotation": "list[str]",
+     "default": "[]",
+     "required": false
+    },
+    "preview": {
+     "annotation": "<class 'marketlens_mcp.results_api.Preview'>",
+     "default": null,
+     "required": true
+    },
+    "provenance": {
+     "annotation": "<class 'marketlens_schema.base.Provenance'>",
+     "default": null,
+     "required": true
+    },
+    "queries": {
+     "annotation": "list[marketlens_mcp.results_api.ReadyQuery]",
+     "default": null,
+     "required": true
+    },
+    "result_id": {
+     "annotation": "<class 'str'>",
+     "default": null,
+     "required": true
+    },
+    "risk": {
+     "annotation": "typing.Literal['api_structured', 'external_text']",
+     "default": null,
+     "required": true
+    },
+    "row_count": {
+     "annotation": "<class 'int'>",
+     "default": null,
+     "required": true
+    },
+    "schema_version": {
+     "annotation": "<class 'str'>",
+     "default": null,
+     "required": true
+    },
+    "tool": {
+     "annotation": "<class 'str'>",
+     "default": null,
+     "required": true
+    }
+   },
+   "kind": "model"
+  },
+  "ResultNotFound": {
+   "bases": [
+    "LookupError"
+   ],
+   "kind": "class",
+   "methods": {
+    "__init__": "(self, result_id: 'str', reason: \"Literal['unknown', 'expired', 'evicted', 'dropped']\")"
+   }
+  },
+  "ResultSession": {
+   "bases": [
+    "Protocol"
+   ],
+   "kind": "class",
+   "methods": {
+    "__init__": "(self, *args, **kwargs)",
+    "info": "(self, result_id: 'str') -> 'ResultInfo'",
+    "query": "(self, sql: 'str', params: 'Sequence[Any]' = ()) -> 'pa.Table'",
+    "table": "(self, result_id: 'str') -> 'str'"
+   }
+  },
+  "ResultStore": {
+   "bases": [
+    "Protocol"
+   ],
+   "kind": "class",
+   "methods": {
+    "__init__": "(self, *args, **kwargs)",
+    "drop": "(self, result_id: 'str') -> 'bool'",
+    "info": "(self, result_id: 'str') -> 'ResultInfo'",
+    "list": "(self) -> 'list[ResultInfo]'",
+    "open": "(self, result_ids: 'Sequence[str]') -> 'AbstractContextManager[ResultSession]'",
+    "put": "(self, table: 'pa.Table', *, tool: 'str', model: 'str', provenance: 'Provenance', absent: 'dict[str, AbsenceReason] | None' = None, pagination: 'PaginationState | None' = None, risk: 'OutputRisk' = 'api_structured', parents: 'Sequence[str]' = (), time_column: 'str | None' = None, group_column: 'str | None' = None, column_units: 'dict[str, str] | None' = None) -> 'ResultInfo'",
+    "read": "(self, result_id: 'str', *, columns: 'Sequence[str] | None' = None, limit: 'int') -> 'pa.Table'",
+    "session_key": "property",
+    "usage": "(self) -> 'StoreUsage'"
+   }
+  },
+  "STORED_KIND": {
+   "kind": "value",
+   "repr": "'stored'"
+  },
+  "StoreUsage": {
+   "classvars": {},
+   "config": {
+    "extra": "'forbid'",
+    "frozen": "True"
+   },
+   "fields": {
+    "bytes": {
+     "annotation": "<class 'int'>",
+     "default": null,
+     "required": true
+    },
+    "max_bytes": {
+     "annotation": "<class 'int'>",
+     "default": null,
+     "required": true
+    },
+    "oldest_created_at": {
+     "annotation": "datetime.datetime | None",
+     "default": "None",
+     "required": false
+    },
+    "results": {
+     "annotation": "<class 'int'>",
+     "default": null,
+     "required": true
+    }
+   },
+   "kind": "model"
+  },
+  "TYPE_CHECKING": {
+   "kind": "value",
+   "repr": "False"
+  }
+ },
+ "marketlens_schema": {
+  "ALIGNED_SCHEMA_NAME": {
+   "kind": "value",
+   "repr": "'marketlens.Aligned'"
+  },
+  "AbsenceCode": {
+   "kind": "enum",
+   "members": {
+    "INSUFFICIENT_DATA": "insufficient_data",
+    "NOT_APPLICABLE": "not_applicable",
+    "NOT_ENTITLED": "not_entitled",
+    "NOT_PROVIDED_BY_SOURCE": "not_provided_by_source",
+    "NOT_RECOVERED": "not_recovered",
+    "NO_DATA": "no_data",
+    "NO_MATCH": "no_match",
+    "SOURCE_ERROR": "source_error",
+    "UNPARSEABLE": "unparseable",
+    "WITHHELD": "withheld"
+   }
+  },
+  "AbsenceReason": {
+   "classvars": {},
+   "config": {
+    "extra": "'forbid'",
+    "frozen": "True"
+   },
+   "fields": {
+    "code": {
+     "annotation": "<enum 'AbsenceCode'>",
+     "default": null,
+     "required": true
+    },
+    "detail": {
+     "annotation": "str | None",
+     "default": "None",
+     "required": false
+    }
+   },
+   "kind": "model"
+  },
+  "AssetClass": {
+   "kind": "enum",
+   "members": {
+    "CRYPTO": "crypto",
+    "FIXED_INCOME": "fixed_income",
+    "US_EQUITY": "us_equity",
+    "US_OPTION": "us_option"
+   }
+  },
+  "BUILTIN_MODELS": {
+   "keys": [
+    "marketlens.Account",
+    "marketlens.AccountConfig",
+    "marketlens.Activity",
+    "marketlens.Asset",
+    "marketlens.Bar",
+    "marketlens.BetaPoint",
+    "marketlens.BetaResult",
+    "marketlens.BrokerWatchlist",
+    "marketlens.CorporateAction",
+    "marketlens.CorporateActionAnnouncement",
+    "marketlens.CorrelationCell",
+    "marketlens.DrawdownPoint",
+    "marketlens.DrawdownSummary",
+    "marketlens.FixedIncomeQuote",
+    "marketlens.Locate",
+    "marketlens.LocateQuote",
+    "marketlens.MarketCalendarDay",
+    "marketlens.MarketClock",
+    "marketlens.MostActive",
+    "marketlens.Mover",
+    "marketlens.NewsItem",
+    "marketlens.OptionBar",
+    "marketlens.OptionContract",
+    "marketlens.OptionDeliverable",
+    "marketlens.OptionExchange",
+    "marketlens.OptionQuote",
+    "marketlens.OptionSnapshot",
+    "marketlens.OptionTrade",
+    "marketlens.Order",
+    "marketlens.OrderBookLevel",
+    "marketlens.OrderLeg",
+    "marketlens.PortfolioHistoryPoint",
+    "marketlens.Position",
+    "marketlens.ProviderDocument",
+    "marketlens.Quote",
+    "marketlens.ReturnPoint",
+    "marketlens.Snapshot",
+    "marketlens.Trade",
+    "marketlens.VolatilityPoint"
+   ],
+   "kind": "mapping"
+  },
+  "CanonicalModel": {
+   "classvars": {
+    "group_column": "None",
+    "schema_name": "''",
+    "time_column": "None",
+    "value_columns": "()"
+   },
+   "config": {
+    "extra": "'forbid'",
+    "frozen": "True"
+   },
+   "fields": {
+    "absent": {
+     "annotation": "dict[str, marketlens_schema.base.AbsenceCode] | None",
+     "default": "None",
+     "required": false
+    }
+   },
+   "kind": "model"
+  },
+  "DecimalStr": {
+   "kind": "other",
+   "type": "_AnnotatedAlias"
+  },
+  "Delay": {
+   "kind": "enum",
+   "members": {
+    "DELAYED": "delayed",
+    "END_OF_DAY": "end_of_day",
+    "REALTIME": "realtime",
+    "UNKNOWN": "unknown"
+   }
+  },
+  "Environment": {
+   "kind": "enum",
+   "members": {
+    "LIVE": "live",
+    "PAPER": "paper"
+   }
+  },
+  "Isin": {
+   "kind": "other",
+   "type": "_AnnotatedAlias"
+  },
+  "OccSymbol": {
+   "kind": "other",
+   "type": "_AnnotatedAlias"
+  },
+  "OptionStyle": {
+   "kind": "enum",
+   "members": {
+    "AMERICAN": "american",
+    "EUROPEAN": "european"
+   }
+  },
+  "OptionType": {
+   "kind": "enum",
+   "members": {
+    "CALL": "call",
+    "PUT": "put"
+   }
+  },
+  "OrderClass": {
+   "kind": "enum",
+   "members": {
+    "BRACKET": "bracket",
+    "MLEG": "mleg",
+    "OCO": "oco",
+    "OTO": "oto",
+    "SIMPLE": "simple"
+   }
+  },
+  "OrderStatus": {
+   "kind": "enum",
+   "members": {
+    "ACCEPTED": "accepted",
+    "ACCEPTED_FOR_BIDDING": "accepted_for_bidding",
+    "CALCULATED": "calculated",
+    "CANCELED": "canceled",
+    "DONE_FOR_DAY": "done_for_day",
+    "EXPIRED": "expired",
+    "FILLED": "filled",
+    "HELD": "held",
+    "NEW": "new",
+    "PARTIALLY_FILLED": "partially_filled",
+    "PENDING_CANCEL": "pending_cancel",
+    "PENDING_NEW": "pending_new",
+    "PENDING_REPLACE": "pending_replace",
+    "PENDING_REVIEW": "pending_review",
+    "REJECTED": "rejected",
+    "REPLACED": "replaced",
+    "STOPPED": "stopped",
+    "SUSPENDED": "suspended"
+   }
+  },
+  "OrderType": {
+   "kind": "enum",
+   "members": {
+    "LIMIT": "limit",
+    "MARKET": "market",
+    "STOP": "stop",
+    "STOP_LIMIT": "stop_limit",
+    "TRAILING_STOP": "trailing_stop"
+   }
+  },
+  "PaginationState": {
+   "classvars": {},
+   "config": {
+    "extra": "'forbid'",
+    "frozen": "True"
+   },
+   "fields": {
+    "complete": {
+     "annotation": "<class 'bool'>",
+     "default": null,
+     "required": true
+    },
+    "next_page_token": {
+     "annotation": "str | None",
+     "default": "None",
+     "required": false
+    },
+    "page_cap_hit": {
+     "annotation": "<class 'bool'>",
+     "default": "False",
+     "required": false
+    },
+    "pages_fetched": {
+     "annotation": "<class 'int'>",
+     "default": null,
+     "required": true
+    },
+    "row_cap_hit": {
+     "annotation": "<class 'bool'>",
+     "default": "False",
+     "required": false
+    },
+    "rows_fetched": {
+     "annotation": "<class 'int'>",
+     "default": null,
+     "required": true
+    }
+   },
+   "kind": "model"
+  },
+  "PositionSide": {
+   "kind": "enum",
+   "members": {
+    "LONG": "long",
+    "SHORT": "short"
+   }
+  },
+  "Provenance": {
+   "classvars": {},
+   "config": {
+    "extra": "'forbid'",
+    "frozen": "True"
+   },
+   "fields": {
+    "as_of": {
+     "annotation": "typing.Optional[typing.Annotated[datetime.datetime, AfterValidator(func=<function _to_utc>), PlainSerializer(func=<function _iso_z>, return_type=<class 'str'>, when_used='json')]]",
+     "default": "None",
+     "required": false
+    },
+    "authority": {
+     "annotation": "list[str] | None",
+     "default": "None",
+     "required": false
+    },
+    "cached": {
+     "annotation": "<class 'bool'>",
+     "default": "False",
+     "required": false
+    },
+    "dataset": {
+     "annotation": "str | None",
+     "default": "None",
+     "required": false
+    },
+    "delay": {
+     "annotation": "<enum 'Delay'>",
+     "default": "<Delay.UNKNOWN: 'unknown'>",
+     "required": false
+    },
+    "derived_from": {
+     "annotation": "list[str]",
+     "default": "[]",
+     "required": false
+    },
+    "environment": {
+     "annotation": "marketlens_schema.base.Environment | None",
+     "default": "None",
+     "required": false
+    },
+    "feed": {
+     "annotation": "str | None",
+     "default": "None",
+     "required": false
+    },
+    "fetched_at": {
+     "annotation": "<class 'datetime.datetime'>",
+     "default": null,
+     "required": true
+    },
+    "knowledge_time": {
+     "annotation": "typing.Optional[typing.Annotated[datetime.datetime, AfterValidator(func=<function _to_utc>), PlainSerializer(func=<function _iso_z>, return_type=<class 'str'>, when_used='json')]]",
+     "default": "None",
+     "required": false
+    },
+    "lag_days": {
+     "annotation": "float | None",
+     "default": "None",
+     "required": false
+    },
+    "operation": {
+     "annotation": "str | None",
+     "default": "None",
+     "required": false
+    },
+    "pages_fetched": {
+     "annotation": "<class 'int'>",
+     "default": "0",
+     "required": false
+    },
+    "provider": {
+     "annotation": "<class 'str'>",
+     "default": null,
+     "required": true
+    },
+    "request": {
+     "annotation": "dict[str, str | int | float | bool | list[str] | None]",
+     "default": "{}",
+     "required": false
+    },
+    "route": {
+     "annotation": "<class 'str'>",
+     "default": null,
+     "required": true
+    },
+    "schema_version": {
+     "annotation": "<class 'str'>",
+     "default": "'1.0.0'",
+     "required": false
+    },
+    "stale": {
+     "annotation": "bool | None",
+     "default": "None",
+     "required": false
+    },
+    "truncated": {
+     "annotation": "<class 'bool'>",
+     "default": "False",
+     "required": false
+    },
+    "truncation_note": {
+     "annotation": "str | None",
+     "default": "None",
+     "required": false
+    },
+    "upstream_request_id": {
+     "annotation": "str | None",
+     "default": "None",
+     "required": false
+    }
+   },
+   "kind": "model"
+  },
+  "QUERY_ROW_SCHEMA_NAME": {
+   "kind": "value",
+   "repr": "'marketlens.QueryRow'"
+  },
+  "SCHEMA_NAMESPACE": {
+   "kind": "value",
+   "repr": "'marketlens'"
+  },
+  "SCHEMA_VERSION": {
+   "kind": "value",
+   "repr": "'1.0.0'"
+  },
+  "Side": {
+   "kind": "enum",
+   "members": {
+    "BUY": "buy",
+    "SELL": "sell"
+   }
+  },
+  "Ticker": {
+   "kind": "other",
+   "type": "_AnnotatedAlias"
+  },
+  "TimeInForce": {
+   "kind": "enum",
+   "members": {
+    "CLS": "cls",
+    "DAY": "day",
+    "FOK": "fok",
+    "GTC": "gtc",
+    "IOC": "ioc",
+    "OPG": "opg"
+   }
+  },
+  "Timeframe": {
+   "kind": "other",
+   "type": "_AnnotatedAlias"
+  },
+  "UNITS": {
+   "keys": [
+    "USD",
+    "UTC",
+    "base_units",
+    "by_asset_class",
+    "contracts",
+    "count",
+    "days",
+    "fraction",
+    "fraction_per_year",
+    "multiplier",
+    "per_share_greek",
+    "percent_of_par",
+    "price",
+    "shares"
+   ],
+   "kind": "mapping"
+  },
+  "UtcDatetime": {
+   "kind": "other",
+   "type": "_AnnotatedAlias"
+  },
+  "normalize_ticker": {
+   "kind": "function",
+   "signature": "(raw: 'str') -> 'str'"
+  },
+  "unexplained_absences": {
+   "kind": "function",
+   "signature": "(rows: 'Sequence[CanonicalModel]', response_absent: 'Mapping[str, AbsenceReason]') -> 'list[tuple[int, str]]'"
+  },
+  "unit": {
+   "kind": "function",
+   "signature": "(u: 'str', **kwargs: 'Any') -> 'Any'"
+  }
+ },
+ "marketlens_schema.analytics": {
+  "ALIGNED_SCHEMA_NAME": {
+   "kind": "value",
+   "repr": "'marketlens.Aligned'"
+  },
+  "ANALYTICS_MODELS": {
+   "kind": "value",
+   "repr": "(<class 'marketlens_schema.analytics.ReturnPoint'>, <class 'marketlens_schema.analytics.VolatilityPoint'>, <class 'marketlens_schema.analytics.CorrelationCell'>, <class 'marketlens_schema.analytics.DrawdownPoint'>, <class 'marketlens_schema.analytics.DrawdownSummary'>, <class 'marketlens_schema.analytics.BetaResult'>, <class 'marketlens_schema.analytics.BetaPoint'>)"
+  },
+  "BetaPoint": {
+   "classvars": {
+    "group_column": "'series'",
+    "schema_name": "'marketlens.BetaPoint'",
+    "time_column": "'t'",
+    "value_columns": "('beta',)"
+   },
+   "config": {
+    "extra": "'forbid'",
+    "frozen": "True"
+   },
+   "fields": {
+    "absent": {
+     "annotation": "dict[str, marketlens_schema.base.AbsenceCode] | None",
+     "default": "None",
+     "required": false
+    },
+    "benchmark": {
+     "annotation": "<class 'str'>",
+     "default": null,
+     "required": true
+    },
+    "beta": {
+     "annotation": "float | None",
+     "default": "None",
+     "required": false
+    },
+    "period": {
+     "annotation": "typing.Optional[typing.Annotated[str, StringConstraints(strip_whitespace=None, to_upper=None, to_lower=None, strict=None, min_length=None, max_length=None, pattern='^(?:(?:[1-9]|[1-5][0-9])min|(?:[1-9]|1[0-9]|2[0-3])h|1d|1w|(?:1|2|3|4|6|12)mo)$', ascii_only=None)]]",
+     "default": "None",
+     "required": false
+    },
+    "return_kind": {
+     "annotation": "typing.Literal['simple', 'log']",
+     "default": null,
+     "required": true
+    },
+    "series": {
+     "annotation": "<class 'str'>",
+     "default": null,
+     "required": true
+    },
+    "t": {
+     "annotation": "<class 'datetime.datetime'>",
+     "default": null,
+     "required": true
+    },
+    "window": {
+     "annotation": "<class 'int'>",
+     "default": null,
+     "required": true
+    }
+   },
+   "kind": "model"
+  },
+  "BetaResult": {
+   "classvars": {
+    "group_column": "'series'",
+    "schema_name": "'marketlens.BetaResult'",
+    "time_column": "None",
+    "value_columns": "('beta', 'alpha', 'r_squared')"
+   },
+   "config": {
+    "extra": "'forbid'",
+    "frozen": "True"
+   },
+   "fields": {
+    "absent": {
+     "annotation": "dict[str, marketlens_schema.base.AbsenceCode] | None",
+     "default": "None",
+     "required": false
+    },
+    "alpha": {
+     "annotation": "float | None",
+     "default": "None",
+     "required": false
+    },
+    "benchmark": {
+     "annotation": "<class 'str'>",
+     "default": null,
+     "required": true
+    },
+    "beta": {
+     "annotation": "float | None",
+     "default": "None",
+     "required": false
+    },
+    "end": {
+     "annotation": "typing.Optional[typing.Annotated[datetime.datetime, AfterValidator(func=<function _to_utc>), PlainSerializer(func=<function _iso_z>, return_type=<class 'str'>, when_used='json')]]",
+     "default": "None",
+     "required": false
+    },
+    "n_obs": {
+     "annotation": "<class 'int'>",
+     "default": null,
+     "required": true
+    },
+    "period": {
+     "annotation": "typing.Optional[typing.Annotated[str, StringConstraints(strip_whitespace=None, to_upper=None, to_lower=None, strict=None, min_length=None, max_length=None, pattern='^(?:(?:[1-9]|[1-5][0-9])min|(?:[1-9]|1[0-9]|2[0-3])h|1d|1w|(?:1|2|3|4|6|12)mo)$', ascii_only=None)]]",
+     "default": "None",
+     "required": false
+    },
+    "r_squared": {
+     "annotation": "float | None",
+     "default": "None",
+     "required": false
+    },
+    "return_kind": {
+     "annotation": "typing.Literal['simple', 'log']",
+     "default": null,
+     "required": true
+    },
+    "series": {
+     "annotation": "<class 'str'>",
+     "default": null,
+     "required": true
+    },
+    "start": {
+     "annotation": "typing.Optional[typing.Annotated[datetime.datetime, AfterValidator(func=<function _to_utc>), PlainSerializer(func=<function _iso_z>, return_type=<class 'str'>, when_used='json')]]",
+     "default": "None",
+     "required": false
+    }
+   },
+   "kind": "model"
+  },
+  "CorrelationCell": {
+   "classvars": {
+    "group_column": "None",
+    "schema_name": "'marketlens.CorrelationCell'",
+    "time_column": "None",
+    "value_columns": "('correlation',)"
+   },
+   "config": {
+    "extra": "'forbid'",
+    "frozen": "True"
+   },
+   "fields": {
+    "a": {
+     "annotation": "<class 'str'>",
+     "default": null,
+     "required": true
+    },
+    "absent": {
+     "annotation": "dict[str, marketlens_schema.base.AbsenceCode] | None",
+     "default": "None",
+     "required": false
+    },
+    "b": {
+     "annotation": "<class 'str'>",
+     "default": null,
+     "required": true
+    },
+    "correlation": {
+     "annotation": "float | None",
+     "default": "None",
+     "required": false
+    },
+    "end": {
+     "annotation": "typing.Optional[typing.Annotated[datetime.datetime, AfterValidator(func=<function _to_utc>), PlainSerializer(func=<function _iso_z>, return_type=<class 'str'>, when_used='json')]]",
+     "default": "None",
+     "required": false
+    },
+    "n_obs": {
+     "annotation": "<class 'int'>",
+     "default": null,
+     "required": true
+    },
+    "start": {
+     "annotation": "typing.Optional[typing.Annotated[datetime.datetime, AfterValidator(func=<function _to_utc>), PlainSerializer(func=<function _iso_z>, return_type=<class 'str'>, when_used='json')]]",
+     "default": "None",
+     "required": false
+    },
+    "value_column": {
+     "annotation": "<class 'str'>",
+     "default": null,
+     "required": true
+    }
+   },
+   "kind": "model"
+  },
+  "DrawdownPoint": {
+   "classvars": {
+    "group_column": "'series'",
+    "schema_name": "'marketlens.DrawdownPoint'",
+    "time_column": "'t'",
+    "value_columns": "('drawdown',)"
+   },
+   "config": {
+    "extra": "'forbid'",
+    "frozen": "True"
+   },
+   "fields": {
+    "absent": {
+     "annotation": "dict[str, marketlens_schema.base.AbsenceCode] | None",
+     "default": "None",
+     "required": false
+    },
+    "drawdown": {
+     "annotation": "<class 'float'>",
+     "default": null,
+     "required": true
+    },
+    "running_peak": {
+     "annotation": "<class 'float'>",
+     "default": null,
+     "required": true
+    },
+    "series": {
+     "annotation": "<class 'str'>",
+     "default": null,
+     "required": true
+    },
+    "t": {
+     "annotation": "<class 'datetime.datetime'>",
+     "default": null,
+     "required": true
+    },
+    "value": {
+     "annotation": "<class 'float'>",
+     "default": null,
+     "required": true
+    }
+   },
+   "kind": "model"
+  },
+  "DrawdownSummary": {
+   "classvars": {
+    "group_column": "'series'",
+    "schema_name": "'marketlens.DrawdownSummary'",
+    "time_column": "None",
+    "value_columns": "('max_drawdown',)"
+   },
+   "config": {
+    "extra": "'forbid'",
+    "frozen": "True"
+   },
+   "fields": {
+    "absent": {
+     "annotation": "dict[str, marketlens_schema.base.AbsenceCode] | None",
+     "default": "None",
+     "required": false
+    },
+    "max_drawdown": {
+     "annotation": "<class 'float'>",
+     "default": null,
+     "required": true
+    },
+    "n_obs": {
+     "annotation": "<class 'int'>",
+     "default": null,
+     "required": true
+    },
+    "peak_t": {
+     "annotation": "<class 'datetime.datetime'>",
+     "default": null,
+     "required": true
+    },
+    "peak_to_trough_days": {
+     "annotation": "<class 'float'>",
+     "default": null,
+     "required": true
+    },
+    "recovery_t": {
+     "annotation": "typing.Optional[typing.Annotated[datetime.datetime, AfterValidator(func=<function _to_utc>), PlainSerializer(func=<function _iso_z>, return_type=<class 'str'>, when_used='json')]]",
+     "default": "None",
+     "required": false
+    },
+    "series": {
+     "annotation": "<class 'str'>",
+     "default": null,
+     "required": true
+    },
+    "trough_t": {
+     "annotation": "<class 'datetime.datetime'>",
+     "default": null,
+     "required": true
+    },
+    "value_column": {
+     "annotation": "<class 'str'>",
+     "default": null,
+     "required": true
+    }
+   },
+   "kind": "model"
+  },
+  "QUERY_ROW_SCHEMA_NAME": {
+   "kind": "value",
+   "repr": "'marketlens.QueryRow'"
+  },
+  "ReturnPoint": {
+   "classvars": {
+    "group_column": "'series'",
+    "schema_name": "'marketlens.ReturnPoint'",
+    "time_column": "'t'",
+    "value_columns": "('ret',)"
+   },
+   "config": {
+    "extra": "'forbid'",
+    "frozen": "True"
+   },
+   "fields": {
+    "absent": {
+     "annotation": "dict[str, marketlens_schema.base.AbsenceCode] | None",
+     "default": "None",
+     "required": false
+    },
+    "kind": {
+     "annotation": "typing.Literal['simple', 'log']",
+     "default": null,
+     "required": true
+    },
+    "period": {
+     "annotation": "typing.Optional[typing.Annotated[str, StringConstraints(strip_whitespace=None, to_upper=None, to_lower=None, strict=None, min_length=None, max_length=None, pattern='^(?:(?:[1-9]|[1-5][0-9])min|(?:[1-9]|1[0-9]|2[0-3])h|1d|1w|(?:1|2|3|4|6|12)mo)$', ascii_only=None)]]",
+     "default": "None",
+     "required": false
+    },
+    "price_column": {
+     "annotation": "<class 'str'>",
+     "default": null,
+     "required": true
+    },
+    "ret": {
+     "annotation": "<class 'float'>",
+     "default": null,
+     "required": true
+    },
+    "series": {
+     "annotation": "<class 'str'>",
+     "default": null,
+     "required": true
+    },
+    "t": {
+     "annotation": "<class 'datetime.datetime'>",
+     "default": null,
+     "required": true
+    }
+   },
+   "kind": "model"
+  },
+  "VolatilityPoint": {
+   "classvars": {
+    "group_column": "'series'",
+    "schema_name": "'marketlens.VolatilityPoint'",
+    "time_column": "'t'",
+    "value_columns": "('volatility',)"
+   },
+   "config": {
+    "extra": "'forbid'",
+    "frozen": "True"
+   },
+   "fields": {
+    "absent": {
+     "annotation": "dict[str, marketlens_schema.base.AbsenceCode] | None",
+     "default": "None",
+     "required": false
+    },
+    "periods_per_year": {
+     "annotation": "<class 'float'>",
+     "default": null,
+     "required": true
+    },
+    "return_kind": {
+     "annotation": "typing.Literal['simple', 'log']",
+     "default": null,
+     "required": true
+    },
+    "series": {
+     "annotation": "<class 'str'>",
+     "default": null,
+     "required": true
+    },
+    "t": {
+     "annotation": "<class 'datetime.datetime'>",
+     "default": null,
+     "required": true
+    },
+    "volatility": {
+     "annotation": "<class 'float'>",
+     "default": null,
+     "required": true
+    },
+    "window": {
+     "annotation": "<class 'int'>",
+     "default": null,
+     "required": true
+    }
+   },
+   "kind": "model"
+  }
+ },
+ "marketlens_schema.base": {
+  "AbsenceCode": {
+   "kind": "enum",
+   "members": {
+    "INSUFFICIENT_DATA": "insufficient_data",
+    "NOT_APPLICABLE": "not_applicable",
+    "NOT_ENTITLED": "not_entitled",
+    "NOT_PROVIDED_BY_SOURCE": "not_provided_by_source",
+    "NOT_RECOVERED": "not_recovered",
+    "NO_DATA": "no_data",
+    "NO_MATCH": "no_match",
+    "SOURCE_ERROR": "source_error",
+    "UNPARSEABLE": "unparseable",
+    "WITHHELD": "withheld"
+   }
+  },
+  "AbsenceReason": {
+   "classvars": {},
+   "config": {
+    "extra": "'forbid'",
+    "frozen": "True"
+   },
+   "fields": {
+    "code": {
+     "annotation": "<enum 'AbsenceCode'>",
+     "default": null,
+     "required": true
+    },
+    "detail": {
+     "annotation": "str | None",
+     "default": "None",
+     "required": false
+    }
+   },
+   "kind": "model"
+  },
+  "AssetClass": {
+   "kind": "enum",
+   "members": {
+    "CRYPTO": "crypto",
+    "FIXED_INCOME": "fixed_income",
+    "US_EQUITY": "us_equity",
+    "US_OPTION": "us_option"
+   }
+  },
+  "CRYPTO_PAIR_PATTERN": {
+   "kind": "value",
+   "repr": "'[A-Z0-9]{2,10}/[A-Z0-9]{2,10}'"
+  },
+  "CRYPTO_QUOTE_CURRENCIES": {
+   "kind": "value",
+   "repr": "['BTC', 'ETH', 'EUR', 'USD', 'USDC', 'USDT']"
+  },
+  "CanonicalModel": {
+   "classvars": {
+    "group_column": "None",
+    "schema_name": "''",
+    "time_column": "None",
+    "value_columns": "()"
+   },
+   "config": {
+    "extra": "'forbid'",
+    "frozen": "True"
+   },
+   "fields": {
+    "absent": {
+     "annotation": "dict[str, marketlens_schema.base.AbsenceCode] | None",
+     "default": "None",
+     "required": false
+    }
+   },
+   "kind": "model"
+  },
+  "Delay": {
+   "kind": "enum",
+   "members": {
+    "DELAYED": "delayed",
+    "END_OF_DAY": "end_of_day",
+    "REALTIME": "realtime",
+    "UNKNOWN": "unknown"
+   }
+  },
+  "EQUITY_TICKER_PATTERN": {
+   "kind": "value",
+   "repr": "'[A-Z][A-Z0-9]{0,9}(?:-[A-Z0-9]{1,5})?'"
+  },
+  "Environment": {
+   "kind": "enum",
+   "members": {
+    "LIVE": "live",
+    "PAPER": "paper"
+   }
+  },
+  "OptionStyle": {
+   "kind": "enum",
+   "members": {
+    "AMERICAN": "american",
+    "EUROPEAN": "european"
+   }
+  },
+  "OptionType": {
+   "kind": "enum",
+   "members": {
+    "CALL": "call",
+    "PUT": "put"
+   }
+  },
+  "OrderClass": {
+   "kind": "enum",
+   "members": {
+    "BRACKET": "bracket",
+    "MLEG": "mleg",
+    "OCO": "oco",
+    "OTO": "oto",
+    "SIMPLE": "simple"
+   }
+  },
+  "OrderStatus": {
+   "kind": "enum",
+   "members": {
+    "ACCEPTED": "accepted",
+    "ACCEPTED_FOR_BIDDING": "accepted_for_bidding",
+    "CALCULATED": "calculated",
+    "CANCELED": "canceled",
+    "DONE_FOR_DAY": "done_for_day",
+    "EXPIRED": "expired",
+    "FILLED": "filled",
+    "HELD": "held",
+    "NEW": "new",
+    "PARTIALLY_FILLED": "partially_filled",
+    "PENDING_CANCEL": "pending_cancel",
+    "PENDING_NEW": "pending_new",
+    "PENDING_REPLACE": "pending_replace",
+    "PENDING_REVIEW": "pending_review",
+    "REJECTED": "rejected",
+    "REPLACED": "replaced",
+    "STOPPED": "stopped",
+    "SUSPENDED": "suspended"
+   }
+  },
+  "OrderType": {
+   "kind": "enum",
+   "members": {
+    "LIMIT": "limit",
+    "MARKET": "market",
+    "STOP": "stop",
+    "STOP_LIMIT": "stop_limit",
+    "TRAILING_STOP": "trailing_stop"
+   }
+  },
+  "PaginationState": {
+   "classvars": {},
+   "config": {
+    "extra": "'forbid'",
+    "frozen": "True"
+   },
+   "fields": {
+    "complete": {
+     "annotation": "<class 'bool'>",
+     "default": null,
+     "required": true
+    },
+    "next_page_token": {
+     "annotation": "str | None",
+     "default": "None",
+     "required": false
+    },
+    "page_cap_hit": {
+     "annotation": "<class 'bool'>",
+     "default": "False",
+     "required": false
+    },
+    "pages_fetched": {
+     "annotation": "<class 'int'>",
+     "default": null,
+     "required": true
+    },
+    "row_cap_hit": {
+     "annotation": "<class 'bool'>",
+     "default": "False",
+     "required": false
+    },
+    "rows_fetched": {
+     "annotation": "<class 'int'>",
+     "default": null,
+     "required": true
+    }
+   },
+   "kind": "model"
+  },
+  "PositionSide": {
+   "kind": "enum",
+   "members": {
+    "LONG": "long",
+    "SHORT": "short"
+   }
+  },
+  "Provenance": {
+   "classvars": {},
+   "config": {
+    "extra": "'forbid'",
+    "frozen": "True"
+   },
+   "fields": {
+    "as_of": {
+     "annotation": "typing.Optional[typing.Annotated[datetime.datetime, AfterValidator(func=<function _to_utc>), PlainSerializer(func=<function _iso_z>, return_type=<class 'str'>, when_used='json')]]",
+     "default": "None",
+     "required": false
+    },
+    "authority": {
+     "annotation": "list[str] | None",
+     "default": "None",
+     "required": false
+    },
+    "cached": {
+     "annotation": "<class 'bool'>",
+     "default": "False",
+     "required": false
+    },
+    "dataset": {
+     "annotation": "str | None",
+     "default": "None",
+     "required": false
+    },
+    "delay": {
+     "annotation": "<enum 'Delay'>",
+     "default": "<Delay.UNKNOWN: 'unknown'>",
+     "required": false
+    },
+    "derived_from": {
+     "annotation": "list[str]",
+     "default": "[]",
+     "required": false
+    },
+    "environment": {
+     "annotation": "marketlens_schema.base.Environment | None",
+     "default": "None",
+     "required": false
+    },
+    "feed": {
+     "annotation": "str | None",
+     "default": "None",
+     "required": false
+    },
+    "fetched_at": {
+     "annotation": "<class 'datetime.datetime'>",
+     "default": null,
+     "required": true
+    },
+    "knowledge_time": {
+     "annotation": "typing.Optional[typing.Annotated[datetime.datetime, AfterValidator(func=<function _to_utc>), PlainSerializer(func=<function _iso_z>, return_type=<class 'str'>, when_used='json')]]",
+     "default": "None",
+     "required": false
+    },
+    "lag_days": {
+     "annotation": "float | None",
+     "default": "None",
+     "required": false
+    },
+    "operation": {
+     "annotation": "str | None",
+     "default": "None",
+     "required": false
+    },
+    "pages_fetched": {
+     "annotation": "<class 'int'>",
+     "default": "0",
+     "required": false
+    },
+    "provider": {
+     "annotation": "<class 'str'>",
+     "default": null,
+     "required": true
+    },
+    "request": {
+     "annotation": "dict[str, str | int | float | bool | list[str] | None]",
+     "default": "{}",
+     "required": false
+    },
+    "route": {
+     "annotation": "<class 'str'>",
+     "default": null,
+     "required": true
+    },
+    "schema_version": {
+     "annotation": "<class 'str'>",
+     "default": "'1.0.0'",
+     "required": false
+    },
+    "stale": {
+     "annotation": "bool | None",
+     "default": "None",
+     "required": false
+    },
+    "truncated": {
+     "annotation": "<class 'bool'>",
+     "default": "False",
+     "required": false
+    },
+    "truncation_note": {
+     "annotation": "str | None",
+     "default": "None",
+     "required": false
+    },
+    "upstream_request_id": {
+     "annotation": "str | None",
+     "default": "None",
+     "required": false
+    }
+   },
+   "kind": "model"
+  },
+  "SCHEMA_NAMESPACE": {
+   "kind": "value",
+   "repr": "'marketlens'"
+  },
+  "SCHEMA_VERSION": {
+   "kind": "value",
+   "repr": "'1.0.0'"
+  },
+  "Side": {
+   "kind": "enum",
+   "members": {
+    "BUY": "buy",
+    "SELL": "sell"
+   }
+  },
+  "TimeInForce": {
+   "kind": "enum",
+   "members": {
+    "CLS": "cls",
+    "DAY": "day",
+    "FOK": "fok",
+    "GTC": "gtc",
+    "IOC": "ioc",
+    "OPG": "opg"
+   }
+  },
+  "UNITS": {
+   "keys": [
+    "USD",
+    "UTC",
+    "base_units",
+    "by_asset_class",
+    "contracts",
+    "count",
+    "days",
+    "fraction",
+    "fraction_per_year",
+    "multiplier",
+    "per_share_greek",
+    "percent_of_par",
+    "price",
+    "shares"
+   ],
+   "kind": "mapping"
+  },
+  "UTC": {
+   "kind": "other",
+   "type": "timezone"
+  },
+  "normalize_ticker": {
+   "kind": "function",
+   "signature": "(raw: 'str') -> 'str'"
+  },
+  "schema_names": {
+   "kind": "function",
+   "signature": "(models: 'Iterable[type[CanonicalModel]]') -> 'list[str]'"
+  },
+  "unexplained_absences": {
+   "kind": "function",
+   "signature": "(rows: 'Sequence[CanonicalModel]', response_absent: 'Mapping[str, AbsenceReason]') -> 'list[tuple[int, str]]'"
+  },
+  "unit": {
+   "kind": "function",
+   "signature": "(u: 'str', **kwargs: 'Any') -> 'Any'"
+  }
+ },
+ "marketlens_schema.market": {
+  "Asset": {
+   "classvars": {
+    "group_column": "'ticker'",
+    "schema_name": "'marketlens.Asset'",
+    "time_column": "None",
+    "value_columns": "()"
+   },
+   "config": {
+    "extra": "'forbid'",
+    "frozen": "True"
+   },
+   "fields": {
+    "absent": {
+     "annotation": "dict[str, marketlens_schema.base.AbsenceCode] | None",
+     "default": "None",
+     "required": false
+    },
+    "asset_class": {
+     "annotation": "<enum 'AssetClass'>",
+     "default": null,
+     "required": true
+    },
+    "attributes": {
+     "annotation": "list[str]",
+     "default": "[]",
+     "required": false
+    },
+    "cusip": {
+     "annotation": "str | None",
+     "default": "None",
+     "required": false
+    },
+    "easy_to_borrow": {
+     "annotation": "bool | None",
+     "default": "None",
+     "required": false
+    },
+    "exchange": {
+     "annotation": "str | None",
+     "default": "None",
+     "required": false
+    },
+    "fractionable": {
+     "annotation": "bool | None",
+     "default": "None",
+     "required": false
+    },
+    "margin_requirement_long": {
+     "annotation": "float | None",
+     "default": "None",
+     "required": false
+    },
+    "margin_requirement_short": {
+     "annotation": "float | None",
+     "default": "None",
+     "required": false
+    },
+    "marginable": {
+     "annotation": "bool | None",
+     "default": "None",
+     "required": false
+    },
+    "min_order_size": {
+     "annotation": "typing.Optional[typing.Annotated[decimal.Decimal, BeforeValidator(func=<function _no_float>, json_schema_input_type=PydanticUndefined), PlainSerializer(func=<function <lambda>>, return_type=<class 'str'>, when_used='json'), WithJsonSchema(json_schema={'type': 'string', 'pattern': '^-?\\\\d+(\\\\.\\\\d+)?$'}, mode=None)]]",
+     "default": "None",
+     "required": false
+    },
+    "min_trade_increment": {
+     "annotation": "typing.Optional[typing.Annotated[decimal.Decimal, BeforeValidator(func=<function _no_float>, json_schema_input_type=PydanticUndefined), PlainSerializer(func=<function <lambda>>, return_type=<class 'str'>, when_used='json'), WithJsonSchema(json_schema={'type': 'string', 'pattern': '^-?\\\\d+(\\\\.\\\\d+)?$'}, mode=None)]]",
+     "default": "None",
+     "required": false
+    },
+    "name": {
+     "annotation": "str | None",
+     "default": "None",
+     "required": false
+    },
+    "price_increment": {
+     "annotation": "typing.Optional[typing.Annotated[decimal.Decimal, BeforeValidator(func=<function _no_float>, json_schema_input_type=PydanticUndefined), PlainSerializer(func=<function <lambda>>, return_type=<class 'str'>, when_used='json'), WithJsonSchema(json_schema={'type': 'string', 'pattern': '^-?\\\\d+(\\\\.\\\\d+)?$'}, mode=None)]]",
+     "default": "None",
+     "required": false
+    },
+    "provider_asset_id": {
+     "annotation": "str | None",
+     "default": "None",
+     "required": false
+    },
+    "shortable": {
+     "annotation": "bool | None",
+     "default": "None",
+     "required": false
+    },
+    "status": {
+     "annotation": "typing.Literal['active', 'inactive']",
+     "default": null,
+     "required": true
+    },
+    "ticker": {
+     "annotation": "<class 'str'>",
+     "default": null,
+     "required": true
+    },
+    "tradable": {
+     "annotation": "<class 'bool'>",
+     "default": null,
+     "required": true
+    }
+   },
+   "kind": "model"
+  },
+  "Bar": {
+   "classvars": {
+    "group_column": "'ticker'",
+    "schema_name": "'marketlens.Bar'",
+    "time_column": "'t'",
+    "value_columns": "('close', 'open', 'high', 'low', 'vwap', 'volume')"
+   },
+   "config": {
+    "extra": "'forbid'",
+    "frozen": "True"
+   },
+   "fields": {
+    "absent": {
+     "annotation": "dict[str, marketlens_schema.base.AbsenceCode] | None",
+     "default": "None",
+     "required": false
+    },
+    "asset_class": {
+     "annotation": "<enum 'AssetClass'>",
+     "default": null,
+     "required": true
+    },
+    "close": {
+     "annotation": "<class 'float'>",
+     "default": null,
+     "required": true
+    },
+    "currency": {
+     "annotation": "<class 'str'>",
+     "default": "'USD'",
+     "required": false
+    },
+    "high": {
+     "annotation": "<class 'float'>",
+     "default": null,
+     "required": true
+    },
+    "low": {
+     "annotation": "<class 'float'>",
+     "default": null,
+     "required": true
+    },
+    "open": {
+     "annotation": "<class 'float'>",
+     "default": null,
+     "required": true
+    },
+    "t": {
+     "annotation": "<class 'datetime.datetime'>",
+     "default": null,
+     "required": true
+    },
+    "ticker": {
+     "annotation": "<class 'str'>",
+     "default": null,
+     "required": true
+    },
+    "timeframe": {
+     "annotation": "<class 'str'>",
+     "default": null,
+     "required": true
+    },
+    "trade_count": {
+     "annotation": "int | None",
+     "default": "None",
+     "required": false
+    },
+    "volume": {
+     "annotation": "<class 'float'>",
+     "default": null,
+     "required": true
+    },
+    "vwap": {
+     "annotation": "float | None",
+     "default": "None",
+     "required": false
+    }
+   },
+   "kind": "model"
+  },
+  "CorporateAction": {
+   "classvars": {
+    "group_column": "'ticker'",
+    "schema_name": "'marketlens.CorporateAction'",
+    "time_column": "None",
+    "value_columns": "()"
+   },
+   "config": {
+    "extra": "'forbid'",
+    "frozen": "True"
+   },
+   "fields": {
+    "absent": {
+     "annotation": "dict[str, marketlens_schema.base.AbsenceCode] | None",
+     "default": "None",
+     "required": false
+    },
+    "acquiree_ticker": {
+     "annotation": "typing.Optional[typing.Annotated[str, StringConstraints(strip_whitespace=None, to_upper=None, to_lower=None, strict=None, min_length=None, max_length=None, pattern='^(?:[A-Z][A-Z0-9]{0,9}(?:-[A-Z0-9]{1,5})?|[A-Z0-9]{2,10}/[A-Z0-9]{2,10})$', ascii_only=None)]]",
+     "default": "None",
+     "required": false
+    },
+    "acquirer_ticker": {
+     "annotation": "typing.Optional[typing.Annotated[str, StringConstraints(strip_whitespace=None, to_upper=None, to_lower=None, strict=None, min_length=None, max_length=None, pattern='^(?:[A-Z][A-Z0-9]{0,9}(?:-[A-Z0-9]{1,5})?|[A-Z0-9]{2,10}/[A-Z0-9]{2,10})$', ascii_only=None)]]",
+     "default": "None",
+     "required": false
+    },
+    "action_id": {
+     "annotation": "<class 'str'>",
+     "default": null,
+     "required": true
+    },
+    "action_type": {
+     "annotation": "typing.Literal['cash_dividend', 'stock_dividend', 'forward_split', 'reverse_split', 'unit_split', 'spin_off', 'cash_merger', 'stock_merger', 'stock_and_cash_merger', 'redemption', 'name_change', 'worthless_removal', 'rights_distribution', 'partial_call', 'reorganization', 'capital_gains_distribution']",
+     "default": null,
+     "required": true
+    },
+    "cash_rate": {
+     "annotation": "float | None",
+     "default": "None",
+     "required": false
+    },
+    "currency": {
+     "annotation": "str | None",
+     "default": "None",
+     "required": false
+    },
+    "cusip": {
+     "annotation": "str | None",
+     "default": "None",
+     "required": false
+    },
+    "effective_date": {
+     "annotation": "datetime.date | None",
+     "default": "None",
+     "required": false
+    },
+    "ex_date": {
+     "annotation": "datetime.date | None",
+     "default": "None",
+     "required": false
+    },
+    "foreign": {
+     "annotation": "bool | None",
+     "default": "None",
+     "required": false
+    },
+    "isin": {
+     "annotation": "typing.Optional[typing.Annotated[str, StringConstraints(strip_whitespace=None, to_upper=None, to_lower=None, strict=None, min_length=None, max_length=None, pattern='^[A-Z]{2}[A-Z0-9]{9}\\\\d$', ascii_only=None)]]",
+     "default": "None",
+     "required": false
+    },
+    "new_rate": {
+     "annotation": "float | None",
+     "default": "None",
+     "required": false
+    },
+    "new_ticker": {
+     "annotation": "typing.Optional[typing.Annotated[str, StringConstraints(strip_whitespace=None, to_upper=None, to_lower=None, strict=None, min_length=None, max_length=None, pattern='^(?:[A-Z][A-Z0-9]{0,9}(?:-[A-Z0-9]{1,5})?|[A-Z0-9]{2,10}/[A-Z0-9]{2,10})$', ascii_only=None)]]",
+     "default": "None",
+     "required": false
+    },
+    "old_rate": {
+     "annotation": "float | None",
+     "default": "None",
+     "required": false
+    },
+    "old_ticker": {
+     "annotation": "typing.Optional[typing.Annotated[str, StringConstraints(strip_whitespace=None, to_upper=None, to_lower=None, strict=None, min_length=None, max_length=None, pattern='^(?:[A-Z][A-Z0-9]{0,9}(?:-[A-Z0-9]{1,5})?|[A-Z0-9]{2,10}/[A-Z0-9]{2,10})$', ascii_only=None)]]",
+     "default": "None",
+     "required": false
+    },
+    "payable_date": {
+     "annotation": "datetime.date | None",
+     "default": "None",
+     "required": false
+    },
+    "process_date": {
+     "annotation": "datetime.date | None",
+     "default": "None",
+     "required": false
+    },
+    "rate": {
+     "annotation": "float | None",
+     "default": "None",
+     "required": false
+    },
+    "record_date": {
+     "annotation": "datetime.date | None",
+     "default": "None",
+     "required": false
+    },
+    "source_ticker": {
+     "annotation": "typing.Optional[typing.Annotated[str, StringConstraints(strip_whitespace=None, to_upper=None, to_lower=None, strict=None, min_length=None, max_length=None, pattern='^(?:[A-Z][A-Z0-9]{0,9}(?:-[A-Z0-9]{1,5})?|[A-Z0-9]{2,10}/[A-Z0-9]{2,10})$', ascii_only=None)]]",
+     "default": "None",
+     "required": false
+    },
+    "special": {
+     "annotation": "bool | None",
+     "default": "None",
+     "required": false
+    },
+    "ticker": {
+     "annotation": "typing.Optional[typing.Annotated[str, StringConstraints(strip_whitespace=None, to_upper=None, to_lower=None, strict=None, min_length=None, max_length=None, pattern='^(?:[A-Z][A-Z0-9]{0,9}(?:-[A-Z0-9]{1,5})?|[A-Z0-9]{2,10}/[A-Z0-9]{2,10})$', ascii_only=None)]]",
+     "default": "None",
+     "required": false
+    }
+   },
+   "kind": "model"
+  },
+  "CorporateActionAnnouncement": {
+   "classvars": {
+    "group_column": "'initiating_ticker'",
+    "schema_name": "'marketlens.CorporateActionAnnouncement'",
+    "time_column": "None",
+    "value_columns": "()"
+   },
+   "config": {
+    "extra": "'forbid'",
+    "frozen": "True"
+   },
+   "fields": {
+    "absent": {
+     "annotation": "dict[str, marketlens_schema.base.AbsenceCode] | None",
+     "default": "None",
+     "required": false
+    },
+    "announcement_id": {
+     "annotation": "<class 'str'>",
+     "default": null,
+     "required": true
+    },
+    "ca_sub_type": {
+     "annotation": "str | None",
+     "default": "None",
+     "required": false
+    },
+    "ca_type": {
+     "annotation": "typing.Literal['dividend', 'merger', 'spinoff', 'split', 'name_change', 'other']",
+     "default": null,
+     "required": true
+    },
+    "cash": {
+     "annotation": "typing.Optional[typing.Annotated[decimal.Decimal, BeforeValidator(func=<function _no_float>, json_schema_input_type=PydanticUndefined), PlainSerializer(func=<function <lambda>>, return_type=<class 'str'>, when_used='json'), WithJsonSchema(json_schema={'type': 'string', 'pattern': '^-?\\\\d+(\\\\.\\\\d+)?$'}, mode=None)]]",
+     "default": "None",
+     "required": false
+    },
+    "corporate_action_id": {
+     "annotation": "str | None",
+     "default": "None",
+     "required": false
+    },
+    "declaration_date": {
+     "annotation": "datetime.date | None",
+     "default": "None",
+     "required": false
+    },
+    "effective_date": {
+     "annotation": "datetime.date | None",
+     "default": "None",
+     "required": false
+    },
+    "ex_date": {
+     "annotation": "datetime.date | None",
+     "default": "None",
+     "required": false
+    },
+    "initiating_cusip": {
+     "annotation": "str | None",
+     "default": "None",
+     "required": false
+    },
+    "initiating_ticker": {
+     "annotation": "typing.Optional[typing.Annotated[str, StringConstraints(strip_whitespace=None, to_upper=None, to_lower=None, strict=None, min_length=None, max_length=None, pattern='^(?:[A-Z][A-Z0-9]{0,9}(?:-[A-Z0-9]{1,5})?|[A-Z0-9]{2,10}/[A-Z0-9]{2,10})$', ascii_only=None)]]",
+     "default": "None",
+     "required": false
+    },
+    "new_rate": {
+     "annotation": "typing.Optional[typing.Annotated[decimal.Decimal, BeforeValidator(func=<function _no_float>, json_schema_input_type=PydanticUndefined), PlainSerializer(func=<function <lambda>>, return_type=<class 'str'>, when_used='json'), WithJsonSchema(json_schema={'type': 'string', 'pattern': '^-?\\\\d+(\\\\.\\\\d+)?$'}, mode=None)]]",
+     "default": "None",
+     "required": false
+    },
+    "old_rate": {
+     "annotation": "typing.Optional[typing.Annotated[decimal.Decimal, BeforeValidator(func=<function _no_float>, json_schema_input_type=PydanticUndefined), PlainSerializer(func=<function <lambda>>, return_type=<class 'str'>, when_used='json'), WithJsonSchema(json_schema={'type': 'string', 'pattern': '^-?\\\\d+(\\\\.\\\\d+)?$'}, mode=None)]]",
+     "default": "None",
+     "required": false
+    },
+    "payable_date": {
+     "annotation": "datetime.date | None",
+     "default": "None",
+     "required": false
+    },
+    "record_date": {
+     "annotation": "datetime.date | None",
+     "default": "None",
+     "required": false
+    },
+    "target_cusip": {
+     "annotation": "str | None",
+     "default": "None",
+     "required": false
+    },
+    "target_ticker": {
+     "annotation": "typing.Optional[typing.Annotated[str, StringConstraints(strip_whitespace=None, to_upper=None, to_lower=None, strict=None, min_length=None, max_length=None, pattern='^(?:[A-Z][A-Z0-9]{0,9}(?:-[A-Z0-9]{1,5})?|[A-Z0-9]{2,10}/[A-Z0-9]{2,10})$', ascii_only=None)]]",
+     "default": "None",
+     "required": false
+    }
+   },
+   "kind": "model"
+  },
+  "FixedIncomeQuote": {
+   "classvars": {
+    "group_column": "'isin'",
+    "schema_name": "'marketlens.FixedIncomeQuote'",
+    "time_column": "'t'",
+    "value_columns": "('bid_price', 'ask_price', 'bid_ytm', 'ask_ytm')"
+   },
+   "config": {
+    "extra": "'forbid'",
+    "frozen": "True"
+   },
+   "fields": {
+    "absent": {
+     "annotation": "dict[str, marketlens_schema.base.AbsenceCode] | None",
+     "default": "None",
+     "required": false
+    },
+    "ask_price": {
+     "annotation": "float | None",
+     "default": "None",
+     "required": false
+    },
+    "ask_size": {
+     "annotation": "float | None",
+     "default": "None",
+     "required": false
+    },
+    "ask_ytm": {
+     "annotation": "float | None",
+     "default": "None",
+     "required": false
+    },
+    "ask_ytw": {
+     "annotation": "float | None",
+     "default": "None",
+     "required": false
+    },
+    "bid_price": {
+     "annotation": "float | None",
+     "default": "None",
+     "required": false
+    },
+    "bid_size": {
+     "annotation": "float | None",
+     "default": "None",
+     "required": false
+    },
+    "bid_ytm": {
+     "annotation": "float | None",
+     "default": "None",
+     "required": false
+    },
+    "bid_ytw": {
+     "annotation": "float | None",
+     "default": "None",
+     "required": false
+    },
+    "isin": {
+     "annotation": "<class 'str'>",
+     "default": null,
+     "required": true
+    },
+    "t": {
+     "annotation": "<class 'datetime.datetime'>",
+     "default": null,
+     "required": true
+    }
+   },
+   "kind": "model"
+  },
+  "MARKET_MODELS": {
+   "kind": "value",
+   "repr": "(<class 'marketlens_schema.market.Asset'>, <class 'marketlens_schema.market.MarketClock'>, <class 'marketlens_schema.market.MarketCalendarDay'>, <class 'marketlens_schema.market.OptionDeliverable'>, <class 'marketlens_schema.market.OptionContract'>, <class 'marketlens_schema.market.OptionExchange'>, <class 'marketlens_schema.market.CorporateAction'>, <class 'marketlens_schema.market.CorporateActionAnnouncement'>, <class 'marketlens_schema.market.Bar'>, <class 'marketlens_schema.market.Quote'>, <class 'marketlens_schema.market.Trade'>, <class 'marketlens_schema.market.Snapshot'>, <class 'marketlens_schema.market.OrderBookLevel'>, <class 'marketlens_schema.market.MostActive'>, <class 'marketlens_schema.market.Mover'>, <class 'marketlens_schema.market.OptionBar'>, <class 'marketlens_schema.market.OptionQuote'>, <class 'marketlens_schema.market.OptionTrade'>, <class 'marketlens_schema.market.OptionSnapshot'>, <class 'marketlens_schema.market.FixedIncomeQuote'>, <class 'marketlens_schema.market.NewsItem'>, <class 'marketlens_schema.market.ProviderDocument'>)"
+  },
+  "MarketCalendarDay": {
+   "classvars": {
+    "group_column": "None",
+    "schema_name": "'marketlens.MarketCalendarDay'",
+    "time_column": "None",
+    "value_columns": "()"
+   },
+   "config": {
+    "extra": "'forbid'",
+    "frozen": "True"
+   },
+   "fields": {
+    "absent": {
+     "annotation": "dict[str, marketlens_schema.base.AbsenceCode] | None",
+     "default": "None",
+     "required": false
+    },
+    "close": {
+     "annotation": "<class 'datetime.datetime'>",
+     "default": null,
+     "required": true
+    },
+    "date": {
+     "annotation": "<class 'datetime.date'>",
+     "default": null,
+     "required": true
+    },
+    "market": {
+     "annotation": "<class 'str'>",
+     "default": null,
+     "required": true
+    },
+    "open": {
+     "annotation": "<class 'datetime.datetime'>",
+     "default": null,
+     "required": true
+    },
+    "session_close": {
+     "annotation": "typing.Optional[typing.Annotated[datetime.datetime, AfterValidator(func=<function _to_utc>), PlainSerializer(func=<function _iso_z>, return_type=<class 'str'>, when_used='json')]]",
+     "default": "None",
+     "required": false
+    },
+    "session_open": {
+     "annotation": "typing.Optional[typing.Annotated[datetime.datetime, AfterValidator(func=<function _to_utc>), PlainSerializer(func=<function _iso_z>, return_type=<class 'str'>, when_used='json')]]",
+     "default": "None",
+     "required": false
+    },
+    "settlement_date": {
+     "annotation": "datetime.date | None",
+     "default": "None",
+     "required": false
+    }
+   },
+   "kind": "model"
+  },
+  "MarketClock": {
+   "classvars": {
+    "group_column": "None",
+    "schema_name": "'marketlens.MarketClock'",
+    "time_column": "'t'",
+    "value_columns": "()"
+   },
+   "config": {
+    "extra": "'forbid'",
+    "frozen": "True"
+   },
+   "fields": {
+    "absent": {
+     "annotation": "dict[str, marketlens_schema.base.AbsenceCode] | None",
+     "default": "None",
+     "required": false
+    },
+    "is_open": {
+     "annotation": "<class 'bool'>",
+     "default": null,
+     "required": true
+    },
+    "market": {
+     "annotation": "<class 'str'>",
+     "default": null,
+     "required": true
+    },
+    "next_close": {
+     "annotation": "<class 'datetime.datetime'>",
+     "default": null,
+     "required": true
+    },
+    "next_open": {
+     "annotation": "<class 'datetime.datetime'>",
+     "default": null,
+     "required": true
+    },
+    "t": {
+     "annotation": "<class 'datetime.datetime'>",
+     "default": null,
+     "required": true
+    }
+   },
+   "kind": "model"
+  },
+  "MostActive": {
+   "classvars": {
+    "group_column": "'ticker'",
+    "schema_name": "'marketlens.MostActive'",
+    "time_column": "None",
+    "value_columns": "('volume', 'trade_count')"
+   },
+   "config": {
+    "extra": "'forbid'",
+    "frozen": "True"
+   },
+   "fields": {
+    "absent": {
+     "annotation": "dict[str, marketlens_schema.base.AbsenceCode] | None",
+     "default": "None",
+     "required": false
+    },
+    "as_of": {
+     "annotation": "<class 'datetime.datetime'>",
+     "default": null,
+     "required": true
+    },
+    "rank": {
+     "annotation": "<class 'int'>",
+     "default": null,
+     "required": true
+    },
+    "ranked_by": {
+     "annotation": "typing.Literal['volume', 'trades']",
+     "default": null,
+     "required": true
+    },
+    "ticker": {
+     "annotation": "<class 'str'>",
+     "default": null,
+     "required": true
+    },
+    "trade_count": {
+     "annotation": "<class 'int'>",
+     "default": null,
+     "required": true
+    },
+    "volume": {
+     "annotation": "<class 'float'>",
+     "default": null,
+     "required": true
+    }
+   },
+   "kind": "model"
+  },
+  "Mover": {
+   "classvars": {
+    "group_column": "'ticker'",
+    "schema_name": "'marketlens.Mover'",
+    "time_column": "None",
+    "value_columns": "('percent_change', 'change', 'price')"
+   },
+   "config": {
+    "extra": "'forbid'",
+    "frozen": "True"
+   },
+   "fields": {
+    "absent": {
+     "annotation": "dict[str, marketlens_schema.base.AbsenceCode] | None",
+     "default": "None",
+     "required": false
+    },
+    "as_of": {
+     "annotation": "<class 'datetime.datetime'>",
+     "default": null,
+     "required": true
+    },
+    "change": {
+     "annotation": "<class 'float'>",
+     "default": null,
+     "required": true
+    },
+    "direction": {
+     "annotation": "typing.Literal['gainer', 'loser']",
+     "default": null,
+     "required": true
+    },
+    "market_type": {
+     "annotation": "typing.Literal['stocks', 'crypto']",
+     "default": null,
+     "required": true
+    },
+    "percent_change": {
+     "annotation": "<class 'float'>",
+     "default": null,
+     "required": true
+    },
+    "price": {
+     "annotation": "<class 'float'>",
+     "default": null,
+     "required": true
+    },
+    "rank": {
+     "annotation": "<class 'int'>",
+     "default": null,
+     "required": true
+    },
+    "ticker": {
+     "annotation": "<class 'str'>",
+     "default": null,
+     "required": true
+    }
+   },
+   "kind": "model"
+  },
+  "NewsItem": {
+   "classvars": {
+    "group_column": "None",
+    "schema_name": "'marketlens.NewsItem'",
+    "time_column": "'created_at'",
+    "value_columns": "()"
+   },
+   "config": {
+    "extra": "'forbid'",
+    "frozen": "True"
+   },
+   "fields": {
+    "absent": {
+     "annotation": "dict[str, marketlens_schema.base.AbsenceCode] | None",
+     "default": "None",
+     "required": false
+    },
+    "author": {
+     "annotation": "str | None",
+     "default": "None",
+     "required": false
+    },
+    "content": {
+     "annotation": "str | None",
+     "default": "None",
+     "required": false
+    },
+    "created_at": {
+     "annotation": "<class 'datetime.datetime'>",
+     "default": null,
+     "required": true
+    },
+    "headline": {
+     "annotation": "<class 'str'>",
+     "default": null,
+     "required": true
+    },
+    "news_id": {
+     "annotation": "<class 'str'>",
+     "default": null,
+     "required": true
+    },
+    "publisher": {
+     "annotation": "str | None",
+     "default": "None",
+     "required": false
+    },
+    "summary": {
+     "annotation": "str | None",
+     "default": "None",
+     "required": false
+    },
+    "tickers": {
+     "annotation": "list[typing.Annotated[str, StringConstraints(strip_whitespace=None, to_upper=None, to_lower=None, strict=None, min_length=None, max_length=None, pattern='^(?:[A-Z][A-Z0-9]{0,9}(?:-[A-Z0-9]{1,5})?|[A-Z0-9]{2,10}/[A-Z0-9]{2,10})$', ascii_only=None)]]",
+     "default": "[]",
+     "required": false
+    },
+    "updated_at": {
+     "annotation": "typing.Optional[typing.Annotated[datetime.datetime, AfterValidator(func=<function _to_utc>), PlainSerializer(func=<function _iso_z>, return_type=<class 'str'>, when_used='json')]]",
+     "default": "None",
+     "required": false
+    },
+    "url": {
+     "annotation": "str | None",
+     "default": "None",
+     "required": false
+    }
+   },
+   "kind": "model"
+  },
+  "OptionBar": {
+   "classvars": {
+    "group_column": "'occ_symbol'",
+    "schema_name": "'marketlens.OptionBar'",
+    "time_column": "'t'",
+    "value_columns": "('close', 'open', 'high', 'low', 'vwap', 'volume')"
+   },
+   "config": {
+    "extra": "'forbid'",
+    "frozen": "True"
+   },
+   "fields": {
+    "absent": {
+     "annotation": "dict[str, marketlens_schema.base.AbsenceCode] | None",
+     "default": "None",
+     "required": false
+    },
+    "close": {
+     "annotation": "<class 'float'>",
+     "default": null,
+     "required": true
+    },
+    "currency": {
+     "annotation": "<class 'str'>",
+     "default": "'USD'",
+     "required": false
+    },
+    "high": {
+     "annotation": "<class 'float'>",
+     "default": null,
+     "required": true
+    },
+    "low": {
+     "annotation": "<class 'float'>",
+     "default": null,
+     "required": true
+    },
+    "occ_symbol": {
+     "annotation": "<class 'str'>",
+     "default": null,
+     "required": true
+    },
+    "open": {
+     "annotation": "<class 'float'>",
+     "default": null,
+     "required": true
+    },
+    "t": {
+     "annotation": "<class 'datetime.datetime'>",
+     "default": null,
+     "required": true
+    },
+    "timeframe": {
+     "annotation": "<class 'str'>",
+     "default": null,
+     "required": true
+    },
+    "trade_count": {
+     "annotation": "int | None",
+     "default": "None",
+     "required": false
+    },
+    "underlying": {
+     "annotation": "<class 'str'>",
+     "default": null,
+     "required": true
+    },
+    "volume": {
+     "annotation": "<class 'float'>",
+     "default": null,
+     "required": true
+    },
+    "vwap": {
+     "annotation": "float | None",
+     "default": "None",
+     "required": false
+    }
+   },
+   "kind": "model"
+  },
+  "OptionContract": {
+   "classvars": {
+    "group_column": "'occ_symbol'",
+    "schema_name": "'marketlens.OptionContract'",
+    "time_column": "None",
+    "value_columns": "()"
+   },
+   "config": {
+    "extra": "'forbid'",
+    "frozen": "True"
+   },
+   "fields": {
+    "absent": {
+     "annotation": "dict[str, marketlens_schema.base.AbsenceCode] | None",
+     "default": "None",
+     "required": false
+    },
+    "close_price": {
+     "annotation": "float | None",
+     "default": "None",
+     "required": false
+    },
+    "close_price_date": {
+     "annotation": "datetime.date | None",
+     "default": "None",
+     "required": false
+    },
+    "deliverables": {
+     "annotation": "list[marketlens_schema.market.OptionDeliverable] | None",
+     "default": "None",
+     "required": false
+    },
+    "expiration_date": {
+     "annotation": "<class 'datetime.date'>",
+     "default": null,
+     "required": true
+    },
+    "multiplier": {
+     "annotation": "<class 'float'>",
+     "default": null,
+     "required": true
+    },
+    "name": {
+     "annotation": "str | None",
+     "default": "None",
+     "required": false
+    },
+    "occ_symbol": {
+     "annotation": "<class 'str'>",
+     "default": null,
+     "required": true
+    },
+    "open_interest": {
+     "annotation": "int | None",
+     "default": "None",
+     "required": false
+    },
+    "open_interest_date": {
+     "annotation": "datetime.date | None",
+     "default": "None",
+     "required": false
+    },
+    "option_type": {
+     "annotation": "<enum 'OptionType'>",
+     "default": null,
+     "required": true
+    },
+    "provider_contract_id": {
+     "annotation": "str | None",
+     "default": "None",
+     "required": false
+    },
+    "root_symbol": {
+     "annotation": "<class 'str'>",
+     "default": null,
+     "required": true
+    },
+    "size": {
+     "annotation": "float | None",
+     "default": "None",
+     "required": false
+    },
+    "status": {
+     "annotation": "typing.Literal['active', 'inactive']",
+     "default": null,
+     "required": true
+    },
+    "strike": {
+     "annotation": "<class 'float'>",
+     "default": null,
+     "required": true
+    },
+    "style": {
+     "annotation": "<enum 'OptionStyle'>",
+     "default": null,
+     "required": true
+    },
+    "tradable": {
+     "annotation": "<class 'bool'>",
+     "default": null,
+     "required": true
+    },
+    "underlying": {
+     "annotation": "<class 'str'>",
+     "default": null,
+     "required": true
+    }
+   },
+   "kind": "model"
+  },
+  "OptionDeliverable": {
+   "classvars": {
+    "group_column": "None",
+    "schema_name": "'marketlens.OptionDeliverable'",
+    "time_column": "None",
+    "value_columns": "()"
+   },
+   "config": {
+    "extra": "'forbid'",
+    "frozen": "True"
+   },
+   "fields": {
+    "absent": {
+     "annotation": "dict[str, marketlens_schema.base.AbsenceCode] | None",
+     "default": "None",
+     "required": false
+    },
+    "allocation_pct": {
+     "annotation": "float | None",
+     "default": "None",
+     "required": false
+    },
+    "amount": {
+     "annotation": "<class 'decimal.Decimal'>",
+     "default": null,
+     "required": true
+    },
+    "delayed_settlement": {
+     "annotation": "bool | None",
+     "default": "None",
+     "required": false
+    },
+    "settlement_method": {
+     "annotation": "str | None",
+     "default": "None",
+     "required": false
+    },
+    "settlement_type": {
+     "annotation": "str | None",
+     "default": "None",
+     "required": false
+    },
+    "ticker": {
+     "annotation": "typing.Optional[typing.Annotated[str, StringConstraints(strip_whitespace=None, to_upper=None, to_lower=None, strict=None, min_length=None, max_length=None, pattern='^(?:[A-Z][A-Z0-9]{0,9}(?:-[A-Z0-9]{1,5})?|[A-Z0-9]{2,10}/[A-Z0-9]{2,10})$', ascii_only=None)]]",
+     "default": "None",
+     "required": false
+    },
+    "type": {
+     "annotation": "typing.Literal['cash', 'equity']",
+     "default": null,
+     "required": true
+    }
+   },
+   "kind": "model"
+  },
+  "OptionExchange": {
+   "classvars": {
+    "group_column": "None",
+    "schema_name": "'marketlens.OptionExchange'",
+    "time_column": "None",
+    "value_columns": "()"
+   },
+   "config": {
+    "extra": "'forbid'",
+    "frozen": "True"
+   },
+   "fields": {
+    "absent": {
+     "annotation": "dict[str, marketlens_schema.base.AbsenceCode] | None",
+     "default": "None",
+     "required": false
+    },
+    "code": {
+     "annotation": "<class 'str'>",
+     "default": null,
+     "required": true
+    },
+    "name": {
+     "annotation": "<class 'str'>",
+     "default": null,
+     "required": true
+    }
+   },
+   "kind": "model"
+  },
+  "OptionQuote": {
+   "classvars": {
+    "group_column": "'occ_symbol'",
+    "schema_name": "'marketlens.OptionQuote'",
+    "time_column": "'t'",
+    "value_columns": "('bid_price', 'ask_price')"
+   },
+   "config": {
+    "extra": "'forbid'",
+    "frozen": "True"
+   },
+   "fields": {
+    "absent": {
+     "annotation": "dict[str, marketlens_schema.base.AbsenceCode] | None",
+     "default": "None",
+     "required": false
+    },
+    "ask_exchange": {
+     "annotation": "str | None",
+     "default": "None",
+     "required": false
+    },
+    "ask_price": {
+     "annotation": "float | None",
+     "default": "None",
+     "required": false
+    },
+    "ask_size": {
+     "annotation": "float | None",
+     "default": "None",
+     "required": false
+    },
+    "bid_exchange": {
+     "annotation": "str | None",
+     "default": "None",
+     "required": false
+    },
+    "bid_price": {
+     "annotation": "float | None",
+     "default": "None",
+     "required": false
+    },
+    "bid_size": {
+     "annotation": "float | None",
+     "default": "None",
+     "required": false
+    },
+    "condition": {
+     "annotation": "str | None",
+     "default": "None",
+     "required": false
+    },
+    "currency": {
+     "annotation": "<class 'str'>",
+     "default": "'USD'",
+     "required": false
+    },
+    "occ_symbol": {
+     "annotation": "<class 'str'>",
+     "default": null,
+     "required": true
+    },
+    "t": {
+     "annotation": "<class 'datetime.datetime'>",
+     "default": null,
+     "required": true
+    },
+    "underlying": {
+     "annotation": "<class 'str'>",
+     "default": null,
+     "required": true
+    }
+   },
+   "kind": "model"
+  },
+  "OptionSnapshot": {
+   "classvars": {
+    "group_column": "'occ_symbol'",
+    "schema_name": "'marketlens.OptionSnapshot'",
+    "time_column": "'t'",
+    "value_columns": "('implied_volatility', 'delta', 'last_price', 'bid_price', 'ask_price')"
+   },
+   "config": {
+    "extra": "'forbid'",
+    "frozen": "True"
+   },
+   "fields": {
+    "absent": {
+     "annotation": "dict[str, marketlens_schema.base.AbsenceCode] | None",
+     "default": "None",
+     "required": false
+    },
+    "ask_price": {
+     "annotation": "float | None",
+     "default": "None",
+     "required": false
+    },
+    "ask_size": {
+     "annotation": "float | None",
+     "default": "None",
+     "required": false
+    },
+    "bid_price": {
+     "annotation": "float | None",
+     "default": "None",
+     "required": false
+    },
+    "bid_size": {
+     "annotation": "float | None",
+     "default": "None",
+     "required": false
+    },
+    "currency": {
+     "annotation": "<class 'str'>",
+     "default": "'USD'",
+     "required": false
+    },
+    "day_close": {
+     "annotation": "float | None",
+     "default": "None",
+     "required": false
+    },
+    "day_high": {
+     "annotation": "float | None",
+     "default": "None",
+     "required": false
+    },
+    "day_low": {
+     "annotation": "float | None",
+     "default": "None",
+     "required": false
+    },
+    "day_open": {
+     "annotation": "float | None",
+     "default": "None",
+     "required": false
+    },
+    "day_volume": {
+     "annotation": "float | None",
+     "default": "None",
+     "required": false
+    },
+    "delta": {
+     "annotation": "float | None",
+     "default": "None",
+     "required": false
+    },
+    "expiration_date": {
+     "annotation": "<class 'datetime.date'>",
+     "default": null,
+     "required": true
+    },
+    "gamma": {
+     "annotation": "float | None",
+     "default": "None",
+     "required": false
+    },
+    "implied_volatility": {
+     "annotation": "float | None",
+     "default": "None",
+     "required": false
+    },
+    "last_price": {
+     "annotation": "float | None",
+     "default": "None",
+     "required": false
+    },
+    "last_size": {
+     "annotation": "float | None",
+     "default": "None",
+     "required": false
+    },
+    "last_t": {
+     "annotation": "typing.Optional[typing.Annotated[datetime.datetime, AfterValidator(func=<function _to_utc>), PlainSerializer(func=<function _iso_z>, return_type=<class 'str'>, when_used='json')]]",
+     "default": "None",
+     "required": false
+    },
+    "occ_symbol": {
+     "annotation": "<class 'str'>",
+     "default": null,
+     "required": true
+    },
+    "option_type": {
+     "annotation": "<enum 'OptionType'>",
+     "default": null,
+     "required": true
+    },
+    "prev_close": {
+     "annotation": "float | None",
+     "default": "None",
+     "required": false
+    },
+    "quote_t": {
+     "annotation": "typing.Optional[typing.Annotated[datetime.datetime, AfterValidator(func=<function _to_utc>), PlainSerializer(func=<function _iso_z>, return_type=<class 'str'>, when_used='json')]]",
+     "default": "None",
+     "required": false
+    },
+    "rho": {
+     "annotation": "float | None",
+     "default": "None",
+     "required": false
+    },
+    "strike": {
+     "annotation": "<class 'float'>",
+     "default": null,
+     "required": true
+    },
+    "t": {
+     "annotation": "<class 'datetime.datetime'>",
+     "default": null,
+     "required": true
+    },
+    "theta": {
+     "annotation": "float | None",
+     "default": "None",
+     "required": false
+    },
+    "underlying": {
+     "annotation": "<class 'str'>",
+     "default": null,
+     "required": true
+    },
+    "vega": {
+     "annotation": "float | None",
+     "default": "None",
+     "required": false
+    }
+   },
+   "kind": "model"
+  },
+  "OptionTrade": {
+   "classvars": {
+    "group_column": "'occ_symbol'",
+    "schema_name": "'marketlens.OptionTrade'",
+    "time_column": "'t'",
+    "value_columns": "('price', 'size')"
+   },
+   "config": {
+    "extra": "'forbid'",
+    "frozen": "True"
+   },
+   "fields": {
+    "absent": {
+     "annotation": "dict[str, marketlens_schema.base.AbsenceCode] | None",
+     "default": "None",
+     "required": false
+    },
+    "condition": {
+     "annotation": "str | None",
+     "default": "None",
+     "required": false
+    },
+    "currency": {
+     "annotation": "<class 'str'>",
+     "default": "'USD'",
+     "required": false
+    },
+    "exchange": {
+     "annotation": "str | None",
+     "default": "None",
+     "required": false
+    },
+    "occ_symbol": {
+     "annotation": "<class 'str'>",
+     "default": null,
+     "required": true
+    },
+    "price": {
+     "annotation": "<class 'float'>",
+     "default": null,
+     "required": true
+    },
+    "size": {
+     "annotation": "<class 'float'>",
+     "default": null,
+     "required": true
+    },
+    "t": {
+     "annotation": "<class 'datetime.datetime'>",
+     "default": null,
+     "required": true
+    },
+    "underlying": {
+     "annotation": "<class 'str'>",
+     "default": null,
+     "required": true
+    }
+   },
+   "kind": "model"
+  },
+  "OrderBookLevel": {
+   "classvars": {
+    "group_column": "'ticker'",
+    "schema_name": "'marketlens.OrderBookLevel'",
+    "time_column": "'t'",
+    "value_columns": "('price', 'size')"
+   },
+   "config": {
+    "extra": "'forbid'",
+    "frozen": "True"
+   },
+   "fields": {
+    "absent": {
+     "annotation": "dict[str, marketlens_schema.base.AbsenceCode] | None",
+     "default": "None",
+     "required": false
+    },
+    "asset_class": {
+     "annotation": "<enum 'AssetClass'>",
+     "default": null,
+     "required": true
+    },
+    "currency": {
+     "annotation": "<class 'str'>",
+     "default": "'USD'",
+     "required": false
+    },
+    "level": {
+     "annotation": "<class 'int'>",
+     "default": null,
+     "required": true
+    },
+    "price": {
+     "annotation": "<class 'float'>",
+     "default": null,
+     "required": true
+    },
+    "side": {
+     "annotation": "typing.Literal['bid', 'ask']",
+     "default": null,
+     "required": true
+    },
+    "size": {
+     "annotation": "<class 'float'>",
+     "default": null,
+     "required": true
+    },
+    "t": {
+     "annotation": "<class 'datetime.datetime'>",
+     "default": null,
+     "required": true
+    },
+    "ticker": {
+     "annotation": "<class 'str'>",
+     "default": null,
+     "required": true
+    }
+   },
+   "kind": "model"
+  },
+  "ProviderDocument": {
+   "classvars": {
+    "group_column": "None",
+    "schema_name": "'marketlens.ProviderDocument'",
+    "time_column": "None",
+    "value_columns": "()"
+   },
+   "config": {
+    "extra": "'forbid'",
+    "frozen": "True"
+   },
+   "fields": {
+    "absent": {
+     "annotation": "dict[str, marketlens_schema.base.AbsenceCode] | None",
+     "default": "None",
+     "required": false
+    },
+    "doc_id": {
+     "annotation": "str | None",
+     "default": "None",
+     "required": false
+    },
+    "kind": {
+     "annotation": "typing.Literal['search_hit', 'document', 'endpoint', 'endpoint_list']",
+     "default": null,
+     "required": true
+    },
+    "method": {
+     "annotation": "str | None",
+     "default": "None",
+     "required": false
+    },
+    "path": {
+     "annotation": "str | None",
+     "default": "None",
+     "required": false
+    },
+    "provider": {
+     "annotation": "<class 'str'>",
+     "default": null,
+     "required": true
+    },
+    "text": {
+     "annotation": "str | None",
+     "default": "None",
+     "required": false
+    },
+    "title": {
+     "annotation": "str | None",
+     "default": "None",
+     "required": false
+    },
+    "url": {
+     "annotation": "str | None",
+     "default": "None",
+     "required": false
+    }
+   },
+   "kind": "model"
+  },
+  "Quote": {
+   "classvars": {
+    "group_column": "'ticker'",
+    "schema_name": "'marketlens.Quote'",
+    "time_column": "'t'",
+    "value_columns": "('bid_price', 'ask_price', 'bid_size', 'ask_size')"
+   },
+   "config": {
+    "extra": "'forbid'",
+    "frozen": "True"
+   },
+   "fields": {
+    "absent": {
+     "annotation": "dict[str, marketlens_schema.base.AbsenceCode] | None",
+     "default": "None",
+     "required": false
+    },
+    "ask_exchange": {
+     "annotation": "str | None",
+     "default": "None",
+     "required": false
+    },
+    "ask_price": {
+     "annotation": "float | None",
+     "default": "None",
+     "required": false
+    },
+    "ask_size": {
+     "annotation": "float | None",
+     "default": "None",
+     "required": false
+    },
+    "asset_class": {
+     "annotation": "<enum 'AssetClass'>",
+     "default": null,
+     "required": true
+    },
+    "bid_exchange": {
+     "annotation": "str | None",
+     "default": "None",
+     "required": false
+    },
+    "bid_price": {
+     "annotation": "float | None",
+     "default": "None",
+     "required": false
+    },
+    "bid_size": {
+     "annotation": "float | None",
+     "default": "None",
+     "required": false
+    },
+    "conditions": {
+     "annotation": "list[str] | None",
+     "default": "None",
+     "required": false
+    },
+    "currency": {
+     "annotation": "<class 'str'>",
+     "default": "'USD'",
+     "required": false
+    },
+    "t": {
+     "annotation": "<class 'datetime.datetime'>",
+     "default": null,
+     "required": true
+    },
+    "tape": {
+     "annotation": "str | None",
+     "default": "None",
+     "required": false
+    },
+    "ticker": {
+     "annotation": "<class 'str'>",
+     "default": null,
+     "required": true
+    }
+   },
+   "kind": "model"
+  },
+  "Snapshot": {
+   "classvars": {
+    "group_column": "'ticker'",
+    "schema_name": "'marketlens.Snapshot'",
+    "time_column": "'t'",
+    "value_columns": "('last_price', 'change_pct')"
+   },
+   "config": {
+    "extra": "'forbid'",
+    "frozen": "True"
+   },
+   "fields": {
+    "absent": {
+     "annotation": "dict[str, marketlens_schema.base.AbsenceCode] | None",
+     "default": "None",
+     "required": false
+    },
+    "ask_price": {
+     "annotation": "float | None",
+     "default": "None",
+     "required": false
+    },
+    "ask_size": {
+     "annotation": "float | None",
+     "default": "None",
+     "required": false
+    },
+    "asset_class": {
+     "annotation": "<enum 'AssetClass'>",
+     "default": null,
+     "required": true
+    },
+    "bid_price": {
+     "annotation": "float | None",
+     "default": "None",
+     "required": false
+    },
+    "bid_size": {
+     "annotation": "float | None",
+     "default": "None",
+     "required": false
+    },
+    "change": {
+     "annotation": "float | None",
+     "default": "None",
+     "required": false
+    },
+    "change_pct": {
+     "annotation": "float | None",
+     "default": "None",
+     "required": false
+    },
+    "currency": {
+     "annotation": "<class 'str'>",
+     "default": "'USD'",
+     "required": false
+    },
+    "day_close": {
+     "annotation": "float | None",
+     "default": "None",
+     "required": false
+    },
+    "day_high": {
+     "annotation": "float | None",
+     "default": "None",
+     "required": false
+    },
+    "day_low": {
+     "annotation": "float | None",
+     "default": "None",
+     "required": false
+    },
+    "day_open": {
+     "annotation": "float | None",
+     "default": "None",
+     "required": false
+    },
+    "day_volume": {
+     "annotation": "float | None",
+     "default": "None",
+     "required": false
+    },
+    "day_vwap": {
+     "annotation": "float | None",
+     "default": "None",
+     "required": false
+    },
+    "last_price": {
+     "annotation": "float | None",
+     "default": "None",
+     "required": false
+    },
+    "last_size": {
+     "annotation": "float | None",
+     "default": "None",
+     "required": false
+    },
+    "last_t": {
+     "annotation": "typing.Optional[typing.Annotated[datetime.datetime, AfterValidator(func=<function _to_utc>), PlainSerializer(func=<function _iso_z>, return_type=<class 'str'>, when_used='json')]]",
+     "default": "None",
+     "required": false
+    },
+    "minute_close": {
+     "annotation": "float | None",
+     "default": "None",
+     "required": false
+    },
+    "minute_t": {
+     "annotation": "typing.Optional[typing.Annotated[datetime.datetime, AfterValidator(func=<function _to_utc>), PlainSerializer(func=<function _iso_z>, return_type=<class 'str'>, when_used='json')]]",
+     "default": "None",
+     "required": false
+    },
+    "prev_close": {
+     "annotation": "float | None",
+     "default": "None",
+     "required": false
+    },
+    "prev_volume": {
+     "annotation": "float | None",
+     "default": "None",
+     "required": false
+    },
+    "quote_t": {
+     "annotation": "typing.Optional[typing.Annotated[datetime.datetime, AfterValidator(func=<function _to_utc>), PlainSerializer(func=<function _iso_z>, return_type=<class 'str'>, when_used='json')]]",
+     "default": "None",
+     "required": false
+    },
+    "t": {
+     "annotation": "<class 'datetime.datetime'>",
+     "default": null,
+     "required": true
+    },
+    "ticker": {
+     "annotation": "<class 'str'>",
+     "default": null,
+     "required": true
+    }
+   },
+   "kind": "model"
+  },
+  "Trade": {
+   "classvars": {
+    "group_column": "'ticker'",
+    "schema_name": "'marketlens.Trade'",
+    "time_column": "'t'",
+    "value_columns": "('price', 'size')"
+   },
+   "config": {
+    "extra": "'forbid'",
+    "frozen": "True"
+   },
+   "fields": {
+    "absent": {
+     "annotation": "dict[str, marketlens_schema.base.AbsenceCode] | None",
+     "default": "None",
+     "required": false
+    },
+    "asset_class": {
+     "annotation": "<enum 'AssetClass'>",
+     "default": null,
+     "required": true
+    },
+    "conditions": {
+     "annotation": "list[str] | None",
+     "default": "None",
+     "required": false
+    },
+    "currency": {
+     "annotation": "<class 'str'>",
+     "default": "'USD'",
+     "required": false
+    },
+    "exchange": {
+     "annotation": "str | None",
+     "default": "None",
+     "required": false
+    },
+    "price": {
+     "annotation": "<class 'float'>",
+     "default": null,
+     "required": true
+    },
+    "size": {
+     "annotation": "<class 'float'>",
+     "default": null,
+     "required": true
+    },
+    "t": {
+     "annotation": "<class 'datetime.datetime'>",
+     "default": null,
+     "required": true
+    },
+    "taker_side": {
+     "annotation": "marketlens_schema.base.Side | None",
+     "default": "None",
+     "required": false
+    },
+    "tape": {
+     "annotation": "str | None",
+     "default": "None",
+     "required": false
+    },
+    "ticker": {
+     "annotation": "<class 'str'>",
+     "default": null,
+     "required": true
+    },
+    "trade_id": {
+     "annotation": "str | None",
+     "default": "None",
+     "required": false
+    }
+   },
+   "kind": "model"
+  }
+ },
+ "marketlens_schema.portfolio": {
+  "Account": {
+   "classvars": {
+    "group_column": "None",
+    "schema_name": "'marketlens.Account'",
+    "time_column": "None",
+    "value_columns": "()"
+   },
+   "config": {
+    "extra": "'forbid'",
+    "frozen": "True"
+   },
+   "fields": {
+    "absent": {
+     "annotation": "dict[str, marketlens_schema.base.AbsenceCode] | None",
+     "default": "None",
+     "required": false
+    },
+    "account_blocked": {
+     "annotation": "bool | None",
+     "default": "None",
+     "required": false
+    },
+    "account_id": {
+     "annotation": "<class 'str'>",
+     "default": null,
+     "required": true
+    },
+    "account_number_masked": {
+     "annotation": "str | None",
+     "default": "None",
+     "required": false
+    },
+    "accrued_fees": {
+     "annotation": "typing.Optional[typing.Annotated[decimal.Decimal, BeforeValidator(func=<function _no_float>, json_schema_input_type=PydanticUndefined), PlainSerializer(func=<function <lambda>>, return_type=<class 'str'>, when_used='json'), WithJsonSchema(json_schema={'type': 'string', 'pattern': '^-?\\\\d+(\\\\.\\\\d+)?$'}, mode=None)]]",
+     "default": "None",
+     "required": false
+    },
+    "balance_as_of": {
+     "annotation": "datetime.date | None",
+     "default": "None",
+     "required": false
+    },
+    "buying_power": {
+     "annotation": "<class 'decimal.Decimal'>",
+     "default": null,
+     "required": true
+    },
+    "cash": {
+     "annotation": "<class 'decimal.Decimal'>",
+     "default": null,
+     "required": true
+    },
+    "created_at": {
+     "annotation": "typing.Optional[typing.Annotated[datetime.datetime, AfterValidator(func=<function _to_utc>), PlainSerializer(func=<function _iso_z>, return_type=<class 'str'>, when_used='json')]]",
+     "default": "None",
+     "required": false
+    },
+    "crypto_status": {
+     "annotation": "str | None",
+     "default": "None",
+     "required": false
+    },
+    "currency": {
+     "annotation": "<class 'str'>",
+     "default": "'USD'",
+     "required": false
+    },
+    "daytrade_count": {
+     "annotation": "int | None",
+     "default": "None",
+     "required": false
+    },
+    "daytrading_buying_power": {
+     "annotation": "typing.Optional[typing.Annotated[decimal.Decimal, BeforeValidator(func=<function _no_float>, json_schema_input_type=PydanticUndefined), PlainSerializer(func=<function <lambda>>, return_type=<class 'str'>, when_used='json'), WithJsonSchema(json_schema={'type': 'string', 'pattern': '^-?\\\\d+(\\\\.\\\\d+)?$'}, mode=None)]]",
+     "default": "None",
+     "required": false
+    },
+    "environment": {
+     "annotation": "<enum 'Environment'>",
+     "default": null,
+     "required": true
+    },
+    "equity": {
+     "annotation": "<class 'decimal.Decimal'>",
+     "default": null,
+     "required": true
+    },
+    "initial_margin": {
+     "annotation": "typing.Optional[typing.Annotated[decimal.Decimal, BeforeValidator(func=<function _no_float>, json_schema_input_type=PydanticUndefined), PlainSerializer(func=<function <lambda>>, return_type=<class 'str'>, when_used='json'), WithJsonSchema(json_schema={'type': 'string', 'pattern': '^-?\\\\d+(\\\\.\\\\d+)?$'}, mode=None)]]",
+     "default": "None",
+     "required": false
+    },
+    "last_equity": {
+     "annotation": "typing.Optional[typing.Annotated[decimal.Decimal, BeforeValidator(func=<function _no_float>, json_schema_input_type=PydanticUndefined), PlainSerializer(func=<function <lambda>>, return_type=<class 'str'>, when_used='json'), WithJsonSchema(json_schema={'type': 'string', 'pattern': '^-?\\\\d+(\\\\.\\\\d+)?$'}, mode=None)]]",
+     "default": "None",
+     "required": false
+    },
+    "last_maintenance_margin": {
+     "annotation": "typing.Optional[typing.Annotated[decimal.Decimal, BeforeValidator(func=<function _no_float>, json_schema_input_type=PydanticUndefined), PlainSerializer(func=<function <lambda>>, return_type=<class 'str'>, when_used='json'), WithJsonSchema(json_schema={'type': 'string', 'pattern': '^-?\\\\d+(\\\\.\\\\d+)?$'}, mode=None)]]",
+     "default": "None",
+     "required": false
+    },
+    "long_market_value": {
+     "annotation": "typing.Optional[typing.Annotated[decimal.Decimal, BeforeValidator(func=<function _no_float>, json_schema_input_type=PydanticUndefined), PlainSerializer(func=<function <lambda>>, return_type=<class 'str'>, when_used='json'), WithJsonSchema(json_schema={'type': 'string', 'pattern': '^-?\\\\d+(\\\\.\\\\d+)?$'}, mode=None)]]",
+     "default": "None",
+     "required": false
+    },
+    "maintenance_margin": {
+     "annotation": "typing.Optional[typing.Annotated[decimal.Decimal, BeforeValidator(func=<function _no_float>, json_schema_input_type=PydanticUndefined), PlainSerializer(func=<function <lambda>>, return_type=<class 'str'>, when_used='json'), WithJsonSchema(json_schema={'type': 'string', 'pattern': '^-?\\\\d+(\\\\.\\\\d+)?$'}, mode=None)]]",
+     "default": "None",
+     "required": false
+    },
+    "multiplier": {
+     "annotation": "typing.Optional[typing.Annotated[decimal.Decimal, BeforeValidator(func=<function _no_float>, json_schema_input_type=PydanticUndefined), PlainSerializer(func=<function <lambda>>, return_type=<class 'str'>, when_used='json'), WithJsonSchema(json_schema={'type': 'string', 'pattern': '^-?\\\\d+(\\\\.\\\\d+)?$'}, mode=None)]]",
+     "default": "None",
+     "required": false
+    },
+    "non_marginable_buying_power": {
+     "annotation": "typing.Optional[typing.Annotated[decimal.Decimal, BeforeValidator(func=<function _no_float>, json_schema_input_type=PydanticUndefined), PlainSerializer(func=<function <lambda>>, return_type=<class 'str'>, when_used='json'), WithJsonSchema(json_schema={'type': 'string', 'pattern': '^-?\\\\d+(\\\\.\\\\d+)?$'}, mode=None)]]",
+     "default": "None",
+     "required": false
+    },
+    "options_approved_level": {
+     "annotation": "int | None",
+     "default": "None",
+     "required": false
+    },
+    "options_buying_power": {
+     "annotation": "typing.Optional[typing.Annotated[decimal.Decimal, BeforeValidator(func=<function _no_float>, json_schema_input_type=PydanticUndefined), PlainSerializer(func=<function <lambda>>, return_type=<class 'str'>, when_used='json'), WithJsonSchema(json_schema={'type': 'string', 'pattern': '^-?\\\\d+(\\\\.\\\\d+)?$'}, mode=None)]]",
+     "default": "None",
+     "required": false
+    },
+    "options_trading_level": {
+     "annotation": "int | None",
+     "default": "None",
+     "required": false
+    },
+    "pattern_day_trader": {
+     "annotation": "bool | None",
+     "default": "None",
+     "required": false
+    },
+    "pending_transfer_in": {
+     "annotation": "typing.Optional[typing.Annotated[decimal.Decimal, BeforeValidator(func=<function _no_float>, json_schema_input_type=PydanticUndefined), PlainSerializer(func=<function <lambda>>, return_type=<class 'str'>, when_used='json'), WithJsonSchema(json_schema={'type': 'string', 'pattern': '^-?\\\\d+(\\\\.\\\\d+)?$'}, mode=None)]]",
+     "default": "None",
+     "required": false
+    },
+    "pending_transfer_out": {
+     "annotation": "typing.Optional[typing.Annotated[decimal.Decimal, BeforeValidator(func=<function _no_float>, json_schema_input_type=PydanticUndefined), PlainSerializer(func=<function <lambda>>, return_type=<class 'str'>, when_used='json'), WithJsonSchema(json_schema={'type': 'string', 'pattern': '^-?\\\\d+(\\\\.\\\\d+)?$'}, mode=None)]]",
+     "default": "None",
+     "required": false
+    },
+    "regt_buying_power": {
+     "annotation": "typing.Optional[typing.Annotated[decimal.Decimal, BeforeValidator(func=<function _no_float>, json_schema_input_type=PydanticUndefined), PlainSerializer(func=<function <lambda>>, return_type=<class 'str'>, when_used='json'), WithJsonSchema(json_schema={'type': 'string', 'pattern': '^-?\\\\d+(\\\\.\\\\d+)?$'}, mode=None)]]",
+     "default": "None",
+     "required": false
+    },
+    "short_market_value": {
+     "annotation": "typing.Optional[typing.Annotated[decimal.Decimal, BeforeValidator(func=<function _no_float>, json_schema_input_type=PydanticUndefined), PlainSerializer(func=<function <lambda>>, return_type=<class 'str'>, when_used='json'), WithJsonSchema(json_schema={'type': 'string', 'pattern': '^-?\\\\d+(\\\\.\\\\d+)?$'}, mode=None)]]",
+     "default": "None",
+     "required": false
+    },
+    "shorting_enabled": {
+     "annotation": "bool | None",
+     "default": "None",
+     "required": false
+    },
+    "sma": {
+     "annotation": "typing.Optional[typing.Annotated[decimal.Decimal, BeforeValidator(func=<function _no_float>, json_schema_input_type=PydanticUndefined), PlainSerializer(func=<function <lambda>>, return_type=<class 'str'>, when_used='json'), WithJsonSchema(json_schema={'type': 'string', 'pattern': '^-?\\\\d+(\\\\.\\\\d+)?$'}, mode=None)]]",
+     "default": "None",
+     "required": false
+    },
+    "status": {
+     "annotation": "<class 'str'>",
+     "default": null,
+     "required": true
+    },
+    "trade_suspended_by_user": {
+     "annotation": "bool | None",
+     "default": "None",
+     "required": false
+    },
+    "trading_blocked": {
+     "annotation": "bool | None",
+     "default": "None",
+     "required": false
+    },
+    "transfers_blocked": {
+     "annotation": "bool | None",
+     "default": "None",
+     "required": false
+    }
+   },
+   "kind": "model"
+  },
+  "AccountConfig": {
+   "classvars": {
+    "group_column": "None",
+    "schema_name": "'marketlens.AccountConfig'",
+    "time_column": "None",
+    "value_columns": "()"
+   },
+   "config": {
+    "extra": "'forbid'",
+    "frozen": "True"
+   },
+   "fields": {
+    "absent": {
+     "annotation": "dict[str, marketlens_schema.base.AbsenceCode] | None",
+     "default": "None",
+     "required": false
+    },
+    "disable_overnight_trading": {
+     "annotation": "bool | None",
+     "default": "None",
+     "required": false
+    },
+    "dtbp_check": {
+     "annotation": "str | None",
+     "default": "None",
+     "required": false
+    },
+    "environment": {
+     "annotation": "<enum 'Environment'>",
+     "default": null,
+     "required": true
+    },
+    "fractional_trading": {
+     "annotation": "bool | None",
+     "default": "None",
+     "required": false
+    },
+    "max_margin_multiplier": {
+     "annotation": "typing.Optional[typing.Annotated[decimal.Decimal, BeforeValidator(func=<function _no_float>, json_schema_input_type=PydanticUndefined), PlainSerializer(func=<function <lambda>>, return_type=<class 'str'>, when_used='json'), WithJsonSchema(json_schema={'type': 'string', 'pattern': '^-?\\\\d+(\\\\.\\\\d+)?$'}, mode=None)]]",
+     "default": "None",
+     "required": false
+    },
+    "max_options_trading_level": {
+     "annotation": "int | None",
+     "default": "None",
+     "required": false
+    },
+    "no_shorting": {
+     "annotation": "bool | None",
+     "default": "None",
+     "required": false
+    },
+    "pdt_check": {
+     "annotation": "str | None",
+     "default": "None",
+     "required": false
+    },
+    "ptp_no_exception_entry": {
+     "annotation": "bool | None",
+     "default": "None",
+     "required": false
+    },
+    "suspend_trade": {
+     "annotation": "bool | None",
+     "default": "None",
+     "required": false
+    },
+    "trade_confirm_email": {
+     "annotation": "str | None",
+     "default": "None",
+     "required": false
+    }
+   },
+   "kind": "model"
+  },
+  "Activity": {
+   "classvars": {
+    "group_column": "'ticker'",
+    "schema_name": "'marketlens.Activity'",
+    "time_column": "'t'",
+    "value_columns": "()"
+   },
+   "config": {
+    "extra": "'forbid'",
+    "frozen": "True"
+   },
+   "fields": {
+    "absent": {
+     "annotation": "dict[str, marketlens_schema.base.AbsenceCode] | None",
+     "default": "None",
+     "required": false
+    },
+    "activity_id": {
+     "annotation": "<class 'str'>",
+     "default": null,
+     "required": true
+    },
+    "activity_type": {
+     "annotation": "<class 'str'>",
+     "default": null,
+     "required": true
+    },
+    "category": {
+     "annotation": "typing.Literal['trade', 'non_trade']",
+     "default": null,
+     "required": true
+    },
+    "cum_qty": {
+     "annotation": "typing.Optional[typing.Annotated[decimal.Decimal, BeforeValidator(func=<function _no_float>, json_schema_input_type=PydanticUndefined), PlainSerializer(func=<function <lambda>>, return_type=<class 'str'>, when_used='json'), WithJsonSchema(json_schema={'type': 'string', 'pattern': '^-?\\\\d+(\\\\.\\\\d+)?$'}, mode=None)]]",
+     "default": "None",
+     "required": false
+    },
+    "currency": {
+     "annotation": "str | None",
+     "default": "None",
+     "required": false
+    },
+    "date": {
+     "annotation": "datetime.date | None",
+     "default": "None",
+     "required": false
+    },
+    "description": {
+     "annotation": "str | None",
+     "default": "None",
+     "required": false
+    },
+    "environment": {
+     "annotation": "<enum 'Environment'>",
+     "default": null,
+     "required": true
+    },
+    "leaves_qty": {
+     "annotation": "typing.Optional[typing.Annotated[decimal.Decimal, BeforeValidator(func=<function _no_float>, json_schema_input_type=PydanticUndefined), PlainSerializer(func=<function <lambda>>, return_type=<class 'str'>, when_used='json'), WithJsonSchema(json_schema={'type': 'string', 'pattern': '^-?\\\\d+(\\\\.\\\\d+)?$'}, mode=None)]]",
+     "default": "None",
+     "required": false
+    },
+    "net_amount": {
+     "annotation": "typing.Optional[typing.Annotated[decimal.Decimal, BeforeValidator(func=<function _no_float>, json_schema_input_type=PydanticUndefined), PlainSerializer(func=<function <lambda>>, return_type=<class 'str'>, when_used='json'), WithJsonSchema(json_schema={'type': 'string', 'pattern': '^-?\\\\d+(\\\\.\\\\d+)?$'}, mode=None)]]",
+     "default": "None",
+     "required": false
+    },
+    "occ_symbol": {
+     "annotation": "typing.Optional[typing.Annotated[str, StringConstraints(strip_whitespace=None, to_upper=None, to_lower=None, strict=None, min_length=None, max_length=None, pattern='^(?P<root>[A-Z]{1,6})(?P<yymmdd>\\\\d{6})(?P<cp>[CP])(?P<strike>\\\\d{8})$', ascii_only=None)]]",
+     "default": "None",
+     "required": false
+    },
+    "order_id": {
+     "annotation": "str | None",
+     "default": "None",
+     "required": false
+    },
+    "order_status": {
+     "annotation": "marketlens_schema.base.OrderStatus | None",
+     "default": "None",
+     "required": false
+    },
+    "per_share_amount": {
+     "annotation": "typing.Optional[typing.Annotated[decimal.Decimal, BeforeValidator(func=<function _no_float>, json_schema_input_type=PydanticUndefined), PlainSerializer(func=<function <lambda>>, return_type=<class 'str'>, when_used='json'), WithJsonSchema(json_schema={'type': 'string', 'pattern': '^-?\\\\d+(\\\\.\\\\d+)?$'}, mode=None)]]",
+     "default": "None",
+     "required": false
+    },
+    "price": {
+     "annotation": "typing.Optional[typing.Annotated[decimal.Decimal, BeforeValidator(func=<function _no_float>, json_schema_input_type=PydanticUndefined), PlainSerializer(func=<function <lambda>>, return_type=<class 'str'>, when_used='json'), WithJsonSchema(json_schema={'type': 'string', 'pattern': '^-?\\\\d+(\\\\.\\\\d+)?$'}, mode=None)]]",
+     "default": "None",
+     "required": false
+    },
+    "qty": {
+     "annotation": "typing.Optional[typing.Annotated[decimal.Decimal, BeforeValidator(func=<function _no_float>, json_schema_input_type=PydanticUndefined), PlainSerializer(func=<function <lambda>>, return_type=<class 'str'>, when_used='json'), WithJsonSchema(json_schema={'type': 'string', 'pattern': '^-?\\\\d+(\\\\.\\\\d+)?$'}, mode=None)]]",
+     "default": "None",
+     "required": false
+    },
+    "side": {
+     "annotation": "marketlens_schema.base.Side | None",
+     "default": "None",
+     "required": false
+    },
+    "status": {
+     "annotation": "str | None",
+     "default": "None",
+     "required": false
+    },
+    "t": {
+     "annotation": "<class 'datetime.datetime'>",
+     "default": null,
+     "required": true
+    },
+    "ticker": {
+     "annotation": "typing.Optional[typing.Annotated[str, StringConstraints(strip_whitespace=None, to_upper=None, to_lower=None, strict=None, min_length=None, max_length=None, pattern='^(?:[A-Z][A-Z0-9]{0,9}(?:-[A-Z0-9]{1,5})?|[A-Z0-9]{2,10}/[A-Z0-9]{2,10})$', ascii_only=None)]]",
+     "default": "None",
+     "required": false
+    }
+   },
+   "kind": "model"
+  },
+  "BrokerWatchlist": {
+   "classvars": {
+    "group_column": "None",
+    "schema_name": "'marketlens.BrokerWatchlist'",
+    "time_column": "None",
+    "value_columns": "()"
+   },
+   "config": {
+    "extra": "'forbid'",
+    "frozen": "True"
+   },
+   "fields": {
+    "absent": {
+     "annotation": "dict[str, marketlens_schema.base.AbsenceCode] | None",
+     "default": "None",
+     "required": false
+    },
+    "created_at": {
+     "annotation": "typing.Optional[typing.Annotated[datetime.datetime, AfterValidator(func=<function _to_utc>), PlainSerializer(func=<function _iso_z>, return_type=<class 'str'>, when_used='json')]]",
+     "default": "None",
+     "required": false
+    },
+    "environment": {
+     "annotation": "<enum 'Environment'>",
+     "default": null,
+     "required": true
+    },
+    "name": {
+     "annotation": "<class 'str'>",
+     "default": null,
+     "required": true
+    },
+    "tickers": {
+     "annotation": "list[typing.Annotated[str, StringConstraints(strip_whitespace=None, to_upper=None, to_lower=None, strict=None, min_length=None, max_length=None, pattern='^(?:[A-Z][A-Z0-9]{0,9}(?:-[A-Z0-9]{1,5})?|[A-Z0-9]{2,10}/[A-Z0-9]{2,10})$', ascii_only=None)]] | None",
+     "default": "None",
+     "required": false
+    },
+    "updated_at": {
+     "annotation": "typing.Optional[typing.Annotated[datetime.datetime, AfterValidator(func=<function _to_utc>), PlainSerializer(func=<function _iso_z>, return_type=<class 'str'>, when_used='json')]]",
+     "default": "None",
+     "required": false
+    },
+    "watchlist_id": {
+     "annotation": "<class 'str'>",
+     "default": null,
+     "required": true
+    }
+   },
+   "kind": "model"
+  },
+  "Locate": {
+   "classvars": {
+    "group_column": "'ticker'",
+    "schema_name": "'marketlens.Locate'",
+    "time_column": "None",
+    "value_columns": "()"
+   },
+   "config": {
+    "extra": "'forbid'",
+    "frozen": "True"
+   },
+   "fields": {
+    "absent": {
+     "annotation": "dict[str, marketlens_schema.base.AbsenceCode] | None",
+     "default": "None",
+     "required": false
+    },
+    "all_or_none": {
+     "annotation": "bool | None",
+     "default": "None",
+     "required": false
+    },
+    "created_at": {
+     "annotation": "typing.Optional[typing.Annotated[datetime.datetime, AfterValidator(func=<function _to_utc>), PlainSerializer(func=<function _iso_z>, return_type=<class 'str'>, when_used='json')]]",
+     "default": "None",
+     "required": false
+    },
+    "environment": {
+     "annotation": "<enum 'Environment'>",
+     "default": null,
+     "required": true
+    },
+    "expires_at": {
+     "annotation": "typing.Optional[typing.Annotated[datetime.datetime, AfterValidator(func=<function _to_utc>), PlainSerializer(func=<function _iso_z>, return_type=<class 'str'>, when_used='json')]]",
+     "default": "None",
+     "required": false
+    },
+    "limit_price": {
+     "annotation": "typing.Optional[typing.Annotated[decimal.Decimal, BeforeValidator(func=<function _no_float>, json_schema_input_type=PydanticUndefined), PlainSerializer(func=<function <lambda>>, return_type=<class 'str'>, when_used='json'), WithJsonSchema(json_schema={'type': 'string', 'pattern': '^-?\\\\d+(\\\\.\\\\d+)?$'}, mode=None)]]",
+     "default": "None",
+     "required": false
+    },
+    "locate_id": {
+     "annotation": "<class 'str'>",
+     "default": null,
+     "required": true
+    },
+    "located_price": {
+     "annotation": "typing.Optional[typing.Annotated[decimal.Decimal, BeforeValidator(func=<function _no_float>, json_schema_input_type=PydanticUndefined), PlainSerializer(func=<function <lambda>>, return_type=<class 'str'>, when_used='json'), WithJsonSchema(json_schema={'type': 'string', 'pattern': '^-?\\\\d+(\\\\.\\\\d+)?$'}, mode=None)]]",
+     "default": "None",
+     "required": false
+    },
+    "located_qty": {
+     "annotation": "int | None",
+     "default": "None",
+     "required": false
+    },
+    "rejection_reason": {
+     "annotation": "str | None",
+     "default": "None",
+     "required": false
+    },
+    "requested_qty": {
+     "annotation": "<class 'int'>",
+     "default": null,
+     "required": true
+    },
+    "status": {
+     "annotation": "<class 'str'>",
+     "default": null,
+     "required": true
+    },
+    "ticker": {
+     "annotation": "<class 'str'>",
+     "default": null,
+     "required": true
+    },
+    "total_fee": {
+     "annotation": "typing.Optional[typing.Annotated[decimal.Decimal, BeforeValidator(func=<function _no_float>, json_schema_input_type=PydanticUndefined), PlainSerializer(func=<function <lambda>>, return_type=<class 'str'>, when_used='json'), WithJsonSchema(json_schema={'type': 'string', 'pattern': '^-?\\\\d+(\\\\.\\\\d+)?$'}, mode=None)]]",
+     "default": "None",
+     "required": false
+    }
+   },
+   "kind": "model"
+  },
+  "LocateQuote": {
+   "classvars": {
+    "group_column": "'ticker'",
+    "schema_name": "'marketlens.LocateQuote'",
+    "time_column": "None",
+    "value_columns": "()"
+   },
+   "config": {
+    "extra": "'forbid'",
+    "frozen": "True"
+   },
+   "fields": {
+    "absent": {
+     "annotation": "dict[str, marketlens_schema.base.AbsenceCode] | None",
+     "default": "None",
+     "required": false
+    },
+    "available_qty": {
+     "annotation": "int | None",
+     "default": "None",
+     "required": false
+    },
+    "environment": {
+     "annotation": "<enum 'Environment'>",
+     "default": null,
+     "required": true
+    },
+    "price": {
+     "annotation": "typing.Optional[typing.Annotated[decimal.Decimal, BeforeValidator(func=<function _no_float>, json_schema_input_type=PydanticUndefined), PlainSerializer(func=<function <lambda>>, return_type=<class 'str'>, when_used='json'), WithJsonSchema(json_schema={'type': 'string', 'pattern': '^-?\\\\d+(\\\\.\\\\d+)?$'}, mode=None)]]",
+     "default": "None",
+     "required": false
+    },
+    "quoted_at": {
+     "annotation": "typing.Optional[typing.Annotated[datetime.datetime, AfterValidator(func=<function _to_utc>), PlainSerializer(func=<function _iso_z>, return_type=<class 'str'>, when_used='json')]]",
+     "default": "None",
+     "required": false
+    },
+    "ticker": {
+     "annotation": "<class 'str'>",
+     "default": null,
+     "required": true
+    }
+   },
+   "kind": "model"
+  },
+  "Order": {
+   "classvars": {
+    "group_column": "'ticker'",
+    "schema_name": "'marketlens.Order'",
+    "time_column": "'created_at'",
+    "value_columns": "()"
+   },
+   "config": {
+    "extra": "'forbid'",
+    "frozen": "True"
+   },
+   "fields": {
+    "absent": {
+     "annotation": "dict[str, marketlens_schema.base.AbsenceCode] | None",
+     "default": "None",
+     "required": false
+    },
+    "asset_class": {
+     "annotation": "<enum 'AssetClass'>",
+     "default": null,
+     "required": true
+    },
+    "canceled_at": {
+     "annotation": "typing.Optional[typing.Annotated[datetime.datetime, AfterValidator(func=<function _to_utc>), PlainSerializer(func=<function _iso_z>, return_type=<class 'str'>, when_used='json')]]",
+     "default": "None",
+     "required": false
+    },
+    "client_order_id": {
+     "annotation": "str | None",
+     "default": "None",
+     "required": false
+    },
+    "created_at": {
+     "annotation": "<class 'datetime.datetime'>",
+     "default": null,
+     "required": true
+    },
+    "environment": {
+     "annotation": "<enum 'Environment'>",
+     "default": null,
+     "required": true
+    },
+    "expired_at": {
+     "annotation": "typing.Optional[typing.Annotated[datetime.datetime, AfterValidator(func=<function _to_utc>), PlainSerializer(func=<function _iso_z>, return_type=<class 'str'>, when_used='json')]]",
+     "default": "None",
+     "required": false
+    },
+    "expires_at": {
+     "annotation": "typing.Optional[typing.Annotated[datetime.datetime, AfterValidator(func=<function _to_utc>), PlainSerializer(func=<function _iso_z>, return_type=<class 'str'>, when_used='json')]]",
+     "default": "None",
+     "required": false
+    },
+    "extended_hours": {
+     "annotation": "bool | None",
+     "default": "None",
+     "required": false
+    },
+    "failed_at": {
+     "annotation": "typing.Optional[typing.Annotated[datetime.datetime, AfterValidator(func=<function _to_utc>), PlainSerializer(func=<function _iso_z>, return_type=<class 'str'>, when_used='json')]]",
+     "default": "None",
+     "required": false
+    },
+    "filled_at": {
+     "annotation": "typing.Optional[typing.Annotated[datetime.datetime, AfterValidator(func=<function _to_utc>), PlainSerializer(func=<function _iso_z>, return_type=<class 'str'>, when_used='json')]]",
+     "default": "None",
+     "required": false
+    },
+    "filled_avg_price": {
+     "annotation": "typing.Optional[typing.Annotated[decimal.Decimal, BeforeValidator(func=<function _no_float>, json_schema_input_type=PydanticUndefined), PlainSerializer(func=<function <lambda>>, return_type=<class 'str'>, when_used='json'), WithJsonSchema(json_schema={'type': 'string', 'pattern': '^-?\\\\d+(\\\\.\\\\d+)?$'}, mode=None)]]",
+     "default": "None",
+     "required": false
+    },
+    "filled_qty": {
+     "annotation": "<class 'decimal.Decimal'>",
+     "default": null,
+     "required": true
+    },
+    "hwm": {
+     "annotation": "typing.Optional[typing.Annotated[decimal.Decimal, BeforeValidator(func=<function _no_float>, json_schema_input_type=PydanticUndefined), PlainSerializer(func=<function <lambda>>, return_type=<class 'str'>, when_used='json'), WithJsonSchema(json_schema={'type': 'string', 'pattern': '^-?\\\\d+(\\\\.\\\\d+)?$'}, mode=None)]]",
+     "default": "None",
+     "required": false
+    },
+    "legs": {
+     "annotation": "list[marketlens_schema.portfolio.OrderLeg] | None",
+     "default": "None",
+     "required": false
+    },
+    "limit_price": {
+     "annotation": "typing.Optional[typing.Annotated[decimal.Decimal, BeforeValidator(func=<function _no_float>, json_schema_input_type=PydanticUndefined), PlainSerializer(func=<function <lambda>>, return_type=<class 'str'>, when_used='json'), WithJsonSchema(json_schema={'type': 'string', 'pattern': '^-?\\\\d+(\\\\.\\\\d+)?$'}, mode=None)]]",
+     "default": "None",
+     "required": false
+    },
+    "notional": {
+     "annotation": "typing.Optional[typing.Annotated[decimal.Decimal, BeforeValidator(func=<function _no_float>, json_schema_input_type=PydanticUndefined), PlainSerializer(func=<function <lambda>>, return_type=<class 'str'>, when_used='json'), WithJsonSchema(json_schema={'type': 'string', 'pattern': '^-?\\\\d+(\\\\.\\\\d+)?$'}, mode=None)]]",
+     "default": "None",
+     "required": false
+    },
+    "occ_symbol": {
+     "annotation": "typing.Optional[typing.Annotated[str, StringConstraints(strip_whitespace=None, to_upper=None, to_lower=None, strict=None, min_length=None, max_length=None, pattern='^(?P<root>[A-Z]{1,6})(?P<yymmdd>\\\\d{6})(?P<cp>[CP])(?P<strike>\\\\d{8})$', ascii_only=None)]]",
+     "default": "None",
+     "required": false
+    },
+    "order_class": {
+     "annotation": "marketlens_schema.base.OrderClass | None",
+     "default": "None",
+     "required": false
+    },
+    "order_id": {
+     "annotation": "<class 'str'>",
+     "default": null,
+     "required": true
+    },
+    "order_type": {
+     "annotation": "marketlens_schema.base.OrderType | None",
+     "default": "None",
+     "required": false
+    },
+    "position_intent": {
+     "annotation": "str | None",
+     "default": "None",
+     "required": false
+    },
+    "qty": {
+     "annotation": "typing.Optional[typing.Annotated[decimal.Decimal, BeforeValidator(func=<function _no_float>, json_schema_input_type=PydanticUndefined), PlainSerializer(func=<function <lambda>>, return_type=<class 'str'>, when_used='json'), WithJsonSchema(json_schema={'type': 'string', 'pattern': '^-?\\\\d+(\\\\.\\\\d+)?$'}, mode=None)]]",
+     "default": "None",
+     "required": false
+    },
+    "replaced_at": {
+     "annotation": "typing.Optional[typing.Annotated[datetime.datetime, AfterValidator(func=<function _to_utc>), PlainSerializer(func=<function _iso_z>, return_type=<class 'str'>, when_used='json')]]",
+     "default": "None",
+     "required": false
+    },
+    "replaced_by": {
+     "annotation": "str | None",
+     "default": "None",
+     "required": false
+    },
+    "replaces": {
+     "annotation": "str | None",
+     "default": "None",
+     "required": false
+    },
+    "side": {
+     "annotation": "marketlens_schema.base.Side | None",
+     "default": "None",
+     "required": false
+    },
+    "status": {
+     "annotation": "<enum 'OrderStatus'>",
+     "default": null,
+     "required": true
+    },
+    "stop_price": {
+     "annotation": "typing.Optional[typing.Annotated[decimal.Decimal, BeforeValidator(func=<function _no_float>, json_schema_input_type=PydanticUndefined), PlainSerializer(func=<function <lambda>>, return_type=<class 'str'>, when_used='json'), WithJsonSchema(json_schema={'type': 'string', 'pattern': '^-?\\\\d+(\\\\.\\\\d+)?$'}, mode=None)]]",
+     "default": "None",
+     "required": false
+    },
+    "submitted_at": {
+     "annotation": "typing.Optional[typing.Annotated[datetime.datetime, AfterValidator(func=<function _to_utc>), PlainSerializer(func=<function _iso_z>, return_type=<class 'str'>, when_used='json')]]",
+     "default": "None",
+     "required": false
+    },
+    "ticker": {
+     "annotation": "<class 'str'>",
+     "default": null,
+     "required": true
+    },
+    "time_in_force": {
+     "annotation": "marketlens_schema.base.TimeInForce | None",
+     "default": "None",
+     "required": false
+    },
+    "trail_percent": {
+     "annotation": "float | None",
+     "default": "None",
+     "required": false
+    },
+    "trail_price": {
+     "annotation": "typing.Optional[typing.Annotated[decimal.Decimal, BeforeValidator(func=<function _no_float>, json_schema_input_type=PydanticUndefined), PlainSerializer(func=<function <lambda>>, return_type=<class 'str'>, when_used='json'), WithJsonSchema(json_schema={'type': 'string', 'pattern': '^-?\\\\d+(\\\\.\\\\d+)?$'}, mode=None)]]",
+     "default": "None",
+     "required": false
+    },
+    "updated_at": {
+     "annotation": "typing.Optional[typing.Annotated[datetime.datetime, AfterValidator(func=<function _to_utc>), PlainSerializer(func=<function _iso_z>, return_type=<class 'str'>, when_used='json')]]",
+     "default": "None",
+     "required": false
+    }
+   },
+   "kind": "model"
+  },
+  "OrderLeg": {
+   "classvars": {
+    "group_column": "None",
+    "schema_name": "'marketlens.OrderLeg'",
+    "time_column": "None",
+    "value_columns": "()"
+   },
+   "config": {
+    "extra": "'forbid'",
+    "frozen": "True"
+   },
+   "fields": {
+    "absent": {
+     "annotation": "dict[str, marketlens_schema.base.AbsenceCode] | None",
+     "default": "None",
+     "required": false
+    },
+    "asset_class": {
+     "annotation": "<enum 'AssetClass'>",
+     "default": null,
+     "required": true
+    },
+    "client_order_id": {
+     "annotation": "str | None",
+     "default": "None",
+     "required": false
+    },
+    "created_at": {
+     "annotation": "typing.Optional[typing.Annotated[datetime.datetime, AfterValidator(func=<function _to_utc>), PlainSerializer(func=<function _iso_z>, return_type=<class 'str'>, when_used='json')]]",
+     "default": "None",
+     "required": false
+    },
+    "filled_at": {
+     "annotation": "typing.Optional[typing.Annotated[datetime.datetime, AfterValidator(func=<function _to_utc>), PlainSerializer(func=<function _iso_z>, return_type=<class 'str'>, when_used='json')]]",
+     "default": "None",
+     "required": false
+    },
+    "filled_avg_price": {
+     "annotation": "typing.Optional[typing.Annotated[decimal.Decimal, BeforeValidator(func=<function _no_float>, json_schema_input_type=PydanticUndefined), PlainSerializer(func=<function <lambda>>, return_type=<class 'str'>, when_used='json'), WithJsonSchema(json_schema={'type': 'string', 'pattern': '^-?\\\\d+(\\\\.\\\\d+)?$'}, mode=None)]]",
+     "default": "None",
+     "required": false
+    },
+    "filled_qty": {
+     "annotation": "typing.Optional[typing.Annotated[decimal.Decimal, BeforeValidator(func=<function _no_float>, json_schema_input_type=PydanticUndefined), PlainSerializer(func=<function <lambda>>, return_type=<class 'str'>, when_used='json'), WithJsonSchema(json_schema={'type': 'string', 'pattern': '^-?\\\\d+(\\\\.\\\\d+)?$'}, mode=None)]]",
+     "default": "None",
+     "required": false
+    },
+    "limit_price": {
+     "annotation": "typing.Optional[typing.Annotated[decimal.Decimal, BeforeValidator(func=<function _no_float>, json_schema_input_type=PydanticUndefined), PlainSerializer(func=<function <lambda>>, return_type=<class 'str'>, when_used='json'), WithJsonSchema(json_schema={'type': 'string', 'pattern': '^-?\\\\d+(\\\\.\\\\d+)?$'}, mode=None)]]",
+     "default": "None",
+     "required": false
+    },
+    "occ_symbol": {
+     "annotation": "typing.Optional[typing.Annotated[str, StringConstraints(strip_whitespace=None, to_upper=None, to_lower=None, strict=None, min_length=None, max_length=None, pattern='^(?P<root>[A-Z]{1,6})(?P<yymmdd>\\\\d{6})(?P<cp>[CP])(?P<strike>\\\\d{8})$', ascii_only=None)]]",
+     "default": "None",
+     "required": false
+    },
+    "order_id": {
+     "annotation": "<class 'str'>",
+     "default": null,
+     "required": true
+    },
+    "order_type": {
+     "annotation": "marketlens_schema.base.OrderType | None",
+     "default": "None",
+     "required": false
+    },
+    "position_intent": {
+     "annotation": "str | None",
+     "default": "None",
+     "required": false
+    },
+    "qty": {
+     "annotation": "typing.Optional[typing.Annotated[decimal.Decimal, BeforeValidator(func=<function _no_float>, json_schema_input_type=PydanticUndefined), PlainSerializer(func=<function <lambda>>, return_type=<class 'str'>, when_used='json'), WithJsonSchema(json_schema={'type': 'string', 'pattern': '^-?\\\\d+(\\\\.\\\\d+)?$'}, mode=None)]]",
+     "default": "None",
+     "required": false
+    },
+    "ratio_qty": {
+     "annotation": "typing.Optional[typing.Annotated[decimal.Decimal, BeforeValidator(func=<function _no_float>, json_schema_input_type=PydanticUndefined), PlainSerializer(func=<function <lambda>>, return_type=<class 'str'>, when_used='json'), WithJsonSchema(json_schema={'type': 'string', 'pattern': '^-?\\\\d+(\\\\.\\\\d+)?$'}, mode=None)]]",
+     "default": "None",
+     "required": false
+    },
+    "side": {
+     "annotation": "marketlens_schema.base.Side | None",
+     "default": "None",
+     "required": false
+    },
+    "status": {
+     "annotation": "<enum 'OrderStatus'>",
+     "default": null,
+     "required": true
+    },
+    "stop_price": {
+     "annotation": "typing.Optional[typing.Annotated[decimal.Decimal, BeforeValidator(func=<function _no_float>, json_schema_input_type=PydanticUndefined), PlainSerializer(func=<function <lambda>>, return_type=<class 'str'>, when_used='json'), WithJsonSchema(json_schema={'type': 'string', 'pattern': '^-?\\\\d+(\\\\.\\\\d+)?$'}, mode=None)]]",
+     "default": "None",
+     "required": false
+    },
+    "ticker": {
+     "annotation": "<class 'str'>",
+     "default": null,
+     "required": true
+    }
+   },
+   "kind": "model"
+  },
+  "PORTFOLIO_MODELS": {
+   "kind": "value",
+   "repr": "(<class 'marketlens_schema.portfolio.Account'>, <class 'marketlens_schema.portfolio.AccountConfig'>, <class 'marketlens_schema.portfolio.Position'>, <class 'marketlens_schema.portfolio.OrderLeg'>, <class 'marketlens_schema.portfolio.Order'>, <class 'marketlens_schema.portfolio.Activity'>, <class 'marketlens_schema.portfolio.PortfolioHistoryPoint'>, <class 'marketlens_schema.portfolio.BrokerWatchlist'>, <class 'marketlens_schema.portfolio.Locate'>, <class 'marketlens_schema.portfolio.LocateQuote'>)"
+  },
+  "PortfolioHistoryPoint": {
+   "classvars": {
+    "group_column": "None",
+    "schema_name": "'marketlens.PortfolioHistoryPoint'",
+    "time_column": "'t'",
+    "value_columns": "('equity', 'profit_loss', 'profit_loss_pct')"
+   },
+   "config": {
+    "extra": "'forbid'",
+    "frozen": "True"
+   },
+   "fields": {
+    "absent": {
+     "annotation": "dict[str, marketlens_schema.base.AbsenceCode] | None",
+     "default": "None",
+     "required": false
+    },
+    "base_value": {
+     "annotation": "typing.Optional[typing.Annotated[decimal.Decimal, BeforeValidator(func=<function _no_float>, json_schema_input_type=PydanticUndefined), PlainSerializer(func=<function <lambda>>, return_type=<class 'str'>, when_used='json'), WithJsonSchema(json_schema={'type': 'string', 'pattern': '^-?\\\\d+(\\\\.\\\\d+)?$'}, mode=None)]]",
+     "default": "None",
+     "required": false
+    },
+    "environment": {
+     "annotation": "<enum 'Environment'>",
+     "default": null,
+     "required": true
+    },
+    "equity": {
+     "annotation": "typing.Optional[typing.Annotated[decimal.Decimal, BeforeValidator(func=<function _no_float>, json_schema_input_type=PydanticUndefined), PlainSerializer(func=<function <lambda>>, return_type=<class 'str'>, when_used='json'), WithJsonSchema(json_schema={'type': 'string', 'pattern': '^-?\\\\d+(\\\\.\\\\d+)?$'}, mode=None)]]",
+     "default": "None",
+     "required": false
+    },
+    "profit_loss": {
+     "annotation": "typing.Optional[typing.Annotated[decimal.Decimal, BeforeValidator(func=<function _no_float>, json_schema_input_type=PydanticUndefined), PlainSerializer(func=<function <lambda>>, return_type=<class 'str'>, when_used='json'), WithJsonSchema(json_schema={'type': 'string', 'pattern': '^-?\\\\d+(\\\\.\\\\d+)?$'}, mode=None)]]",
+     "default": "None",
+     "required": false
+    },
+    "profit_loss_pct": {
+     "annotation": "float | None",
+     "default": "None",
+     "required": false
+    },
+    "t": {
+     "annotation": "<class 'datetime.datetime'>",
+     "default": null,
+     "required": true
+    },
+    "timeframe": {
+     "annotation": "<class 'str'>",
+     "default": null,
+     "required": true
+    }
+   },
+   "kind": "model"
+  },
+  "Position": {
+   "classvars": {
+    "group_column": "'ticker'",
+    "schema_name": "'marketlens.Position'",
+    "time_column": "None",
+    "value_columns": "('market_value', 'unrealized_pl', 'unrealized_plpc')"
+   },
+   "config": {
+    "extra": "'forbid'",
+    "frozen": "True"
+   },
+   "fields": {
+    "absent": {
+     "annotation": "dict[str, marketlens_schema.base.AbsenceCode] | None",
+     "default": "None",
+     "required": false
+    },
+    "asset_class": {
+     "annotation": "<enum 'AssetClass'>",
+     "default": null,
+     "required": true
+    },
+    "asset_marginable": {
+     "annotation": "bool | None",
+     "default": "None",
+     "required": false
+    },
+    "avg_entry_price": {
+     "annotation": "<class 'decimal.Decimal'>",
+     "default": null,
+     "required": true
+    },
+    "change_today": {
+     "annotation": "float | None",
+     "default": "None",
+     "required": false
+    },
+    "cost_basis": {
+     "annotation": "<class 'decimal.Decimal'>",
+     "default": null,
+     "required": true
+    },
+    "current_price": {
+     "annotation": "typing.Optional[typing.Annotated[decimal.Decimal, BeforeValidator(func=<function _no_float>, json_schema_input_type=PydanticUndefined), PlainSerializer(func=<function <lambda>>, return_type=<class 'str'>, when_used='json'), WithJsonSchema(json_schema={'type': 'string', 'pattern': '^-?\\\\d+(\\\\.\\\\d+)?$'}, mode=None)]]",
+     "default": "None",
+     "required": false
+    },
+    "environment": {
+     "annotation": "<enum 'Environment'>",
+     "default": null,
+     "required": true
+    },
+    "exchange": {
+     "annotation": "str | None",
+     "default": "None",
+     "required": false
+    },
+    "lastday_price": {
+     "annotation": "typing.Optional[typing.Annotated[decimal.Decimal, BeforeValidator(func=<function _no_float>, json_schema_input_type=PydanticUndefined), PlainSerializer(func=<function <lambda>>, return_type=<class 'str'>, when_used='json'), WithJsonSchema(json_schema={'type': 'string', 'pattern': '^-?\\\\d+(\\\\.\\\\d+)?$'}, mode=None)]]",
+     "default": "None",
+     "required": false
+    },
+    "market_value": {
+     "annotation": "typing.Optional[typing.Annotated[decimal.Decimal, BeforeValidator(func=<function _no_float>, json_schema_input_type=PydanticUndefined), PlainSerializer(func=<function <lambda>>, return_type=<class 'str'>, when_used='json'), WithJsonSchema(json_schema={'type': 'string', 'pattern': '^-?\\\\d+(\\\\.\\\\d+)?$'}, mode=None)]]",
+     "default": "None",
+     "required": false
+    },
+    "occ_symbol": {
+     "annotation": "typing.Optional[typing.Annotated[str, StringConstraints(strip_whitespace=None, to_upper=None, to_lower=None, strict=None, min_length=None, max_length=None, pattern='^(?P<root>[A-Z]{1,6})(?P<yymmdd>\\\\d{6})(?P<cp>[CP])(?P<strike>\\\\d{8})$', ascii_only=None)]]",
+     "default": "None",
+     "required": false
+    },
+    "provider_asset_id": {
+     "annotation": "str | None",
+     "default": "None",
+     "required": false
+    },
+    "qty": {
+     "annotation": "<class 'decimal.Decimal'>",
+     "default": null,
+     "required": true
+    },
+    "qty_available": {
+     "annotation": "typing.Optional[typing.Annotated[decimal.Decimal, BeforeValidator(func=<function _no_float>, json_schema_input_type=PydanticUndefined), PlainSerializer(func=<function <lambda>>, return_type=<class 'str'>, when_used='json'), WithJsonSchema(json_schema={'type': 'string', 'pattern': '^-?\\\\d+(\\\\.\\\\d+)?$'}, mode=None)]]",
+     "default": "None",
+     "required": false
+    },
+    "side": {
+     "annotation": "<enum 'PositionSide'>",
+     "default": null,
+     "required": true
+    },
+    "ticker": {
+     "annotation": "<class 'str'>",
+     "default": null,
+     "required": true
+    },
+    "unrealized_intraday_pl": {
+     "annotation": "typing.Optional[typing.Annotated[decimal.Decimal, BeforeValidator(func=<function _no_float>, json_schema_input_type=PydanticUndefined), PlainSerializer(func=<function <lambda>>, return_type=<class 'str'>, when_used='json'), WithJsonSchema(json_schema={'type': 'string', 'pattern': '^-?\\\\d+(\\\\.\\\\d+)?$'}, mode=None)]]",
+     "default": "None",
+     "required": false
+    },
+    "unrealized_intraday_plpc": {
+     "annotation": "float | None",
+     "default": "None",
+     "required": false
+    },
+    "unrealized_pl": {
+     "annotation": "typing.Optional[typing.Annotated[decimal.Decimal, BeforeValidator(func=<function _no_float>, json_schema_input_type=PydanticUndefined), PlainSerializer(func=<function <lambda>>, return_type=<class 'str'>, when_used='json'), WithJsonSchema(json_schema={'type': 'string', 'pattern': '^-?\\\\d+(\\\\.\\\\d+)?$'}, mode=None)]]",
+     "default": "None",
+     "required": false
+    },
+    "unrealized_plpc": {
+     "annotation": "float | None",
+     "default": "None",
+     "required": false
+    }
+   },
+   "kind": "model"
+  }
+ }
+}

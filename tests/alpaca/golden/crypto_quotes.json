@@ -1,0 +1,97 @@
+{
+ "absent": {
+  "ask_exchange": {
+   "code": "not_applicable",
+   "detail": "Alpaca crypto quotes carry no exchange, conditions or tape."
+  },
+  "bid_exchange": {
+   "code": "not_applicable",
+   "detail": "Alpaca crypto quotes carry no exchange, conditions or tape."
+  },
+  "conditions": {
+   "code": "not_applicable",
+   "detail": "Alpaca crypto quotes carry no exchange, conditions or tape."
+  },
+  "tape": {
+   "code": "not_applicable",
+   "detail": "Alpaca crypto quotes carry no exchange, conditions or tape."
+  }
+ },
+ "model": "marketlens.Quote",
+ "notes": [],
+ "offload": "auto",
+ "pagination": {
+  "complete": true,
+  "next_page_token": null,
+  "page_cap_hit": false,
+  "pages_fetched": 1,
+  "row_cap_hit": false,
+  "rows_fetched": 2
+ },
+ "provenance": {
+  "as_of": "2026-10-02T20:00:00Z",
+  "authority": null,
+  "cached": false,
+  "dataset": null,
+  "delay": "realtime",
+  "derived_from": [],
+  "environment": null,
+  "feed": "us",
+  "knowledge_time": null,
+  "lag_days": null,
+  "operation": "CryptoQuotes",
+  "pages_fetched": 1,
+  "provider": "alpaca",
+  "request": {
+   "location": "us",
+   "lookback": "PT15M",
+   "sort": "asc",
+   "start": "2026-10-02T19:45:00Z",
+   "tickers": [
+    "BTC/USD"
+   ]
+  },
+  "route": "GET /v1beta3/crypto/{loc}/quotes",
+  "schema_version": "1.0.0",
+  "stale": null,
+  "truncated": false,
+  "truncation_note": null,
+  "upstream_request_id": null
+ },
+ "risk": null,
+ "rows": [
+  {
+   "absent": null,
+   "ask_exchange": null,
+   "ask_price": 62151.0,
+   "ask_size": 3.252,
+   "asset_class": "crypto",
+   "bid_exchange": null,
+   "bid_price": 62149.5,
+   "bid_size": 0.3544,
+   "conditions": null,
+   "currency": "USD",
+   "t": "2026-10-02T19:59:58.443471Z",
+   "tape": null,
+   "ticker": "BTC/USD"
+  },
+  {
+   "absent": {
+    "bid_price": "no_data",
+    "bid_size": "no_data"
+   },
+   "ask_exchange": null,
+   "ask_price": 62152.0,
+   "ask_size": 1.1,
+   "asset_class": "crypto",
+   "bid_exchange": null,
+   "bid_price": null,
+   "bid_size": null,
+   "conditions": null,
+   "currency": "USD",
+   "t": "2026-10-02T19:59:59Z",
+   "tape": null,
+   "ticker": "BTC/USD"
+  }
+ ]
+}

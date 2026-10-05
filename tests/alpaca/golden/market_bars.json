@@ -1,0 +1,113 @@
+{
+ "absent": {},
+ "model": "marketlens.Bar",
+ "notes": [],
+ "offload": "auto",
+ "pagination": {
+  "complete": true,
+  "next_page_token": null,
+  "page_cap_hit": false,
+  "pages_fetched": 2,
+  "row_cap_hit": false,
+  "rows_fetched": 4
+ },
+ "provenance": {
+  "as_of": "2026-10-02T20:00:00Z",
+  "authority": null,
+  "cached": false,
+  "dataset": null,
+  "delay": "realtime",
+  "derived_from": [],
+  "environment": null,
+  "feed": "iex",
+  "knowledge_time": null,
+  "lag_days": null,
+  "operation": "StockBars",
+  "pages_fetched": 2,
+  "provider": "alpaca",
+  "request": {
+   "adjustment": "all",
+   "feed": "iex",
+   "lookback": "P1Y",
+   "sort": "asc",
+   "start": "2025-10-02T20:00:00Z",
+   "tickers": [
+    "AAPL",
+    "BRK-B"
+   ],
+   "timeframe": "1d"
+  },
+  "route": "GET /v2/stocks/bars",
+  "schema_version": "1.0.0",
+  "stale": null,
+  "truncated": false,
+  "truncation_note": null,
+  "upstream_request_id": null
+ },
+ "risk": null,
+ "rows": [
+  {
+   "absent": null,
+   "asset_class": "us_equity",
+   "close": 255.8,
+   "currency": "USD",
+   "high": 256.2,
+   "low": 253.0,
+   "open": 254.1,
+   "t": "2026-09-30T04:00:00Z",
+   "ticker": "AAPL",
+   "timeframe": "1d",
+   "trade_count": 512201,
+   "volume": 41203311.0,
+   "vwap": 255.012
+  },
+  {
+   "absent": null,
+   "asset_class": "us_equity",
+   "close": 257.4,
+   "currency": "USD",
+   "high": 258.0,
+   "low": 255.1,
+   "open": 255.9,
+   "t": "2026-10-01T04:00:00Z",
+   "ticker": "AAPL",
+   "timeframe": "1d",
+   "trade_count": 498003,
+   "volume": 39001200.0,
+   "vwap": 256.77
+  },
+  {
+   "absent": null,
+   "asset_class": "us_equity",
+   "close": 500.4,
+   "currency": "USD",
+   "high": 501.0,
+   "low": 497.5,
+   "open": 498.2,
+   "t": "2026-09-30T04:00:00Z",
+   "ticker": "BRK-B",
+   "timeframe": "1d",
+   "trade_count": 61022,
+   "volume": 3120044.0,
+   "vwap": 499.6
+  },
+  {
+   "absent": {
+    "trade_count": "not_provided_by_source",
+    "vwap": "not_provided_by_source"
+   },
+   "asset_class": "us_equity",
+   "close": 502.9,
+   "currency": "USD",
+   "high": 503.3,
+   "low": 499.0,
+   "open": 500.1,
+   "t": "2026-10-01T04:00:00Z",
+   "ticker": "BRK-B",
+   "timeframe": "1d",
+   "trade_count": null,
+   "volume": 2988010.0,
+   "vwap": null
+  }
+ ]
+}

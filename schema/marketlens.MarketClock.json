@@ -1,0 +1,79 @@
+{
+  "$defs": {
+    "AbsenceCode": {
+      "description": "Why a value is None. Never served as 0.",
+      "enum": [
+        "not_provided_by_source",
+        "not_applicable",
+        "not_entitled",
+        "no_data",
+        "insufficient_data",
+        "not_recovered",
+        "no_match",
+        "withheld",
+        "source_error",
+        "unparseable"
+      ],
+      "title": "AbsenceCode",
+      "type": "string"
+    }
+  },
+  "$id": "urn:marketlens:schema:1:marketlens.MarketClock",
+  "additionalProperties": false,
+  "properties": {
+    "absent": {
+      "anyOf": [
+        {
+          "additionalProperties": {
+            "$ref": "#/$defs/AbsenceCode"
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Per-row reasons for None fields: field name -> AbsenceCode",
+      "title": "Absent"
+    },
+    "is_open": {
+      "title": "Is Open",
+      "type": "boolean"
+    },
+    "market": {
+      "description": "The market this clock describes, e.g. \"US equities\"",
+      "title": "Market",
+      "type": "string"
+    },
+    "next_close": {
+      "format": "date-time",
+      "title": "Next Close",
+      "type": "string",
+      "x-unit": "UTC"
+    },
+    "next_open": {
+      "format": "date-time",
+      "title": "Next Open",
+      "type": "string",
+      "x-unit": "UTC"
+    },
+    "t": {
+      "description": "The provider's current time",
+      "format": "date-time",
+      "title": "T",
+      "type": "string",
+      "x-unit": "UTC"
+    }
+  },
+  "required": [
+    "market",
+    "t",
+    "is_open",
+    "next_open",
+    "next_close"
+  ],
+  "title": "MarketClock",
+  "type": "object",
+  "x-schema-version": "1.0.0"
+}

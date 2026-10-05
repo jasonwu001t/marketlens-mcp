@@ -1,0 +1,56 @@
+[
+ {
+  "id": "b0b6dd9d-8b9b-48a9-ba46-b9d54906e415",
+  "class": "us_equity",
+  "exchange": "NASDAQ",
+  "symbol": "AAPL",
+  "name": "Apple Inc. Common Stock",
+  "status": "active",
+  "tradable": true,
+  "marginable": true,
+  "shortable": true,
+  "easy_to_borrow": true,
+  "fractionable": true,
+  "cusip": "037833100",
+  "margin_requirement_long": "30",
+  "margin_requirement_short": "30",
+  "attributes": [
+   "has_options",
+   "fractional_eh_enabled"
+  ]
+ },
+ {
+  "id": "1e1e1e1e-0000-4000-8000-000000000001",
+  "class": "us_equity",
+  "exchange": "NYSE",
+  "symbol": "BRK.B",
+  "name": "Berkshire Hathaway Inc. Class B",
+  "status": "active",
+  "tradable": true,
+  "marginable": true,
+  "shortable": true,
+  "borrow_status": "easy_to_borrow",
+  "fractionable": true,
+  "cusip": null,
+  "margin_requirement_long": "25",
+  "margin_requirement_short": "100",
+  "attributes": []
+ },
+ {
+  "id": "276e2673-764b-4ab6-a611-caf665ca6340",
+  "class": "crypto",
+  "exchange": "CRYPTO",
+  "symbol": "BTC/USD",
+  "name": "Bitcoin  / US Dollar",
+  "status": "active",
+  "tradable": true,
+  "marginable": false,
+  "shortable": false,
+  "easy_to_borrow": false,
+  "fractionable": true,
+  "min_order_size": "0.0001",
+  "min_trade_increment": "0.000000001",
+  "price_increment": "1",
+  "attributes": []
+ }
+]

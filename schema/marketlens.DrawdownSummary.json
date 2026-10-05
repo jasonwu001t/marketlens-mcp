@@ -1,0 +1,104 @@
+{
+  "$defs": {
+    "AbsenceCode": {
+      "description": "Why a value is None. Never served as 0.",
+      "enum": [
+        "not_provided_by_source",
+        "not_applicable",
+        "not_entitled",
+        "no_data",
+        "insufficient_data",
+        "not_recovered",
+        "no_match",
+        "withheld",
+        "source_error",
+        "unparseable"
+      ],
+      "title": "AbsenceCode",
+      "type": "string"
+    }
+  },
+  "$id": "urn:marketlens:schema:1:marketlens.DrawdownSummary",
+  "additionalProperties": false,
+  "properties": {
+    "absent": {
+      "anyOf": [
+        {
+          "additionalProperties": {
+            "$ref": "#/$defs/AbsenceCode"
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Per-row reasons for None fields: field name -> AbsenceCode",
+      "title": "Absent"
+    },
+    "max_drawdown": {
+      "description": "The most negative drawdown (0 when the series never fell below a peak)",
+      "title": "Max Drawdown",
+      "type": "number",
+      "x-unit": "fraction"
+    },
+    "n_obs": {
+      "title": "N Obs",
+      "type": "integer",
+      "x-unit": "count"
+    },
+    "peak_t": {
+      "format": "date-time",
+      "title": "Peak T",
+      "type": "string",
+      "x-unit": "UTC"
+    },
+    "peak_to_trough_days": {
+      "title": "Peak To Trough Days",
+      "type": "number",
+      "x-unit": "days"
+    },
+    "recovery_t": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "First time at or above the peak after the trough; None with not_recovered",
+      "title": "Recovery T",
+      "x-unit": "UTC"
+    },
+    "series": {
+      "title": "Series",
+      "type": "string"
+    },
+    "trough_t": {
+      "format": "date-time",
+      "title": "Trough T",
+      "type": "string",
+      "x-unit": "UTC"
+    },
+    "value_column": {
+      "title": "Value Column",
+      "type": "string"
+    }
+  },
+  "required": [
+    "series",
+    "max_drawdown",
+    "peak_t",
+    "trough_t",
+    "peak_to_trough_days",
+    "n_obs",
+    "value_column"
+  ],
+  "title": "DrawdownSummary",
+  "type": "object",
+  "x-schema-version": "1.0.0"
+}

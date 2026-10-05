@@ -1,0 +1,87 @@
+{
+ "absent": {},
+ "model": "marketlens.PortfolioHistoryPoint",
+ "notes": [],
+ "offload": "auto",
+ "pagination": {
+  "complete": true,
+  "next_page_token": null,
+  "page_cap_hit": false,
+  "pages_fetched": 1,
+  "row_cap_hit": false,
+  "rows_fetched": 4
+ },
+ "provenance": {
+  "as_of": "2026-10-01T00:00:00Z",
+  "authority": null,
+  "cached": false,
+  "dataset": null,
+  "delay": "realtime",
+  "derived_from": [],
+  "environment": "paper",
+  "feed": null,
+  "knowledge_time": null,
+  "lag_days": null,
+  "operation": "getAccountPortfolioHistory",
+  "pages_fetched": 1,
+  "provider": "alpaca",
+  "request": {
+   "period": "1W",
+   "pnl_reset": "no_reset",
+   "timeframe": "1d"
+  },
+  "route": "GET /v2/account/portfolio/history",
+  "schema_version": "1.0.0",
+  "stale": null,
+  "truncated": false,
+  "truncation_note": null,
+  "upstream_request_id": null
+ },
+ "risk": null,
+ "rows": [
+  {
+   "absent": null,
+   "base_value": "8413.04",
+   "environment": "paper",
+   "equity": "8425.21",
+   "profit_loss": "12.17",
+   "profit_loss_pct": 0.0014,
+   "t": "2026-09-28T00:00:00Z",
+   "timeframe": "1d"
+  },
+  {
+   "absent": null,
+   "base_value": "8413.04",
+   "environment": "paper",
+   "equity": "8639.77",
+   "profit_loss": "214.56",
+   "profit_loss_pct": 0.0255,
+   "t": "2026-09-29T00:00:00Z",
+   "timeframe": "1d"
+  },
+  {
+   "absent": {
+    "equity": "no_data",
+    "profit_loss": "no_data",
+    "profit_loss_pct": "no_data"
+   },
+   "base_value": "8413.04",
+   "environment": "paper",
+   "equity": null,
+   "profit_loss": null,
+   "profit_loss_pct": null,
+   "t": "2026-09-30T00:00:00Z",
+   "timeframe": "1d"
+  },
+  {
+   "absent": null,
+   "base_value": "8413.04",
+   "environment": "paper",
+   "equity": "8835.31",
+   "profit_loss": "69.21",
+   "profit_loss_pct": 0.0079,
+   "t": "2026-10-01T00:00:00Z",
+   "timeframe": "1d"
+  }
+ ]
+}

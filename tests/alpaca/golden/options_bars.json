@@ -1,0 +1,77 @@
+{
+ "absent": {},
+ "model": "marketlens.OptionBar",
+ "notes": [],
+ "offload": "auto",
+ "pagination": {
+  "complete": true,
+  "next_page_token": null,
+  "page_cap_hit": false,
+  "pages_fetched": 1,
+  "row_cap_hit": false,
+  "rows_fetched": 2
+ },
+ "provenance": {
+  "as_of": "2026-10-02T20:00:00Z",
+  "authority": null,
+  "cached": false,
+  "dataset": null,
+  "delay": "unknown",
+  "derived_from": [],
+  "environment": null,
+  "feed": null,
+  "knowledge_time": null,
+  "lag_days": null,
+  "operation": "optionBars",
+  "pages_fetched": 1,
+  "provider": "alpaca",
+  "request": {
+   "lookback": "P30D",
+   "occ_symbols": [
+    "AAPL261016C00250000"
+   ],
+   "sort": "asc",
+   "start": "2026-09-02T20:00:00Z",
+   "timeframe": "1d"
+  },
+  "route": "GET /v1beta1/options/bars",
+  "schema_version": "1.0.0",
+  "stale": null,
+  "truncated": false,
+  "truncation_note": null,
+  "upstream_request_id": null
+ },
+ "risk": null,
+ "rows": [
+  {
+   "absent": null,
+   "close": 9.2,
+   "currency": "USD",
+   "high": 9.35,
+   "low": 7.9,
+   "occ_symbol": "AAPL261016C00250000",
+   "open": 8.1,
+   "t": "2026-09-30T04:00:00Z",
+   "timeframe": "1d",
+   "trade_count": 311,
+   "underlying": "AAPL",
+   "volume": 4120.0,
+   "vwap": 8.77
+  },
+  {
+   "absent": null,
+   "close": 10.15,
+   "currency": "USD",
+   "high": 10.4,
+   "low": 9.0,
+   "occ_symbol": "AAPL261016C00250000",
+   "open": 9.2,
+   "t": "2026-10-01T04:00:00Z",
+   "timeframe": "1d",
+   "trade_count": 402,
+   "underlying": "AAPL",
+   "volume": 5011.0,
+   "vwap": 9.81
+  }
+ ]
+}

@@ -1,0 +1,65 @@
+{
+ "absent": {
+  "taker_side": {
+   "code": "not_applicable",
+   "detail": "Stock trades carry no aggressor side."
+  }
+ },
+ "model": "marketlens.Trade",
+ "notes": [],
+ "offload": "auto",
+ "pagination": {
+  "complete": true,
+  "next_page_token": null,
+  "page_cap_hit": false,
+  "pages_fetched": 1,
+  "row_cap_hit": false,
+  "rows_fetched": 1
+ },
+ "provenance": {
+  "as_of": "2026-10-02T19:59:59.999999Z",
+  "authority": null,
+  "cached": false,
+  "dataset": null,
+  "delay": "realtime",
+  "derived_from": [],
+  "environment": null,
+  "feed": "iex",
+  "knowledge_time": null,
+  "lag_days": null,
+  "operation": "StockLatestTrades",
+  "pages_fetched": 1,
+  "provider": "alpaca",
+  "request": {
+   "feed": "iex",
+   "tickers": [
+    "AAPL"
+   ]
+  },
+  "route": "GET /v2/stocks/trades/latest",
+  "schema_version": "1.0.0",
+  "stale": null,
+  "truncated": false,
+  "truncation_note": null,
+  "upstream_request_id": null
+ },
+ "risk": null,
+ "rows": [
+  {
+   "absent": null,
+   "asset_class": "us_equity",
+   "conditions": [
+    "@"
+   ],
+   "currency": "USD",
+   "exchange": "V",
+   "price": 255.8,
+   "size": 100.0,
+   "t": "2026-10-02T19:59:59.999999Z",
+   "taker_side": null,
+   "tape": "C",
+   "ticker": "AAPL",
+   "trade_id": "52983525028"
+  }
+ ]
+}

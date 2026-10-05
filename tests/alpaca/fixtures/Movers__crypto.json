@@ -1,0 +1,20 @@
+{
+ "gainers": [
+  {
+   "symbol": "SOL/USD",
+   "percent_change": 8.5,
+   "change": 11.9,
+   "price": 151.9
+  }
+ ],
+ "losers": [
+  {
+   "symbol": "DOGE/USD",
+   "percent_change": -3.0,
+   "change": -0.0042,
+   "price": 0.1358
+  }
+ ],
+ "market_type": "crypto",
+ "last_updated": "2026-10-02T19:55:00Z"
+}

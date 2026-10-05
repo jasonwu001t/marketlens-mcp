@@ -1,0 +1,60 @@
+{
+ "absent": {},
+ "model": "marketlens.CorporateActionAnnouncement",
+ "notes": [],
+ "offload": "auto",
+ "pagination": {
+  "complete": true,
+  "next_page_token": null,
+  "page_cap_hit": false,
+  "pages_fetched": 1,
+  "row_cap_hit": false,
+  "rows_fetched": 1
+ },
+ "provenance": {
+  "as_of": null,
+  "authority": null,
+  "cached": false,
+  "dataset": null,
+  "delay": "unknown",
+  "derived_from": [],
+  "environment": null,
+  "feed": null,
+  "knowledge_time": null,
+  "lag_days": null,
+  "operation": "get-v2-corporate_actions-announcements-id",
+  "pages_fetched": 1,
+  "provider": "alpaca",
+  "request": {
+   "announcement_id": "be3c368a-4c7c-4384-808e-f02c9f5a8afe"
+  },
+  "route": "GET /v2/corporate_actions/announcements/{id}",
+  "schema_version": "1.0.0",
+  "stale": null,
+  "truncated": false,
+  "truncation_note": null,
+  "upstream_request_id": null
+ },
+ "risk": null,
+ "rows": [
+  {
+   "absent": null,
+   "announcement_id": "be3c368a-4c7c-4384-808e-f02c9f5a8afe",
+   "ca_sub_type": "DIV",
+   "ca_type": "dividend",
+   "cash": "0.018",
+   "corporate_action_id": "F58684224_XY37",
+   "declaration_date": "2026-09-05",
+   "effective_date": "2026-09-08",
+   "ex_date": "2026-09-12",
+   "initiating_cusip": "55275E101",
+   "initiating_ticker": "MLLAX",
+   "new_rate": "1",
+   "old_rate": "1",
+   "payable_date": "2026-09-14",
+   "record_date": "2026-09-13",
+   "target_cusip": "55275E101",
+   "target_ticker": "MLLAX"
+  }
+ ]
+}

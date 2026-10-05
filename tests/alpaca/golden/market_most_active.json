@@ -1,0 +1,60 @@
+{
+ "absent": {},
+ "model": "marketlens.MostActive",
+ "notes": [],
+ "offload": "auto",
+ "pagination": {
+  "complete": true,
+  "next_page_token": null,
+  "page_cap_hit": false,
+  "pages_fetched": 1,
+  "row_cap_hit": false,
+  "rows_fetched": 2
+ },
+ "provenance": {
+  "as_of": "2026-10-02T19:55:01.123456Z",
+  "authority": null,
+  "cached": false,
+  "dataset": null,
+  "delay": "unknown",
+  "derived_from": [],
+  "environment": null,
+  "feed": null,
+  "knowledge_time": null,
+  "lag_days": null,
+  "operation": "MostActives",
+  "pages_fetched": 1,
+  "provider": "alpaca",
+  "request": {
+   "by": "trades",
+   "top": 2
+  },
+  "route": "GET /v1beta1/screener/stocks/most-actives",
+  "schema_version": "1.0.0",
+  "stale": null,
+  "truncated": false,
+  "truncation_note": null,
+  "upstream_request_id": null
+ },
+ "risk": null,
+ "rows": [
+  {
+   "absent": null,
+   "as_of": "2026-10-02T19:55:01.123456Z",
+   "rank": 1,
+   "ranked_by": "trades",
+   "ticker": "NVDA",
+   "trade_count": 1639626,
+   "volume": 222709184.0
+  },
+  {
+   "absent": null,
+   "as_of": "2026-10-02T19:55:01.123456Z",
+   "rank": 2,
+   "ranked_by": "trades",
+   "ticker": "BRK-B",
+   "trade_count": 639626,
+   "volume": 122709184.0
+  }
+ ]
+}

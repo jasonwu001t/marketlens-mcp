@@ -1,0 +1,66 @@
+{
+ "absent": {},
+ "model": "marketlens.Position",
+ "notes": [],
+ "offload": "auto",
+ "pagination": {
+  "complete": true,
+  "next_page_token": null,
+  "page_cap_hit": false,
+  "pages_fetched": 1,
+  "row_cap_hit": false,
+  "rows_fetched": 1
+ },
+ "provenance": {
+  "as_of": null,
+  "authority": null,
+  "cached": false,
+  "dataset": null,
+  "delay": "realtime",
+  "derived_from": [],
+  "environment": "paper",
+  "feed": null,
+  "knowledge_time": null,
+  "lag_days": null,
+  "operation": "getOpenPosition",
+  "pages_fetched": 1,
+  "provider": "alpaca",
+  "request": {
+   "ticker": "BRK-B"
+  },
+  "route": "GET /v2/positions/{symbol_or_asset_id}",
+  "schema_version": "1.0.0",
+  "stale": null,
+  "truncated": false,
+  "truncation_note": null,
+  "upstream_request_id": null
+ },
+ "risk": null,
+ "rows": [
+  {
+   "absent": {
+    "occ_symbol": "not_applicable"
+   },
+   "asset_class": "us_equity",
+   "asset_marginable": true,
+   "avg_entry_price": "100.0",
+   "change_today": 0.0084,
+   "cost_basis": "500.0",
+   "current_price": "120.0",
+   "environment": "paper",
+   "exchange": "NYSE",
+   "lastday_price": "119.0",
+   "market_value": "600.0",
+   "occ_symbol": null,
+   "provider_asset_id": "1e1e1e1e-0000-4000-8000-000000000001",
+   "qty": "5",
+   "qty_available": "4",
+   "side": "long",
+   "ticker": "BRK-B",
+   "unrealized_intraday_pl": "10.0",
+   "unrealized_intraday_plpc": 0.0084,
+   "unrealized_pl": "100.0",
+   "unrealized_plpc": 0.2
+  }
+ ]
+}

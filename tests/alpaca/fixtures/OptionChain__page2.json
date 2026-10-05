@@ -1,0 +1,25 @@
+{
+ "snapshots": {
+  "AAPL261016P00240000": {
+   "latestQuote": {
+    "t": "2026-10-02T19:59:58Z",
+    "bx": "C",
+    "bp": 1.2,
+    "bs": 40,
+    "ax": "C",
+    "ap": 1.25,
+    "as": 31,
+    "c": "A"
+   },
+   "impliedVolatility": 0.3011,
+   "greeks": {
+    "delta": -0.2104,
+    "gamma": 0.0199,
+    "theta": -0.0811,
+    "vega": 0.1902,
+    "rho": -0.0312
+   }
+  }
+ },
+ "next_page_token": null
+}

@@ -1,0 +1,53 @@
+{
+ "absent": {
+  "tickers": {
+   "code": "not_provided_by_source",
+   "detail": "The list endpoint omits contents; read one with portfolio_broker_watchlist."
+  }
+ },
+ "model": "marketlens.BrokerWatchlist",
+ "notes": [],
+ "offload": "auto",
+ "pagination": {
+  "complete": true,
+  "next_page_token": null,
+  "page_cap_hit": false,
+  "pages_fetched": 1,
+  "row_cap_hit": false,
+  "rows_fetched": 1
+ },
+ "provenance": {
+  "as_of": null,
+  "authority": null,
+  "cached": false,
+  "dataset": null,
+  "delay": "realtime",
+  "derived_from": [],
+  "environment": "paper",
+  "feed": null,
+  "knowledge_time": null,
+  "lag_days": null,
+  "operation": "getWatchlists",
+  "pages_fetched": 1,
+  "provider": "alpaca",
+  "request": {},
+  "route": "GET /v2/watchlists",
+  "schema_version": "1.0.0",
+  "stale": null,
+  "truncated": false,
+  "truncation_note": null,
+  "upstream_request_id": null
+ },
+ "risk": null,
+ "rows": [
+  {
+   "absent": null,
+   "created_at": "2026-01-31T21:49:05.146280Z",
+   "environment": "paper",
+   "name": "Primary Watchlist",
+   "tickers": null,
+   "updated_at": "2026-01-31T21:49:05.146280Z",
+   "watchlist_id": "3174d6df-7726-44b4-a5bd-7fda5ae6e009"
+  }
+ ]
+}

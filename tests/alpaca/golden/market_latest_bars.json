@@ -1,0 +1,75 @@
+{
+ "absent": {},
+ "model": "marketlens.Bar",
+ "notes": [],
+ "offload": "auto",
+ "pagination": {
+  "complete": true,
+  "next_page_token": null,
+  "page_cap_hit": false,
+  "pages_fetched": 1,
+  "row_cap_hit": false,
+  "rows_fetched": 2
+ },
+ "provenance": {
+  "as_of": "2026-10-02T19:59:00Z",
+  "authority": null,
+  "cached": false,
+  "dataset": null,
+  "delay": "realtime",
+  "derived_from": [],
+  "environment": null,
+  "feed": "iex",
+  "knowledge_time": null,
+  "lag_days": null,
+  "operation": "StockLatestBars",
+  "pages_fetched": 1,
+  "provider": "alpaca",
+  "request": {
+   "feed": "iex",
+   "tickers": [
+    "AAPL",
+    "BRK-B"
+   ]
+  },
+  "route": "GET /v2/stocks/bars/latest",
+  "schema_version": "1.0.0",
+  "stale": null,
+  "truncated": false,
+  "truncation_note": null,
+  "upstream_request_id": null
+ },
+ "risk": null,
+ "rows": [
+  {
+   "absent": null,
+   "asset_class": "us_equity",
+   "close": 255.8,
+   "currency": "USD",
+   "high": 255.9,
+   "low": 255.5,
+   "open": 255.6,
+   "t": "2026-10-02T19:59:00Z",
+   "ticker": "AAPL",
+   "timeframe": "1min",
+   "trade_count": 1501,
+   "volume": 120331.0,
+   "vwap": 255.7
+  },
+  {
+   "absent": null,
+   "asset_class": "us_equity",
+   "close": 502.8,
+   "currency": "USD",
+   "high": 502.9,
+   "low": 502.4,
+   "open": 502.5,
+   "t": "2026-10-02T19:59:00Z",
+   "ticker": "BRK-B",
+   "timeframe": "1min",
+   "trade_count": 211,
+   "volume": 8022.0,
+   "vwap": 502.66
+  }
+ ]
+}

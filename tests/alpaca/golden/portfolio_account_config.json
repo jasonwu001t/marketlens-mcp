@@ -1,0 +1,53 @@
+{
+ "absent": {},
+ "model": "marketlens.AccountConfig",
+ "notes": [],
+ "offload": "auto",
+ "pagination": {
+  "complete": true,
+  "next_page_token": null,
+  "page_cap_hit": false,
+  "pages_fetched": 1,
+  "row_cap_hit": false,
+  "rows_fetched": 1
+ },
+ "provenance": {
+  "as_of": null,
+  "authority": null,
+  "cached": false,
+  "dataset": null,
+  "delay": "realtime",
+  "derived_from": [],
+  "environment": "paper",
+  "feed": null,
+  "knowledge_time": null,
+  "lag_days": null,
+  "operation": "getAccountConfig",
+  "pages_fetched": 1,
+  "provider": "alpaca",
+  "request": {},
+  "route": "GET /v2/account/configurations",
+  "schema_version": "1.0.0",
+  "stale": null,
+  "truncated": false,
+  "truncation_note": null,
+  "upstream_request_id": null
+ },
+ "risk": null,
+ "rows": [
+  {
+   "absent": null,
+   "disable_overnight_trading": false,
+   "dtbp_check": "entry",
+   "environment": "paper",
+   "fractional_trading": true,
+   "max_margin_multiplier": "4",
+   "max_options_trading_level": 2,
+   "no_shorting": false,
+   "pdt_check": "entry",
+   "ptp_no_exception_entry": false,
+   "suspend_trade": false,
+   "trade_confirm_email": "all"
+  }
+ ]
+}

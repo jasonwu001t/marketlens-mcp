@@ -1,0 +1,48 @@
+{
+ "absent": {},
+ "model": "marketlens.ProviderDocument",
+ "notes": [],
+ "offload": "auto",
+ "pagination": null,
+ "provenance": {
+  "as_of": null,
+  "authority": null,
+  "cached": false,
+  "dataset": null,
+  "delay": "unknown",
+  "derived_from": [],
+  "environment": null,
+  "feed": null,
+  "knowledge_time": null,
+  "lag_days": null,
+  "operation": "fetch",
+  "pages_fetched": 1,
+  "provider": "alpaca-docs",
+  "request": {
+   "doc_id": "market-data-faq"
+  },
+  "route": "mcp:fetch",
+  "schema_version": "1.0.0",
+  "stale": null,
+  "truncated": false,
+  "truncation_note": null,
+  "upstream_request_id": null
+ },
+ "risk": null,
+ "rows": [
+  {
+   "absent": {
+    "method": "not_applicable",
+    "path": "not_applicable"
+   },
+   "doc_id": "market-data-faq",
+   "kind": "document",
+   "method": null,
+   "path": null,
+   "provider": "alpaca",
+   "text": "# Market data FAQ\n\nThe free plan includes IEX.",
+   "title": "Market data FAQ",
+   "url": "https://docs.alpaca.markets/docs/market-data-faq"
+  }
+ ]
+}

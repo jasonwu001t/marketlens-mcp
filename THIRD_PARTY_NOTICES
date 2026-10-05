@@ -1,0 +1,66 @@
+THIRD-PARTY NOTICES
+===================
+
+marketlens-mcp is MIT licensed (see LICENSE). It includes or adapts the
+following third-party material.
+
+
+1. alpacahq/alpaca-mcp-server
+-----------------------------
+
+Source: https://github.com/alpacahq/alpaca-mcp-server, commit
+a82ad1ccb740609abc99e10376e42d8e9c1037a1 (version 2.3.2).
+License: MIT License, Copyright (c) 2025-2026 Alpaca.
+
+What marketlens-mcp uses from it:
+
+* The two Alpaca OpenAPI specification files bundled with that project,
+  copied byte for byte:
+    src/marketlens_mcp/providers/alpaca/specs/trading-api.json
+      (sha256 8b9a45575ce2f9cd593ac8344096dcec9291ec7b92f03fe91d26656f0ac363ce)
+    src/marketlens_mcp/providers/alpaca/specs/market-data-api.json
+      (sha256 66382b65ea21baa4025c68a2c3b43e361c5d39a43e87b55243afb3269268bbc1)
+  The specifications describe Alpaca's public APIs as published by Alpaca at
+  https://docs.alpaca.markets/openapi/. marketlens-mcp uses them for its
+  parity test and its spec-sync routine; it does not generate tools from them.
+
+* The routine for keeping an Alpaca integration in step with Alpaca's specs
+  (sync the specs, diff and classify the changes, map or exclude, validate,
+  document, commit), adapted in ADDING_A_CAPABILITY.md from that project's
+  AGENTS.md. The wording in ADDING_A_CAPABILITY.md is our own.
+
+* The idea of wrapping every tool result in a trust envelope that marks
+  third-party text as untrusted (that project's TrustBoundaryMiddleware).
+  marketlens-mcp's envelope, its field names and its wording are our own.
+
+* The list of that project's 72 tool names, used by the parity test
+  (tests/alpaca/fixtures/alpaca_mcp_server_tools.json).
+
+The MIT License text under which that material is used:
+
+    MIT License
+
+    Copyright (c) 2025-2026 Alpaca
+
+    Permission is hereby granted, free of charge, to any person obtaining a copy
+    of this software and associated documentation files (the "Software"), to deal
+    in the Software without restriction, including without limitation the rights
+    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+    copies of the Software, and to permit persons to whom the Software is
+    furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in all
+    copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+    SOFTWARE.
+
+
+"Alpaca" is a name and trademark of its owner. marketlens-mcp is not affiliated
+with, endorsed by or sponsored by Alpaca. Using Alpaca's APIs through marketlens-mcp
+is subject to your own agreements with Alpaca.

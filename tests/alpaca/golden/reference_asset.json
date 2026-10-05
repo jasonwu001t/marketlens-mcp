@@ -1,0 +1,67 @@
+{
+ "absent": {},
+ "model": "marketlens.Asset",
+ "notes": [],
+ "offload": "auto",
+ "pagination": {
+  "complete": true,
+  "next_page_token": null,
+  "page_cap_hit": false,
+  "pages_fetched": 1,
+  "row_cap_hit": false,
+  "rows_fetched": 1
+ },
+ "provenance": {
+  "as_of": null,
+  "authority": null,
+  "cached": false,
+  "dataset": null,
+  "delay": "unknown",
+  "derived_from": [],
+  "environment": null,
+  "feed": null,
+  "knowledge_time": null,
+  "lag_days": null,
+  "operation": "get-v2-assets-symbol_or_asset_id",
+  "pages_fetched": 1,
+  "provider": "alpaca",
+  "request": {
+   "ticker": "BRK-B"
+  },
+  "route": "GET /v2/assets/{symbol_or_asset_id}",
+  "schema_version": "1.0.0",
+  "stale": null,
+  "truncated": false,
+  "truncation_note": null,
+  "upstream_request_id": null
+ },
+ "risk": null,
+ "rows": [
+  {
+   "absent": {
+    "cusip": "not_provided_by_source",
+    "min_order_size": "not_applicable",
+    "min_trade_increment": "not_applicable",
+    "price_increment": "not_applicable"
+   },
+   "asset_class": "us_equity",
+   "attributes": [],
+   "cusip": null,
+   "easy_to_borrow": true,
+   "exchange": "NYSE",
+   "fractionable": true,
+   "margin_requirement_long": 0.25,
+   "margin_requirement_short": 1.0,
+   "marginable": true,
+   "min_order_size": null,
+   "min_trade_increment": null,
+   "name": "Berkshire Hathaway Inc. Class B",
+   "price_increment": null,
+   "provider_asset_id": "1e1e1e1e-0000-4000-8000-000000000001",
+   "shortable": true,
+   "status": "active",
+   "ticker": "BRK-B",
+   "tradable": true
+  }
+ ]
+}

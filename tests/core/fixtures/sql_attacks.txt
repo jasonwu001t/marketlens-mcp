@@ -1,0 +1,139 @@
+# The query-guard corpus (contract 5.4 and 11.1).
+# One case per line: <expected code> TAB <sql>. "\n" in the SQL is a newline.
+# Placeholders: {A} and {B} are live results of this session, {OTHER} is a
+# live result of another session, {NINE} expands to nine live results joined
+# with commas. Code "ok" means the guard must accept it and the server must
+# run it with a forced LIMIT.
+sql_not_select	DROP\nTABLE {A}
+sql_not_select	DROP TABLE {A}
+sql_not_select	DELETE\nFROM {A}
+sql_not_select	DELETE FROM {A} WHERE ticker = 'AAPL'
+sql_not_select	UPDATE {A} SET close = 0
+sql_not_select	INSERT INTO {A} SELECT * FROM {A}
+sql_not_select	CREATE TABLE x AS SELECT * FROM {A}
+sql_not_select	CREATE MACRO m(a) AS a
+sql_not_select	CREATE VIEW v AS SELECT 1
+sql_not_select	ALTER TABLE {A} ADD COLUMN x INT
+sql_not_select	ATTACH 'x.db'
+sql_not_select	ATTACH ':memory:' AS m
+sql_not_select	DETACH m
+sql_not_select	COPY {A} TO 'x.csv'
+sql_not_select	COPY (SELECT * FROM {A}) TO 'x.parquet' (FORMAT parquet)
+sql_parse	EXPORT DATABASE 'x'
+sql_not_select	INSTALL httpfs
+sql_not_select	LOAD httpfs
+sql_not_select	PRAGMA database_list
+sql_not_select	PRAGMA enable_profiling
+sql_not_select	SET enable_external_access=true
+sql_not_select	SET lock_configuration = false
+sql_not_select	CALL pragma_version()
+sql_not_select	USE memory
+sql_not_select	DESCRIBE {A}
+sql_not_select	SHOW TABLES
+sql_not_select	SUMMARIZE {A}
+sql_not_select	BEGIN TRANSACTION
+sql_not_select	CHECKPOINT
+sql_not_select	VALUES (1)
+sql_not_select	PIVOT {A} ON ticker USING sum(close)
+sql_function	SELECT * FROM read_csv('/etc/passwd')
+sql_function	SELECT * FROM read_csv_auto('/etc/passwd')
+sql_function	SELECT * FROM read_parquet('/tmp/x.parquet')
+sql_function	SELECT * FROM read_parquet(['a.parquet', 'b.parquet'])
+sql_function	SELECT * FROM parquet_scan('x')
+sql_function	SELECT * FROM read_json('x.json')
+sql_function	SELECT * FROM read_json_auto('x.json')
+sql_function	SELECT * FROM read_text('/etc/hosts')
+sql_function	SELECT * FROM read_blob('/etc/hosts')
+sql_function	SELECT * FROM glob('*')
+sql_function	SELECT count(*) FROM glob('/Users/*')
+sql_function	SELECT getenv('HOME')
+sql_function	SELECT * FROM {A} WHERE ticker = getenv('USER')
+sql_function	SELECT * FROM duckdb_settings()
+sql_function	SELECT * FROM duckdb_extensions()
+sql_function	SELECT * FROM duckdb_secrets()
+sql_function	SELECT current_setting('memory_limit')
+sql_function	SELECT query('SELECT 1')
+sql_function	SELECT * FROM query_table('{A}')
+sql_function	SELECT load_extension('httpfs')
+sql_function	SELECT * FROM sniff_csv('x.csv')
+sql_function	SELECT * FROM sqlite_scan('x.db', 't')
+sql_function	SELECT * FROM (SELECT 1) t WHERE EXISTS (SELECT * FROM read_csv('x'))
+sql_table	SELECT * FROM 'file.parquet'
+sql_table	SELECT * FROM "file.csv"
+sql_table	SELECT * FROM information_schema.tables
+sql_table	SELECT * FROM main.{A}
+sql_table	SELECT * FROM memory.main.{A}
+sql_table	SELECT * FROM duckdb_tables
+sql_table	SELECT * FROM range(10)
+sql_table	SELECT * FROM r_ffffffffff
+sql_table	SELECT * FROM {OTHER}
+sql_table	SELECT * FROM {A} JOIN {OTHER} USING (t)
+sql_too_many_results	SELECT 1 FROM {NINE}
+# A CTE name hides a catalog name only where that CTE is visible (its own
+# WITH, after its definition; a self-reference only in WITH RECURSIVE ... UNION).
+sql_table	SELECT name, setting FROM (WITH pg_settings AS (SELECT 1) SELECT 1) q, pg_settings
+sql_table	SELECT * FROM (WITH duckdb_databases AS (SELECT 1) SELECT 1) q, duckdb_databases
+sql_table	SELECT * FROM (WITH pragma_database_list AS (SELECT 1) SELECT 1) q, pragma_database_list
+sql_table	SELECT * FROM (WITH sqlite_master AS (SELECT 1) SELECT 1) q, sqlite_master
+sql_table	SELECT name, setting FROM pg_settings WHERE EXISTS (WITH pg_settings AS (SELECT 1) SELECT 1)
+sql_table	SELECT * FROM {A} WHERE EXISTS (WITH sqlite_master AS (SELECT 1) SELECT 1) AND EXISTS (SELECT * FROM sqlite_master)
+sql_table	SELECT (SELECT setting FROM pg_settings WHERE name = 'secret_directory') AS s FROM (WITH pg_settings AS (SELECT 1) SELECT 1) q
+sql_table	SELECT 1 FROM duckdb_databases UNION ALL (WITH duckdb_databases AS (SELECT 1) SELECT * FROM duckdb_databases)
+sql_table	WITH pg_settings AS (SELECT * FROM pg_settings) SELECT name, setting FROM pg_settings
+sql_table	WITH RECURSIVE pg_settings AS (SELECT name, setting FROM pg_settings) SELECT * FROM pg_settings
+sql_table	WITH a AS (SELECT * FROM duckdb_databases), duckdb_databases AS (SELECT 1 AS k) SELECT * FROM a
+sql_table	WITH pg AS (SELECT 1) SELECT * FROM pg_settings AS pg
+sql_table	WITH c AS (SELECT 1 AS k) SELECT * FROM pg_settings, c AS pg_settings WHERE EXISTS (WITH pg_settings AS (SELECT 1) SELECT 1)
+sql_table	WITH c AS (SELECT 1 AS k) SELECT name, setting FROM c AS pg_settings, pg_settings AS s WHERE EXISTS (WITH pg_settings AS (SELECT 1) SELECT 1)
+# DuckDB binds a CTE's own name inside its body only in the right branch of a
+# top-level UNION [ALL] (not BY NAME, EXCEPT or INTERSECT) under WITH RECURSIVE;
+# anywhere else that name reads the catalog.
+sql_table	WITH RECURSIVE pg_settings AS (SELECT name FROM pg_settings UNION SELECT 'cte') SELECT name FROM pg_settings
+sql_table	WITH RECURSIVE pg_settings(name) AS ((SELECT name FROM pg_settings) UNION ALL SELECT 'x') SELECT * FROM pg_settings
+sql_table	WITH RECURSIVE pg_settings AS (SELECT 'x' AS name UNION SELECT name FROM pg_settings WHERE name <> 'x' UNION SELECT 'y') SELECT * FROM pg_settings
+sql_table	WITH RECURSIVE pg_settings AS (SELECT 'TimeZone' AS name INTERSECT SELECT name FROM pg_settings) SELECT * FROM pg_settings
+sql_table	WITH RECURSIVE pg_settings AS (SELECT 'x' AS name EXCEPT SELECT name FROM pg_settings) SELECT * FROM pg_settings
+sql_table	WITH RECURSIVE pg_settings AS (SELECT 'x' AS name UNION ALL BY NAME SELECT name FROM pg_settings WHERE name <> 'x') SELECT * FROM pg_settings
+sql_table	WITH pg_settings AS (SELECT 'x' AS name UNION ALL SELECT name FROM pg_settings) SELECT * FROM pg_settings
+sql_table	WITH RECURSIVE a AS (SELECT name FROM pg_settings UNION ALL SELECT 'q'), pg_settings AS (SELECT 'x' AS name UNION ALL SELECT name FROM pg_settings WHERE false) SELECT * FROM a
+sql_multiple	SELECT 1; SELECT 2
+sql_multiple	SELECT 1 --\n; DROP TABLE r
+sql_multiple	SELECT * FROM {A}; DROP TABLE {A}
+sql_multiple	SELECT 1 /* x */; SELECT 2
+sql_forbidden	SELECT * INTO t FROM {A}
+sql_forbidden	SELECT $1
+sql_forbidden	SELECT * FROM {A} WHERE ticker = ?
+sql_empty
+sql_parse	SELECT FROM WHERE (
+sql_parse	SELECT * FROM {A} WHERE
+ok	SELECT * FROM {A}
+ok	FROM {A}
+ok	SELECT ticker, count(*) AS n FROM {A} GROUP BY ticker ORDER BY ticker
+ok	SELECT ticker, t, close, avg(close) OVER (PARTITION BY ticker ORDER BY t ROWS BETWEEN 4 PRECEDING AND CURRENT ROW) AS ma5 FROM {A}
+ok	SELECT a.ticker, a.t, a.close, b.close AS other_close FROM {A} a ASOF JOIN {B} b ON a.ticker = b.ticker AND a.t >= b.t
+ok	SELECT ticker, time_bucket(INTERVAL '1 day', t) AS day, max(close) AS hi FROM {A} GROUP BY ALL ORDER BY day
+ok	WITH x AS (SELECT ticker, close FROM {A}) SELECT ticker, max(close) FROM x GROUP BY ticker
+ok	SELECT a.ticker, count(*) FROM {A} a JOIN {B} b ON a.ticker = b.ticker AND a.t = b.t GROUP BY a.ticker
+ok	SELECT ticker FROM {A} UNION SELECT ticker FROM {B}
+ok	SELECT * FROM {A} LIMIT 100000
+ok	SELECT * FROM {A} ORDER BY t DESC LIMIT 5 OFFSET 2
+ok	SELECT * EXCLUDE (absent) FROM {A} QUALIFY row_number() OVER (PARTITION BY ticker ORDER BY t DESC) = 1
+ok	SELECT * FROM "{A}"
+ok	-- leading comment\nSELECT count(*) FROM {A}
+ok	WITH a AS (SELECT * FROM {A}), b AS (SELECT ticker, close FROM a) SELECT ticker, max(close) FROM b GROUP BY ticker
+ok	WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < 3) SELECT i FROM n
+ok	SELECT * FROM (WITH x AS (SELECT ticker, close FROM {A}) SELECT * FROM x) q
+ok	WITH x AS (SELECT ticker FROM {B}) SELECT * FROM {A} a WHERE EXISTS (SELECT 1 FROM x WHERE x.ticker = a.ticker)
+ok	WITH x AS (SELECT * FROM {A}) SELECT p.ticker FROM x p JOIN x q ON p.t = q.t AND p.ticker = q.ticker
+ok	WITH x AS (SELECT 1 AS k) SELECT * FROM x, (WITH x AS (SELECT 2 AS j) SELECT * FROM x) y
+ok	WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT * FROM (SELECT i + 1 FROM n WHERE i < 3)) SELECT i FROM n
+ok	WITH RECURSIVE n(i) AS (SELECT count(*) FROM {A} UNION ALL SELECT i - 1 FROM n WHERE i > 88) SELECT i FROM n
+ok	WITH x AS (SELECT ticker, close FROM {A}) SELECT * FROM (WITH y AS (SELECT * FROM x) SELECT * FROM y) q
+# A quoted or case-mangled function name is the same function to DuckDB (review round 3).
+sql_function	SELECT "current_setting"('secret_directory')
+sql_function	SELECT "CURRENT_SETTING"('allowed_directories')
+sql_function	SELECT "main"."current_setting"('allowed_directories')
+sql_function	SELECT "Read_Text"('/etc/hosts')
+sql_function	SELECT which_secret('s3://bucket/x', 's3')
+sql_function	SELECT "duckdb_memory"() FROM {A}
+sql_function	SELECT pragma_version() FROM {A}

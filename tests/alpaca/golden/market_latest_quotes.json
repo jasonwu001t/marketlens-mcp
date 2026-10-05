@@ -1,0 +1,84 @@
+{
+ "absent": {},
+ "model": "marketlens.Quote",
+ "notes": [],
+ "offload": "auto",
+ "pagination": {
+  "complete": true,
+  "next_page_token": null,
+  "page_cap_hit": false,
+  "pages_fetched": 1,
+  "row_cap_hit": false,
+  "rows_fetched": 2
+ },
+ "provenance": {
+  "as_of": "2026-10-02T19:59:59.900000Z",
+  "authority": null,
+  "cached": false,
+  "dataset": null,
+  "delay": "realtime",
+  "derived_from": [],
+  "environment": null,
+  "feed": "iex",
+  "knowledge_time": null,
+  "lag_days": null,
+  "operation": "StockLatestQuotes",
+  "pages_fetched": 1,
+  "provider": "alpaca",
+  "request": {
+   "feed": "iex",
+   "tickers": [
+    "AAPL",
+    "BRK-B"
+   ]
+  },
+  "route": "GET /v2/stocks/quotes/latest",
+  "schema_version": "1.0.0",
+  "stale": null,
+  "truncated": false,
+  "truncation_note": null,
+  "upstream_request_id": null
+ },
+ "risk": null,
+ "rows": [
+  {
+   "absent": null,
+   "ask_exchange": "V",
+   "ask_price": 255.81,
+   "ask_size": 100.0,
+   "asset_class": "us_equity",
+   "bid_exchange": "V",
+   "bid_price": 255.79,
+   "bid_size": 200.0,
+   "conditions": [
+    "R"
+   ],
+   "currency": "USD",
+   "t": "2026-10-02T19:59:59.900000Z",
+   "tape": "C",
+   "ticker": "AAPL"
+  },
+  {
+   "absent": {
+    "ask_exchange": "no_data",
+    "ask_price": "no_data",
+    "ask_size": "no_data",
+    "bid_exchange": "no_data",
+    "bid_price": "no_data",
+    "bid_size": "no_data"
+   },
+   "ask_exchange": null,
+   "ask_price": null,
+   "ask_size": null,
+   "asset_class": "us_equity",
+   "bid_exchange": null,
+   "bid_price": null,
+   "bid_size": null,
+   "conditions": [],
+   "currency": "USD",
+   "t": "2026-10-02T19:59:58Z",
+   "tape": "B",
+   "ticker": "BRK-B"
+  }
+ ]
+}

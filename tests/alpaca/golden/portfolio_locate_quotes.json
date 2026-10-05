@@ -1,0 +1,65 @@
+{
+ "absent": {},
+ "model": "marketlens.LocateQuote",
+ "notes": [
+  "Alpaca could not quote: META: symbol not found."
+ ],
+ "offload": "auto",
+ "pagination": {
+  "complete": true,
+  "next_page_token": null,
+  "page_cap_hit": false,
+  "pages_fetched": 1,
+  "row_cap_hit": false,
+  "rows_fetched": 2
+ },
+ "provenance": {
+  "as_of": null,
+  "authority": null,
+  "cached": false,
+  "dataset": null,
+  "delay": "realtime",
+  "derived_from": [],
+  "environment": "paper",
+  "feed": null,
+  "knowledge_time": null,
+  "lag_days": null,
+  "operation": "listLocateQuotes",
+  "pages_fetched": 1,
+  "provider": "alpaca",
+  "request": {
+   "tickers": [
+    "TSLA",
+    "BRK-B",
+    "META"
+   ]
+  },
+  "route": "GET /v1/locates/quotes",
+  "schema_version": "1.0.0",
+  "stale": null,
+  "truncated": false,
+  "truncation_note": null,
+  "upstream_request_id": null
+ },
+ "risk": null,
+ "rows": [
+  {
+   "absent": null,
+   "available_qty": 1000,
+   "environment": "paper",
+   "price": "0.0123",
+   "quoted_at": "2026-10-02T15:04:05Z",
+   "ticker": "TSLA"
+  },
+  {
+   "absent": {
+    "price": "no_data"
+   },
+   "available_qty": 0,
+   "environment": "paper",
+   "price": null,
+   "quoted_at": "2026-10-02T15:04:05Z",
+   "ticker": "BRK-B"
+  }
+ ]
+}

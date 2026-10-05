@@ -1,0 +1,740 @@
+{
+  "$defs": {
+    "AbsenceCode": {
+      "description": "Why a value is None. Never served as 0.",
+      "enum": [
+        "not_provided_by_source",
+        "not_applicable",
+        "not_entitled",
+        "no_data",
+        "insufficient_data",
+        "not_recovered",
+        "no_match",
+        "withheld",
+        "source_error",
+        "unparseable"
+      ],
+      "title": "AbsenceCode",
+      "type": "string"
+    },
+    "AssetClass": {
+      "enum": [
+        "us_equity",
+        "us_option",
+        "crypto",
+        "fixed_income"
+      ],
+      "title": "AssetClass",
+      "type": "string"
+    },
+    "Environment": {
+      "description": "Which brokerage account a portfolio read came from.",
+      "enum": [
+        "paper",
+        "live"
+      ],
+      "title": "Environment",
+      "type": "string"
+    },
+    "OrderClass": {
+      "enum": [
+        "simple",
+        "bracket",
+        "oco",
+        "oto",
+        "mleg"
+      ],
+      "title": "OrderClass",
+      "type": "string"
+    },
+    "OrderLeg": {
+      "additionalProperties": false,
+      "description": "One leg of a multi-leg or bracket order (same fields as Order, no legs).",
+      "properties": {
+        "absent": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "$ref": "#/$defs/AbsenceCode"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Per-row reasons for None fields: field name -> AbsenceCode",
+          "title": "Absent"
+        },
+        "asset_class": {
+          "$ref": "#/$defs/AssetClass"
+        },
+        "client_order_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Client Order Id"
+        },
+        "created_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Created At",
+          "x-unit": "UTC"
+        },
+        "filled_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Filled At",
+          "x-unit": "UTC"
+        },
+        "filled_avg_price": {
+          "anyOf": [
+            {
+              "pattern": "^-?\\d+(\\.\\d+)?$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Filled Avg Price",
+          "x-unit": "USD"
+        },
+        "filled_qty": {
+          "anyOf": [
+            {
+              "pattern": "^-?\\d+(\\.\\d+)?$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Filled Qty",
+          "x-unit": "by_asset_class"
+        },
+        "limit_price": {
+          "anyOf": [
+            {
+              "pattern": "^-?\\d+(\\.\\d+)?$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Limit Price",
+          "x-unit": "USD"
+        },
+        "occ_symbol": {
+          "anyOf": [
+            {
+              "pattern": "^(?P<root>[A-Z]{1,6})(?P<yymmdd>\\d{6})(?P<cp>[CP])(?P<strike>\\d{8})$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Occ Symbol"
+        },
+        "order_id": {
+          "title": "Order Id",
+          "type": "string"
+        },
+        "order_type": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/OrderType"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "position_intent": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Position Intent"
+        },
+        "qty": {
+          "anyOf": [
+            {
+              "pattern": "^-?\\d+(\\.\\d+)?$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Qty",
+          "x-unit": "by_asset_class"
+        },
+        "ratio_qty": {
+          "anyOf": [
+            {
+              "pattern": "^-?\\d+(\\.\\d+)?$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ratio Qty",
+          "x-unit": "count"
+        },
+        "side": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Side"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "status": {
+          "$ref": "#/$defs/OrderStatus"
+        },
+        "stop_price": {
+          "anyOf": [
+            {
+              "pattern": "^-?\\d+(\\.\\d+)?$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Stop Price",
+          "x-unit": "USD"
+        },
+        "ticker": {
+          "pattern": "^(?:[A-Z][A-Z0-9]{0,9}(?:-[A-Z0-9]{1,5})?|[A-Z0-9]{2,10}/[A-Z0-9]{2,10})$",
+          "title": "Ticker",
+          "type": "string"
+        }
+      },
+      "required": [
+        "order_id",
+        "asset_class",
+        "ticker",
+        "status"
+      ],
+      "title": "OrderLeg",
+      "type": "object"
+    },
+    "OrderStatus": {
+      "enum": [
+        "new",
+        "partially_filled",
+        "filled",
+        "done_for_day",
+        "canceled",
+        "expired",
+        "replaced",
+        "pending_cancel",
+        "pending_replace",
+        "pending_review",
+        "accepted",
+        "pending_new",
+        "accepted_for_bidding",
+        "stopped",
+        "rejected",
+        "suspended",
+        "calculated",
+        "held"
+      ],
+      "title": "OrderStatus",
+      "type": "string"
+    },
+    "OrderType": {
+      "enum": [
+        "market",
+        "limit",
+        "stop",
+        "stop_limit",
+        "trailing_stop"
+      ],
+      "title": "OrderType",
+      "type": "string"
+    },
+    "Side": {
+      "enum": [
+        "buy",
+        "sell"
+      ],
+      "title": "Side",
+      "type": "string"
+    },
+    "TimeInForce": {
+      "enum": [
+        "day",
+        "gtc",
+        "opg",
+        "cls",
+        "ioc",
+        "fok"
+      ],
+      "title": "TimeInForce",
+      "type": "string"
+    }
+  },
+  "$id": "urn:marketlens:schema:1:marketlens.Order",
+  "additionalProperties": false,
+  "properties": {
+    "absent": {
+      "anyOf": [
+        {
+          "additionalProperties": {
+            "$ref": "#/$defs/AbsenceCode"
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Per-row reasons for None fields: field name -> AbsenceCode",
+      "title": "Absent"
+    },
+    "asset_class": {
+      "$ref": "#/$defs/AssetClass"
+    },
+    "canceled_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Canceled At",
+      "x-unit": "UTC"
+    },
+    "client_order_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Client Order Id"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string",
+      "x-unit": "UTC"
+    },
+    "environment": {
+      "$ref": "#/$defs/Environment"
+    },
+    "expired_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Expired At",
+      "x-unit": "UTC"
+    },
+    "expires_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Expires At",
+      "x-unit": "UTC"
+    },
+    "extended_hours": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Extended Hours"
+    },
+    "failed_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Failed At",
+      "x-unit": "UTC"
+    },
+    "filled_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Filled At",
+      "x-unit": "UTC"
+    },
+    "filled_avg_price": {
+      "anyOf": [
+        {
+          "pattern": "^-?\\d+(\\.\\d+)?$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Filled Avg Price",
+      "x-unit": "USD"
+    },
+    "filled_qty": {
+      "pattern": "^-?\\d+(\\.\\d+)?$",
+      "title": "Filled Qty",
+      "type": "string",
+      "x-unit": "by_asset_class"
+    },
+    "hwm": {
+      "anyOf": [
+        {
+          "pattern": "^-?\\d+(\\.\\d+)?$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Hwm",
+      "x-unit": "USD"
+    },
+    "legs": {
+      "anyOf": [
+        {
+          "items": {
+            "$ref": "#/$defs/OrderLeg"
+          },
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Legs"
+    },
+    "limit_price": {
+      "anyOf": [
+        {
+          "pattern": "^-?\\d+(\\.\\d+)?$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Limit Price",
+      "x-unit": "USD"
+    },
+    "notional": {
+      "anyOf": [
+        {
+          "pattern": "^-?\\d+(\\.\\d+)?$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Notional",
+      "x-unit": "USD"
+    },
+    "occ_symbol": {
+      "anyOf": [
+        {
+          "pattern": "^(?P<root>[A-Z]{1,6})(?P<yymmdd>\\d{6})(?P<cp>[CP])(?P<strike>\\d{8})$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Occ Symbol"
+    },
+    "order_class": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/OrderClass"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "order_id": {
+      "title": "Order Id",
+      "type": "string"
+    },
+    "order_type": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/OrderType"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "position_intent": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Position Intent"
+    },
+    "qty": {
+      "anyOf": [
+        {
+          "pattern": "^-?\\d+(\\.\\d+)?$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Qty",
+      "x-unit": "by_asset_class"
+    },
+    "replaced_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Replaced At",
+      "x-unit": "UTC"
+    },
+    "replaced_by": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Replaced By"
+    },
+    "replaces": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Replaces"
+    },
+    "side": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Side"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "None for a multi-leg parent (see legs)"
+    },
+    "status": {
+      "$ref": "#/$defs/OrderStatus"
+    },
+    "stop_price": {
+      "anyOf": [
+        {
+          "pattern": "^-?\\d+(\\.\\d+)?$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Stop Price",
+      "x-unit": "USD"
+    },
+    "submitted_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Submitted At",
+      "x-unit": "UTC"
+    },
+    "ticker": {
+      "pattern": "^(?:[A-Z][A-Z0-9]{0,9}(?:-[A-Z0-9]{1,5})?|[A-Z0-9]{2,10}/[A-Z0-9]{2,10})$",
+      "title": "Ticker",
+      "type": "string"
+    },
+    "time_in_force": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/TimeInForce"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "trail_percent": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Trail Percent",
+      "x-unit": "fraction"
+    },
+    "trail_price": {
+      "anyOf": [
+        {
+          "pattern": "^-?\\d+(\\.\\d+)?$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Trail Price",
+      "x-unit": "USD"
+    },
+    "updated_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Updated At",
+      "x-unit": "UTC"
+    }
+  },
+  "required": [
+    "environment",
+    "order_id",
+    "asset_class",
+    "ticker",
+    "status",
+    "filled_qty",
+    "created_at"
+  ],
+  "title": "Order",
+  "type": "object",
+  "x-schema-version": "1.0.0"
+}
