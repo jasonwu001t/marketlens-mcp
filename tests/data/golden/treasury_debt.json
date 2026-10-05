@@ -1,0 +1,54 @@
+{
+ "absent": {},
+ "model": "marketlens.TreasuryDebt",
+ "notes": [],
+ "offload": "auto",
+ "pagination": null,
+ "provenance": {
+  "as_of": null,
+  "authority": [
+   "official"
+  ],
+  "cached": false,
+  "dataset": "fiscaldata.debt_to_penny",
+  "delay": "unknown",
+  "derived_from": [],
+  "environment": null,
+  "feed": null,
+  "knowledge_time": "2026-10-01T21:00:00Z",
+  "lag_days": 2.0,
+  "operation": null,
+  "pages_fetched": 1,
+  "provider": "fiscaldata",
+  "request": {
+   "as_of": null,
+   "end": "2026-10-02",
+   "start": "2025-10-02"
+  },
+  "route": "omni fiscaldata.debt_to_penny <- api.fiscaldata.treasury.gov/v2/accounting/od/debt_to_penny",
+  "schema_version": "1.1.0",
+  "stale": null,
+  "truncated": false,
+  "truncation_note": null,
+  "upstream_request_id": null
+ },
+ "risk": null,
+ "rows": [
+  {
+   "absent": null,
+   "date": "2026-09-29",
+   "debt_held_public": 29990000000000.0,
+   "intragovernmental": 7490000000000.0,
+   "knowledge_time": "2026-09-30T21:00:00Z",
+   "total_debt": 37480000000000.0
+  },
+  {
+   "absent": null,
+   "date": "2026-09-30",
+   "debt_held_public": 30000000000000.0,
+   "intragovernmental": 7500000000000.0,
+   "knowledge_time": "2026-10-01T21:00:00Z",
+   "total_debt": 37500000000000.0
+  }
+ ]
+}

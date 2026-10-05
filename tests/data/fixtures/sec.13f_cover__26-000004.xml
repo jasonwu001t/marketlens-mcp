@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- synthetic 13F cover page of a restatement -->
+<edgarSubmission xmlns="http://www.sec.gov/edgar/thirteenffiler">
+ <formData>
+  <coverPage><reportCalendarOrQuarter>03-31-2026</reportCalendarOrQuarter><isAmendment>true</isAmendment>
+   <amendmentInfo><amendmentType>RESTATEMENT</amendmentType></amendmentInfo></coverPage>
+  <summaryPage><tableEntryTotal>1</tableEntryTotal></summaryPage>
+ </formData>
+</edgarSubmission>

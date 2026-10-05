@@ -1,0 +1,99 @@
+{
+  "$defs": {
+    "AbsenceCode": {
+      "description": "Why a value is None. Never served as 0.",
+      "enum": [
+        "not_provided_by_source",
+        "not_applicable",
+        "not_entitled",
+        "no_data",
+        "insufficient_data",
+        "not_recovered",
+        "no_match",
+        "withheld",
+        "source_error",
+        "unparseable"
+      ],
+      "title": "AbsenceCode",
+      "type": "string"
+    }
+  },
+  "$id": "urn:marketlens:schema:1:marketlens.TreasuryDebt",
+  "additionalProperties": false,
+  "properties": {
+    "absent": {
+      "anyOf": [
+        {
+          "additionalProperties": {
+            "$ref": "#/$defs/AbsenceCode"
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Per-row reasons for None fields: field name -> AbsenceCode",
+      "title": "Absent"
+    },
+    "date": {
+      "format": "date",
+      "title": "Date",
+      "type": "string"
+    },
+    "debt_held_public": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Debt Held Public",
+      "x-unit": "USD"
+    },
+    "intragovernmental": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Intragovernmental",
+      "x-unit": "USD"
+    },
+    "knowledge_time": {
+      "description": "When the value became knowable under the dataset's point-in-time policy",
+      "format": "date-time",
+      "title": "Knowledge Time",
+      "type": "string",
+      "x-unit": "UTC"
+    },
+    "total_debt": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Total Debt",
+      "x-unit": "USD"
+    }
+  },
+  "required": [
+    "date",
+    "knowledge_time"
+  ],
+  "title": "TreasuryDebt",
+  "type": "object",
+  "x-schema-version": "1.1.0"
+}

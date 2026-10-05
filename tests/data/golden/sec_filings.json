@@ -1,0 +1,180 @@
+{
+ "absent": {},
+ "model": "marketlens.Filing",
+ "notes": [],
+ "offload": "auto",
+ "pagination": null,
+ "provenance": {
+  "as_of": null,
+  "authority": [
+   "official"
+  ],
+  "cached": false,
+  "dataset": "sec.submissions",
+  "delay": "unknown",
+  "derived_from": [],
+  "environment": null,
+  "feed": null,
+  "knowledge_time": "2026-08-01T20:15:00Z",
+  "lag_days": 62.0,
+  "operation": null,
+  "pages_fetched": 1,
+  "provider": "sec",
+  "request": {
+   "as_of": null,
+   "end": "2026-10-02",
+   "forms": null,
+   "start": "2024-10-02",
+   "ticker": "TESTCO"
+  },
+  "route": "omni sec.submissions <- data.sec.gov/submissions",
+  "schema_version": "1.1.0",
+  "stale": null,
+  "truncated": false,
+  "truncation_note": null,
+  "upstream_request_id": null
+ },
+ "risk": null,
+ "rows": [
+  {
+   "absent": null,
+   "accepted_at": "2026-08-01T20:15:00Z",
+   "accession_number": "0009999901-26-000010",
+   "cik": "0009999901",
+   "company_name": "Testco Synthetic Corp",
+   "filing_date": "2026-08-01",
+   "form": "10-Q",
+   "items": [],
+   "knowledge_time": "2026-08-01T20:15:00Z",
+   "primary_doc_url": "https://www.sec.gov/Archives/edgar/data/9999901/000999990126000010/testco-20260630.htm",
+   "report_date": "2026-06-30",
+   "sic": "3571",
+   "sic_description": "Electronic Computers",
+   "ticker": "TESTCO"
+  },
+  {
+   "absent": null,
+   "accepted_at": "2026-07-30T20:05:00Z",
+   "accession_number": "0009999901-26-000009",
+   "cik": "0009999901",
+   "company_name": "Testco Synthetic Corp",
+   "filing_date": "2026-07-30",
+   "form": "8-K",
+   "items": [
+    "2.02",
+    "9.01"
+   ],
+   "knowledge_time": "2026-07-30T20:05:00Z",
+   "primary_doc_url": "https://www.sec.gov/Archives/edgar/data/9999901/000999990126000009/tc-8k.htm",
+   "report_date": "2026-07-30",
+   "sic": "3571",
+   "sic_description": "Electronic Computers",
+   "ticker": "TESTCO"
+  },
+  {
+   "absent": null,
+   "accepted_at": "2026-03-03T21:30:00Z",
+   "accession_number": "0009999901-26-000005",
+   "cik": "0009999901",
+   "company_name": "Testco Synthetic Corp",
+   "filing_date": "2026-03-03",
+   "form": "4",
+   "items": [],
+   "knowledge_time": "2026-03-03T21:30:00Z",
+   "primary_doc_url": "https://www.sec.gov/Archives/edgar/data/9999901/000999990126000005/xslF345X05/form4.xml",
+   "report_date": "2026-03-02",
+   "sic": "3571",
+   "sic_description": "Electronic Computers",
+   "ticker": "TESTCO"
+  },
+  {
+   "absent": {
+    "report_date": "no_data"
+   },
+   "accepted_at": "2026-02-20T15:00:00Z",
+   "accession_number": "0009999901-26-000004",
+   "cik": "0009999901",
+   "company_name": "Testco Synthetic Corp",
+   "filing_date": "2026-02-20",
+   "form": "144",
+   "items": [],
+   "knowledge_time": "2026-02-20T15:00:00Z",
+   "primary_doc_url": "https://www.sec.gov/Archives/edgar/data/9999901/000999990126000004/xsl144X01/primary_doc.xml",
+   "report_date": null,
+   "sic": "3571",
+   "sic_description": "Electronic Computers",
+   "ticker": "TESTCO"
+  },
+  {
+   "absent": null,
+   "accepted_at": "2026-02-10T21:00:00Z",
+   "accession_number": "0009999901-26-000002",
+   "cik": "0009999901",
+   "company_name": "Testco Synthetic Corp",
+   "filing_date": "2026-02-10",
+   "form": "10-K",
+   "items": [],
+   "knowledge_time": "2026-02-10T21:00:00Z",
+   "primary_doc_url": "https://www.sec.gov/Archives/edgar/data/9999901/000999990126000002/testco-20251231.htm",
+   "report_date": "2025-12-31",
+   "sic": "3571",
+   "sic_description": "Electronic Computers",
+   "ticker": "TESTCO"
+  },
+  {
+   "absent": null,
+   "accepted_at": "2026-01-29T12:05:00Z",
+   "accession_number": "0009999901-26-000001",
+   "cik": "0009999901",
+   "company_name": "Testco Synthetic Corp",
+   "filing_date": "2026-01-29",
+   "form": "8-K",
+   "items": [
+    "2.02",
+    "9.01"
+   ],
+   "knowledge_time": "2026-01-29T12:05:00Z",
+   "primary_doc_url": "https://www.sec.gov/Archives/edgar/data/9999901/000999990126000001/tc-8k-q4.htm",
+   "report_date": "2026-01-29",
+   "sic": "3571",
+   "sic_description": "Electronic Computers",
+   "ticker": "TESTCO"
+  },
+  {
+   "absent": null,
+   "accepted_at": "2025-12-15T22:10:00Z",
+   "accession_number": "0009999901-25-000030",
+   "cik": "0009999901",
+   "company_name": "Testco Synthetic Corp",
+   "filing_date": "2025-12-15",
+   "form": "4",
+   "items": [],
+   "knowledge_time": "2025-12-15T22:10:00Z",
+   "primary_doc_url": "https://www.sec.gov/Archives/edgar/data/9999901/000999990125000030/xslF345X05/form4.xml",
+   "report_date": "2025-12-12",
+   "sic": "3571",
+   "sic_description": "Electronic Computers",
+   "ticker": "TESTCO"
+  },
+  {
+   "absent": {
+    "report_date": "no_data"
+   },
+   "accepted_at": "2025-11-06T04:59:59.999999Z",
+   "accession_number": "0009999901-25-000020",
+   "cik": "0009999901",
+   "company_name": "Testco Synthetic Corp",
+   "filing_date": "2025-11-05",
+   "form": "8-K",
+   "items": [
+    "5.02"
+   ],
+   "knowledge_time": "2025-11-06T04:59:59.999999Z",
+   "primary_doc_url": "https://www.sec.gov/Archives/edgar/data/9999901/000999990125000020/tc-8k-502.htm",
+   "report_date": null,
+   "sic": "3571",
+   "sic_description": "Electronic Computers",
+   "ticker": "TESTCO"
+  }
+ ]
+}

@@ -1,0 +1,93 @@
+{
+  "$defs": {
+    "AbsenceCode": {
+      "description": "Why a value is None. Never served as 0.",
+      "enum": [
+        "not_provided_by_source",
+        "not_applicable",
+        "not_entitled",
+        "no_data",
+        "insufficient_data",
+        "not_recovered",
+        "no_match",
+        "withheld",
+        "source_error",
+        "unparseable"
+      ],
+      "title": "AbsenceCode",
+      "type": "string"
+    }
+  },
+  "$id": "urn:marketlens:schema:1:marketlens.YieldCurvePoint",
+  "additionalProperties": false,
+  "properties": {
+    "absent": {
+      "anyOf": [
+        {
+          "additionalProperties": {
+            "$ref": "#/$defs/AbsenceCode"
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Per-row reasons for None fields: field name -> AbsenceCode",
+      "title": "Absent"
+    },
+    "date": {
+      "format": "date",
+      "title": "Date",
+      "type": "string"
+    },
+    "knowledge_time": {
+      "description": "When the value became knowable under the dataset's point-in-time policy",
+      "format": "date-time",
+      "title": "Knowledge Time",
+      "type": "string",
+      "x-unit": "UTC"
+    },
+    "rate": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Par yield",
+      "title": "Rate",
+      "x-unit": "fraction_per_year"
+    },
+    "tenor": {
+      "description": "1M ... 30Y, and 1.5M",
+      "title": "Tenor",
+      "type": "string"
+    },
+    "tenor_label": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "1 Mo ... 30 Yr",
+      "title": "Tenor Label"
+    }
+  },
+  "required": [
+    "date",
+    "tenor",
+    "knowledge_time"
+  ],
+  "title": "YieldCurvePoint",
+  "type": "object",
+  "x-schema-version": "1.1.0"
+}

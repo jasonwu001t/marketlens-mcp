@@ -1,0 +1,95 @@
+{
+ "absent": {},
+ "model": "marketlens.YieldCurvePoint",
+ "notes": [],
+ "offload": "auto",
+ "pagination": null,
+ "provenance": {
+  "as_of": null,
+  "authority": [
+   "official"
+  ],
+  "cached": false,
+  "dataset": "treasury.yield_curve",
+  "delay": "unknown",
+  "derived_from": [],
+  "environment": null,
+  "feed": null,
+  "knowledge_time": "2026-10-01T22:00:00Z",
+  "lag_days": 1.0,
+  "operation": null,
+  "pages_fetched": 1,
+  "provider": "treasury",
+  "request": {
+   "as_of": null,
+   "end": "2026-10-02",
+   "start": "2026-09-02",
+   "tenors": [
+    "1.5M",
+    "3M",
+    "10Y"
+   ]
+  },
+  "route": "omni treasury.yield_curve <- home.treasury.gov daily-treasury-rates.csv",
+  "schema_version": "1.1.0",
+  "stale": null,
+  "truncated": false,
+  "truncation_note": null,
+  "upstream_request_id": null
+ },
+ "risk": null,
+ "rows": [
+  {
+   "absent": {
+    "tenor_label": "not_applicable"
+   },
+   "date": "2026-09-30",
+   "knowledge_time": "2026-09-30T22:00:00Z",
+   "rate": 0.041,
+   "tenor": "1.5M",
+   "tenor_label": null
+  },
+  {
+   "absent": null,
+   "date": "2026-09-30",
+   "knowledge_time": "2026-09-30T22:00:00Z",
+   "rate": 0.0406,
+   "tenor": "3M",
+   "tenor_label": "3 Mo"
+  },
+  {
+   "absent": null,
+   "date": "2026-09-30",
+   "knowledge_time": "2026-09-30T22:00:00Z",
+   "rate": 0.0397,
+   "tenor": "10Y",
+   "tenor_label": "10 Yr"
+  },
+  {
+   "absent": {
+    "tenor_label": "not_applicable"
+   },
+   "date": "2026-10-01",
+   "knowledge_time": "2026-10-01T22:00:00Z",
+   "rate": 0.0409,
+   "tenor": "1.5M",
+   "tenor_label": null
+  },
+  {
+   "absent": null,
+   "date": "2026-10-01",
+   "knowledge_time": "2026-10-01T22:00:00Z",
+   "rate": 0.0405,
+   "tenor": "3M",
+   "tenor_label": "3 Mo"
+  },
+  {
+   "absent": null,
+   "date": "2026-10-01",
+   "knowledge_time": "2026-10-01T22:00:00Z",
+   "rate": 0.0395,
+   "tenor": "10Y",
+   "tenor_label": "10 Yr"
+  }
+ ]
+}

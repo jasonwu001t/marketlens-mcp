@@ -2,6 +2,25 @@
 
 All notable changes to this project are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/). The canonical schema (`SCHEMA_VERSION`) and the plugin API (`PLUGIN_API_VERSION`) are versioned separately.
 
+## [0.2.0] - Unreleased
+
+### Added
+
+- The `data` extra (`pip install "marketlens-mcp[data]"`, Python 3.13 or later): a built-in provider over marketlens-data (import name `omni`) for official data, 25 tools under four new capabilities:
+  - `macro` (on): FRED/ALFRED series with vintages and `as_of` reads, BLS series, BEA NIPA tables, BLS release schedules, the FRED series catalogue.
+  - `filings` (on): SEC EDGAR filings, XBRL facts with restatement vintages, point-in-time fundamentals, 8-K Item 2.02 earnings releases and press-release EPS, Form 4 and 144 insider transactions, 13F holdings, fund N-PORT reports and holdings.
+  - `fed_treasury` (on): FOMC meetings and statements, NY Fed reference rates (SOFR, EFFR, OBFR, TGCR, BGCR), the Treasury par yield curve, Treasury auctions, debt to the penny and the Treasury General Account.
+  - `calendars` (off: the Nasdaq endpoint is unofficial): the economic calendar with PMI and other actual and consensus figures, the earnings calendar and earnings history, and US market holidays from NYSE, SIFMA and OPM.
+- Each source names its own key (`FRED_API_KEY`, `BEA_API_KEY`; `BLS_API_KEY` optional; `SEC_CONTACT_EMAIL` for SEC fair access; the rest keyless); `doctor` reports which sources are ready, where the data store is and in which mode.
+- `providers.data` settings: `mode` (`auto` fetches and keeps, `local` reads only what is stored), `data_dir`, `ttl_hours`, `calendar_ttl_minutes`, `call_timeout_seconds`.
+- Schema 1.1.0: 23 canonical models for the data tools and the units `as_published`, `USD_per_share`, `times`, `ordinal`.
+- The README tool table lists the data tools whether or not the extra is installed, marked "needs the data extra".
+
+### Changed
+
+- A fetch cut at `fetch.max_rows` without a page token no longer carries the R16 "call again with page_token" note; the tool's own note says how to narrow the request.
+- The name `data` is reserved for the built-in provider; a plugin may not take it.
+
 ## [0.1.0] - Unreleased
 
 ### Added

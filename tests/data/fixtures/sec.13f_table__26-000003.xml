@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- synthetic 13F information table -->
+<informationTable xmlns="http://www.sec.gov/edgar/document/thirteenf/informationtable">
+ <infoTable>
+  <nameOfIssuer>TESTCO SYNTHETIC CORP</nameOfIssuer><titleOfClass>COM</titleOfClass><cusip>99999T101</cusip>
+  <value>5025000</value>
+  <shrsOrPrnAmt><sshPrnamt>100000</sshPrnamt><sshPrnamtType>SH</sshPrnamtType></shrsOrPrnAmt>
+  <investmentDiscretion>SOLE</investmentDiscretion>
+  <votingAuthority><Sole>100000</Sole><Shared>0</Shared><None>0</None></votingAuthority>
+ </infoTable>
+ <infoTable>
+  <nameOfIssuer>OTHERCO SYNTHETIC INC</nameOfIssuer><titleOfClass>COM</titleOfClass><cusip>99999O102</cusip>
+  <value>1200000</value>
+  <shrsOrPrnAmt><sshPrnamt>30000</sshPrnamt><sshPrnamtType>SH</sshPrnamtType></shrsOrPrnAmt>
+  <putCall>Put</putCall>
+  <investmentDiscretion>DFND</investmentDiscretion>
+  <votingAuthority><Sole>0</Sole><Shared>30000</Shared><None>0</None></votingAuthority>
+ </infoTable>
+</informationTable>

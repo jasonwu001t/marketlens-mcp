@@ -1,0 +1,123 @@
+{
+ "absent": {},
+ "model": "marketlens.TreasuryAuction",
+ "notes": [],
+ "offload": "auto",
+ "pagination": null,
+ "provenance": {
+  "as_of": null,
+  "authority": [
+   "official"
+  ],
+  "cached": false,
+  "dataset": "fiscaldata.auctions",
+  "delay": "unknown",
+  "derived_from": [],
+  "environment": null,
+  "feed": null,
+  "knowledge_time": "2026-09-28T18:00:00Z",
+  "lag_days": 4.0,
+  "operation": null,
+  "pages_fetched": 1,
+  "provider": "fiscaldata",
+  "request": {
+   "as_of": null,
+   "end": "2026-10-02",
+   "security_types": null,
+   "start": "2025-10-02"
+  },
+  "route": "omni fiscaldata.auctions <- api.fiscaldata.treasury.gov/v1/accounting/od/auctions_query",
+  "schema_version": "1.1.0",
+  "stale": null,
+  "truncated": false,
+  "truncation_note": null,
+  "upstream_request_id": null
+ },
+ "risk": null,
+ "rows": [
+  {
+   "absent": {
+    "high_yield": "no_data",
+    "interest_rate": "no_data"
+   },
+   "auction_date": "2026-09-28",
+   "bid_to_cover": 2.85,
+   "cusip": "912797SX6",
+   "high_discount_rate": 0.0405,
+   "high_investment_rate": 0.0415,
+   "high_yield": null,
+   "interest_rate": null,
+   "issue_date": "2026-10-01",
+   "knowledge_time": "2026-09-28T18:00:00Z",
+   "maturity_date": "2026-12-31",
+   "offering_amount": 75000000000.0,
+   "price_per_100": 98.97625,
+   "security_term": "13-Week",
+   "security_type": "Bill",
+   "total_accepted": 75000123400.0
+  },
+  {
+   "absent": {
+    "high_yield": "no_data",
+    "interest_rate": "no_data"
+   },
+   "auction_date": "2026-09-24",
+   "bid_to_cover": 3.1,
+   "cusip": "912797SY4",
+   "high_discount_rate": 0.0422,
+   "high_investment_rate": 0.0423,
+   "high_yield": null,
+   "interest_rate": null,
+   "issue_date": "2026-09-25",
+   "knowledge_time": "2026-09-24T18:00:00Z",
+   "maturity_date": "2026-10-01",
+   "offering_amount": 30000000000.0,
+   "price_per_100": 99.929667,
+   "security_term": "6-Day",
+   "security_type": "CMB",
+   "total_accepted": 30000000000.0
+  },
+  {
+   "absent": {
+    "high_discount_rate": "no_data",
+    "high_investment_rate": "no_data"
+   },
+   "auction_date": "2026-09-18",
+   "bid_to_cover": 2.4,
+   "cusip": "91282CNB3",
+   "high_discount_rate": null,
+   "high_investment_rate": null,
+   "high_yield": 0.019,
+   "interest_rate": 0.01875,
+   "issue_date": "2026-09-30",
+   "knowledge_time": "2026-09-18T18:00:00Z",
+   "maturity_date": "2036-07-15",
+   "offering_amount": 17000000000.0,
+   "price_per_100": 99.77102,
+   "security_term": "9-Year 10-Month TIPS",
+   "security_type": "Note",
+   "total_accepted": 17000002100.0
+  },
+  {
+   "absent": {
+    "high_discount_rate": "no_data",
+    "high_investment_rate": "no_data"
+   },
+   "auction_date": "2026-09-10",
+   "bid_to_cover": 2.52,
+   "cusip": "91282CNA5",
+   "high_discount_rate": null,
+   "high_investment_rate": null,
+   "high_yield": 0.04125,
+   "interest_rate": 0.04125,
+   "issue_date": "2026-09-15",
+   "knowledge_time": "2026-09-10T18:00:00Z",
+   "maturity_date": "2036-08-15",
+   "offering_amount": 39000000000.0,
+   "price_per_100": 100.0,
+   "security_term": "10-Year",
+   "security_type": "Note",
+   "total_accepted": 39000045600.0
+  }
+ ]
+}

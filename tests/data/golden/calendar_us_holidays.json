@@ -1,0 +1,818 @@
+{
+ "absent": {},
+ "model": "marketlens.MarketHoliday",
+ "notes": [],
+ "offload": "auto",
+ "pagination": null,
+ "provenance": {
+  "as_of": null,
+  "authority": [
+   "exchange",
+   "third-party",
+   "official"
+  ],
+  "cached": false,
+  "dataset": "nyse.holidays,sifma.holidays,opm.federal_holidays",
+  "delay": "unknown",
+  "derived_from": [],
+  "environment": null,
+  "feed": null,
+  "knowledge_time": "2026-10-02T20:00:00Z",
+  "lag_days": -91.0,
+  "operation": null,
+  "pages_fetched": 3,
+  "provider": "nyse,sifma,opm",
+  "request": {
+   "as_of": null,
+   "end": "2027-12-31",
+   "markets": [
+    "stocks",
+    "bonds",
+    "federal"
+   ],
+   "start": "2026-01-01"
+  },
+  "route": "omni nyse.holidays, sifma.holidays, opm.federal_holidays <- nyse.com, sifma.org, opm.gov",
+  "schema_version": "1.1.0",
+  "stale": null,
+  "truncated": false,
+  "truncation_note": null,
+  "upstream_request_id": null
+ },
+ "risk": null,
+ "rows": [
+  {
+   "absent": {
+    "close_at": "not_applicable",
+    "close_time_et": "not_applicable",
+    "crosscheck_note": "not_applicable",
+    "note": "not_applicable"
+   },
+   "close_at": null,
+   "close_time_et": null,
+   "crosscheck": "not_checked",
+   "crosscheck_note": null,
+   "holiday_date": "2026-01-01",
+   "knowledge_time": "2026-10-02T20:00:00Z",
+   "market": "stocks",
+   "name": "New Years Day",
+   "note": null,
+   "publisher": "nyse",
+   "status": "closed"
+  },
+  {
+   "absent": {
+    "close_at": "not_applicable",
+    "close_time_et": "not_applicable",
+    "crosscheck": "not_applicable",
+    "crosscheck_note": "not_applicable",
+    "note": "not_applicable"
+   },
+   "close_at": null,
+   "close_time_et": null,
+   "crosscheck": null,
+   "crosscheck_note": null,
+   "holiday_date": "2026-01-01",
+   "knowledge_time": "2026-10-02T20:00:00Z",
+   "market": "bonds",
+   "name": "New Year's Day",
+   "note": null,
+   "publisher": "sifma",
+   "status": "closed"
+  },
+  {
+   "absent": {
+    "close_at": "not_applicable",
+    "close_time_et": "not_applicable",
+    "crosscheck": "not_applicable",
+    "crosscheck_note": "not_applicable",
+    "note": "not_applicable"
+   },
+   "close_at": null,
+   "close_time_et": null,
+   "crosscheck": null,
+   "crosscheck_note": null,
+   "holiday_date": "2026-01-01",
+   "knowledge_time": "2026-10-02T20:00:00Z",
+   "market": "federal",
+   "name": "New Year's Day",
+   "note": null,
+   "publisher": "opm",
+   "status": "closed"
+  },
+  {
+   "absent": {
+    "close_at": "not_applicable",
+    "close_time_et": "not_applicable",
+    "crosscheck_note": "not_applicable",
+    "note": "not_applicable"
+   },
+   "close_at": null,
+   "close_time_et": null,
+   "crosscheck": "not_checked",
+   "crosscheck_note": null,
+   "holiday_date": "2026-01-19",
+   "knowledge_time": "2026-10-02T20:00:00Z",
+   "market": "stocks",
+   "name": "Martin Luther King, Jr. Day",
+   "note": null,
+   "publisher": "nyse",
+   "status": "closed"
+  },
+  {
+   "absent": {
+    "close_at": "not_applicable",
+    "close_time_et": "not_applicable",
+    "crosscheck": "not_applicable",
+    "crosscheck_note": "not_applicable",
+    "note": "not_applicable"
+   },
+   "close_at": null,
+   "close_time_et": null,
+   "crosscheck": null,
+   "crosscheck_note": null,
+   "holiday_date": "2026-01-19",
+   "knowledge_time": "2026-10-02T20:00:00Z",
+   "market": "bonds",
+   "name": "Martin Luther King Day",
+   "note": null,
+   "publisher": "sifma",
+   "status": "closed"
+  },
+  {
+   "absent": {
+    "close_at": "not_applicable",
+    "close_time_et": "not_applicable",
+    "crosscheck": "not_applicable",
+    "crosscheck_note": "not_applicable",
+    "note": "not_applicable"
+   },
+   "close_at": null,
+   "close_time_et": null,
+   "crosscheck": null,
+   "crosscheck_note": null,
+   "holiday_date": "2026-01-19",
+   "knowledge_time": "2026-10-02T20:00:00Z",
+   "market": "federal",
+   "name": "Birthday of Martin Luther King, Jr.",
+   "note": null,
+   "publisher": "opm",
+   "status": "closed"
+  },
+  {
+   "absent": {
+    "close_at": "not_applicable",
+    "close_time_et": "not_applicable",
+    "crosscheck_note": "not_applicable",
+    "note": "not_applicable"
+   },
+   "close_at": null,
+   "close_time_et": null,
+   "crosscheck": "not_checked",
+   "crosscheck_note": null,
+   "holiday_date": "2026-02-16",
+   "knowledge_time": "2026-10-02T20:00:00Z",
+   "market": "stocks",
+   "name": "Washington's Birthday",
+   "note": null,
+   "publisher": "nyse",
+   "status": "closed"
+  },
+  {
+   "absent": {
+    "close_at": "not_applicable",
+    "close_time_et": "not_applicable",
+    "crosscheck": "not_applicable",
+    "crosscheck_note": "not_applicable",
+    "note": "not_applicable"
+   },
+   "close_at": null,
+   "close_time_et": null,
+   "crosscheck": null,
+   "crosscheck_note": null,
+   "holiday_date": "2026-02-16",
+   "knowledge_time": "2026-10-02T20:00:00Z",
+   "market": "bonds",
+   "name": "Presidents Day",
+   "note": null,
+   "publisher": "sifma",
+   "status": "closed"
+  },
+  {
+   "absent": {
+    "close_at": "not_applicable",
+    "close_time_et": "not_applicable",
+    "crosscheck": "not_applicable",
+    "crosscheck_note": "not_applicable",
+    "note": "not_applicable"
+   },
+   "close_at": null,
+   "close_time_et": null,
+   "crosscheck": null,
+   "crosscheck_note": null,
+   "holiday_date": "2026-02-16",
+   "knowledge_time": "2026-10-02T20:00:00Z",
+   "market": "federal",
+   "name": "Washington's Birthday",
+   "note": null,
+   "publisher": "opm",
+   "status": "closed"
+  },
+  {
+   "absent": {
+    "crosscheck": "not_applicable",
+    "crosscheck_note": "not_applicable",
+    "note": "not_applicable"
+   },
+   "close_at": "2026-04-02T18:00:00Z",
+   "close_time_et": "14:00",
+   "crosscheck": null,
+   "crosscheck_note": null,
+   "holiday_date": "2026-04-02",
+   "knowledge_time": "2026-10-02T20:00:00Z",
+   "market": "bonds",
+   "name": "Early close before Good Friday",
+   "note": null,
+   "publisher": "sifma",
+   "status": "early_close"
+  },
+  {
+   "absent": {
+    "close_at": "not_applicable",
+    "close_time_et": "not_applicable",
+    "crosscheck_note": "not_applicable",
+    "note": "not_applicable"
+   },
+   "close_at": null,
+   "close_time_et": null,
+   "crosscheck": "not_checked",
+   "crosscheck_note": null,
+   "holiday_date": "2026-04-03",
+   "knowledge_time": "2026-10-02T20:00:00Z",
+   "market": "stocks",
+   "name": "Good Friday",
+   "note": null,
+   "publisher": "nyse",
+   "status": "closed"
+  },
+  {
+   "absent": {
+    "close_at": "not_applicable",
+    "close_time_et": "not_applicable",
+    "crosscheck": "not_applicable",
+    "crosscheck_note": "not_applicable",
+    "note": "not_applicable"
+   },
+   "close_at": null,
+   "close_time_et": null,
+   "crosscheck": null,
+   "crosscheck_note": null,
+   "holiday_date": "2026-04-03",
+   "knowledge_time": "2026-10-02T20:00:00Z",
+   "market": "bonds",
+   "name": "Good Friday",
+   "note": null,
+   "publisher": "sifma",
+   "status": "closed"
+  },
+  {
+   "absent": {
+    "crosscheck": "not_applicable",
+    "crosscheck_note": "not_applicable",
+    "note": "not_applicable"
+   },
+   "close_at": "2026-05-22T18:00:00Z",
+   "close_time_et": "14:00",
+   "crosscheck": null,
+   "crosscheck_note": null,
+   "holiday_date": "2026-05-22",
+   "knowledge_time": "2026-10-02T20:00:00Z",
+   "market": "bonds",
+   "name": "Early close before Memorial Day",
+   "note": null,
+   "publisher": "sifma",
+   "status": "early_close"
+  },
+  {
+   "absent": {
+    "close_at": "not_applicable",
+    "close_time_et": "not_applicable",
+    "crosscheck_note": "not_applicable",
+    "note": "not_applicable"
+   },
+   "close_at": null,
+   "close_time_et": null,
+   "crosscheck": "not_checked",
+   "crosscheck_note": null,
+   "holiday_date": "2026-05-25",
+   "knowledge_time": "2026-10-02T20:00:00Z",
+   "market": "stocks",
+   "name": "Memorial Day",
+   "note": null,
+   "publisher": "nyse",
+   "status": "closed"
+  },
+  {
+   "absent": {
+    "close_at": "not_applicable",
+    "close_time_et": "not_applicable",
+    "crosscheck": "not_applicable",
+    "crosscheck_note": "not_applicable",
+    "note": "not_applicable"
+   },
+   "close_at": null,
+   "close_time_et": null,
+   "crosscheck": null,
+   "crosscheck_note": null,
+   "holiday_date": "2026-05-25",
+   "knowledge_time": "2026-10-02T20:00:00Z",
+   "market": "bonds",
+   "name": "Memorial Day",
+   "note": null,
+   "publisher": "sifma",
+   "status": "closed"
+  },
+  {
+   "absent": {
+    "close_at": "not_applicable",
+    "close_time_et": "not_applicable",
+    "crosscheck": "not_applicable",
+    "crosscheck_note": "not_applicable",
+    "note": "not_applicable"
+   },
+   "close_at": null,
+   "close_time_et": null,
+   "crosscheck": null,
+   "crosscheck_note": null,
+   "holiday_date": "2026-05-25",
+   "knowledge_time": "2026-10-02T20:00:00Z",
+   "market": "federal",
+   "name": "Memorial Day",
+   "note": null,
+   "publisher": "opm",
+   "status": "closed"
+  },
+  {
+   "absent": {
+    "close_at": "not_applicable",
+    "close_time_et": "not_applicable",
+    "crosscheck_note": "not_applicable",
+    "note": "not_applicable"
+   },
+   "close_at": null,
+   "close_time_et": null,
+   "crosscheck": "not_checked",
+   "crosscheck_note": null,
+   "holiday_date": "2026-06-19",
+   "knowledge_time": "2026-10-02T20:00:00Z",
+   "market": "stocks",
+   "name": "Juneteenth National Independence Day",
+   "note": null,
+   "publisher": "nyse",
+   "status": "closed"
+  },
+  {
+   "absent": {
+    "close_at": "not_applicable",
+    "close_time_et": "not_applicable",
+    "crosscheck": "not_applicable",
+    "crosscheck_note": "not_applicable",
+    "note": "not_applicable"
+   },
+   "close_at": null,
+   "close_time_et": null,
+   "crosscheck": null,
+   "crosscheck_note": null,
+   "holiday_date": "2026-06-19",
+   "knowledge_time": "2026-10-02T20:00:00Z",
+   "market": "bonds",
+   "name": "Juneteenth National Independence Day",
+   "note": null,
+   "publisher": "sifma",
+   "status": "closed"
+  },
+  {
+   "absent": {
+    "close_at": "not_applicable",
+    "close_time_et": "not_applicable",
+    "crosscheck": "not_applicable",
+    "crosscheck_note": "not_applicable",
+    "note": "not_applicable"
+   },
+   "close_at": null,
+   "close_time_et": null,
+   "crosscheck": null,
+   "crosscheck_note": null,
+   "holiday_date": "2026-06-19",
+   "knowledge_time": "2026-10-02T20:00:00Z",
+   "market": "federal",
+   "name": "Juneteenth National Independence Day",
+   "note": null,
+   "publisher": "opm",
+   "status": "closed"
+  },
+  {
+   "absent": {
+    "crosscheck": "not_applicable",
+    "crosscheck_note": "not_applicable",
+    "note": "not_applicable"
+   },
+   "close_at": "2026-07-02T18:00:00Z",
+   "close_time_et": "14:00",
+   "crosscheck": null,
+   "crosscheck_note": null,
+   "holiday_date": "2026-07-02",
+   "knowledge_time": "2026-10-02T20:00:00Z",
+   "market": "bonds",
+   "name": "Early close before U.S. Independence Day",
+   "note": null,
+   "publisher": "sifma",
+   "status": "early_close"
+  },
+  {
+   "absent": {
+    "close_at": "not_applicable",
+    "close_time_et": "not_applicable",
+    "crosscheck_note": "not_applicable"
+   },
+   "close_at": null,
+   "close_time_et": null,
+   "crosscheck": "not_checked",
+   "crosscheck_note": null,
+   "holiday_date": "2026-07-03",
+   "knowledge_time": "2026-10-02T20:00:00Z",
+   "market": "stocks",
+   "name": "Independence Day",
+   "note": "Observed",
+   "publisher": "nyse",
+   "status": "closed"
+  },
+  {
+   "absent": {
+    "close_at": "not_applicable",
+    "close_time_et": "not_applicable",
+    "crosscheck": "not_applicable",
+    "crosscheck_note": "not_applicable"
+   },
+   "close_at": null,
+   "close_time_et": null,
+   "crosscheck": null,
+   "crosscheck_note": null,
+   "holiday_date": "2026-07-03",
+   "knowledge_time": "2026-10-02T20:00:00Z",
+   "market": "bonds",
+   "name": "U.S. Independence Day",
+   "note": "Observed",
+   "publisher": "sifma",
+   "status": "closed"
+  },
+  {
+   "absent": {
+    "close_at": "not_applicable",
+    "close_time_et": "not_applicable",
+    "crosscheck": "not_applicable",
+    "crosscheck_note": "not_applicable",
+    "note": "not_applicable"
+   },
+   "close_at": null,
+   "close_time_et": null,
+   "crosscheck": null,
+   "crosscheck_note": null,
+   "holiday_date": "2026-07-03",
+   "knowledge_time": "2026-10-02T20:00:00Z",
+   "market": "federal",
+   "name": "Independence Day",
+   "note": null,
+   "publisher": "opm",
+   "status": "closed"
+  },
+  {
+   "absent": {
+    "close_at": "not_applicable",
+    "close_time_et": "not_applicable",
+    "crosscheck_note": "not_applicable",
+    "note": "not_applicable"
+   },
+   "close_at": null,
+   "close_time_et": null,
+   "crosscheck": "not_checked",
+   "crosscheck_note": null,
+   "holiday_date": "2026-09-07",
+   "knowledge_time": "2026-10-02T20:00:00Z",
+   "market": "stocks",
+   "name": "Labor Day",
+   "note": null,
+   "publisher": "nyse",
+   "status": "closed"
+  },
+  {
+   "absent": {
+    "close_at": "not_applicable",
+    "close_time_et": "not_applicable",
+    "crosscheck": "not_applicable",
+    "crosscheck_note": "not_applicable",
+    "note": "not_applicable"
+   },
+   "close_at": null,
+   "close_time_et": null,
+   "crosscheck": null,
+   "crosscheck_note": null,
+   "holiday_date": "2026-09-07",
+   "knowledge_time": "2026-10-02T20:00:00Z",
+   "market": "bonds",
+   "name": "Labor Day",
+   "note": null,
+   "publisher": "sifma",
+   "status": "closed"
+  },
+  {
+   "absent": {
+    "close_at": "not_applicable",
+    "close_time_et": "not_applicable",
+    "crosscheck": "not_applicable",
+    "crosscheck_note": "not_applicable",
+    "note": "not_applicable"
+   },
+   "close_at": null,
+   "close_time_et": null,
+   "crosscheck": null,
+   "crosscheck_note": null,
+   "holiday_date": "2026-09-07",
+   "knowledge_time": "2026-10-02T20:00:00Z",
+   "market": "federal",
+   "name": "Labor Day",
+   "note": null,
+   "publisher": "opm",
+   "status": "closed"
+  },
+  {
+   "absent": {
+    "close_at": "not_applicable",
+    "close_time_et": "not_applicable",
+    "crosscheck": "not_applicable",
+    "crosscheck_note": "not_applicable",
+    "note": "not_applicable"
+   },
+   "close_at": null,
+   "close_time_et": null,
+   "crosscheck": null,
+   "crosscheck_note": null,
+   "holiday_date": "2026-10-12",
+   "knowledge_time": "2026-10-02T20:00:00Z",
+   "market": "bonds",
+   "name": "Columbus Day",
+   "note": null,
+   "publisher": "sifma",
+   "status": "closed"
+  },
+  {
+   "absent": {
+    "close_at": "not_applicable",
+    "close_time_et": "not_applicable",
+    "crosscheck": "not_applicable",
+    "crosscheck_note": "not_applicable",
+    "note": "not_applicable"
+   },
+   "close_at": null,
+   "close_time_et": null,
+   "crosscheck": null,
+   "crosscheck_note": null,
+   "holiday_date": "2026-10-12",
+   "knowledge_time": "2026-10-02T20:00:00Z",
+   "market": "federal",
+   "name": "Columbus Day",
+   "note": null,
+   "publisher": "opm",
+   "status": "closed"
+  },
+  {
+   "absent": {
+    "close_at": "not_applicable",
+    "close_time_et": "not_applicable",
+    "crosscheck": "not_applicable",
+    "crosscheck_note": "not_applicable",
+    "note": "not_applicable"
+   },
+   "close_at": null,
+   "close_time_et": null,
+   "crosscheck": null,
+   "crosscheck_note": null,
+   "holiday_date": "2026-11-11",
+   "knowledge_time": "2026-10-02T20:00:00Z",
+   "market": "bonds",
+   "name": "Veterans Day",
+   "note": null,
+   "publisher": "sifma",
+   "status": "closed"
+  },
+  {
+   "absent": {
+    "close_at": "not_applicable",
+    "close_time_et": "not_applicable",
+    "crosscheck": "not_applicable",
+    "crosscheck_note": "not_applicable",
+    "note": "not_applicable"
+   },
+   "close_at": null,
+   "close_time_et": null,
+   "crosscheck": null,
+   "crosscheck_note": null,
+   "holiday_date": "2026-11-11",
+   "knowledge_time": "2026-10-02T20:00:00Z",
+   "market": "federal",
+   "name": "Veterans Day",
+   "note": null,
+   "publisher": "opm",
+   "status": "closed"
+  },
+  {
+   "absent": {
+    "close_at": "not_applicable",
+    "close_time_et": "not_applicable",
+    "crosscheck_note": "not_applicable",
+    "note": "not_applicable"
+   },
+   "close_at": null,
+   "close_time_et": null,
+   "crosscheck": "not_checked",
+   "crosscheck_note": null,
+   "holiday_date": "2026-11-26",
+   "knowledge_time": "2026-10-02T20:00:00Z",
+   "market": "stocks",
+   "name": "Thanksgiving Day",
+   "note": null,
+   "publisher": "nyse",
+   "status": "closed"
+  },
+  {
+   "absent": {
+    "close_at": "not_applicable",
+    "close_time_et": "not_applicable",
+    "crosscheck": "not_applicable",
+    "crosscheck_note": "not_applicable",
+    "note": "not_applicable"
+   },
+   "close_at": null,
+   "close_time_et": null,
+   "crosscheck": null,
+   "crosscheck_note": null,
+   "holiday_date": "2026-11-26",
+   "knowledge_time": "2026-10-02T20:00:00Z",
+   "market": "bonds",
+   "name": "Thanksgiving Day",
+   "note": null,
+   "publisher": "sifma",
+   "status": "closed"
+  },
+  {
+   "absent": {
+    "close_at": "not_applicable",
+    "close_time_et": "not_applicable",
+    "crosscheck": "not_applicable",
+    "crosscheck_note": "not_applicable",
+    "note": "not_applicable"
+   },
+   "close_at": null,
+   "close_time_et": null,
+   "crosscheck": null,
+   "crosscheck_note": null,
+   "holiday_date": "2026-11-26",
+   "knowledge_time": "2026-10-02T20:00:00Z",
+   "market": "federal",
+   "name": "Thanksgiving Day",
+   "note": null,
+   "publisher": "opm",
+   "status": "closed"
+  },
+  {
+   "absent": {
+    "crosscheck_note": "not_applicable"
+   },
+   "close_at": "2026-11-27T18:00:00Z",
+   "close_time_et": "13:00",
+   "crosscheck": "not_checked",
+   "crosscheck_note": null,
+   "holiday_date": "2026-11-27",
+   "knowledge_time": "2026-10-02T20:00:00Z",
+   "market": "stocks",
+   "name": "Early close after Thanksgiving Day",
+   "note": "Eligible options close 15 minutes later",
+   "publisher": "nyse",
+   "status": "early_close"
+  },
+  {
+   "absent": {
+    "crosscheck": "not_applicable",
+    "crosscheck_note": "not_applicable",
+    "note": "not_applicable"
+   },
+   "close_at": "2026-11-27T19:00:00Z",
+   "close_time_et": "14:00",
+   "crosscheck": null,
+   "crosscheck_note": null,
+   "holiday_date": "2026-11-27",
+   "knowledge_time": "2026-10-02T20:00:00Z",
+   "market": "bonds",
+   "name": "Early close after Thanksgiving Day",
+   "note": null,
+   "publisher": "sifma",
+   "status": "early_close"
+  },
+  {
+   "absent": {
+    "crosscheck": "not_applicable",
+    "crosscheck_note": "not_applicable",
+    "note": "not_applicable"
+   },
+   "close_at": "2026-12-24T19:00:00Z",
+   "close_time_et": "14:00",
+   "crosscheck": null,
+   "crosscheck_note": null,
+   "holiday_date": "2026-12-24",
+   "knowledge_time": "2026-10-02T20:00:00Z",
+   "market": "bonds",
+   "name": "Early close before Christmas Day",
+   "note": null,
+   "publisher": "sifma",
+   "status": "early_close"
+  },
+  {
+   "absent": {
+    "close_at": "not_applicable",
+    "close_time_et": "not_applicable",
+    "crosscheck_note": "not_applicable",
+    "note": "not_applicable"
+   },
+   "close_at": null,
+   "close_time_et": null,
+   "crosscheck": "not_checked",
+   "crosscheck_note": null,
+   "holiday_date": "2026-12-25",
+   "knowledge_time": "2026-10-02T20:00:00Z",
+   "market": "stocks",
+   "name": "Christmas Day",
+   "note": null,
+   "publisher": "nyse",
+   "status": "closed"
+  },
+  {
+   "absent": {
+    "close_at": "not_applicable",
+    "close_time_et": "not_applicable",
+    "crosscheck": "not_applicable",
+    "crosscheck_note": "not_applicable",
+    "note": "not_applicable"
+   },
+   "close_at": null,
+   "close_time_et": null,
+   "crosscheck": null,
+   "crosscheck_note": null,
+   "holiday_date": "2026-12-25",
+   "knowledge_time": "2026-10-02T20:00:00Z",
+   "market": "bonds",
+   "name": "Christmas Day",
+   "note": null,
+   "publisher": "sifma",
+   "status": "closed"
+  },
+  {
+   "absent": {
+    "close_at": "not_applicable",
+    "close_time_et": "not_applicable",
+    "crosscheck": "not_applicable",
+    "crosscheck_note": "not_applicable",
+    "note": "not_applicable"
+   },
+   "close_at": null,
+   "close_time_et": null,
+   "crosscheck": null,
+   "crosscheck_note": null,
+   "holiday_date": "2026-12-25",
+   "knowledge_time": "2026-10-02T20:00:00Z",
+   "market": "federal",
+   "name": "Christmas Day",
+   "note": null,
+   "publisher": "opm",
+   "status": "closed"
+  },
+  {
+   "absent": {
+    "close_at": "not_applicable",
+    "close_time_et": "not_applicable",
+    "crosscheck_note": "not_applicable",
+    "note": "not_applicable"
+   },
+   "close_at": null,
+   "close_time_et": null,
+   "crosscheck": "not_checked",
+   "crosscheck_note": null,
+   "holiday_date": "2027-01-01",
+   "knowledge_time": "2026-10-02T20:00:00Z",
+   "market": "stocks",
+   "name": "New Years Day",
+   "note": null,
+   "publisher": "nyse",
+   "status": "closed"
+  }
+ ]
+}

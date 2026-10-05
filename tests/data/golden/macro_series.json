@@ -1,0 +1,143 @@
+{
+ "absent": {
+  "frequency": {
+   "code": "not_provided_by_source",
+   "detail": "FRED's observations do not state the frequency"
+  },
+  "line_number": {
+   "code": "not_applicable",
+   "detail": "BEA tables only"
+  },
+  "period": {
+   "code": "not_applicable",
+   "detail": "FRED states no period code"
+  },
+  "table_name": {
+   "code": "not_applicable",
+   "detail": "BEA tables only"
+  }
+ },
+ "model": "marketlens.EconomicObservation",
+ "notes": [],
+ "offload": "auto",
+ "pagination": null,
+ "provenance": {
+  "as_of": null,
+  "authority": [
+   "official"
+  ],
+  "cached": false,
+  "dataset": "fred.series",
+  "delay": "unknown",
+  "derived_from": [],
+  "environment": null,
+  "feed": null,
+  "knowledge_time": "2024-04-10T00:00:00Z",
+  "lag_days": 945.0,
+  "operation": null,
+  "pages_fetched": 2,
+  "provider": "fred",
+  "request": {
+   "as_of": null,
+   "end": null,
+   "include_vintages": false,
+   "series_ids": [
+    "CPIAUCSL",
+    "ZZTEST01"
+   ],
+   "start": null
+  },
+  "route": "omni fred.series <- api.stlouisfed.org/fred/series/observations (ALFRED vintages)",
+  "schema_version": "1.1.0",
+  "stale": null,
+  "truncated": false,
+  "truncation_note": null,
+  "upstream_request_id": null
+ },
+ "risk": null,
+ "rows": [
+  {
+   "absent": null,
+   "date": "2024-01-01",
+   "frequency": null,
+   "knowledge_time": "2024-03-12T00:00:00Z",
+   "line_number": null,
+   "period": null,
+   "pit": "vintage",
+   "series_id": "CPIAUCSL",
+   "source": "fred",
+   "table_name": null,
+   "title": "CPI (All Items)",
+   "units": "index",
+   "value": 308.5
+  },
+  {
+   "absent": null,
+   "date": "2024-02-01",
+   "frequency": null,
+   "knowledge_time": "2024-04-10T00:00:00Z",
+   "line_number": null,
+   "period": null,
+   "pit": "vintage",
+   "series_id": "CPIAUCSL",
+   "source": "fred",
+   "table_name": null,
+   "title": "CPI (All Items)",
+   "units": "index",
+   "value": 310.1
+  },
+  {
+   "absent": {
+    "value": "no_data"
+   },
+   "date": "2024-03-01",
+   "frequency": null,
+   "knowledge_time": "2024-04-10T00:00:00Z",
+   "line_number": null,
+   "period": null,
+   "pit": "vintage",
+   "series_id": "CPIAUCSL",
+   "source": "fred",
+   "table_name": null,
+   "title": "CPI (All Items)",
+   "units": "index",
+   "value": null
+  },
+  {
+   "absent": {
+    "title": "not_provided_by_source",
+    "units": "not_provided_by_source"
+   },
+   "date": "2024-01-04",
+   "frequency": null,
+   "knowledge_time": "2024-01-05T00:00:00Z",
+   "line_number": null,
+   "period": null,
+   "pit": "vintage",
+   "series_id": "ZZTEST01",
+   "source": "fred",
+   "table_name": null,
+   "title": null,
+   "units": null,
+   "value": 4.05
+  },
+  {
+   "absent": {
+    "title": "not_provided_by_source",
+    "units": "not_provided_by_source"
+   },
+   "date": "2024-01-05",
+   "frequency": null,
+   "knowledge_time": "2024-01-06T00:00:00Z",
+   "line_number": null,
+   "period": null,
+   "pit": "vintage",
+   "series_id": "ZZTEST01",
+   "source": "fred",
+   "table_name": null,
+   "title": null,
+   "units": null,
+   "value": 4.07
+  }
+ ]
+}

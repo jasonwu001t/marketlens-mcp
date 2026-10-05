@@ -1,0 +1,17 @@
+{
+ "_synthetic": true,
+ "cik": "9999970",
+ "name": "Synthetic Index Funds Trust",
+ "filings": {
+  "recent": {
+   "accessionNumber": ["0009999970-26-000005", "0009999970-26-000002"],
+   "filingDate": ["2026-08-28", "2026-05-29"],
+   "reportDate": ["2026-06-30", "2026-03-31"],
+   "acceptanceDateTime": ["2026-08-28T16:00:05.000Z", "2026-05-29T16:10:00.000Z"],
+   "form": ["NPORT-P", "NPORT-P"],
+   "items": ["", ""],
+   "primaryDocument": ["primary_doc.xml", "primary_doc.xml"]
+  },
+  "files": []
+ }
+}

@@ -63,7 +63,7 @@ __all__ = [
 T = TypeVar("T")
 
 #: Names a plugin may not take (the built-ins and the server itself).
-BUILTIN_PLUGIN_NAMES = frozenset({"results", "alpaca", "analytics", "core", "marketlens"})
+BUILTIN_PLUGIN_NAMES = frozenset({"results", "alpaca", "analytics", "data", "core", "marketlens"})
 
 log = logging.getLogger("marketlens")
 

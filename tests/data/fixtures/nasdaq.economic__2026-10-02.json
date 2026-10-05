@@ -1,0 +1,49 @@
+{
+ "_synthetic": true,
+ "data": {
+  "headers": {
+   "gmt": "Time (ET)",
+   "country": "Country",
+   "eventName": "Event",
+   "actual": "Actual",
+   "consensus": "Consensus",
+   "previous": "Previous",
+   "description": "Description"
+  },
+  "rows": [
+   {
+    "gmt": "08:30",
+    "country": "United States",
+    "eventName": "Nonfarm Payrolls",
+    "actual": "&nbsp;",
+    "consensus": "150K",
+    "previous": "142K",
+    "description": "Synthetic jobs report description."
+   },
+   {
+    "gmt": "08:30",
+    "country": "United States",
+    "eventName": "Unemployment Rate",
+    "actual": "",
+    "consensus": "4.3%",
+    "previous": "4.3%",
+    "description": "Synthetic unemployment rate description."
+   },
+   {
+    "gmt": "All Day",
+    "country": "United States",
+    "eventName": "Synthetic Holiday Note",
+    "actual": "",
+    "consensus": "",
+    "previous": "",
+    "description": ""
+   }
+  ]
+ },
+ "message": null,
+ "status": {
+  "rCode": 200,
+  "bCodeMessage": null,
+  "developerMessage": null
+ }
+}

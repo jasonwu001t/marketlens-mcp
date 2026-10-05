@@ -1,0 +1,19 @@
+<?xml version="1.0"?>
+<!-- synthetic Form 144 -->
+<edgarSubmission xmlns="http://www.sec.gov/edgar/ownership">
+ <headerData><submissionType>144</submissionType></headerData>
+ <formData>
+  <issuerInfo>
+   <issuerCik>0009999901</issuerCik>
+   <issuerName>Testco Synthetic Corp</issuerName>
+   <nameOfPersonForWhoseAccountTheSecuritiesAreToBeSold>Example John</nameOfPersonForWhoseAccountTheSecuritiesAreToBeSold>
+   <relationshipsToIssuer><relationshipToIssuer>Director</relationshipToIssuer></relationshipsToIssuer>
+  </issuerInfo>
+  <securitiesInformation>
+   <securitiesClassTitle>Common</securitiesClassTitle>
+   <noOfUnitsSold>2000</noOfUnitsSold>
+   <aggregateMarketValue>101000</aggregateMarketValue>
+   <approxSaleDate>02/25/2026</approxSaleDate>
+  </securitiesInformation>
+ </formData>
+</edgarSubmission>

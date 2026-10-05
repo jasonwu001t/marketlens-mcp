@@ -3,7 +3,9 @@
 ``builtin_table()`` is what README.md holds between the markers (the built-in
 specs under their default capabilities, whatever the owner's config says);
 ``marketlens-mcp tools --markdown`` prints the same table for the installed
-configuration.
+configuration. The data tools are always in the README table, marked "needs
+the data extra", whether or not marketlens-data is installed where the table
+is generated.
 """
 
 from __future__ import annotations
@@ -18,6 +20,7 @@ from .plugin_api import CapabilitySpec
 from .registry import ToolEntry, build_catalog
 
 START = "<!-- tools:start -->"
+DATA_NOTE = "needs the data extra"
 END = "<!-- tools:end -->"
 
 
@@ -31,6 +34,7 @@ def tool_table(
     *,
     states: Mapping[str, bool] | None = None,
     show_disabled: bool = False,
+    extra_notes: Mapping[str, str] | None = None,
 ) -> str:
     """Markdown table. Without ``states`` (README mode) the capability column
     shows each capability's default; with ``states`` (installed mode) it shows
@@ -49,6 +53,8 @@ def tool_table(
                 continue
             cap = spec.capability if enabled else f"{spec.capability} (off)"
         notes = "untrusted text" if spec.output_risk == "external_text" else spec.readme
+        if extra_notes and spec.name in extra_notes:
+            notes = f"{notes}; {extra_notes[spec.name]}"
         env = ", ".join(e.env) if e.env else "-"
         rows.append(
             f"| `{spec.name}` | {_cell(cap)} | `{_cell(spec.route)}` ({_cell(spec.provider)}) | "
@@ -65,8 +71,15 @@ def default_config() -> Config:
 
 
 def builtin_table() -> str:
+    from .providers.data.tools import all_specs as data_specs
+
     cat = build_catalog(default_config(), discover=list)
-    return tool_table(cat.tools.values(), cat.capabilities)
+    entries = {name: e for name, e in cat.tools.items() if e.plugin != "builtin:data"}
+    notes = {}
+    for spec in data_specs():
+        entries[spec.name] = ToolEntry(spec=spec, plugin="builtin:data", env=spec.env)
+        notes[spec.name] = DATA_NOTE
+    return tool_table(entries.values(), cat.capabilities, extra_notes=notes)
 
 
 def replace_table(text: str, table: str) -> str:

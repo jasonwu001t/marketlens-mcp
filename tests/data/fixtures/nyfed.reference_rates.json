@@ -1,0 +1,12 @@
+{
+ "_synthetic": true,
+ "refRates": [
+  {"effectiveDate": "2026-10-01", "type": "SOFR", "percentRate": 4.33, "percentPercentile1": 4.28, "volumeInBillions": 2615, "revisionIndicator": ""},
+  {"effectiveDate": "2026-10-01", "type": "EFFR", "percentRate": 4.33, "volumeInBillions": 89, "targetRateFrom": 4.25, "targetRateTo": 4.5, "revisionIndicator": ""},
+  {"effectiveDate": "2026-10-01", "type": "OBFR", "percentRate": 4.32, "volumeInBillions": 201, "revisionIndicator": ""},
+  {"effectiveDate": "2026-10-01", "type": "TGCR", "percentRate": 4.3, "volumeInBillions": 1003, "revisionIndicator": ""},
+  {"effectiveDate": "2026-10-01", "type": "BGCR", "percentRate": 4.3, "volumeInBillions": 1021, "revisionIndicator": ""},
+  {"effectiveDate": "2026-09-30", "type": "SOFR", "percentRate": 4.41, "volumeInBillions": null, "revisionIndicator": "Y"},
+  {"effectiveDate": "2026-10-01", "type": "SOFRAI", "percentRate": 4.2, "revisionIndicator": ""}
+ ]
+}

@@ -206,6 +206,29 @@ def test_truncated_fetch_gets_the_r16_note(store):
     assert out.provenance.truncation_note == note
 
 
+def test_a_row_cap_without_a_token_keeps_the_handlers_own_note(store):
+    # A source read at once (no upstream pages) cut at fetch.max_rows has nothing
+    # to continue from: R16's 'call again with page_token=...' would be false.
+    own = "Stopped at 5 rows (fetch.max_rows); narrow the request."
+    p = PaginationState(
+        complete=False, pages_fetched=1, rows_fetched=5, next_page_token=None, row_cap_hit=True
+    )
+    out = finalize(
+        store,
+        ToolOutput(
+            model=Bar,
+            provenance=provenance().model_copy(update={"truncated": True, "truncation_note": own}),
+            rows=bar_rows(n=5),
+            pagination=p,
+            notes=[own],
+        ),
+        limits=FetchLimits(max_rows=5, max_pages=20),
+    )
+    assert out.notes == [own]
+    assert not any("page_token" in n for n in out.notes)
+    assert out.provenance.truncation_note == own
+
+
 def test_stored_output_returns_the_existing_marker(store):
     info = store.put(
         rows_to_table(bar_rows(n=5), Bar),

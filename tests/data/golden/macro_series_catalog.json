@@ -1,0 +1,66 @@
+{
+ "absent": {},
+ "model": "marketlens.EconomicSeriesInfo",
+ "notes": [],
+ "offload": "auto",
+ "pagination": null,
+ "provenance": {
+  "as_of": null,
+  "authority": null,
+  "cached": true,
+  "dataset": null,
+  "delay": "unknown",
+  "derived_from": [],
+  "environment": null,
+  "feed": null,
+  "knowledge_time": null,
+  "lag_days": null,
+  "operation": null,
+  "pages_fetched": 0,
+  "provider": "local",
+  "request": {
+   "category": null,
+   "q": null
+  },
+  "route": "omni catalog.series_meta (local, no fetch)",
+  "schema_version": "1.1.0",
+  "stale": null,
+  "truncated": false,
+  "truncation_note": null,
+  "upstream_request_id": null
+ },
+ "risk": null,
+ "rows": [
+  {
+   "absent": null,
+   "category": "Inflation",
+   "chart_type": "line",
+   "name": "CPI (All Items)",
+   "polarity": "up_is_risk_off",
+   "series_id": "CPIAUCSL",
+   "units": "Index 1982-84=100"
+  },
+  {
+   "absent": null,
+   "category": "Employment",
+   "chart_type": "line",
+   "name": "Unemployment Rate",
+   "polarity": "up_is_risk_off",
+   "series_id": "UNRATE",
+   "units": "%"
+  },
+  {
+   "absent": {
+    "chart_type": "not_provided_by_source",
+    "polarity": "not_provided_by_source",
+    "units": "not_provided_by_source"
+   },
+   "category": "Custom",
+   "chart_type": null,
+   "name": "Synthetic series",
+   "polarity": null,
+   "series_id": "ZZSYN",
+   "units": null
+  }
+ ]
+}

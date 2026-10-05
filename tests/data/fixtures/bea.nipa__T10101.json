@@ -1,0 +1,18 @@
+{
+ "_synthetic": true,
+ "BEAAPI": {
+  "Request": {"RequestParam": [{"ParameterName": "TABLENAME", "ParameterValue": "T10101"}]},
+  "Results": {
+   "Statistic": "NIPA Table",
+   "UTCProductionTime": "2026-09-25T12:30:00.000",
+   "Dimensions": [],
+   "Data": [
+    {"TableName": "T10101", "SeriesCode": "A191RL", "LineNumber": "1", "LineDescription": "Gross domestic product", "TimePeriod": "2026Q1", "METRIC_NAME": "Fisher Quantity Index", "CL_UNIT": "Percent change, annual rate", "UNIT_MULT": "0", "DataValue": "1.4", "NoteRef": "T10101"},
+    {"TableName": "T10101", "SeriesCode": "A191RL", "LineNumber": "1", "LineDescription": "Gross domestic product", "TimePeriod": "2026Q2", "METRIC_NAME": "Fisher Quantity Index", "CL_UNIT": "Percent change, annual rate", "UNIT_MULT": "0", "DataValue": "2.1", "NoteRef": "T10101"},
+    {"TableName": "T10101", "SeriesCode": "DPCERL", "LineNumber": "2", "LineDescription": "Personal consumption expenditures", "TimePeriod": "2026Q1", "METRIC_NAME": "Fisher Quantity Index", "CL_UNIT": "Percent change, annual rate", "UNIT_MULT": "0", "DataValue": "0.9", "NoteRef": "T10101"},
+    {"TableName": "T10101", "SeriesCode": "DPCERL", "LineNumber": "2", "LineDescription": "Personal consumption expenditures", "TimePeriod": "2026Q2", "METRIC_NAME": "Fisher Quantity Index", "CL_UNIT": "Percent change, annual rate", "UNIT_MULT": "0", "DataValue": "(NA)", "NoteRef": "T10101"}
+   ],
+   "Notes": []
+  }
+ }
+}

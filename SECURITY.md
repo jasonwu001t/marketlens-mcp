@@ -23,4 +23,5 @@ Only the latest release receives fixes while the project is in alpha (0.x).
 - Model-written SQL passes a parser-based guard (one SELECT, no functions that read files or settings, tables only by this session's result ids) and then runs in a fresh in-memory DuckDB with external access disabled and its configuration locked, with a forced row limit, a timeout and a memory cap. DuckDB error texts are scrubbed of paths.
 - Results are stored as owner-only files in the user's cache directory, expire after 24 hours and are capped in size.
 - marketlens-mcp sends no telemetry; the FastMCP banner's update check is disabled.
+- The data tools (the `data` extra) call the publishers (FRED, BLS, BEA, SEC EDGAR, the Federal Reserve, the Treasury, Nasdaq, NYSE, SIFMA, OPM) directly from your machine and keep what they fetch in a local store (owner-only folder); marketlens never lets marketlens-data read a `.env` file, and key values are redacted from every error.
 - Plugins run in-process: installing a plugin is trusting its code.

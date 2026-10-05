@@ -1,0 +1,122 @@
+{
+ "absent": {},
+ "model": "marketlens.EarningsCalendarEntry",
+ "notes": [],
+ "offload": "auto",
+ "pagination": null,
+ "provenance": {
+  "as_of": null,
+  "authority": [
+   "third-party"
+  ],
+  "cached": false,
+  "dataset": "nasdaq.earnings",
+  "delay": "unknown",
+  "derived_from": [],
+  "environment": null,
+  "feed": null,
+  "knowledge_time": "2026-10-02T20:00:00Z",
+  "lag_days": 0.0,
+  "operation": null,
+  "pages_fetched": 2,
+  "provider": "nasdaq",
+  "request": {
+   "as_of": null,
+   "end": "2026-10-02",
+   "start": "2026-10-01",
+   "tickers": null
+  },
+  "route": "omni nasdaq.earnings <- api.nasdaq.com/api/calendar/earnings (unofficial)",
+  "schema_version": "1.1.0",
+  "stale": null,
+  "truncated": false,
+  "truncation_note": null,
+  "upstream_request_id": null
+ },
+ "risk": null,
+ "rows": [
+  {
+   "absent": {
+    "last_year_eps": "not_applicable",
+    "last_year_report_date": "not_applicable",
+    "market_cap": "no_data"
+   },
+   "eps_actual": -0.12,
+   "eps_forecast": -0.1,
+   "estimates": 2,
+   "fiscal_quarter": "2026-08",
+   "knowledge_time": "2026-10-02T20:00:00Z",
+   "last_year_eps": null,
+   "last_year_report_date": null,
+   "market_cap": null,
+   "name": "Lossco Synthetic Ltd",
+   "report_date": "2026-10-01",
+   "status": "reported",
+   "surprise_pct": -0.2,
+   "ticker": "LOSSCO",
+   "time_of_day": "not_supplied"
+  },
+  {
+   "absent": {
+    "last_year_eps": "not_applicable",
+    "last_year_report_date": "not_applicable"
+   },
+   "eps_actual": 0.47,
+   "eps_forecast": 0.45,
+   "estimates": 6,
+   "fiscal_quarter": "2026-08",
+   "knowledge_time": "2026-10-02T20:00:00Z",
+   "last_year_eps": null,
+   "last_year_report_date": null,
+   "market_cap": 2500000000.0,
+   "name": "Otherco Synthetic Inc.",
+   "report_date": "2026-10-01",
+   "status": "reported",
+   "surprise_pct": 0.0444,
+   "ticker": "OTHRCO",
+   "time_of_day": "pre_market"
+  },
+  {
+   "absent": {
+    "eps_actual": "not_applicable",
+    "last_year_eps": "no_data",
+    "last_year_report_date": "no_data",
+    "surprise_pct": "not_applicable"
+   },
+   "eps_actual": null,
+   "eps_forecast": 5.1,
+   "estimates": 3,
+   "fiscal_quarter": "2026-09",
+   "knowledge_time": "2026-10-02T20:00:00Z",
+   "last_year_eps": null,
+   "last_year_report_date": null,
+   "market_cap": 900000000000.0,
+   "name": "Berkshire Synthetic",
+   "report_date": "2026-10-02",
+   "status": "upcoming",
+   "surprise_pct": null,
+   "ticker": "BRK-B",
+   "time_of_day": "pre_market"
+  },
+  {
+   "absent": {
+    "eps_actual": "not_applicable",
+    "surprise_pct": "not_applicable"
+   },
+   "eps_actual": null,
+   "eps_forecast": 0.45,
+   "estimates": 8,
+   "fiscal_quarter": "2026-09",
+   "knowledge_time": "2026-10-02T20:00:00Z",
+   "last_year_eps": 0.38,
+   "last_year_report_date": "2025-10-30",
+   "market_cap": 19296256000.0,
+   "name": "Testco Synthetic Corp",
+   "report_date": "2026-10-02",
+   "status": "upcoming",
+   "surprise_pct": null,
+   "ticker": "TESTCO",
+   "time_of_day": "after_hours"
+  }
+ ]
+}

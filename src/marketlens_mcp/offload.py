@@ -84,7 +84,9 @@ def finalize(
     notes = list(out.notes)
     provenance: Provenance = out.provenance
     p = out.pagination
-    if p is not None and not p.complete and (p.row_cap_hit or p.page_cap_hit):
+    # R16 tells the model to continue with the page token; without one (a result
+    # read at once and cut at fetch.max_rows) the handler's own note stands.
+    if p is not None and not p.complete and (p.row_cap_hit or p.page_cap_hit) and p.next_page_token:
         note = truncation_note(tool, p, limits)
         if note not in notes:
             notes.append(note)

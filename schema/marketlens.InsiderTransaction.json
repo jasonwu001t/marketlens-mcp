@@ -1,0 +1,238 @@
+{
+  "$defs": {
+    "AbsenceCode": {
+      "description": "Why a value is None. Never served as 0.",
+      "enum": [
+        "not_provided_by_source",
+        "not_applicable",
+        "not_entitled",
+        "no_data",
+        "insufficient_data",
+        "not_recovered",
+        "no_match",
+        "withheld",
+        "source_error",
+        "unparseable"
+      ],
+      "title": "AbsenceCode",
+      "type": "string"
+    }
+  },
+  "$id": "urn:marketlens:schema:1:marketlens.InsiderTransaction",
+  "additionalProperties": false,
+  "description": "One transaction of a Form 4, or one Form 144 notice of an intended sale.",
+  "properties": {
+    "absent": {
+      "anyOf": [
+        {
+          "additionalProperties": {
+            "$ref": "#/$defs/AbsenceCode"
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Per-row reasons for None fields: field name -> AbsenceCode",
+      "title": "Absent"
+    },
+    "accession_number": {
+      "title": "Accession Number",
+      "type": "string"
+    },
+    "acquired_disposed": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "A or D",
+      "title": "Acquired Disposed"
+    },
+    "cik": {
+      "description": "Issuer CIK, 10-digit",
+      "title": "Cik",
+      "type": "string"
+    },
+    "filing_date": {
+      "format": "date",
+      "title": "Filing Date",
+      "type": "string"
+    },
+    "form": {
+      "description": "4, 4/A, 144 or 144/A",
+      "title": "Form",
+      "type": "string"
+    },
+    "has_10b5_1": {
+      "description": "Under a pre-arranged 10b5-1 plan",
+      "title": "Has 10B5 1",
+      "type": "boolean"
+    },
+    "insider_cik": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Insider Cik"
+    },
+    "insider_name": {
+      "title": "Insider Name",
+      "type": "string"
+    },
+    "is_derivative": {
+      "description": "Options/RSU table (True) or common stock table (False)",
+      "title": "Is Derivative",
+      "type": "boolean"
+    },
+    "is_director": {
+      "title": "Is Director",
+      "type": "boolean"
+    },
+    "is_officer": {
+      "title": "Is Officer",
+      "type": "boolean"
+    },
+    "is_ten_percent_owner": {
+      "title": "Is Ten Percent Owner",
+      "type": "boolean"
+    },
+    "knowledge_time": {
+      "description": "When the value became knowable under the dataset's point-in-time policy",
+      "format": "date-time",
+      "title": "Knowledge Time",
+      "type": "string",
+      "x-unit": "UTC"
+    },
+    "line": {
+      "description": "Position of the transaction in its filing (1 = first)",
+      "title": "Line",
+      "type": "integer",
+      "x-unit": "ordinal"
+    },
+    "officer_title": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Officer Title"
+    },
+    "price_per_share": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "USD",
+      "title": "Price Per Share",
+      "x-unit": "price"
+    },
+    "security_title": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Security Title"
+    },
+    "shares": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Shares",
+      "x-unit": "shares"
+    },
+    "shares_owned_after": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Shares Owned After",
+      "x-unit": "shares"
+    },
+    "ticker": {
+      "title": "Ticker",
+      "type": "string"
+    },
+    "transaction_code": {
+      "description": "P buy, S sell, A grant, M exercise, F tax, G gift, 144 announced sale",
+      "title": "Transaction Code",
+      "type": "string"
+    },
+    "transaction_date": {
+      "description": "Executed (Form 4) or intended sale date (Form 144)",
+      "format": "date",
+      "title": "Transaction Date",
+      "type": "string"
+    },
+    "value_usd": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "shares x price, or the 144 value",
+      "title": "Value Usd",
+      "x-unit": "USD"
+    }
+  },
+  "required": [
+    "ticker",
+    "cik",
+    "accession_number",
+    "line",
+    "form",
+    "filing_date",
+    "insider_name",
+    "is_director",
+    "is_officer",
+    "is_ten_percent_owner",
+    "has_10b5_1",
+    "is_derivative",
+    "transaction_date",
+    "transaction_code",
+    "knowledge_time"
+  ],
+  "title": "InsiderTransaction",
+  "type": "object",
+  "x-schema-version": "1.1.0"
+}

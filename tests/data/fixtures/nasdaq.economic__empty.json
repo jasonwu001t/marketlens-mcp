@@ -1,0 +1,15 @@
+{
+ "_synthetic": true,
+ "data": null,
+ "message": "No record found.",
+ "status": {
+  "rCode": 200,
+  "bCodeMessage": [
+   {
+    "code": 1002,
+    "errorMessage": "No record found."
+   }
+  ],
+  "developerMessage": null
+ }
+}

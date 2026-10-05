@@ -1,0 +1,31 @@
+<?xml version="1.0"?>
+<!-- synthetic Form 4 -->
+<ownershipDocument>
+ <schemaVersion>X0508</schemaVersion>
+ <documentType>4</documentType>
+ <periodOfReport>2026-03-02</periodOfReport>
+ <issuer><issuerCik>0009999901</issuerCik><issuerName>Testco Synthetic Corp</issuerName><issuerTradingSymbol>TESTCO</issuerTradingSymbol></issuer>
+ <reportingOwner>
+  <reportingOwnerId><rptOwnerCik>0009999911</rptOwnerCik><rptOwnerName>Example Jane</rptOwnerName></reportingOwnerId>
+  <reportingOwnerRelationship><isDirector>0</isDirector><isOfficer>1</isOfficer><isTenPercentOwner>0</isTenPercentOwner><officerTitle>Chief Executive Officer</officerTitle></reportingOwnerRelationship>
+ </reportingOwner>
+ <aff10b5One>1</aff10b5One>
+ <nonDerivativeTable>
+  <nonDerivativeTransaction>
+   <securityTitle><value>Common Stock</value></securityTitle>
+   <transactionDate><value>2026-03-02</value></transactionDate>
+   <transactionCoding><transactionFormType>4</transactionFormType><transactionCode>S</transactionCode></transactionCoding>
+   <transactionAmounts><transactionShares><value>1000</value></transactionShares><transactionPricePerShare><value>50.25</value></transactionPricePerShare><transactionAcquiredDisposedCode><value>D</value></transactionAcquiredDisposedCode></transactionAmounts>
+   <postTransactionAmounts><sharesOwnedFollowingTransaction><value>25000</value></sharesOwnedFollowingTransaction></postTransactionAmounts>
+  </nonDerivativeTransaction>
+ </nonDerivativeTable>
+ <derivativeTable>
+  <derivativeTransaction>
+   <securityTitle><value>Stock Option (right to buy)</value></securityTitle>
+   <transactionDate><value>2026-03-02</value></transactionDate>
+   <transactionCoding><transactionFormType>4</transactionFormType><transactionCode>M</transactionCode></transactionCoding>
+   <transactionAmounts><transactionShares><value>1000</value></transactionShares><transactionPricePerShare><footnoteId id="F1"/></transactionPricePerShare><transactionAcquiredDisposedCode><value>D</value></transactionAcquiredDisposedCode></transactionAmounts>
+   <postTransactionAmounts><sharesOwnedFollowingTransaction><value>9000</value></sharesOwnedFollowingTransaction></postTransactionAmounts>
+  </derivativeTransaction>
+ </derivativeTable>
+</ownershipDocument>

@@ -1,10 +1,10 @@
 # marketlens-mcp
 
-A read-only [Model Context Protocol](https://modelcontextprotocol.io) server for market data and analytics. It answers in one vendor-neutral schema whatever the data provider (Alpaca is built in; other providers plug in), keeps large results out of the model's context window in a local DuckDB result store that the model queries with read-only SQL, computes common analytics (returns, volatility, correlation, drawdown, beta, ...) on those stored results, and lets you choose which capabilities it may use. It works with any MCP client and your own provider keys.
+A read-only [Model Context Protocol](https://modelcontextprotocol.io) server for market data and analytics. It answers in one vendor-neutral schema whatever the data provider (Alpaca is built in; other providers plug in), keeps large results out of the model's context window in a local DuckDB result store that the model queries with read-only SQL, computes common analytics (returns, volatility, correlation, drawdown, beta, ...) on those stored results, and lets you choose which capabilities it may use. With the optional `data` extra it also answers from official sources, point in time: FRED, BLS and BEA series (CPI, the unemployment rate, payrolls, GDP), SEC EDGAR filings, XBRL facts, fundamentals, earnings releases, insider trades, 13F and fund holdings, the FOMC, NY Fed reference rates and the Treasury's yield curve, auctions, debt and cash, plus market calendars. It works with any MCP client and your own provider keys.
 
 ## Status
 
-Alpha (0.1.0, unreleased). The tool names, the canonical schema (1.0.0) and the plugin API (1.0) are versioned; see [CHANGELOG.md](CHANGELOG.md).
+Alpha (0.2.0, unreleased). The tool names, the canonical schema (1.1.0) and the plugin API (1.0) are versioned; see [CHANGELOG.md](CHANGELOG.md).
 
 ## Install
 
@@ -15,6 +15,14 @@ pip install marketlens-mcp    # or into an environment you manage
 ```
 
 Python 3.11 or newer. The bare command serves MCP over stdio.
+
+With the official-data tools (the `data` extra, Python 3.13 or newer; see [Official data](#official-data-the-data-extra)):
+
+```sh
+uvx --from "marketlens-mcp[data]" marketlens-mcp
+pipx install "marketlens-mcp[data]"
+pip install "marketlens-mcp[data]"
+```
 
 ## Add it to a client
 
@@ -29,6 +37,27 @@ Claude Desktop (`claude_desktop_config.json`):
       "env": {
         "ALPACA_API_KEY": "your key id",
         "ALPACA_SECRET_KEY": "your secret key"
+      }
+    }
+  }
+}
+```
+
+With the `data` extra, run it from the extra and add the official sources' keys (each one only for the tools that need it; see [the keys](#keys)):
+
+```json
+{
+  "mcpServers": {
+    "marketlens": {
+      "command": "uvx",
+      "args": ["--from", "marketlens-mcp[data]", "marketlens-mcp"],
+      "env": {
+        "ALPACA_API_KEY": "your key id",
+        "ALPACA_SECRET_KEY": "your secret key",
+        "FRED_API_KEY": "your FRED key",
+        "BEA_API_KEY": "your BEA key",
+        "BLS_API_KEY": "your BLS key (optional)",
+        "SEC_CONTACT_EMAIL": "you@example.com"
       }
     }
   }
@@ -59,8 +88,12 @@ Each tool belongs to one capability. Turn capabilities on or off in the config f
 | `results` | always on | Query, describe, sample, list and drop results stored by this session. |
 | `results.export` | off | Write a stored result to CSV or Parquet in your export folder. The only tool that writes a file. |
 | `provider.docs` | off | Search the data provider's documentation service (an outbound call to a third party). Third-party text, marked untrusted. |
+| `macro` | on | FRED/ALFRED, BLS and BEA series with vintages and as-of reads, BLS release schedules, the FRED series catalogue. Needs the `data` extra. |
+| `filings` | on | SEC EDGAR filings, XBRL facts, point-in-time fundamentals, earnings releases and press-release EPS, insider trades, 13F holdings, fund N-PORT reports. Needs the `data` extra. |
+| `fed_treasury` | on | FOMC meetings and statements, NY Fed reference rates, the Treasury yield curve, auctions, debt and cash balance. Needs the `data` extra. |
+| `calendars` | off | Nasdaq's economic calendar (PMI and other actual and consensus figures), earnings calendar and history, US market holidays (NYSE, SIFMA, OPM). Off by default: the Nasdaq endpoint is unofficial and may change or refuse without notice. Needs the `data` extra. |
 
-Plugins may declare more capabilities; see [Plugins and providers](#plugins-and-providers).
+The last four are declared whether or not the `data` extra is installed (a config file naming them is always valid); their tools are listed only where it is. Plugins may declare more capabilities; see [Plugins and providers](#plugins-and-providers).
 
 **Read-only.** marketlens-mcp has no tool that places, replaces or cancels orders, closes positions, exercises options, changes account settings, or edits broker watchlists. Those tools do not exist in the package, so no configuration can enable them.
 
@@ -74,7 +107,7 @@ Settings live in a YAML file:
 
 No file means every default. `marketlens-mcp config init` writes the commented default file, `config path` prints where it is, `config show` prints the effective settings. The server reads the file once at start: restart it after editing. Unknown settings, wrong types and out-of-range values refuse to start with a one-line reason.
 
-Secrets never go in the file. They come from the environment only: `ALPACA_API_KEY`, `ALPACA_SECRET_KEY`, and `MARKETLENS_HTTP_TOKEN` for HTTP. `MARKETLENS_LOG_LEVEL` (default `WARNING`) sets the log level; logs go to stderr.
+Secrets never go in the file. They come from the environment only: `ALPACA_API_KEY`, `ALPACA_SECRET_KEY`, `MARKETLENS_HTTP_TOKEN` for HTTP, and the data sources' keys (`FRED_API_KEY`, `BEA_API_KEY`, `BLS_API_KEY`, `SEC_CONTACT_EMAIL`; see [the keys](#keys)). `MARKETLENS_LOG_LEVEL` (default `WARNING`) sets the log level; logs go to stderr.
 
 The default file:
 
@@ -85,6 +118,10 @@ capabilities:
   reference: true
   news: true
   analytics: true
+  macro: true             # FRED, BLS, BEA (needs the data extra)
+  filings: true           # SEC EDGAR (needs the data extra)
+  fed_treasury: true      # FOMC, NY Fed rates, Treasury curve and auctions (needs the data extra)
+  calendars: false        # Nasdaq calendars: an unofficial endpoint (needs the data extra)
   portfolio: false
   results.export: false
   provider.docs: false
@@ -98,6 +135,12 @@ providers:
     rate_limit_per_minute: 190
     trading_url: null
     data_url: null
+  data:
+    mode: auto            # auto (fetch and keep) | local (read only what is stored)
+    data_dir: null        # absolute folder for the data store; default: the per-user data folder
+    ttl_hours: 12         # how long a fetched slice is reused before it is fetched again
+    calendar_ttl_minutes: 60
+    call_timeout_seconds: 120
 results:
   inline_max_rows: 200
   inline_max_tokens: 6000
@@ -141,6 +184,63 @@ Upstream fetches stop at 50,000 rows or 20 pages and say so, with the token to c
 ## Analytics
 
 The `analytics_*` tools take result handles and compute in DuckDB: simple and log returns (optionally by period), rolling annualised volatility (window stated), a correlation matrix, OHLCV resampling (aggregation rules stated), an as-of alignment of two results, drawdown (maximum and series), and beta against a benchmark result. Inputs are validated against the result's typed columns; large outputs are stored like any other result.
+
+## Official data (the data extra)
+
+`pip install "marketlens-mcp[data]"` (Python 3.13 or newer) adds a built-in provider over [marketlens-data](https://pypi.org/project/marketlens-data/) (import name `omni`), which fetches each publisher's own data and keeps it, point in time, in a local DuckDB + Parquet store. 25 tools under four capabilities:
+
+- `macro`: FRED/ALFRED series with every vintage (`macro_series`), BLS series (`macro_bls_series`), BEA NIPA tables (`macro_bea_table`), BLS release schedules for the CPI and the jobs report (`macro_release_schedule`), and the FRED series catalogue (`macro_series_catalog`).
+- `filings`: SEC EDGAR filings (`sec_filings`), XBRL facts with restatements (`sec_xbrl_facts`), 23 point-in-time fundamentals computed from them (`sec_fundamentals`), 8-K Item 2.02 earnings releases (`sec_earnings_releases`) and the EPS their press releases state (`sec_earnings_figures`), Form 4 and 144 insider transactions (`sec_insider_trades`), 13F holdings (`sec_13f_holdings`), fund N-PORT reports and holdings (`sec_fund_nport`, `sec_fund_holdings`).
+- `fed_treasury`: FOMC meetings and statements, NY Fed reference rates (SOFR, EFFR, OBFR, TGCR, BGCR), the Treasury par yield curve, Treasury auctions, debt to the penny and the Treasury General Account.
+- `calendars` (off by default): Nasdaq's economic calendar, earnings calendar and earnings history, and US market holidays from NYSE, SIFMA and OPM.
+
+### Keys
+
+Each source names its own key; set the ones you need in the env block of the server (never in the config file). `marketlens-mcp doctor` prints one line per source: ready, missing (its tools refuse until it is set), optional, keyless, or its capability off.
+
+| Source | Variable | Needed | Get it | Tools |
+|---|---|---|---|---|
+| FRED / ALFRED | `FRED_API_KEY` | yes | free: https://fred.stlouisfed.org/docs/api/api_key.html | `macro_series` |
+| BLS | `BLS_API_KEY` | no | free; raises BLS's daily limit and years per request: https://data.bls.gov/registrationEngine/ | `macro_bls_series` |
+| BEA | `BEA_API_KEY` | yes | free: https://apps.bea.gov/API/signup/ | `macro_bea_table` |
+| SEC EDGAR | `SEC_CONTACT_EMAIL` | yes, to fetch | your contact address, sent in the User-Agent as SEC's fair-access rule asks: https://www.sec.gov/os/accessing-edgar-data | the nine `sec_` tools |
+| Federal Reserve, NY Fed, Treasury, FiscalData | none | | keyless | `fed_`, `treasury_` tools, `macro_release_schedule` |
+| Nasdaq | none | | keyless; an unofficial endpoint | `calendar_economic`, `calendar_earnings`, `calendar_earnings_history` |
+| NYSE, SIFMA, OPM | `ALPACA_API_KEY`, `ALPACA_SECRET_KEY` | no | optional: NYSE's calendar is cross-checked against Alpaca's | `calendar_us_holidays` |
+| EIA | `EIA_API_KEY` | not used yet | free | planned (a later release) |
+| Census | `CENSUS_API_KEY` | not used yet | | planned (a later release) |
+
+A tool whose key is missing answers with the variable to set and where to get it; nothing is fetched.
+
+### Where the data lives, and the two modes
+
+The store is a folder of your own: `providers.data.data_dir` if you set it, else `OMNI_DATA_DIR`, else the per-user data folder (`~/Library/Application Support/marketlens-data` on macOS, `%LOCALAPPDATA%\marketlens-data` on Windows, `$XDG_DATA_HOME/marketlens-data` or `~/.local/share/marketlens-data` elsewhere), created owner-only. marketlens never lets marketlens-data read a `.env` file.
+
+- `mode: auto` (the default): a slice (one series, one company, one date) older than `ttl_hours` is fetched from the publisher and stored, then the answer is read from the store. A second question within the TTL makes no request (`cached: true` in the provenance).
+- `mode: local`: only what is stored is read; nothing is fetched and no key is needed. An empty answer says so.
+
+### Point in time and `as_of`
+
+Every data tool takes `as_of`: the answer as it was knowable then (a date means 00:00 UTC; give a datetime with a zone for intraday precision). Each tool's description states its dataset's rule:
+
+- *vintage* (FRED/ALFRED, XBRL facts, fundamentals, N-PORT): exact; the values as published at `as_of`.
+- *lagged* (BLS, BEA, NY Fed, Treasury, FiscalData, FOMC statements, 13F, insider trades): a row is hidden until its release lag or EDGAR acceptance has passed; revisions are tracked from the first fetch on.
+- *at_event* (SEC filings, earnings releases, press-release EPS): exact EDGAR acceptance instants.
+- *forward_known* (release schedules, FOMC meetings, holidays): known from when they were captured.
+- *snapshot* (Nasdaq calendars): the captured state at `as_of`; history exists only from the first capture.
+
+### Calendars: unofficial, and the only free PMI
+
+`calendars` is off by default because Nasdaq's calendar endpoint is unofficial and may change or refuse without notice; turn it on with `capabilities: {calendars: true}`. It is also the one free source of PMI actual and consensus figures (ISM's PMI has no free official source): `calendar_economic` with `q: "PMI"`. Holidays sit under the same switch.
+
+### What the model can ask
+
+- "What was CPI in March 2024, as it was first published?" (`macro_series` with `CPIAUCSL` and `as_of`)
+- "Plot the unemployment rate since 2015." (`macro_series` `UNRATE`, or `macro_bls_series` `LNS14000000`)
+- "Where is SOFR today, and the 2s10s spread?" (`fed_reference_rates`, `macro_series` `T10Y2Y`)
+- "List Apple's 10-K filings and the revenue they reported." (`sec_filings` with `forms: ["10-K"]`, `sec_fundamentals`)
+- "Which insiders sold this year?" (`sec_insider_trades`)
+- "What did this fund manager hold last quarter?" (`sec_13f_holdings`)
 
 ## Tools
 
@@ -215,6 +315,31 @@ Generated from the built-in tool manifest (`make readme`). `marketlens-mcp tools
 | `provider_docs_list_endpoints` | provider.docs (off) | `mcp:list-endpoints (docs.alpaca.markets/mcp)` (alpaca-docs) | marketlens.ProviderDocument | ALPACA_API_KEY, ALPACA_SECRET_KEY, APCA_API_KEY_ID, APCA_API_SECRET_KEY | untrusted text |
 | `provider_docs_search` | provider.docs (off) | `mcp:search (docs.alpaca.markets/mcp)` (alpaca-docs) | marketlens.ProviderDocument | ALPACA_API_KEY, ALPACA_SECRET_KEY, APCA_API_KEY_ID, APCA_API_SECRET_KEY | untrusted text |
 | `provider_docs_search_endpoints` | provider.docs (off) | `mcp:search-endpoints (docs.alpaca.markets/mcp)` (alpaca-docs) | marketlens.ProviderDocument | ALPACA_API_KEY, ALPACA_SECRET_KEY, APCA_API_KEY_ID, APCA_API_SECRET_KEY | untrusted text |
+| `macro_bea_table` | macro (on) | `omni bea.nipa <- apps.bea.gov/api/data (NIPA GetData)` (bea) | marketlens.EconomicObservation | BEA_API_KEY | BEA NIPA tables (GDP, PCE, income, profits); needs the data extra |
+| `macro_bls_series` | macro (on) | `omni bls.timeseries <- api.bls.gov/publicAPI/v2/timeseries/data` (bls) | marketlens.EconomicObservation | BLS_API_KEY | BLS monthly series (CPI, unemployment, payrolls, JOLTS); needs the data extra |
+| `macro_release_schedule` | macro (on) | `omni bls.cpi_schedule, bls.empsit_schedule <- www.bls.gov/schedule/news_release` (bls) | marketlens.ReleaseScheduleEntry | - | CPI and jobs-report release dates and instants; needs the data extra |
+| `macro_series` | macro (on) | `omni fred.series <- api.stlouisfed.org/fred/series/observations (ALFRED vintages)` (fred) | marketlens.EconomicObservation | FRED_API_KEY | FRED/ALFRED series with vintages and as-of reads; needs the data extra |
+| `macro_series_catalog` | macro (on) | `omni catalog.series_meta (local, no fetch)` (local) | marketlens.EconomicSeriesInfo | - | Names, categories and units of the catalogued FRED series; needs the data extra |
+| `sec_13f_holdings` | filings (on) | `omni sec13f.holdings <- www.sec.gov/Archives (13F-HR)` (sec13f) | marketlens.InstitutionalHolding | SEC_CONTACT_EMAIL | 13F-HR institutional holdings of a manager; needs the data extra |
+| `sec_earnings_figures` | filings (on) | `omni sec.earnings_press_release_figures <- www.sec.gov/Archives (EX-99.1)` (sec) | marketlens.EarningsFigure | SEC_CONTACT_EMAIL | untrusted text; needs the data extra |
+| `sec_earnings_releases` | filings (on) | `omni sec.earnings_releases <- data.sec.gov/submissions (8-K Item 2.02)` (sec) | marketlens.EarningsRelease | SEC_CONTACT_EMAIL | 8-K Item 2.02 earnings releases, stamped at acceptance; needs the data extra |
+| `sec_filings` | filings (on) | `omni sec.submissions <- data.sec.gov/submissions` (sec) | marketlens.Filing | SEC_CONTACT_EMAIL | EDGAR filings index of a company; needs the data extra |
+| `sec_fund_holdings` | filings (on) | `omni sec.fund_nport_holdings <- www.sec.gov/Archives (N-PORT)` (sec) | marketlens.FundHolding | SEC_CONTACT_EMAIL | Fund N-PORT holdings of one report; needs the data extra |
+| `sec_fund_nport` | filings (on) | `omni sec.fund_nport <- www.sec.gov/Archives (N-PORT)` (sec) | marketlens.FundReport | SEC_CONTACT_EMAIL | Fund N-PORT headers: net assets per report date; needs the data extra |
+| `sec_fundamentals` | filings (on) | `omni sec.fundamentals <- sec.company_facts (computed locally)` (sec) | marketlens.FundamentalValue | SEC_CONTACT_EMAIL | TTM and balance-sheet fundamentals from XBRL, point in time; needs the data extra |
+| `sec_insider_trades` | filings (on) | `omni sec_insider.transactions <- www.sec.gov/Archives (Forms 4 and 144)` (sec_insider) | marketlens.InsiderTransaction | SEC_CONTACT_EMAIL | Form 4 and Form 144 insider transactions; needs the data extra |
+| `sec_xbrl_facts` | filings (on) | `omni sec.company_facts <- data.sec.gov/api/xbrl/companyfacts` (sec) | marketlens.XbrlFact | SEC_CONTACT_EMAIL | XBRL facts as filed, with restatement vintages; needs the data extra |
+| `fed_fomc_meetings` | fed_treasury (on) | `omni fomc.meetings <- www.federalreserve.gov/monetarypolicy/fomccalendars.htm` (fomc) | marketlens.FomcMeeting | - | FOMC meeting calendar; needs the data extra |
+| `fed_fomc_statements` | fed_treasury (on) | `omni fomc.statement <- www.federalreserve.gov (statements linked from the FOMC calendar)` (fomc) | marketlens.FomcStatement | - | untrusted text; needs the data extra |
+| `fed_reference_rates` | fed_treasury (on) | `omni nyfed.reference_rates <- markets.newyorkfed.org/api/rates/all/search.json` (nyfed) | marketlens.ReferenceRate | - | SOFR, EFFR, OBFR, TGCR, BGCR; needs the data extra |
+| `treasury_auctions` | fed_treasury (on) | `omni fiscaldata.auctions <- api.fiscaldata.treasury.gov/v1/accounting/od/auctions_query` (fiscaldata) | marketlens.TreasuryAuction | - | Treasury auction results; needs the data extra |
+| `treasury_debt` | fed_treasury (on) | `omni fiscaldata.debt_to_penny <- api.fiscaldata.treasury.gov/v2/accounting/od/debt_to_penny` (fiscaldata) | marketlens.TreasuryDebt | - | Total public debt per day; needs the data extra |
+| `treasury_tga` | fed_treasury (on) | `omni fiscaldata.tga_balance <- api.fiscaldata.treasury.gov/v1/accounting/dts/operating_cash_balance` (fiscaldata) | marketlens.TreasuryCashBalance | - | Treasury cash balance (TGA) per day; needs the data extra |
+| `treasury_yield_curve` | fed_treasury (on) | `omni treasury.yield_curve <- home.treasury.gov daily-treasury-rates.csv` (treasury) | marketlens.YieldCurvePoint | - | Daily Treasury par yield curve; needs the data extra |
+| `calendar_earnings` | calendars (off) | `omni nasdaq.earnings <- api.nasdaq.com/api/calendar/earnings (unofficial)` (nasdaq) | marketlens.EarningsCalendarEntry | - | Earnings dates with consensus EPS; needs the data extra |
+| `calendar_earnings_history` | calendars (off) | `omni nasdaq.earnings_surprise <- api.nasdaq.com/api/company/{symbol}/earnings-surprise (unofficial)` (nasdaq) | marketlens.EarningsSurprise | - | Recent EPS against consensus per company; needs the data extra |
+| `calendar_economic` | calendars (off) | `omni nasdaq.economic_events <- api.nasdaq.com/api/calendar/economicevents (unofficial)` (nasdaq) | marketlens.EconomicEvent | - | untrusted text; needs the data extra |
+| `calendar_us_holidays` | calendars (off) | `omni nyse.holidays, sifma.holidays, opm.federal_holidays <- nyse.com, sifma.org, opm.gov` (nyse,sifma,opm) | marketlens.MarketHoliday | ALPACA_API_KEY, ALPACA_SECRET_KEY | NYSE, SIFMA and OPM holidays and early closes; needs the data extra |
 <!-- tools:end -->
 
 ## Canonical schema
@@ -224,7 +349,7 @@ Every response uses the vendor-neutral models in `marketlens_schema` (pydantic o
 ## Security and privacy
 
 - **Read-only**: no tool writes to your brokerage account or any provider; the only file a tool can write is an export into the folder you configure, and only with `results.export` on.
-- **What leaves your machine**: the requests tools make to the provider you configured, and whatever the model reads, which goes to your model provider with the conversation. Brokerage reads are off by default for that reason.
+- **What leaves your machine**: the requests tools make to the provider you configured, and whatever the model reads, which goes to your model provider with the conversation. Brokerage reads are off by default for that reason. The data tools call the publishers directly from your machine; the store is local.
 - **Untrusted text**: every result is wrapped in a `_marketlens` envelope that tells the model to treat it as data; news and documentation text carry a stronger notice.
 - **No telemetry**: marketlens-mcp sends nothing anywhere except the upstream calls tools make. The FastMCP banner and its update check are off.
 - **HTTP**: `serve --transport http` listens only on `127.0.0.1` or `::1`, requires `MARKETLENS_HTTP_TOKEN` (at least 32 characters) as a bearer token on every request, and checks the Host and Origin headers.
@@ -234,13 +359,15 @@ See [SECURITY.md](SECURITY.md) to report a vulnerability.
 
 ## Plugins and providers
 
-A Python package can add capabilities, tools and canonical models through the `marketlens.plugins` entry-point group. Plugins load only when you name them in `plugins.enabled`; a broken plugin is reported (`marketlens-mcp plugins`) and skipped, never stops the server. Installing a plugin is trusting its code: plugins run in the server's process. See [WRITING_A_PLUGIN.md](WRITING_A_PLUGIN.md), which also covers writing a provider for another data vendor, and [ADDING_A_CAPABILITY.md](ADDING_A_CAPABILITY.md) for mapping new Alpaca endpoints.
+A Python package can add capabilities, tools and canonical models through the `marketlens.plugins` entry-point group. Plugins load only when you name them in `plugins.enabled`; a broken plugin is reported (`marketlens-mcp plugins`) and skipped, never stops the server. Installing a plugin is trusting its code: plugins run in the server's process. See [WRITING_A_PLUGIN.md](WRITING_A_PLUGIN.md), which also covers writing a provider for another data vendor, and [ADDING_A_CAPABILITY.md](ADDING_A_CAPABILITY.md) for mapping new Alpaca endpoints and adding official-data tools.
 
 ## Development
 
 ```sh
 make venv install   # .venv with the package and dev tools (uv)
 make test           # pytest (no network, no keys)
+make install-data   # add the data extra (Python 3.13); MARKETLENS_DATA_SRC=../omni for a checkout
+make test-data      # the data provider's tests (skipped without the extra)
 make lint           # ruff check + format check
 make readme schema  # regenerate the tool table and schema/
 make check          # lint + tests + generated-file checks
