@@ -668,21 +668,35 @@ async def sec_insider_trades(ctx: ToolContext, args: InsiderInputs) -> ToolOutpu
     return common.output(ctx, s, InsiderTransaction, rows, prov)
 
 
-def _restated(records: list[dict], period) -> tuple[list[dict], list[str]]:
-    """One portfolio per period: a restatement replaces everything filed before it
-    for the period (the latest restatement wins); new-holdings amendments add."""
-    rows = [r for r in records if F.day(r["period_end"]) == period]
-    restatements = sorted(
+def _filings(rows: list[dict], amendment_type: str) -> list[tuple]:
+    """(filing_date, knowledge_time, accession) of each filing of that amendment type, in filing order."""
+    return sorted(
         {
             (F.day(r["filing_date"]), F.instant(r["knowledge_time"]), F.text(r["accession_number"]))
             for r in rows
-            if (F.text(r["amendment_type"]) or "").upper() == "RESTATEMENT"
+            if (F.text(r["amendment_type"]) or "").upper() == amendment_type
         }
     )
+
+
+def _restated(records: list[dict], period) -> tuple[list[dict], list[str]]:
+    """One portfolio per period: a restatement replaces everything filed before it
+    for the period (the latest restatement wins); new-holdings amendments add to
+    what stands when they are filed, so those filed after the restatement add to it."""
+    rows = [r for r in records if F.day(r["period_end"]) == period]
+    restatements = _filings(rows, "RESTATEMENT")
     if restatements:
-        winner = restatements[-1][2]
-        note = f"A restatement ({winner}) replaces the earlier 13F-HR filings for {period.isoformat()}."
-        return [r for r in rows if F.text(r["accession_number"]) == winner], [note]
+        *filed, winner = restatements[-1]
+        later = list(dict.fromkeys(acc for *when, acc in _filings(rows, "NEW HOLDINGS") if when > filed))
+        note = f"A restatement ({winner}) replaces the earlier 13F-HR filings for {period.isoformat()}"
+        if later:
+            one = len(later) == 1
+            note += (
+                f"; the new-holdings amendment{'' if one else 's'} filed after it ({', '.join(later)}) "
+                f"add{'s' if one else ''} to it"
+            )
+        keep = {winner, *later}
+        return [r for r in rows if F.text(r["accession_number"]) in keep], [note + "."]
     added = sorted(
         {
             F.text(r["accession_number"])

@@ -6,7 +6,7 @@ the Federal Reserve's FOMC calendar and statements, NY Fed JSON, Treasury CSV,
 FiscalData JSON, Nasdaq calendar JSON, NYSE, SIFMA and OPM holiday pages).
 
 No file is a recording of a live response, and no value is real: the companies
-(TESTCO, OTHRCO, LOSSCO), the manager (CIK 9999950), the fund (series
+(TESTCO, OTHRCO, LOSSCO), the managers (CIKs 9999950 and 9999951), the fund (series
 S000099991, TFUND), every CIK, CUSIP, accession number, name, figure and
 statement are invented. Structured files carry "_synthetic": true where the
 format allows it; the SEC ticker lists cannot (their shape has no room for a

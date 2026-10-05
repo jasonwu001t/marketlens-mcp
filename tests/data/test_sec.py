@@ -229,6 +229,43 @@ def test_sec_13f_restatement_replaces_the_original(tmp_path, edgar):
     assert [r.cusip for r in one.rows] == ["99999O102"]
 
 
+def amending_manager_routes(upstream):
+    """Manager 9999951's report for 2026-03-31: the original (May 10), a new-holdings
+    amendment (May 15), a restatement (May 20), then a new-holdings amendment (Jun 1)."""
+    upstream.json_file(r"data\.sec\.gov/submissions/CIK0009999951\.json", "sec.submissions__13F_amends.json")
+    documents = {
+        "26-000001": ("sec.13f_cover__26-000002.xml", "sec.13f_table__26-000002.xml"),
+        "26-000002": ("sec.13f_cover__new_holdings.xml", "sec.13f_table__9999951-26-000002.xml"),
+        "26-000003": ("sec.13f_cover__26-000004.xml", "sec.13f_table__26-000004.xml"),
+        "26-000004": ("sec.13f_cover__new_holdings.xml", "sec.13f_table__9999951-26-000004.xml"),
+    }
+    for acc, (cover, table) in documents.items():
+        folder = f"{ARCH}/9999951/0009999951{acc.replace('-', '')}"
+        upstream.json_file(rf"{folder}/index\.json", "sec.13f_index__9999951.json")
+        upstream.text_file(rf"{folder}/infotable\.xml", table)
+        upstream.text_file(rf"{folder}/primary_doc\.xml", cover)
+
+
+def test_sec_13f_new_holdings_filed_after_a_restatement_add_to_it(tmp_path, upstream, keys):
+    amending_manager_routes(upstream)
+    out = call("sec_13f_holdings", context(tmp_path), filer_cik="9999951")
+    # the original and the new-holdings amendment filed before the restatement are replaced
+    assert [(r.accession_number, r.amendment_type, r.cusip, r.value_usd) for r in out.rows] == [
+        ("0009999951-26-000003", "RESTATEMENT", "99999T101", 4500000.0),
+        ("0009999951-26-000004", "NEW HOLDINGS", "99999X202", 250000.0),
+    ]
+    assert out.notes == [
+        "A restatement (0009999951-26-000003) replaces the earlier 13F-HR filings for 2026-03-31; the "
+        "new-holdings amendment filed after it (0009999951-26-000004) adds to it."
+    ]
+    # before the later amendment was filed, the restatement stands alone
+    before = call("sec_13f_holdings", context(tmp_path), filer_cik="9999951", as_of="2026-05-25")
+    assert [(r.accession_number, r.cusip) for r in before.rows] == [("0009999951-26-000003", "99999T101")]
+    assert before.notes == [
+        "A restatement (0009999951-26-000003) replaces the earlier 13F-HR filings for 2026-03-31."
+    ]
+
+
 # --- N-PORT -------------------------------------------------------------------------------------------
 
 
