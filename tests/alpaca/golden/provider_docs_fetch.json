@@ -22,7 +22,7 @@
    "doc_id": "market-data-faq"
   },
   "route": "mcp:fetch",
-  "schema_version": "1.0.0",
+  "schema_version": "1.1.0",
   "stale": null,
   "truncated": false,
   "truncation_note": null,

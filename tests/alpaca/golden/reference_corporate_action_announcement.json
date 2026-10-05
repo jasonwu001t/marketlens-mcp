@@ -29,7 +29,7 @@
    "announcement_id": "be3c368a-4c7c-4384-808e-f02c9f5a8afe"
   },
   "route": "GET /v2/corporate_actions/announcements/{id}",
-  "schema_version": "1.0.0",
+  "schema_version": "1.1.0",
   "stale": null,
   "truncated": false,
   "truncation_note": null,

@@ -86,12 +86,12 @@ def test_json_schema_export():
     assert set(schemas) == set(BUILTIN_MODELS)
     bar = schemas["marketlens.Bar"]
     assert bar["$id"] == "urn:marketlens:schema:1:marketlens.Bar"
-    assert bar["x-schema-version"] == "1.0.0"
+    assert bar["x-schema-version"] == "1.1.0"
     assert bar["properties"]["close"]["x-unit"] == "price"
     acct = schemas["marketlens.Account"]
     assert acct["properties"]["cash"]["type"] == "string"
     index = jsonschema.index(schemas)
-    assert index == {"schema_version": "1.0.0", "models": {n: f"{n}.json" for n in sorted(schemas)}}
+    assert index == {"schema_version": "1.1.0", "models": {n: f"{n}.json" for n in sorted(schemas)}}
 
 
 def test_readme_capability_table_matches_the_declarations():

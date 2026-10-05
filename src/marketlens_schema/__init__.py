@@ -37,18 +37,20 @@ from .base import (
     unexplained_absences,
     unit,
 )
+from .data import DATA_MODELS
 from .market import MARKET_MODELS
 from .portfolio import PORTFOLIO_MODELS
 
 #: schema name -> model class, for every built-in model. Plugins add theirs
 #: through the server's Registry, never by editing this mapping.
 BUILTIN_MODELS: dict[str, type[CanonicalModel]] = {
-    m.schema_name: m for m in (*MARKET_MODELS, *PORTFOLIO_MODELS, *ANALYTICS_MODELS)
+    m.schema_name: m for m in (*MARKET_MODELS, *PORTFOLIO_MODELS, *ANALYTICS_MODELS, *DATA_MODELS)
 }
 
 __all__ = [
     "ALIGNED_SCHEMA_NAME",
     "BUILTIN_MODELS",
+    "DATA_MODELS",
     "QUERY_ROW_SCHEMA_NAME",
     "SCHEMA_NAMESPACE",
     "SCHEMA_VERSION",

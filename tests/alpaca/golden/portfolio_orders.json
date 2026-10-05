@@ -31,7 +31,7 @@
    "status": "all"
   },
   "route": "GET /v2/orders",
-  "schema_version": "1.0.0",
+  "schema_version": "1.1.0",
   "stale": null,
   "truncated": false,
   "truncation_note": null,

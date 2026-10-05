@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "marketlens-mcp"
-version = "0.1.0"
+version = "0.2.0"
 description = "A read-only MCP server for market data and analytics: one vendor-neutral schema, large results kept out of the context window in a local DuckDB store, capabilities you switch on and off."
 readme = "README.md"
 requires-python = ">=3.11"

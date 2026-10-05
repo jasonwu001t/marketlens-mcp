@@ -56,7 +56,7 @@ from pydantic import (
     WithJsonSchema,
 )
 
-SCHEMA_VERSION = "1.0.0"
+SCHEMA_VERSION = "1.1.0"
 #: Prefix of every built-in model's schema name ("marketlens.Bar"). A plugin's
 #: models use the plugin name instead ("myplugin.Thing").
 SCHEMA_NAMESPACE = "marketlens"
@@ -79,6 +79,11 @@ UNITS: Mapping[str, str] = {
     "days": "calendar days",
     "UTC": "an instant in UTC",
     "per_share_greek": "option greek per share, provider convention (see field description)",
+    # 1.1
+    "as_published": "the publisher's own unit, named in the row's `units` or `unit` field",
+    "USD_per_share": "US dollars per share",
+    "times": "a multiple; 2.5 means 2.5 times",
+    "ordinal": "a position in a list; 1 = first",
 }
 
 

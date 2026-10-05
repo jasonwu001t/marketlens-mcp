@@ -10,7 +10,7 @@
   },
   "__version__": {
    "kind": "value",
-   "repr": "'0.1.0'"
+   "repr": "'0.2.0'"
   }
  },
  "marketlens_mcp.plugin_api": {
@@ -742,11 +742,27 @@
     "marketlens.CorrelationCell",
     "marketlens.DrawdownPoint",
     "marketlens.DrawdownSummary",
+    "marketlens.EarningsCalendarEntry",
+    "marketlens.EarningsFigure",
+    "marketlens.EarningsRelease",
+    "marketlens.EarningsSurprise",
+    "marketlens.EconomicEvent",
+    "marketlens.EconomicObservation",
+    "marketlens.EconomicSeriesInfo",
+    "marketlens.Filing",
     "marketlens.FixedIncomeQuote",
+    "marketlens.FomcMeeting",
+    "marketlens.FomcStatement",
+    "marketlens.FundHolding",
+    "marketlens.FundReport",
+    "marketlens.FundamentalValue",
+    "marketlens.InsiderTransaction",
+    "marketlens.InstitutionalHolding",
     "marketlens.Locate",
     "marketlens.LocateQuote",
     "marketlens.MarketCalendarDay",
     "marketlens.MarketClock",
+    "marketlens.MarketHoliday",
     "marketlens.MostActive",
     "marketlens.Mover",
     "marketlens.NewsItem",
@@ -764,10 +780,17 @@
     "marketlens.Position",
     "marketlens.ProviderDocument",
     "marketlens.Quote",
+    "marketlens.ReferenceRate",
+    "marketlens.ReleaseScheduleEntry",
     "marketlens.ReturnPoint",
     "marketlens.Snapshot",
     "marketlens.Trade",
-    "marketlens.VolatilityPoint"
+    "marketlens.TreasuryAuction",
+    "marketlens.TreasuryCashBalance",
+    "marketlens.TreasuryDebt",
+    "marketlens.VolatilityPoint",
+    "marketlens.XbrlFact",
+    "marketlens.YieldCurvePoint"
    ],
    "kind": "mapping"
   },
@@ -1012,7 +1035,7 @@
     },
     "schema_version": {
      "annotation": "<class 'str'>",
-     "default": "'1.0.0'",
+     "default": "'1.1.0'",
      "required": false
     },
     "stale": {
@@ -1048,7 +1071,7 @@
   },
   "SCHEMA_VERSION": {
    "kind": "value",
-   "repr": "'1.0.0'"
+   "repr": "'1.1.0'"
   },
   "Side": {
    "kind": "enum",
@@ -1079,7 +1102,9 @@
   "UNITS": {
    "keys": [
     "USD",
+    "USD_per_share",
     "UTC",
+    "as_published",
     "base_units",
     "by_asset_class",
     "contracts",
@@ -1088,10 +1113,12 @@
     "fraction",
     "fraction_per_year",
     "multiplier",
+    "ordinal",
     "per_share_greek",
     "percent_of_par",
     "price",
-    "shares"
+    "shares",
+    "times"
    ],
    "kind": "mapping"
   },
@@ -1797,7 +1824,7 @@
     },
     "schema_version": {
      "annotation": "<class 'str'>",
-     "default": "'1.0.0'",
+     "default": "'1.1.0'",
      "required": false
     },
     "stale": {
@@ -1829,7 +1856,7 @@
   },
   "SCHEMA_VERSION": {
    "kind": "value",
-   "repr": "'1.0.0'"
+   "repr": "'1.1.0'"
   },
   "Side": {
    "kind": "enum",
@@ -1852,7 +1879,9 @@
   "UNITS": {
    "keys": [
     "USD",
+    "USD_per_share",
     "UTC",
+    "as_published",
     "base_units",
     "by_asset_class",
     "contracts",
@@ -1861,10 +1890,12 @@
     "fraction",
     "fraction_per_year",
     "multiplier",
+    "ordinal",
     "per_share_greek",
     "percent_of_par",
     "price",
-    "shares"
+    "shares",
+    "times"
    ],
    "kind": "mapping"
   },

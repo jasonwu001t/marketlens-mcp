@@ -35,7 +35,7 @@
    ]
   },
   "route": "GET /v1beta3/crypto/{loc}/latest/orderbooks",
-  "schema_version": "1.0.0",
+  "schema_version": "1.1.0",
   "stale": null,
   "truncated": false,
   "truncation_note": null,

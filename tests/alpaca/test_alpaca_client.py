@@ -68,7 +68,7 @@ def test_headers(alpaca):
     h = alpaca.requests[0].headers
     assert h["APCA-API-KEY-ID"] == TEST_KEYS["ALPACA_API_KEY"]
     assert h["APCA-API-SECRET-KEY"] == TEST_KEYS["ALPACA_SECRET_KEY"]
-    assert h["User-Agent"] == "marketlens-mcp/0.1.0"
+    assert h["User-Agent"] == "marketlens-mcp/0.2.0"
     assert h["Accept"] == "application/json"
 
 

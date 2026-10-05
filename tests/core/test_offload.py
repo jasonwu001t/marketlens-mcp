@@ -124,7 +124,7 @@ def test_marker_shape_and_preview(store):
     )
     assert isinstance(out, ResultMarker)
     m = ResultMarker.model_validate(out.model_dump(mode="json"))
-    assert m.kind == "stored" and m.model == "marketlens.Bar" and m.schema_version == "1.0.0"
+    assert m.kind == "stored" and m.model == "marketlens.Bar" and m.schema_version == "1.1.0"
     assert m.preview.time_column == "t" and m.preview.group_column == "ticker"
     assert m.preview.time_span_start == T0
     assert m.preview.groups_count == 3 and m.preview.groups_sample == ["AAPL", "MSFT", "NVDA"]

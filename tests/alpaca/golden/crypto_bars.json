@@ -36,7 +36,7 @@
    "timeframe": "1h"
   },
   "route": "GET /v1beta3/crypto/{loc}/bars",
-  "schema_version": "1.0.0",
+  "schema_version": "1.1.0",
   "stale": null,
   "truncated": false,
   "truncation_note": null,

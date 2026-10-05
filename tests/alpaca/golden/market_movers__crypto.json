@@ -30,7 +30,7 @@
    "top": 1
   },
   "route": "GET /v1beta1/screener/{market_type}/movers",
-  "schema_version": "1.0.0",
+  "schema_version": "1.1.0",
   "stale": null,
   "truncated": false,
   "truncation_note": null,

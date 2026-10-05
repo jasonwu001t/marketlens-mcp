@@ -29,7 +29,7 @@
    "order_id": "83f37e9f-6b1f-49ed-8fc6-3e6af716323f"
   },
   "route": "GET /v2/orders/{order_id}",
-  "schema_version": "1.0.0",
+  "schema_version": "1.1.0",
   "stale": null,
   "truncated": false,
   "truncation_note": null,

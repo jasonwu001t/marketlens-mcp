@@ -36,7 +36,7 @@
    "underlying": "AAPL"
   },
   "route": "GET /v1beta1/options/snapshots/{underlying_symbol}",
-  "schema_version": "1.0.0",
+  "schema_version": "1.1.0",
   "stale": null,
   "truncated": false,
   "truncation_note": null,
