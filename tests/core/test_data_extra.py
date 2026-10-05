@@ -199,6 +199,14 @@ def test_readme_documents_the_five_capabilities_and_the_keys():
     assert 'pipx install "marketlens-mcp[data]"' in text
 
 
+def test_readme_data_setup_strongly_recommends_the_sec_contact():
+    text = (REPO / "README.md").read_text(encoding="utf-8")
+    setup = text.split("With the `data` extra, run it from the extra", 1)[1].split("Claude Code:", 1)[0]
+    assert "`SEC_CONTACT_EMAIL` is strongly recommended" in setup
+    for words in ("refuse to fetch", "placeholder contact", "logs a warning", "throttle or block"):
+        assert words in setup, words
+
+
 # --- configuration ---------------------------------------------------------------------------
 
 

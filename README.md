@@ -64,6 +64,8 @@ With the `data` extra, run it from the extra and add the official sources' keys 
 }
 ```
 
+`SEC_CONTACT_EMAIL` is strongly recommended: SEC EDGAR's fair-access rule asks every client to name a contact. Without it the `sec_` tools refuse to fetch (`mode: local` still reads what is stored), and marketlens-data used on its own sends a placeholder contact and logs a warning; SEC may throttle or block such requests. `marketlens-mcp doctor` says whether it is set, never its value.
+
 Claude Code:
 
 ```sh
