@@ -98,7 +98,9 @@ def test_macro_series_vintages_and_window(tmp_path, upstream, keys):
         ("2024-03-12T00:00:00Z", [("2024-01-01", 308.417), ("2024-01-01", 308.5), ("2024-02-01", 310.326)]),
     ],
 )
-def test_macro_series_vintages_never_show_one_published_after_as_of(tmp_path, upstream, keys, as_of, expected):
+def test_macro_series_vintages_never_show_one_published_after_as_of(
+    tmp_path, upstream, keys, as_of, expected
+):
     from marketlens_mcp.providers.data.tools.common import parse_instant
 
     fred_routes(upstream)
