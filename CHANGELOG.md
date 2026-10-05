@@ -18,6 +18,7 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Changed
 
+- Linux and macOS are the tested platforms: the classifiers name them instead of "OS Independent", and Windows left the CI matrix (not yet supported). Text I/O still names its encoding everywhere.
 - A fetch cut at `fetch.max_rows` or `fetch.max_pages` without a page token no longer carries the R16 "call again with page_token" note: the tool's own truncation note stands, and a tool that gave none gets "The data is incomplete; narrow the request." (the answer is still flagged `truncated`).
 - The name `data` is reserved for the built-in provider; a plugin may not take it.
 

@@ -14,7 +14,7 @@ pipx install marketlens-mcp   # or a user-wide install
 pip install marketlens-mcp    # or into an environment you manage
 ```
 
-Python 3.11 or newer. The bare command serves MCP over stdio.
+Python 3.11 or newer. Linux and macOS are tested; Windows is not yet supported in this release. The bare command serves MCP over stdio.
 
 With the official-data tools (the `data` extra, Python 3.13 or newer; see [Official data](#official-data-the-data-extra)):
 
