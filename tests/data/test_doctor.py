@@ -67,6 +67,16 @@ def test_doctor_with_the_extra_and_keys(capsys, keys, tmp_path, monkeypatch):
     assert store.is_dir()
 
 
+def test_doctor_sec_contact_not_set(capsys):
+    # a contact address, not a key: optional, and no "free key" link
+    _, out = doctor(capsys)
+    sec = [line for line in out.splitlines() if line.startswith("data source sec:")]
+    assert sec == [
+        "data source sec: SEC_CONTACT_EMAIL not set (optional, strongly recommended; a placeholder contact "
+        "is sent)"
+    ]
+
+
 def test_doctor_store_failure_counts_in_mode_auto_only(capsys, tmp_path):
     blocker = tmp_path / "file"
     blocker.write_text("x", encoding="utf-8")

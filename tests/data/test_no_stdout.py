@@ -3,6 +3,8 @@ marketlens-data under it) may print. Every tool runs on fixtures here."""
 
 from __future__ import annotations
 
+import logging
+
 from data_harness import SPECS, call, context
 from test_calendars import earnings_routes, economic_routes, holiday_routes, surprise_routes
 from test_fed_treasury import FISCAL, fomc_routes, treasury_routes
@@ -53,3 +55,22 @@ def test_no_tool_writes_to_stdout(tmp_path, upstream, keys, frozen_clock, capsys
     captured = capsys.readouterr()
     assert captured.out == ""
     assert answered == 25
+
+
+def test_the_placeholder_contact_warning_never_reaches_stdout(
+    tmp_path, upstream, monkeypatch, capsys, caplog, recwarn
+):
+    # Without SEC_CONTACT_EMAIL marketlens-data warns (once per process) that it sends a
+    # placeholder contact: to logging or stderr, never to stdout.
+    from omni.sources import sec as omni_sec
+
+    if hasattr(omni_sec, "_placeholder_warned"):
+        monkeypatch.setattr(omni_sec, "_placeholder_warned", False)
+    sec_routes(upstream)
+    capsys.readouterr()
+    with caplog.at_level(logging.WARNING):
+        out = call("sec_filings", context(tmp_path), ticker="TESTCO")
+    captured = capsys.readouterr()
+    assert out.rows and captured.out == ""
+    said = caplog.text + captured.err + " ".join(str(w.message) for w in recwarn)
+    assert "SEC_CONTACT_EMAIL" in said

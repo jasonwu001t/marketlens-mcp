@@ -12,7 +12,7 @@ All notable changes to this project are documented here. The format follows [Kee
   - `fed_treasury` (on): FOMC meetings and statements, NY Fed reference rates (SOFR, EFFR, OBFR, TGCR, BGCR), the Treasury par yield curve, Treasury auctions, debt to the penny and the Treasury General Account.
   - `holidays` (on): US market holidays and early closes from NYSE, SIFMA and OPM, keyless; with Alpaca keys NYSE's dates are cross-checked against Alpaca's trading calendar, and without them the answer says they were not.
   - `calendars` (off: the Nasdaq endpoint is unofficial): the economic calendar with PMI and other actual and consensus figures, the earnings calendar and earnings history.
-- Each source names its own key (`FRED_API_KEY`, `BEA_API_KEY`; `BLS_API_KEY` optional; `SEC_CONTACT_EMAIL` for SEC fair access; the rest keyless); `doctor` reports which sources are ready, where the data store is and in which mode.
+- Each source names its own key (`FRED_API_KEY`, `BEA_API_KEY`; `BLS_API_KEY` optional; `SEC_CONTACT_EMAIL` optional but strongly recommended for SEC fair access: without it marketlens-data sends a placeholder contact and every `sec_` answer carries a note saying so; the rest keyless); `doctor` reports which sources are ready, where the data store is and in which mode.
 - `providers.data` settings: `mode` (`auto` fetches and keeps, `local` reads only what is stored), `data_dir`, `ttl_hours`, `calendar_ttl_minutes`, `call_timeout_seconds`.
 - Schema 1.1.0: 23 canonical models for the data tools and the units `as_published`, `USD_per_share`, `times`, `ordinal`.
 - The README tool table lists the data tools whether or not the extra is installed, marked "needs the data extra".

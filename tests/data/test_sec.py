@@ -65,8 +65,57 @@ def test_sec_filings_golden(tmp_path, edgar):
     assert [r.accession_number for r in eight_k.rows] == ["0009999901-26-000009", "0009999901-26-000001"]
 
 
-def test_sec_tools_need_a_contact_email(tmp_path, upstream):
+#: What every SEC answer in mode auto says while SEC_CONTACT_EMAIL is not set (never a value).
+NO_CONTACT = (
+    "SEC_CONTACT_EMAIL is not set, so SEC EDGAR requests were sent with a placeholder contact in the "
+    "User-Agent; SEC may throttle or block them. Set SEC_CONTACT_EMAIL to your email address in the env "
+    "block of this server in your MCP client's configuration."
+)
+SEC_ARGS = {
+    "sec_filings": {"ticker": "TESTCO"},
+    "sec_xbrl_facts": {"ticker": "TESTCO"},
+    "sec_fundamentals": {"ticker": "TESTCO"},
+    "sec_earnings_releases": {"ticker": "TESTCO"},
+    "sec_earnings_figures": {"ticker": "TESTCO"},
+    "sec_insider_trades": {"ticker": "TESTCO"},
+    "sec_13f_holdings": {"filer_cik": "9999950"},
+    "sec_fund_nport": {"ticker": "TFUND"},
+    "sec_fund_holdings": {"ticker": "TFUND"},
+}
+
+
+def test_sec_tools_run_without_a_contact_email(tmp_path, upstream):
+    # as marketlens-data does on its own: its placeholder contact is sent, and the answer says so
+    from omni.sources import sec as omni_sec
+
     sec_routes(upstream)
+    # reading only what is stored sends nothing, so it needs no contact and carries no such note
+    out = call("sec_filings", context(tmp_path, settings={"mode": "local"}), ticker="TESTCO")
+    assert out.rows == [] and out.notes == [
+        "mode is local and nothing is stored for this request; set providers.data.mode: auto to fetch it"
+    ]
+    assert upstream.requests == []
+    out = call("sec_filings", context(tmp_path), ticker="TESTCO")
+    assert len(out.rows) == 8 and out.notes == [NO_CONTACT]
+    agents = {r.headers["User-Agent"] for r in upstream.requests}
+    assert agents and all(omni_sec._PLACEHOLDER_CONTACT in a for a in agents)
+    # within the TTL nothing is fetched again; the answer still says the contact is not set
+    again = call("sec_filings", context(tmp_path), ticker="TESTCO")
+    assert again.provenance.cached and again.notes == [NO_CONTACT]
+
+
+def test_every_sec_answer_notes_the_missing_contact(tmp_path, upstream):
+    sec_routes(upstream)
+    for name, args in SEC_ARGS.items():
+        out = call(name, context(tmp_path), **args)
+        assert out.rows and out.notes[-1] == NO_CONTACT, name
+        assert out.notes.count(NO_CONTACT) == 1, name
+
+
+def test_sec_tools_refuse_a_contact_that_is_not_an_email(tmp_path, upstream, monkeypatch):
+    # unchanged: a value that is set is sent as the contact, so it must be an email address
+    sec_routes(upstream)
+    monkeypatch.setenv("SEC_CONTACT_EMAIL", "not-an-email")
     err = refused("sec_filings", context(tmp_path), ticker="TESTCO")
     assert err.code == "sec_contact_missing"
     assert err.message == (
@@ -74,11 +123,6 @@ def test_sec_tools_need_a_contact_email(tmp_path, upstream):
         "(for example you@example.com) in this server's environment."
     )
     assert upstream.requests == []
-    # reading only what is stored needs no contact
-    out = call("sec_filings", context(tmp_path, settings={"mode": "local"}), ticker="TESTCO")
-    assert out.rows == [] and out.notes == [
-        "mode is local and nothing is stored for this request; set providers.data.mode: auto to fetch it"
-    ]
 
 
 def test_sec_unknown_ticker_is_not_found(tmp_path, edgar):

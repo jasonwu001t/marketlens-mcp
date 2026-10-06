@@ -2,7 +2,8 @@
 releases and press-release EPS, insider trades, 13F holdings and fund
 N-PORT reports (capability ``filings``). Every fetch names the operator's
 contact in its User-Agent (SEC_CONTACT_EMAIL), as EDGAR's fair-access rule
-asks."""
+asks; unset, marketlens-data sends its placeholder contact and every answer
+says so."""
 
 from __future__ import annotations
 
@@ -34,7 +35,7 @@ from .common import AsOf, Inputs, Ticker
 
 GOLDEN = "tests/data/test_sec.py"
 ENV = ("SEC_CONTACT_EMAIL",)
-CONTACT = "Fetching needs SEC_CONTACT_EMAIL (SEC fair access)."
+CONTACT = "Without SEC_CONTACT_EMAIL a placeholder contact is sent (SEC fair access) and the answer says so."
 
 FUNDAMENTAL_METRICS = (
     "revenue",
@@ -262,6 +263,11 @@ def _settings(ctx: ToolContext) -> runtime.Settings:
     return s
 
 
+def _output(ctx: ToolContext, s: runtime.Settings, model, rows, prov, *, notes=()) -> ToolOutput:
+    """common.output, with the note that SEC_CONTACT_EMAIL is not set when it is not."""
+    return common.output(ctx, s, model, rows, prov, notes=[*notes, *common.sec_contact_notes(s, os.environ)])
+
+
 def _today(ctx: ToolContext):
     return ctx.now().date()
 
@@ -331,7 +337,7 @@ async def sec_filings(ctx: ToolContext, args: FilingsInputs) -> ToolOutput:
         session=session,
         request={"ticker": args.ticker, "forms": args.forms, "start": start, "end": end, "as_of": args.as_of},
     )
-    return common.output(ctx, s, Filing, rows, prov)
+    return _output(ctx, s, Filing, rows, prov)
 
 
 async def sec_xbrl_facts(ctx: ToolContext, args: FactsInputs) -> ToolOutput:
@@ -408,7 +414,7 @@ async def sec_xbrl_facts(ctx: ToolContext, args: FactsInputs) -> ToolOutput:
             "include_vintages": args.include_vintages,
         },
     )
-    return common.output(ctx, s, XbrlFact, rows, prov)
+    return _output(ctx, s, XbrlFact, rows, prov)
 
 
 async def sec_fundamentals(ctx: ToolContext, args: FundamentalsInputs) -> ToolOutput:
@@ -481,7 +487,7 @@ async def sec_fundamentals(ctx: ToolContext, args: FundamentalsInputs) -> ToolOu
             "as_of": args.as_of,
         },
     )
-    return common.output(ctx, s, FundamentalValue, rows, prov)
+    return _output(ctx, s, FundamentalValue, rows, prov)
 
 
 async def sec_earnings_releases(ctx: ToolContext, args: ReleasesInputs) -> ToolOutput:
@@ -533,7 +539,7 @@ async def sec_earnings_releases(ctx: ToolContext, args: ReleasesInputs) -> ToolO
         session=session,
         request={"ticker": args.ticker, "start": start, "end": end, "as_of": args.as_of},
     )
-    return common.output(ctx, s, EarningsRelease, rows, prov)
+    return _output(ctx, s, EarningsRelease, rows, prov)
 
 
 async def sec_earnings_figures(ctx: ToolContext, args: FiguresInputs) -> ToolOutput:
@@ -594,7 +600,7 @@ async def sec_earnings_figures(ctx: ToolContext, args: FiguresInputs) -> ToolOut
             "as_of": args.as_of,
         },
     )
-    return common.output(ctx, s, EarningsFigure, rows, prov)
+    return _output(ctx, s, EarningsFigure, rows, prov)
 
 
 async def sec_insider_trades(ctx: ToolContext, args: InsiderInputs) -> ToolOutput:
@@ -665,7 +671,7 @@ async def sec_insider_trades(ctx: ToolContext, args: InsiderInputs) -> ToolOutpu
         provider="sec_insider",
         request={"ticker": args.ticker, "forms": args.forms, "start": start, "end": end, "as_of": args.as_of},
     )
-    return common.output(ctx, s, InsiderTransaction, rows, prov)
+    return _output(ctx, s, InsiderTransaction, rows, prov)
 
 
 def _filings(rows: list[dict], amendment_type: str) -> list[tuple]:
@@ -772,7 +778,7 @@ async def sec_13f_holdings(ctx: ToolContext, args: ThirteenFInputs) -> ToolOutpu
             "as_of": args.as_of,
         },
     )
-    return common.output(ctx, s, InstitutionalHolding, rows, prov, notes=notes)
+    return _output(ctx, s, InstitutionalHolding, rows, prov, notes=notes)
 
 
 def _series_of(session, ticker: str) -> str | None:
@@ -834,7 +840,7 @@ async def sec_fund_nport(ctx: ToolContext, args: NportInputs) -> ToolOutput:
         session=session,
         request={"ticker": args.ticker, "as_of": args.as_of},
     )
-    return common.output(ctx, s, FundReport, rows, prov)
+    return _output(ctx, s, FundReport, rows, prov)
 
 
 async def sec_fund_holdings(ctx: ToolContext, args: FundHoldingsInputs) -> ToolOutput:
@@ -892,7 +898,7 @@ async def sec_fund_holdings(ctx: ToolContext, args: FundHoldingsInputs) -> ToolO
         session=session,
         request={"ticker": args.ticker, "accession_number": accession, "as_of": args.as_of},
     )
-    return common.output(ctx, s, FundHolding, rows, prov)
+    return _output(ctx, s, FundHolding, rows, prov)
 
 
 def _spec(

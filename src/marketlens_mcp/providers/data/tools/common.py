@@ -40,6 +40,11 @@ LOCAL_EMPTY = (
     "mode is local and nothing is stored for this request; set providers.data.mode: auto to fetch it"
 )
 ROW_CAP = "Stopped at {n} rows (fetch.max_rows); narrow the request (fewer series, a shorter window, or metrics=...)."
+NO_SEC_CONTACT = (
+    "SEC_CONTACT_EMAIL is not set, so SEC EDGAR requests were sent with a placeholder contact in the "
+    "User-Agent; SEC may throttle or block them. Set SEC_CONTACT_EMAIL to your email address in the env "
+    "block of this server in your MCP client's configuration."
+)
 
 #: The PIT line each tool's description carries, by marketlens-data policy.
 PIT = {
@@ -148,13 +153,21 @@ def years_ago(d: date, years: int) -> date:
 
 
 def check_sec_contact(settings: runtime.Settings, env: Mapping[str, str]) -> None:
-    """D3: SEC EDGAR's fair-access rule asks every client to name a contact."""
-    if settings.mode == "auto" and not sources.is_email(env.get("SEC_CONTACT_EMAIL")):
+    """D3: SEC EDGAR's fair-access rule asks every client to name a contact. A value that is set is
+    sent as it is, so it must be an email address; unset, marketlens-data sends its placeholder
+    contact (see sec_contact_notes)."""
+    value = env.get("SEC_CONTACT_EMAIL")
+    if settings.mode == "auto" and value and not sources.is_email(value):
         raise ToolError(
             "sec_contact_missing",
             "SEC EDGAR asks every client to name a contact email in its User-Agent: set SEC_CONTACT_EMAIL "
             "(for example you@example.com) in this server's environment.",
         )
+
+
+def sec_contact_notes(settings: runtime.Settings, env: Mapping[str, str]) -> list[str]:
+    """The note every SEC answer carries in mode auto while SEC_CONTACT_EMAIL is not set."""
+    return [NO_SEC_CONTACT] if settings.mode == "auto" and not env.get("SEC_CONTACT_EMAIL") else []
 
 
 # --- fetch, then read --------------------------------------------------------------------------

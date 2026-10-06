@@ -111,6 +111,9 @@ def test_the_25_tools(monkeypatch):
     assert specs["macro_bea_table"].env == ("BEA_API_KEY",)
     for name in TOOLS["filings"]:
         assert specs[name].env == ("SEC_CONTACT_EMAIL",), name
+        # the contact is optional: unset, a placeholder is sent and the answer says so
+        assert "Fetching needs" not in specs[name].description, name
+        assert "Without SEC_CONTACT_EMAIL a placeholder contact is sent" in specs[name].description, name
     assert specs["calendar_us_holidays"].env == ()  # the Alpaca cross-check is optional
     assert specs["macro_series_catalog"].env == ()
     for name in TOOLS["fed_treasury"]:
@@ -202,9 +205,18 @@ def test_readme_documents_the_five_capabilities_and_the_keys():
 def test_readme_data_setup_strongly_recommends_the_sec_contact():
     text = (REPO / "README.md").read_text(encoding="utf-8")
     setup = text.split("With the `data` extra, run it from the extra", 1)[1].split("Claude Code:", 1)[0]
-    assert "`SEC_CONTACT_EMAIL` is strongly recommended" in setup
-    for words in ("refuse to fetch", "placeholder contact", "logs a warning", "throttle or block"):
+    assert "`SEC_CONTACT_EMAIL` is optional but strongly recommended" in setup
+    assert "refuse" not in setup
+    for words in ("placeholder contact", "logs a warning", "throttle or block", "carries a note"):
         assert words in setup, words
+
+
+def test_readme_keys_table_says_the_sec_contact_is_optional():
+    text = (REPO / "README.md").read_text(encoding="utf-8")
+    row = next(line for line in text.splitlines() if line.startswith("| SEC EDGAR |"))
+    cells = [c.strip() for c in row.strip("|").split("|")]
+    assert cells[1:3] == ["`SEC_CONTACT_EMAIL`", "optional, strongly recommended"]
+    assert "placeholder contact" in cells[3] and "throttle or block" in cells[3]
 
 
 # --- configuration ---------------------------------------------------------------------------
@@ -394,7 +406,7 @@ def test_source_table_order_and_keys():
     assert (by["fred"].variables, by["fred"].required) == (("FRED_API_KEY",), True)
     assert (by["bls"].variables, by["bls"].required) == (("BLS_API_KEY",), False)
     assert (by["bea"].variables, by["bea"].required) == (("BEA_API_KEY",), True)
-    assert (by["sec"].variables, by["sec"].required) == (("SEC_CONTACT_EMAIL",), True)
+    assert (by["sec"].variables, by["sec"].required) == (("SEC_CONTACT_EMAIL",), False)
     assert by["nyse"].variables == ("ALPACA_API_KEY", "ALPACA_SECRET_KEY") and not by["nyse"].required
     assert [by[s].capability for s in ("nasdaq", "nyse", "sifma", "opm")] == [
         "calendars",
@@ -423,8 +435,8 @@ def test_readiness_lines_with_nothing_set():
         "request: https://data.bls.gov/registrationEngine/)",
         "data source bea: missing BEA_API_KEY; its tools will refuse until it is set "
         "(free key: https://apps.bea.gov/API/signup/)",
-        "data source sec: missing SEC_CONTACT_EMAIL; its tools will refuse until it is set "
-        "(free key: https://www.sec.gov/os/accessing-edgar-data)",
+        "data source sec: SEC_CONTACT_EMAIL not set (optional, strongly recommended; a placeholder "
+        "contact is sent)",
         "data source fomc: keyless",
         "data source nyfed: keyless",
         "data source treasury: keyless",
@@ -467,17 +479,23 @@ def test_readiness_lines_with_keys_and_capabilities_off():
     ]
     for value in env.values():
         assert not any(value in line for line in out)
-    assert lines({**env, "SEC_CONTACT_EMAIL": "not-an-email"})[3].startswith(
-        "data source sec: missing SEC_CONTACT_EMAIL"
+    # a value that is set is sent as the contact: the sec_ tools refuse one that is not an email address
+    malformed = sources.readiness({**env, "SEC_CONTACT_EMAIL": "not-an-email"}, ALL_ON)[3]
+    assert (malformed.state, malformed.line) == (
+        "missing",
+        "data source sec: SEC_CONTACT_EMAIL is not an email address; its tools refuse to fetch until it is",
     )
+    assert sources.readiness({}, ALL_ON)[3].state == "optional"
 
 
 def test_readiness_in_local_mode_needs_no_key():
     out = lines({}, mode="local")
     assert out[0] == "data source fred: optional FRED_API_KEY not set (only fetching needs it; mode is local)"
     assert out[3] == (
-        "data source sec: optional SEC_CONTACT_EMAIL not set (only fetching needs it; mode is local)"
+        "data source sec: SEC_CONTACT_EMAIL not set (optional, strongly recommended; a placeholder "
+        "contact is sent)"
     )
+    assert sources.readiness({"SEC_CONTACT_EMAIL": "x"}, ALL_ON, mode="local")[3].state == "optional"
 
 
 # --- parity ----------------------------------------------------------------------------------
