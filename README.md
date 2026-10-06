@@ -14,7 +14,7 @@ pipx install marketlens-mcp   # or a user-wide install
 pip install marketlens-mcp    # or into an environment you manage
 ```
 
-Python 3.11 or newer. The bare command serves MCP over stdio.
+Python 3.11 or newer. Linux and macOS are tested; Windows is not yet supported in this release. The bare command serves MCP over stdio.
 
 With the official-data tools (the `data` extra, Python 3.13 or newer; see [Official data](#official-data-the-data-extra)):
 
@@ -64,6 +64,8 @@ With the `data` extra, run it from the extra and add the official sources' keys 
 }
 ```
 
+`SEC_CONTACT_EMAIL` is strongly recommended: SEC EDGAR's fair-access rule asks every client to name a contact. Without it the `sec_` tools refuse to fetch (`mode: local` still reads what is stored), and marketlens-data used on its own sends a placeholder contact and logs a warning; SEC may throttle or block such requests. `marketlens-mcp doctor` says whether it is set, never its value.
+
 Claude Code:
 
 ```sh
@@ -91,9 +93,10 @@ Each tool belongs to one capability. Turn capabilities on or off in the config f
 | `macro` | on | FRED/ALFRED, BLS and BEA series with vintages and as-of reads, BLS release schedules, the FRED series catalogue. Needs the `data` extra. |
 | `filings` | on | SEC EDGAR filings, XBRL facts, point-in-time fundamentals, earnings releases and press-release EPS, insider trades, 13F holdings, fund N-PORT reports. Needs the `data` extra. |
 | `fed_treasury` | on | FOMC meetings and statements, NY Fed reference rates, the Treasury yield curve, auctions, debt and cash balance. Needs the `data` extra. |
-| `calendars` | off | Nasdaq's economic calendar (PMI and other actual and consensus figures), earnings calendar and history, US market holidays (NYSE, SIFMA, OPM). Off by default: the Nasdaq endpoint is unofficial and may change or refuse without notice. Needs the `data` extra. |
+| `holidays` | on | US market holidays and early closes from their publishers: NYSE (stocks), SIFMA (bonds), OPM (federal). Keyless. Needs the `data` extra. |
+| `calendars` | off | Nasdaq's economic calendar (PMI and other actual and consensus figures), earnings calendar and history. Off by default: the Nasdaq endpoint is unofficial and may change or refuse without notice. Needs the `data` extra. |
 
-The last four are declared whether or not the `data` extra is installed (a config file naming them is always valid); their tools are listed only where it is. Plugins may declare more capabilities; see [Plugins and providers](#plugins-and-providers).
+The last five are declared whether or not the `data` extra is installed (a config file naming them is always valid); their tools are listed only where it is. Plugins may declare more capabilities; see [Plugins and providers](#plugins-and-providers).
 
 **Read-only.** marketlens-mcp has no tool that places, replaces or cancels orders, closes positions, exercises options, changes account settings, or edits broker watchlists. Those tools do not exist in the package, so no configuration can enable them.
 
@@ -121,6 +124,7 @@ capabilities:
   macro: true             # FRED, BLS, BEA (needs the data extra)
   filings: true           # SEC EDGAR (needs the data extra)
   fed_treasury: true      # FOMC, NY Fed rates, Treasury curve and auctions (needs the data extra)
+  holidays: true          # NYSE, SIFMA, OPM market holidays (needs the data extra)
   calendars: false        # Nasdaq calendars: an unofficial endpoint (needs the data extra)
   portfolio: false
   results.export: false
@@ -187,12 +191,13 @@ The `analytics_*` tools take result handles and compute in DuckDB: simple and lo
 
 ## Official data (the data extra)
 
-`pip install "marketlens-mcp[data]"` (Python 3.13 or newer) adds a built-in provider over [marketlens-data](https://pypi.org/project/marketlens-data/) (import name `omni`), which fetches each publisher's own data and keeps it, point in time, in a local DuckDB + Parquet store. 25 tools under four capabilities:
+`pip install "marketlens-mcp[data]"` (Python 3.13 or newer) adds a built-in provider over [marketlens-data](https://pypi.org/project/marketlens-data/) (import name `omni`), which fetches each publisher's own data and keeps it, point in time, in a local DuckDB + Parquet store. 25 tools under five capabilities:
 
 - `macro`: FRED/ALFRED series with every vintage (`macro_series`), BLS series (`macro_bls_series`), BEA NIPA tables (`macro_bea_table`; BEA states each value's multiplier separately and marketlens-data does not store it, so a value whose `units` is `Level` is not in ones: NIPA dollar levels are usually millions of dollars, and the answer says so), BLS release schedules for the CPI and the jobs report (`macro_release_schedule`), and the FRED series catalogue (`macro_series_catalog`).
 - `filings`: SEC EDGAR filings (`sec_filings`), XBRL facts with restatements (`sec_xbrl_facts`), 23 point-in-time fundamentals computed from them (`sec_fundamentals`), 8-K Item 2.02 earnings releases (`sec_earnings_releases`) and the EPS their press releases state (`sec_earnings_figures`), Form 4 and 144 insider transactions (`sec_insider_trades`), 13F holdings (`sec_13f_holdings`), fund N-PORT reports and holdings (`sec_fund_nport`, `sec_fund_holdings`).
 - `fed_treasury`: FOMC meetings and statements, NY Fed reference rates (SOFR, EFFR, OBFR, TGCR, BGCR), the Treasury par yield curve, Treasury auctions, debt to the penny and the Treasury General Account.
-- `calendars` (off by default): Nasdaq's economic calendar, earnings calendar and earnings history, and US market holidays from NYSE, SIFMA and OPM.
+- `holidays`: US market holidays and early closes from NYSE, SIFMA and OPM (`calendar_us_holidays`), keyless.
+- `calendars` (off by default): Nasdaq's economic calendar, earnings calendar and earnings history.
 
 ### Keys
 
@@ -206,7 +211,7 @@ Each source names its own key; set the ones you need in the env block of the ser
 | SEC EDGAR | `SEC_CONTACT_EMAIL` | yes, to fetch | your contact address, sent in the User-Agent as SEC's fair-access rule asks: https://www.sec.gov/os/accessing-edgar-data | the nine `sec_` tools |
 | Federal Reserve, NY Fed, Treasury, FiscalData | none | | keyless | `fed_`, `treasury_` tools, `macro_release_schedule` |
 | Nasdaq | none | | keyless; an unofficial endpoint | `calendar_economic`, `calendar_earnings`, `calendar_earnings_history` |
-| NYSE, SIFMA, OPM | `ALPACA_API_KEY`, `ALPACA_SECRET_KEY` | no | optional: NYSE's calendar is cross-checked against Alpaca's | `calendar_us_holidays` |
+| NYSE, SIFMA, OPM | none (`ALPACA_API_KEY`, `ALPACA_SECRET_KEY` optional) | no | keyless; with the Alpaca keys, NYSE's dates are cross-checked against Alpaca's trading calendar, and without them the answer says they were not | `calendar_us_holidays` |
 | EIA | `EIA_API_KEY` | not used yet | free | planned (a later release) |
 | Census | `CENSUS_API_KEY` | not used yet | | planned (a later release) |
 
@@ -231,7 +236,7 @@ Every data tool takes `as_of`: the answer as it was knowable then (a date means 
 
 ### Calendars: unofficial, and the only free PMI
 
-`calendars` is off by default because Nasdaq's calendar endpoint is unofficial and may change or refuse without notice; turn it on with `capabilities: {calendars: true}`. It is also the one free source of PMI actual and consensus figures (ISM's PMI has no free official source): `calendar_economic` with `q: "PMI"`. Holidays sit under the same switch.
+`calendars` is off by default because Nasdaq's calendar endpoint is unofficial and may change or refuse without notice; turn it on with `capabilities: {calendars: true}`. It is also the one free source of PMI actual and consensus figures (ISM's PMI has no free official source): `calendar_economic` with `q: "PMI"`. Holidays are not behind this switch: they come from their publishers and have their own capability, `holidays`, on by default.
 
 ### What the model can ask
 
@@ -336,10 +341,10 @@ Generated from the built-in tool manifest (`make readme`). `marketlens-mcp tools
 | `treasury_debt` | fed_treasury (on) | `omni fiscaldata.debt_to_penny <- api.fiscaldata.treasury.gov/v2/accounting/od/debt_to_penny` (fiscaldata) | marketlens.TreasuryDebt | - | Total public debt per day; needs the data extra |
 | `treasury_tga` | fed_treasury (on) | `omni fiscaldata.tga_balance <- api.fiscaldata.treasury.gov/v1/accounting/dts/operating_cash_balance` (fiscaldata) | marketlens.TreasuryCashBalance | - | Treasury cash balance (TGA) per day; needs the data extra |
 | `treasury_yield_curve` | fed_treasury (on) | `omni treasury.yield_curve <- home.treasury.gov daily-treasury-rates.csv` (treasury) | marketlens.YieldCurvePoint | - | Daily Treasury par yield curve; needs the data extra |
+| `calendar_us_holidays` | holidays (on) | `omni nyse.holidays, sifma.holidays, opm.federal_holidays <- nyse.com, sifma.org, opm.gov` (nyse,sifma,opm) | marketlens.MarketHoliday | - | NYSE, SIFMA and OPM holidays and early closes; needs the data extra |
 | `calendar_earnings` | calendars (off) | `omni nasdaq.earnings <- api.nasdaq.com/api/calendar/earnings (unofficial)` (nasdaq) | marketlens.EarningsCalendarEntry | - | Earnings dates with consensus EPS; needs the data extra |
 | `calendar_earnings_history` | calendars (off) | `omni nasdaq.earnings_surprise <- api.nasdaq.com/api/company/{symbol}/earnings-surprise (unofficial)` (nasdaq) | marketlens.EarningsSurprise | - | Recent EPS against consensus per company; needs the data extra |
 | `calendar_economic` | calendars (off) | `omni nasdaq.economic_events <- api.nasdaq.com/api/calendar/economicevents (unofficial)` (nasdaq) | marketlens.EconomicEvent | - | untrusted text; needs the data extra |
-| `calendar_us_holidays` | calendars (off) | `omni nyse.holidays, sifma.holidays, opm.federal_holidays <- nyse.com, sifma.org, opm.gov` (nyse,sifma,opm) | marketlens.MarketHoliday | ALPACA_API_KEY, ALPACA_SECRET_KEY | NYSE, SIFMA and OPM holidays and early closes; needs the data extra |
 <!-- tools:end -->
 
 ## Canonical schema

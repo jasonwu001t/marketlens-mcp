@@ -1,6 +1,6 @@
 """With marketlens-data importable: the 25 tools register through the plugin
 API, pass the manifest rules, and are listed by the server under their
-capabilities (calendars off by default)."""
+capabilities (holidays on by default, calendars off)."""
 
 from __future__ import annotations
 
@@ -33,11 +33,13 @@ def test_25_specs_register_and_satisfy_the_manifest():
         assert set(entry.env) >= set(spec.env) and "OMNI_DATA_DIR" in entry.env
 
 
-def test_tools_json_lists_68_with_defaults_and_72_with_calendars(capsys, tmp_path):
+def test_tools_json_lists_69_with_defaults_and_72_with_calendars(capsys, tmp_path):
     assert cli.main(["tools", "--json"]) == 0
     body = json.loads(capsys.readouterr().out)
-    assert len(body["tools"]) == 68
-    assert not any(t["name"].startswith("calendar_") for t in body["tools"])
+    assert len(body["tools"]) == 69
+    listed = {t["name"]: t for t in body["tools"] if t["name"].startswith("calendar_")}
+    assert list(listed) == ["calendar_us_holidays"]
+    assert listed["calendar_us_holidays"]["capability"] == "holidays"
     p = tmp_path / "xdg" / "marketlens" / "config.yaml"
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text("capabilities:\n  calendars: true\n", encoding="utf-8")
@@ -58,5 +60,10 @@ def test_the_server_mounts_the_data_capabilities(tmp_path):
     rt = server.build_runtime()
     mcp = server.build_server(rt)
     names = {s.name for s in server.sub_servers(mcp)}
-    assert {"marketlens-macro", "marketlens-filings", "marketlens-fed_treasury"} <= names
+    assert {
+        "marketlens-macro",
+        "marketlens-filings",
+        "marketlens-fed_treasury",
+        "marketlens-holidays",
+    } <= names
     assert "marketlens-calendars" not in names

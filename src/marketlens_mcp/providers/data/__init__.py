@@ -1,8 +1,8 @@
 """The built-in data provider: official macro, SEC EDGAR, Fed and Treasury
-data, and the Nasdaq calendars, through marketlens-data (import name
-``omni``), installed with the ``marketlens-mcp[data]`` extra.
+data, US market holidays, and the Nasdaq calendars, through marketlens-data
+(import name ``omni``), installed with the ``marketlens-mcp[data]`` extra.
 
-Registered by ``marketlens_mcp.builtins`` through ``PLUGIN``. The four
+Registered by ``marketlens_mcp.builtins`` through ``PLUGIN``. The five
 capabilities are always declared (a config that names them is never refused);
 the 25 tools are added only when omni is importable. Importing this package
 imports no omni and performs no I/O.
@@ -31,7 +31,8 @@ PLUGIN = PluginInfo(
     api_version=PLUGIN_API_VERSION,
     register=register,
     description=(
-        "Official macro, SEC EDGAR, Fed and Treasury data, and the Nasdaq calendars, through marketlens-data."
+        "Official macro, SEC EDGAR, Fed and Treasury data, US market holidays, and the Nasdaq calendars, "
+        "through marketlens-data."
     ),
     env=(
         "FRED_API_KEY",

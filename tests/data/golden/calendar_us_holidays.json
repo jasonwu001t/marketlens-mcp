@@ -1,7 +1,9 @@
 {
  "absent": {},
  "model": "marketlens.MarketHoliday",
- "notes": [],
+ "notes": [
+  "NYSE's dates were fetched without ALPACA_API_KEY and ALPACA_SECRET_KEY set, so they are not cross-checked against Alpaca's trading calendar."
+ ],
  "offload": "auto",
  "pagination": null,
  "provenance": {

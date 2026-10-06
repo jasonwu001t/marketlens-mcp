@@ -299,7 +299,7 @@ def _network_check(rt) -> tuple[bool, str]:
 
 DATA_NOT_INSTALLED = (
     "data extra: not installed; install marketlens-mcp[data] (Python 3.13 or later) to list the macro, "
-    "filings, fed_treasury and calendars tools"
+    "filings, fed_treasury, holidays and calendars tools"
 )
 
 

@@ -110,14 +110,14 @@ SOURCES: tuple[SourceKey, ...] = (
     SourceKey(
         "nyse",
         "NYSE",
-        "calendars",
+        "holidays",
         ("ALPACA_API_KEY", "ALPACA_SECRET_KEY"),
         False,
         note="optional cross-check of NYSE's calendar",
         tools=("calendar_us_holidays",),
     ),
-    SourceKey("sifma", "SIFMA", "calendars", tools=("calendar_us_holidays",)),
-    SourceKey("opm", "OPM", "calendars", tools=("calendar_us_holidays",)),
+    SourceKey("sifma", "SIFMA", "holidays", tools=("calendar_us_holidays",)),
+    SourceKey("opm", "OPM", "holidays", tools=("calendar_us_holidays",)),
 )
 
 BY_SOURCE: dict[str, SourceKey] = {s.source: s for s in SOURCES}

@@ -184,10 +184,10 @@ def test_tools_are_grouped_into_one_sub_server_per_capability(tmp_path):
     # The built-ins at their defaults: portfolio and provider.docs are off, so
     # neither has a sub-server (and no tool of theirs is listed). The data
     # extra's tools exist only where marketlens-data is installed; calendars is
-    # off by default.
+    # off by default, holidays on.
     from marketlens_mcp.providers.data import runtime as data_runtime
 
-    data = {"marketlens-macro", "marketlens-filings", "marketlens-fed_treasury"}
+    data = {"marketlens-macro", "marketlens-filings", "marketlens-fed_treasury", "marketlens-holidays"}
     assert {s.name for s in server.sub_servers(mcp)} == {
         "marketlens-analytics",
         "marketlens-market",

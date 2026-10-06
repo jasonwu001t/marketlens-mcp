@@ -1,5 +1,5 @@
 """The data extra as the server sees it, with or without marketlens-data
-installed: the four capabilities are always declared, the 25 tools are
+installed: the five capabilities are always declared, the 25 tools are
 registered only when omni is importable, the README always lists them, the
 config file knows their settings, and doctor says what is missing. Nothing
 here imports omni (tests/data covers the tools themselves)."""
@@ -46,11 +46,11 @@ TOOLS = {
         "treasury_debt",
         "treasury_tga",
     ],
+    "holidays": ["calendar_us_holidays"],
     "calendars": [
         "calendar_economic",
         "calendar_earnings",
         "calendar_earnings_history",
-        "calendar_us_holidays",
     ],
 }
 ALL_TOOLS = [t for names in TOOLS.values() for t in names]
@@ -81,12 +81,14 @@ def test_the_provider_is_built_in_and_its_name_reserved():
 def test_capabilities_are_declared_either_way(monkeypatch, installed):
     cat = catalog(monkeypatch, installed=installed)
     caps = {c.id: c for c in cat.capabilities}
-    assert cat.capability_ids[-4:] == ["macro", "filings", "fed_treasury", "calendars"]
-    assert [caps[i].default_enabled for i in TOOLS] == [True, True, True, False]
+    assert cat.capability_ids[-5:] == ["macro", "filings", "fed_treasury", "holidays", "calendars"]
+    assert [caps[i].default_enabled for i in TOOLS] == [True, True, True, True, False]
     for cap_id in TOOLS:
         assert caps[cap_id].declared_by == "builtin"
         assert "data extra" in caps[cap_id].description
     assert "unofficial" in caps["calendars"].description
+    assert "unofficial" not in caps["holidays"].description
+    assert "holidays" not in caps["calendars"].description
     names = set(cat.tools)
     assert (set(ALL_TOOLS) <= names) is installed
     assert not (set(ALL_TOOLS) & names) or installed
@@ -109,7 +111,7 @@ def test_the_25_tools(monkeypatch):
     assert specs["macro_bea_table"].env == ("BEA_API_KEY",)
     for name in TOOLS["filings"]:
         assert specs[name].env == ("SEC_CONTACT_EMAIL",), name
-    assert specs["calendar_us_holidays"].env == ("ALPACA_API_KEY", "ALPACA_SECRET_KEY")
+    assert specs["calendar_us_holidays"].env == ()  # the Alpaca cross-check is optional
     assert specs["macro_series_catalog"].env == ()
     for name in TOOLS["fed_treasury"]:
         assert specs[name].env == (), name
@@ -119,7 +121,7 @@ def test_the_25_tools(monkeypatch):
         assert "as_of" in spec.input_model.model_fields or name == "macro_series_catalog", name
 
 
-@pytest.mark.parametrize(("installed", "count"), [(False, 47), (True, 68)])
+@pytest.mark.parametrize(("installed", "count"), [(False, 47), (True, 69)])
 def test_tools_json_counts(monkeypatch, capsys, installed, count):
     monkeypatch.setattr(runtime, "available", lambda: installed)
     assert cli.main(["tools", "--json"]) == 0
@@ -134,9 +136,10 @@ def test_tools_json_counts(monkeypatch, capsys, installed, count):
         "declared_by": "builtin",
     }
     assert caps["macro"]["enabled"] is True
+    assert caps["holidays"]["enabled"] is True
 
 
-def test_capabilities_command_lists_the_four(monkeypatch, capsys):
+def test_capabilities_command_lists_the_five(monkeypatch, capsys):
     monkeypatch.setattr(runtime, "available", lambda: False)
     assert cli.main(["capabilities"]) == 0
     out = capsys.readouterr().out
@@ -150,7 +153,7 @@ def test_doctor_without_the_extra(monkeypatch, capsys):
     out = capsys.readouterr().out
     assert (
         "data extra: not installed; install marketlens-mcp[data] (Python 3.13 or later) to list the "
-        "macro, filings, fed_treasury and calendars tools\n"
+        "macro, filings, fed_treasury, holidays and calendars tools\n"
     ) in out
     assert "data source" not in out and "data store" not in out
 
@@ -165,15 +168,23 @@ def test_readme_lists_the_data_tools_whether_or_not_installed(monkeypatch):
         assert "needs the data extra" in rows[name], name
     assert "| macro (on) |" in rows["macro_series"]
     assert "| calendars (off) |" in rows["calendar_economic"]
+    assert "| holidays (on) |" in rows["calendar_us_holidays"]
+    assert "| marketlens.MarketHoliday | - |" in rows["calendar_us_holidays"]  # no key needed
     assert "untrusted text; needs the data extra" in rows["fed_fomc_statements"]
     assert "| FRED_API_KEY |" in rows["macro_series"]
     assert "marketlens.EconomicObservation" in rows["macro_series"]
     assert "needs the data extra" not in rows["market_bars"]
 
 
-def test_readme_documents_the_four_capabilities_and_the_keys():
+def test_readme_documents_the_five_capabilities_and_the_keys():
     text = (REPO / "README.md").read_text(encoding="utf-8")
-    for cap_id, default in (("macro", "on"), ("filings", "on"), ("fed_treasury", "on"), ("calendars", "off")):
+    for cap_id, default in (
+        ("macro", "on"),
+        ("filings", "on"),
+        ("fed_treasury", "on"),
+        ("holidays", "on"),
+        ("calendars", "off"),
+    ):
         assert f"| `{cap_id}` | {default} |" in text, cap_id
     for name in (
         "FRED_API_KEY",
@@ -186,6 +197,14 @@ def test_readme_documents_the_four_capabilities_and_the_keys():
         assert name in text, name
     assert 'uvx --from "marketlens-mcp[data]" marketlens-mcp' in text
     assert 'pipx install "marketlens-mcp[data]"' in text
+
+
+def test_readme_data_setup_strongly_recommends_the_sec_contact():
+    text = (REPO / "README.md").read_text(encoding="utf-8")
+    setup = text.split("With the `data` extra, run it from the extra", 1)[1].split("Claude Code:", 1)[0]
+    assert "`SEC_CONTACT_EMAIL` is strongly recommended" in setup
+    for words in ("refuse to fetch", "placeholder contact", "logs a warning", "throttle or block"):
+        assert words in setup, words
 
 
 # --- configuration ---------------------------------------------------------------------------
@@ -215,7 +234,8 @@ def test_default_config_text_names_the_data_settings():
     )
     assert lines[i + 2].startswith("  filings: true")
     assert lines[i + 3].startswith("  fed_treasury: true")
-    assert lines[i + 4].startswith("  calendars: false") and "an unofficial endpoint" in lines[i + 4]
+    assert lines[i + 4].startswith("  holidays: true") and "NYSE, SIFMA, OPM" in lines[i + 4]
+    assert lines[i + 5].startswith("  calendars: false") and "an unofficial endpoint" in lines[i + 5]
     for line in (
         "  data:",
         "    mode: auto            # auto (fetch and keep) | local (read only what is stored)",
@@ -376,13 +396,19 @@ def test_source_table_order_and_keys():
     assert (by["bea"].variables, by["bea"].required) == (("BEA_API_KEY",), True)
     assert (by["sec"].variables, by["sec"].required) == (("SEC_CONTACT_EMAIL",), True)
     assert by["nyse"].variables == ("ALPACA_API_KEY", "ALPACA_SECRET_KEY") and not by["nyse"].required
+    assert [by[s].capability for s in ("nasdaq", "nyse", "sifma", "opm")] == [
+        "calendars",
+        "holidays",
+        "holidays",
+        "holidays",
+    ]
     assert by["fred"].url == "https://fred.stlouisfed.org/docs/api/api_key.html"
     assert by["bea"].url == "https://apps.bea.gov/API/signup/"
     assert by["bls"].url == "https://data.bls.gov/registrationEngine/"
     assert by["sec"].url == "https://www.sec.gov/os/accessing-edgar-data"
 
 
-ALL_ON = {"macro", "filings", "fed_treasury", "calendars"}
+ALL_ON = {"macro", "filings", "fed_treasury", "holidays", "calendars"}
 
 
 def lines(env, enabled=ALL_ON, mode="auto"):
@@ -429,9 +455,15 @@ def test_readiness_lines_with_keys_and_capabilities_off():
     ]
     assert out[8:] == [
         "data source nasdaq: capability calendars is off",
-        "data source nyse: capability calendars is off",
-        "data source sifma: capability calendars is off",
-        "data source opm: capability calendars is off",
+        "data source nyse: capability holidays is off",
+        "data source sifma: capability holidays is off",
+        "data source opm: capability holidays is off",
+    ]
+    assert lines(env, enabled={"holidays"})[8:] == [
+        "data source nasdaq: capability calendars is off",
+        "data source nyse: ready (ALPACA_API_KEY and ALPACA_SECRET_KEY set)",
+        "data source sifma: keyless",
+        "data source opm: keyless",
     ]
     for value in env.values():
         assert not any(value in line for line in out)

@@ -35,4 +35,4 @@ Every tool's manifest entry (`ToolSpec`) names its capability, its input and out
 
 - One topic per pull request, with tests and a `CHANGELOG.md` entry under "Unreleased".
 - Describe what changed for users (new tools and their capability, changed defaults, breaking changes).
-- CI runs the suite on Linux, macOS and Windows with Python 3.11 and 3.13.
+- CI runs the suite on Linux and macOS with Python 3.11 and 3.13 (Windows is not yet supported).

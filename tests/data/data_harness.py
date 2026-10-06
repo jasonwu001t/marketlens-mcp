@@ -60,6 +60,7 @@ CAPABILITIES = (
     "macro",
     "filings",
     "fed_treasury",
+    "holidays",
     "calendars",
 )
 SPECS: dict[str, ToolSpec] = {s.name: s for s in all_specs()}

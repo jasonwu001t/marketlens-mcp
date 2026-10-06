@@ -12,6 +12,10 @@ import pytest
 from data_harness import NOW, call, check_golden, context, fixture_json, fixture_text, freeze_clocks, refused
 
 NASDAQ = r"api\.nasdaq\.com/api"
+NOT_CHECKED = (
+    "NYSE's dates were fetched without ALPACA_API_KEY and ALPACA_SECRET_KEY set, so they are not "
+    "cross-checked against Alpaca's trading calendar."
+)
 
 
 def economic_routes(upstream, overrides=None):
@@ -194,8 +198,41 @@ def test_calendar_us_holidays_golden(tmp_path, upstream, frozen_clock):
     ]
     assert doc["provenance"]["authority"] == ["exchange", "third-party", "official"]
     assert {r["crosscheck"] for r in doc["rows"] if r["publisher"] == "nyse"} == {"not_checked"}
+    assert doc["notes"] == [NOT_CHECKED]
     federal = call("calendar_us_holidays", context(tmp_path), markets=["federal"], start="2026-11-01")
     assert [r.name for r in federal.rows] == ["Veterans Day", "Thanksgiving Day", "Christmas Day"]
+    assert federal.notes == []
+
+
+def test_calendar_us_holidays_cross_checks_nyse_with_alpaca_keys(
+    tmp_path, upstream, frozen_clock, monkeypatch
+):
+    holiday_routes(upstream)
+    monkeypatch.setenv("ALPACA_API_KEY", "alpacasynthetickey00")
+    monkeypatch.setenv("ALPACA_SECRET_KEY", "alpacasyntheticsecret000000000000000000")
+    sessions = [
+        {"date": "2026-11-25", "open": "09:30", "close": "16:00"},
+        {"date": "2026-11-27", "open": "09:30", "close": "13:00"},
+        {"date": "2026-11-30", "open": "09:30", "close": "16:00"},
+    ]
+    calendar = upstream.add(r"paper-api\.alpaca\.markets/v2/calendar", sessions)
+    out = call("calendar_us_holidays", context(tmp_path), markets=["stocks"])
+    assert calendar.hits == 1
+    checks = {r.holiday_date.isoformat(): r.crosscheck for r in out.rows}
+    assert (checks["2026-11-26"], checks["2026-11-27"], checks["2026-12-25"]) == (
+        "agrees",
+        "agrees",
+        "not_covered",
+    )
+    assert out.notes == []
+
+
+def test_calendar_us_holidays_needs_no_alpaca_keys(tmp_path, upstream, frozen_clock):
+    holiday_routes(upstream)
+    out = call("calendar_us_holidays", context(tmp_path), markets=["stocks"])
+    assert len(out.rows) == 12 and {r.crosscheck for r in out.rows} == {"not_checked"}
+    assert "paper-api.alpaca.markets" not in upstream.hosts()
+    assert out.notes == [NOT_CHECKED]
 
 
 def test_calendar_us_holidays_reports_a_failed_publisher(tmp_path, upstream, frozen_clock):
@@ -205,7 +242,8 @@ def test_calendar_us_holidays_reports_a_failed_publisher(tmp_path, upstream, fro
     assert {r.market for r in out.rows} == {"stocks"}
     assert out.notes == [
         "SIFMA could not be read (SIFMA refused the request: https://www.sifma.org/resources/guides-playbooks/"
-        "holiday-schedule); its stored rows, if any, are shown."
+        "holiday-schedule); its stored rows, if any, are shown.",
+        NOT_CHECKED,
     ]
 
 

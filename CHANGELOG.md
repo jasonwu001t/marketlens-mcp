@@ -6,11 +6,12 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Added
 
-- The `data` extra (`pip install "marketlens-mcp[data]"`, Python 3.13 or later): a built-in provider over marketlens-data (import name `omni`) for official data, 25 tools under four new capabilities:
+- The `data` extra (`pip install "marketlens-mcp[data]"`, Python 3.13 or later): a built-in provider over marketlens-data (import name `omni`) for official data, 25 tools under five new capabilities:
   - `macro` (on): FRED/ALFRED series with vintages and `as_of` reads, BLS series, BEA NIPA tables (a `Level` value carries a note that BEA's multiplier is not stored), BLS release schedules, the FRED series catalogue.
   - `filings` (on): SEC EDGAR filings, XBRL facts with restatement vintages, point-in-time fundamentals, 8-K Item 2.02 earnings releases and press-release EPS, Form 4 and 144 insider transactions, 13F holdings, fund N-PORT reports and holdings.
   - `fed_treasury` (on): FOMC meetings and statements, NY Fed reference rates (SOFR, EFFR, OBFR, TGCR, BGCR), the Treasury par yield curve, Treasury auctions, debt to the penny and the Treasury General Account.
-  - `calendars` (off: the Nasdaq endpoint is unofficial): the economic calendar with PMI and other actual and consensus figures, the earnings calendar and earnings history, and US market holidays from NYSE, SIFMA and OPM.
+  - `holidays` (on): US market holidays and early closes from NYSE, SIFMA and OPM, keyless; with Alpaca keys NYSE's dates are cross-checked against Alpaca's trading calendar, and without them the answer says they were not.
+  - `calendars` (off: the Nasdaq endpoint is unofficial): the economic calendar with PMI and other actual and consensus figures, the earnings calendar and earnings history.
 - Each source names its own key (`FRED_API_KEY`, `BEA_API_KEY`; `BLS_API_KEY` optional; `SEC_CONTACT_EMAIL` for SEC fair access; the rest keyless); `doctor` reports which sources are ready, where the data store is and in which mode.
 - `providers.data` settings: `mode` (`auto` fetches and keeps, `local` reads only what is stored), `data_dir`, `ttl_hours`, `calendar_ttl_minutes`, `call_timeout_seconds`.
 - Schema 1.1.0: 23 canonical models for the data tools and the units `as_published`, `USD_per_share`, `times`, `ordinal`.
@@ -18,6 +19,7 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Changed
 
+- Linux and macOS are the tested platforms: the classifiers name them instead of "OS Independent", and Windows left the CI matrix (not yet supported). Text I/O still names its encoding everywhere.
 - A fetch cut at `fetch.max_rows` or `fetch.max_pages` without a page token no longer carries the R16 "call again with page_token" note: the tool's own truncation note stands, and a tool that gave none gets "The data is incomplete; narrow the request." (the answer is still flagged `truncated`).
 - The name `data` is reserved for the built-in provider; a plugin may not take it.
 

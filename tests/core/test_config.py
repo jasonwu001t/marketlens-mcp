@@ -70,6 +70,7 @@ def test_default_text_is_the_init_file_and_round_trips(tmp_path):
         "macro": True,
         "filings": True,
         "fed_treasury": True,
+        "holidays": True,
         "calendars": False,
         "portfolio": False,
         "results.export": False,

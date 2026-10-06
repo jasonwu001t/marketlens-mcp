@@ -37,6 +37,7 @@ capabilities:
   macro: true             # FRED, BLS, BEA (needs the data extra)
   filings: true           # SEC EDGAR (needs the data extra)
   fed_treasury: true      # FOMC, NY Fed rates, Treasury curve and auctions (needs the data extra)
+  holidays: true          # NYSE, SIFMA, OPM market holidays (needs the data extra)
   calendars: false        # Nasdaq calendars: an unofficial endpoint (needs the data extra)
   portfolio: false        # brokerage account reads; what the model reads leaves your machine
   results.export: false   # write stored results to files in results.export_dir

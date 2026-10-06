@@ -115,3 +115,20 @@ def test_readme_sql_examples_pass_the_guard():
     assert len(statements) == 2
     for sql in statements:
         guard.check(sql, live_ids={"r_8c1f0a9d3e", "r_51b0c2d4e6"})
+
+
+def test_linux_and_macos_are_the_supported_platforms():
+    import pathlib
+    import tomllib
+
+    repo = pathlib.Path(__file__).resolve().parents[2]
+    project = tomllib.loads((repo / "pyproject.toml").read_text(encoding="utf-8"))["project"]
+    assert [c for c in project["classifiers"] if c.startswith("Operating System ::")] == [
+        "Operating System :: MacOS",
+        "Operating System :: POSIX :: Linux",
+    ]
+    text = (repo / "README.md").read_text(encoding="utf-8")
+    assert "Linux and macOS are tested; Windows is not yet supported" in text
+    ci = repo / ".github" / "workflows" / "test.yml"
+    if ci.exists():  # not in the sdist
+        assert "windows" not in ci.read_text(encoding="utf-8")
