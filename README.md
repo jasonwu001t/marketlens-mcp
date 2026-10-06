@@ -64,7 +64,7 @@ With the `data` extra, run it from the extra and add the official sources' keys 
 }
 ```
 
-`SEC_CONTACT_EMAIL` is strongly recommended: SEC EDGAR's fair-access rule asks every client to name a contact. Without it the `sec_` tools refuse to fetch (`mode: local` still reads what is stored), and marketlens-data used on its own sends a placeholder contact and logs a warning; SEC may throttle or block such requests. `marketlens-mcp doctor` says whether it is set, never its value.
+`SEC_CONTACT_EMAIL` is optional but strongly recommended: SEC EDGAR's fair-access rule asks every client to name a contact. Without it marketlens-data sends a placeholder contact and logs a warning, every `sec_` answer carries a note saying so, and SEC may throttle or block such requests. `marketlens-mcp doctor` says whether it is set, never its value.
 
 Claude Code:
 
@@ -208,7 +208,7 @@ Each source names its own key; set the ones you need in the env block of the ser
 | FRED / ALFRED | `FRED_API_KEY` | yes | free: https://fred.stlouisfed.org/docs/api/api_key.html | `macro_series` |
 | BLS | `BLS_API_KEY` | no | free; raises BLS's daily limit and years per request: https://data.bls.gov/registrationEngine/ | `macro_bls_series` |
 | BEA | `BEA_API_KEY` | yes | free: https://apps.bea.gov/API/signup/ | `macro_bea_table` |
-| SEC EDGAR | `SEC_CONTACT_EMAIL` | yes, to fetch | your contact address, sent in the User-Agent as SEC's fair-access rule asks: https://www.sec.gov/os/accessing-edgar-data | the nine `sec_` tools |
+| SEC EDGAR | `SEC_CONTACT_EMAIL` | optional, strongly recommended | your contact address, sent in the User-Agent as SEC's fair-access rule asks; without it a placeholder contact is sent, which SEC may throttle or block: https://www.sec.gov/os/accessing-edgar-data | the nine `sec_` tools |
 | Federal Reserve, NY Fed, Treasury, FiscalData | none | | keyless | `fed_`, `treasury_` tools, `macro_release_schedule` |
 | Nasdaq | none | | keyless; an unofficial endpoint | `calendar_economic`, `calendar_earnings`, `calendar_earnings_history` |
 | NYSE, SIFMA, OPM | none (`ALPACA_API_KEY`, `ALPACA_SECRET_KEY` optional) | no | keyless; with the Alpaca keys, NYSE's dates are cross-checked against Alpaca's trading calendar, and without them the answer says they were not | `calendar_us_holidays` |

@@ -75,7 +75,7 @@ SOURCES: tuple[SourceKey, ...] = (
         "SEC EDGAR",
         "filings",
         ("SEC_CONTACT_EMAIL",),
-        True,
+        False,
         "https://www.sec.gov/os/accessing-edgar-data",
         tools=(
             "sec_filings",
@@ -140,6 +140,12 @@ KEY_VARIABLES: tuple[str, ...] = (
 )
 
 
+#: SEC_CONTACT_EMAIL is a contact address, not a key: unset, marketlens-data sends a placeholder
+#: contact; a value that is set is sent as it is, so the sec_ tools refuse one that is not an email.
+SEC_NOT_SET = "SEC_CONTACT_EMAIL not set (optional, strongly recommended; a placeholder contact is sent)"
+SEC_NOT_EMAIL = "SEC_CONTACT_EMAIL is not an email address; its tools refuse to fetch until it is"
+
+
 def label(source: str) -> str:
     entry = BY_SOURCE.get(source)
     return entry.label if entry else source
@@ -167,6 +173,10 @@ def readiness(env: Mapping[str, str], enabled: Collection[str], *, mode: str = "
             state, text = "keyless", "keyless"
         elif all(_is_set(v, env) for v in s.variables):
             state, text = "ready", f"ready ({_names(s.variables)} set)"
+        elif s.source == "sec" and env.get("SEC_CONTACT_EMAIL"):
+            state, text = ("missing" if mode == "auto" else "optional"), SEC_NOT_EMAIL
+        elif s.source == "sec":
+            state, text = "optional", SEC_NOT_SET
         elif s.required and mode == "auto":
             missing = _names(tuple(v for v in s.variables if not _is_set(v, env)))
             state = "missing"
