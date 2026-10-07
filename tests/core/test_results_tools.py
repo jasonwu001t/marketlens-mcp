@@ -138,6 +138,30 @@ def test_query_store_true_keeps_up_to_fetch_max_rows_and_handles_compose(setup):
     assert set(second.provenance.derived_from) == {out.result_id, small.result_id}
 
 
+def test_query_store_true_keeps_the_parents_time_series_columns_and_units(setup):
+    ctx, store, bars, small, *_ = setup
+    out = call(ctx, "results_query", sql=f"SELECT * FROM {bars.result_id} WHERE ticker = 'AAPL'", store=True)
+    info = store.info(out.result_id)
+    assert (info.model, info.time_column, info.group_column) == ("marketlens.QueryRow", "t", "ticker")
+    units = {c.name: c.unit for c in info.columns}
+    assert units["close"] == {c.name: c.unit for c in bars.columns}["close"] == "price"
+    # Only what is still there unchanged: the series column renamed, the time column cast or two parents.
+    renamed = store.info(
+        call(
+            ctx, "results_query", sql=f"SELECT ticker AS sym, t, close FROM {bars.result_id}", store=True
+        ).result_id
+    )
+    assert (renamed.time_column, renamed.group_column) == ("t", None)
+    for sql in (
+        f"SELECT ticker, CAST(t AS VARCHAR) AS t, close FROM {bars.result_id}",
+        f"SELECT ticker, t AS ts, close FROM {bars.result_id}",
+        f"SELECT a.ticker, a.t, a.close FROM {bars.result_id} a JOIN {small.result_id} b USING (ticker, t)",
+    ):
+        kept = store.info(call(ctx, "results_query", sql=sql, store=True).result_id)
+        assert (kept.time_column, kept.group_column) == (None, None), sql
+        assert all(c.unit is None for c in kept.columns), sql
+
+
 def test_query_over_news_is_external_text(setup):
     ctx, _, _, _, news, _ = setup
     from marketlens_mcp import pipeline

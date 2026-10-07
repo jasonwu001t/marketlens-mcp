@@ -8,6 +8,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from marketlens_mcp.plugin_api import ToolContext, ToolOutput, ToolSpec
+from marketlens_mcp.results_api import ResultSession
 from marketlens_schema.analytics import BetaPoint, BetaResult
 from marketlens_schema.base import Timeframe
 
@@ -24,6 +25,7 @@ from ..common import (
     points_sql,
     price_column,
     provenance,
+    qi,
     ql,
     refuse,
     resolve,
@@ -97,6 +99,18 @@ def _check_frequencies(a: Input, tfa: str | None, b: Input, tfb: str | None, per
             )
 
 
+def _benchmark_name(session: ResultSession, a: Input, b: Input) -> str:
+    """A benchmark without a series column: its one value of the asset's
+    series column (e.g. ticker SPY) when it has that column, else its id."""
+    col = b.column(a.group) if a.group is not None else None
+    if col is not None and col.type == "VARCHAR":
+        g = qi(col.name)
+        found = rows(session, f"SELECT DISTINCT {g} AS g FROM {b.table} WHERE {g} IS NOT NULL LIMIT 2")
+        if len(found) == 1:
+            return found[0]["g"]
+    return b.rid
+
+
 async def handler(ctx: ToolContext, args: BetaArgs) -> ToolOutput:
     a = resolve(ctx, TOOL, args.asset_result_id, series_column=args.series_column)
     b = resolve(ctx, TOOL, args.benchmark_result_id)
@@ -126,7 +140,7 @@ async def handler(ctx: ToolContext, args: BetaArgs) -> ToolOutput:
                 f"{TOOL} needs at least 2 usable prices in the benchmark and in an asset series; {a.label} and "
                 f"{b.label} do not have them.",
             )
-        benchmark = next(iter(bench_series)) if b.group is not None else b.rid
+        benchmark = next(iter(bench_series)) if b.group is not None else _benchmark_name(session, a, b)
         _check_frequencies(
             a, bar_timeframe(ctx, session, TOOL, a), b, bar_timeframe(ctx, session, TOOL, b), args.period
         )

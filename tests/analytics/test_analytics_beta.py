@@ -11,12 +11,13 @@ import math
 import statistics
 
 import pytest
-from analytics_harness import DAY, MINUTE, bars, output_rows, run, source_provenance, utc
+from analytics_harness import DAY, MINUTE, bars, output_rows, run, source_provenance, table_of, utc
 
 from marketlens_mcp.analytics.tools.beta import SPEC
 from marketlens_mcp.analytics.tools.returns import SPEC as RETURNS
 from marketlens_mcp.plugin_api import ToolError
 from marketlens_schema.analytics import BetaPoint, BetaResult
+from marketlens_schema.market import Bar
 
 T0 = utc(2026, 1, 5, 21)
 RB = [0.01, -0.02, 0.015, 0.005, -0.01, 0.02]
@@ -52,6 +53,24 @@ def test_exact_linear_relation(store, ctx):
     assert (r.start, r.end) == (T0 + DAY, T0 + 6 * DAY)
     assert out.provenance.derived_from == [asset, bench]
     assert out.provenance.route == "duckdb:analytics_beta"
+
+
+def test_benchmark_without_a_series_column_is_named_by_its_ticker(store, ctx):
+    asset = store.put_rows(bars("AAPL", prices(100, [1.5 * r for r in RB])))
+    spy = table_of(Bar, bars("SPY", prices(400, RB))).drop_columns(["absent"])
+    named = store.put_dynamic(spy, time_column="t")
+    (r,) = output_rows(
+        run(SPEC, ctx, asset_result_id=asset, benchmark_result_id=named, price_column="close", min_obs=3),
+        BetaResult,
+    )
+    assert r.benchmark == "SPY"
+    # No ticker column to name it by: the result id.
+    unnamed = store.put_dynamic(spy.drop_columns(["ticker"]), time_column="t")
+    (r,) = output_rows(
+        run(SPEC, ctx, asset_result_id=asset, benchmark_result_id=unnamed, price_column="close", min_obs=3),
+        BetaResult,
+    )
+    assert r.benchmark == unnamed
 
 
 def test_noisy_series_against_statistics(store, ctx):

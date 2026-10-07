@@ -15,11 +15,13 @@ from analytics_harness import MINUTE, bars, schema_of, table_of, utc  # noqa: E4
 from marketlens_mcp.analytics.common import canonical_schema  # noqa: E402
 from marketlens_mcp.analytics.tools import all_specs  # noqa: E402
 from marketlens_mcp.analytics.tools.align import SPEC as ALIGN  # noqa: E402
+from marketlens_mcp.analytics.tools.beta import SPEC as BETA  # noqa: E402
 from marketlens_mcp.analytics.tools.drawdown import SPEC as DRAWDOWN  # noqa: E402
 from marketlens_mcp.analytics.tools.resample import SPEC as RESAMPLE  # noqa: E402
 from marketlens_mcp.analytics.tools.returns import SPEC as RETURNS  # noqa: E402
 from marketlens_mcp.analytics.tools.volatility import SPEC as VOLATILITY  # noqa: E402
 from marketlens_mcp.plugin_api import ToolError  # noqa: E402
+from marketlens_mcp.results.tools import SPECS as RESULTS_SPECS  # noqa: E402
 from marketlens_mcp.results_api import InlineResult, ResultMarker  # noqa: E402
 from marketlens_schema import BUILTIN_MODELS  # noqa: E402
 from marketlens_schema.analytics import ANALYTICS_MODELS  # noqa: E402
@@ -106,3 +108,18 @@ def test_specs_pass_the_server_manifest_validation():
     caps = {c.id for c in BUILTIN_CAPABILITIES}
     for spec in all_specs():
         validate_spec(spec, capabilities=caps, models=BUILTIN_MODELS)
+
+
+def test_a_stored_query_of_one_ticker_is_a_benchmark_like_its_parent(real):
+    store, ctx = real
+    (query,) = [s for s in RESULTS_SPECS if s.name == "results_query"]
+    closes = [100 * (1 + 0.01 * ((i * 7) % 5 - 2)) for i in range(30)]
+    both = put_bars(store, bars("AAPL", closes) + bars("SPY", [c * 4 + i for i, c in enumerate(closes)]))
+    spy = call(query, ctx, sql=f"SELECT * FROM {both} WHERE ticker = 'SPY'", store=True)
+    assert isinstance(spy, ResultMarker) and spy.model == "marketlens.QueryRow"
+    aapl = call(query, ctx, sql=f"SELECT * FROM {both} WHERE ticker = 'AAPL'", store=True)
+    out = call(BETA, ctx, asset_result_id=aapl.result_id, benchmark_result_id=spy.result_id)
+    assert isinstance(out, InlineResult)
+    (row,) = out.rows
+    assert (row["series"], row["benchmark"], row["n_obs"]) == ("AAPL", "SPY", 29)
+    assert row["beta"] is not None

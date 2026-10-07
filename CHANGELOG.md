@@ -26,6 +26,7 @@ All notable changes to this project are documented here. The format follows [Kee
 ### Fixed
 
 - `analytics_align` takes `by_left` and `by_right` when the two results name the series column differently (bars' `ticker`, returns' `series`); `by` stays the shorthand for a shared name and is refused together with them.
+- `results_query` with `store=true` (or an answer too large to show) over one result keeps that result's time and series columns and column units when they are still there with the same name and type, so `SELECT * FROM r_bars WHERE ticker='SPY'` chains into analytics as the bars would: the default value column is the parent model's (close), and `analytics_beta` names the benchmark SPY instead of its result id. A benchmark with no series column is named by its one value of the asset's series column when it has that column.
 
 ## [0.1.0] - Unreleased
 

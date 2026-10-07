@@ -41,7 +41,7 @@ from marketlens_mcp.results_api import (
     ResultNotFound,
     ResultSession,
 )
-from marketlens_schema import BUILTIN_MODELS, CanonicalModel
+from marketlens_schema import BUILTIN_MODELS, QUERY_ROW_SCHEMA_NAME, CanonicalModel
 from marketlens_schema.base import TIMEFRAME_RE, AbsenceCode, AbsenceReason, Delay, Provenance
 
 CAPABILITY = "analytics"
@@ -267,12 +267,14 @@ def is_timestamp(column: ColumnInfo) -> bool:
 
 @dataclass(frozen=True)
 class Input:
-    """One result handle, resolved: its info, time column and series column."""
+    """One result handle, resolved: its info, time column and series column;
+    ``value`` is the default value column a query answer keeps from its parent."""
 
     info: ResultInfo
     time: str
     group: str | None
     notes: tuple[str, ...] = ()
+    value: str | None = None
 
     @property
     def rid(self) -> str:
@@ -309,6 +311,25 @@ class Input:
 
     def numeric_columns(self) -> list[str]:
         return [c.name for c in self.info.columns if is_numeric(c)]
+
+
+def _parent_value(ctx: ToolContext, info: ResultInfo) -> str | None:
+    """A stored query answer over one parent whose time column it kept: the
+    parent model's default value column, when it is still there with the same
+    type."""
+    if info.model != QUERY_ROW_SCHEMA_NAME or len(info.parents) != 1 or info.time_column is None:
+        return None
+    try:
+        parent = ctx.results.info(info.parents[0])
+    except ResultNotFound:
+        return None
+    cls = BUILTIN_MODELS.get(parent.model)
+    if cls is None or not cls.value_columns or parent.time_column != info.time_column:
+        return None
+    name = cls.value_columns[0]
+    mine = next((c for c in info.columns if c.name == name), None)
+    theirs = next((c for c in parent.columns if c.name == name), None)
+    return name if mine is not None and theirs is not None and mine.type == theirs.type else None
 
 
 def resolve(ctx: ToolContext, tool: str, result_id: str, *, series_column: str | None = None) -> Input:
@@ -353,21 +374,21 @@ def resolve(ctx: ToolContext, tool: str, result_id: str, *, series_column: str |
             )
         if group == time:
             raise refuse("unknown_column", f"{tool}: the series column cannot be the time column '{time}'.")
-    return Input(info=info, time=time, group=group, notes=tuple(notes))
+    return Input(info=info, time=time, group=group, notes=tuple(notes), value=_parent_value(ctx, info))
 
 
 def value_column(tool: str, inp: Input, given: str | None, *, param: str) -> str:
     """The numeric column to use: ``given``, or the built-in model's first
-    value column. Refusals name the numeric columns."""
+    value column (a query answer's: its parent's). Refusals name the numeric columns."""
     numeric = inp.numeric_columns()
     if given is None:
         cls = BUILTIN_MODELS.get(inp.model)
-        if cls is None or not cls.value_columns:
+        given = cls.value_columns[0] if cls is not None and cls.value_columns else inp.value
+        if given is None:
             raise refuse(
                 "column_required",
                 f"{tool} needs {param}: {inp.label} has no default value column. Numeric columns: {names(numeric)}.",
             )
-        given = cls.value_columns[0]
     if given not in numeric:
         raise refuse(
             "not_numeric",
