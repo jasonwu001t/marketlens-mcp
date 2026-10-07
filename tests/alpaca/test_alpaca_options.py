@@ -43,6 +43,8 @@ def test_options_latest_trades_golden(specs, ctx, alpaca):
     doc = check_golden(out, "options_latest_trades")
     assert alpaca.params() == {"symbols": C1, "feed": "indicative"}
     assert (doc["provenance"]["feed"], doc["provenance"]["delay"]) == ("indicative", "delayed")
+    missing = call(specs["options_latest_trades"], ctx, occ_symbols=[C1, P1])
+    assert f"No data from Alpaca for: {P1}." in missing.notes
 
 
 def test_options_latest_quotes_golden(specs, alpaca):

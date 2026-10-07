@@ -248,6 +248,7 @@ async def _latest(ctx: ToolContext, args: LatestIn, kind: Literal["bars", "quote
         delay=delay,
         as_of=latest_t(page.rows),
         page=page,
+        notes=missing_note(args.tickers, page.rows),
         absent=absent,
         skips=skips,
     )

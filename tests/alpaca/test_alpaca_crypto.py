@@ -58,6 +58,8 @@ def test_crypto_latest_bars_golden(specs, ctx, alpaca):
     out = call(specs["crypto_latest_bars"], ctx, tickers=["BTC/USD"])
     check_golden(out, "crypto_latest_bars")
     assert alpaca.params() == {"symbols": "BTC/USD"}
+    missing = call(specs["crypto_latest_bars"], ctx, tickers=["BTC/USD", "ZZZ/USD"])
+    assert "No data from Alpaca for: ZZZ/USD." in missing.notes
 
 
 def test_crypto_latest_quotes_golden(specs, ctx, alpaca):

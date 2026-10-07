@@ -170,6 +170,21 @@ def test_market_latest_trades_golden(specs, ctx, alpaca):
     check_golden(out, "market_latest_trades")
 
 
+@pytest.mark.parametrize(
+    ("tool", "path", "fixture"),
+    [
+        ("market_latest_bars", "/v2/stocks/bars/latest", "StockLatestBars"),
+        ("market_latest_quotes", "/v2/stocks/quotes/latest", "StockLatestQuotes"),
+        ("market_latest_trades", "/v2/stocks/trades/latest", "StockLatestTrades"),
+    ],
+)
+def test_market_latest_names_tickers_alpaca_returned_nothing_for(specs, ctx, alpaca, tool, path, fixture):
+    alpaca.fixture(path, fixture)
+    out = call(specs[tool], ctx, tickers=["AAPL", "QQQQX"])
+    assert "AAPL" in {r.ticker for r in out.rows}
+    assert "No data from Alpaca for: QQQQX." in out.notes
+
+
 def test_market_snapshots_golden(specs, ctx, alpaca):
     alpaca.fixture("/v2/stocks/snapshots", "StockSnapshots")
     out = call(specs["market_snapshots"], ctx, tickers=["AAPL", "BRK-B", "ZZZZ"])
