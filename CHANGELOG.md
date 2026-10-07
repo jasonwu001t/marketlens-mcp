@@ -30,6 +30,7 @@ All notable changes to this project are documented here. The format follows [Kee
 - The analytics tools take `event_time` as the time column of a result with no recorded one whose other timestamp columns are only the point-in-time clocks `knowledge_time` and `ingested_at` (a datastore's values), with a note, instead of refusing it as having several timestamp columns.
 - An Alpaca 403 for a data set the plan does not include gets a hint for its data family: stock data names `stock_feed`, options data `options_feed`, and anything else (fixed income, news) says no marketlens setting will enable it, instead of the stock and options feed advice for every endpoint.
 - `market_latest_bars`, `market_latest_quotes` and `market_latest_trades` name the requested tickers Alpaca returned nothing for in a note, as the snapshot tools and the crypto and options latest tools already did, instead of dropping them silently.
+- A `lookback` for bars of 1d or longer (`market_bars`, `crypto_bars`, `options_bars`) starts at 00:00 UTC of its first day, so that day's bar (stamped at midnight New York) is no longer dropped: `lookback=P1Y` at 2026-10-07T08:31Z starts at 2025-10-07T00:00Z, not 08:31Z. Intraday bars are unchanged.
 
 ## [0.1.0] - Unreleased
 

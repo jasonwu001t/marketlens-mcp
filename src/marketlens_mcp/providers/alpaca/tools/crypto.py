@@ -105,7 +105,14 @@ async def _history(
     timeframe = getattr(args, "timeframe", None)
     async with AlpacaClient(ctx) as api:
         loc = api.settings.crypto_location
-        win = window(ctx, args.start, args.end, args.lookback, "P1D" if kind == "bars" else "PT15M")
+        win = window(
+            ctx,
+            args.start,
+            args.end,
+            args.lookback,
+            "P1D" if kind == "bars" else "PT15M",
+            timeframe=timeframe,
+        )
         skips = Skips(model.schema_name)
 
         def rows(symbol: str, records: list) -> list:

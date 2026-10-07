@@ -92,7 +92,7 @@ class ChainIn(Inputs):
 
 async def options_bars(ctx: ToolContext, args: BarsIn) -> ToolOutput:
     async with AlpacaClient(ctx) as api:
-        win = window(ctx, args.start, args.end, args.lookback, "P30D")
+        win = window(ctx, args.start, args.end, args.lookback, "P30D", timeframe=args.timeframe)
         skips = Skips(OptionBar.schema_name)
 
         def rows(symbol: str, records: list) -> list:

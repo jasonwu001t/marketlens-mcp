@@ -25,6 +25,12 @@ def test_crypto_bars_golden(specs, ctx, alpaca):
     assert doc["provenance"]["route"] == "GET /v1beta3/crypto/{loc}/bars"
 
 
+def test_crypto_daily_bars_lookback_starts_at_utc_midnight(specs, ctx, alpaca):
+    alpaca.fixture("/v1beta3/crypto/us/bars", "CryptoBars")
+    call(specs["crypto_bars"], ctx, tickers=["BTC/USD"], timeframe="1d", lookback="P3D")
+    assert alpaca.params()["start"] == "2026-09-29T00:00:00Z"  # three days back from 20:00Z, floored
+
+
 def test_crypto_location_setting_picks_the_path(specs, alpaca):
     alpaca.fixture("/v1beta3/crypto/eu-1/bars", "CryptoBars")
     out = call(specs["crypto_bars"], FakeContext(settings={"crypto_location": "eu-1"}), tickers=["BTC/USD"])

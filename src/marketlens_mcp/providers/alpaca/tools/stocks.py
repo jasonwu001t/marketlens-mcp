@@ -94,7 +94,14 @@ def _intraday(tf: str) -> bool:
 async def market_bars(ctx: ToolContext, args: BarsIn) -> ToolOutput:
     async with AlpacaClient(ctx) as api:
         feed, delay = stock_feed(api.settings.stock_feed, historical=True)
-        win = window(ctx, args.start, args.end, args.lookback, "P5D" if _intraday(args.timeframe) else "P1Y")
+        win = window(
+            ctx,
+            args.start,
+            args.end,
+            args.lookback,
+            "P5D" if _intraday(args.timeframe) else "P1Y",
+            timeframe=args.timeframe,
+        )
         skips = Skips(Bar.schema_name)
 
         def rows(symbol: str, records: list) -> list:

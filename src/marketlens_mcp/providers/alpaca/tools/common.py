@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Annotated, Any, Literal
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, ValidationError
@@ -100,7 +100,8 @@ TimeframeIn = Annotated[str, Field(pattern=TIMEFRAME_RE.pattern)]
 START_DOC = "Window start: ISO date (00:00 UTC) or datetime with a zone, e.g. 2026-01-02T14:30:00Z."
 END_DOC = "Window end (same format). Default: now (Alpaca's latest available)."
 LOOKBACK_DOC = (
-    "Window length back from end as an ISO-8601 duration (P5D, P1Y, PT20M); only when start is omitted."
+    "Window length back from end as an ISO-8601 duration (P5D, P1Y, PT20M); only when start is omitted. "
+    "Bars of 1d or longer start at 00:00 UTC of the first day."
 )
 CONTINUE_DOC = "Continue a truncated fetch: the page_token from the previous response's pagination."
 TIMEFRAME_DOC = "Bar size: Nmin (1-59), Nh (1-23), 1d, 1w or Nmo (1,2,3,4,6,12)."
@@ -120,8 +121,17 @@ class Window:
 
 
 def window(
-    ctx: ToolContext, start: str | None, end: str | None, lookback: str | None, default: str
+    ctx: ToolContext,
+    start: str | None,
+    end: str | None,
+    lookback: str | None,
+    default: str,
+    *,
+    timeframe: str | None = None,
 ) -> Window:
+    """With a timeframe of a day or longer, a start from lookback is floored to
+    00:00 UTC so the first day's bar (stamped at midnight New York, 04:00 or
+    05:00 UTC) is in the window."""
     end_dt = convert.parse_instant(end) if end else None
     if start and lookback:
         raise ToolError("invalid_arguments", "Pass start or lookback, not both.")
@@ -135,6 +145,8 @@ def window(
             raise ToolError(
                 "invalid_arguments", f"lookback {lb} reaches back before the year 1; pass a shorter lookback."
             ) from None
+        if timeframe is not None and timeframe.endswith(("d", "w", "mo")):
+            start_dt = start_dt.astimezone(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
     if end_dt is not None and start_dt >= end_dt:
         raise ToolError("invalid_arguments", f"start ({convert.iso_z(start_dt)}) must be before end ({end}).")
     return Window(start_dt, end_dt, lb)

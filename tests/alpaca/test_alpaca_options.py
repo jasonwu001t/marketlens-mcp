@@ -18,7 +18,7 @@ def test_options_bars_golden(specs, ctx, alpaca):
     assert alpaca.params() == {
         "symbols": C1,
         "timeframe": "1Day",
-        "start": "2026-09-02T20:00:00Z",
+        "start": "2026-09-02T00:00:00Z",  # P30D back from now, floored to the UTC day
         "sort": "asc",
         "limit": "10000",
     }

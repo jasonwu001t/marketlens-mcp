@@ -22,7 +22,7 @@ def test_market_bars_golden_two_pages_and_brk_b(specs, ctx, alpaca):
     assert first == {
         "symbols": "AAPL,BRK.B",
         "timeframe": "1Day",
-        "start": "2025-10-02T20:00:00Z",
+        "start": "2025-10-02T00:00:00Z",  # P1Y back from now, floored to the UTC day
         "adjustment": "all",
         "feed": "iex",
         "sort": "asc",
@@ -94,6 +94,29 @@ def test_delayed_sip_is_sent_as_sip_on_history_and_marked_delayed(specs, alpaca)
     out = call(specs["market_bars"], ctx, tickers=["MSFT"])
     assert alpaca.params()["feed"] == "sip"
     assert (out.provenance.feed, out.provenance.delay) == ("sip", "delayed")
+
+
+@pytest.mark.parametrize(
+    ("timeframe", "start"),
+    [
+        ("1d", "2025-10-07T00:00:00Z"),
+        ("1w", "2025-10-07T00:00:00Z"),
+        ("1mo", "2025-10-07T00:00:00Z"),
+        ("1h", "2025-10-07T08:31:05Z"),
+    ],
+)
+def test_a_daily_lookback_starts_at_the_first_days_utc_midnight(specs, ctx, alpaca, timeframe, start):
+    # The 2025-10-07 daily bar is stamped 04:00Z (midnight New York): a start at 08:31:05Z would drop it.
+    alpaca.fixture("/v2/stocks/bars", "StockBars__intraday")
+    call(
+        specs["market_bars"],
+        ctx,
+        tickers=["MSFT"],
+        timeframe=timeframe,
+        lookback="P1Y",
+        end="2026-10-07T04:31:05-04:00",
+    )
+    assert alpaca.params()["start"] == start
 
 
 def test_start_and_lookback_together_are_refused(specs, ctx, alpaca):

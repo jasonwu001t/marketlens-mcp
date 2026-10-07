@@ -30,7 +30,7 @@
    "feed": "iex",
    "lookback": "P1Y",
    "sort": "asc",
-   "start": "2025-10-02T20:00:00Z",
+   "start": "2025-10-02T00:00:00Z",
    "tickers": [
     "AAPL",
     "BRK-B"
