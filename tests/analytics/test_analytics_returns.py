@@ -231,3 +231,32 @@ def test_a_ratio_column_is_not_a_price(store, ctx):
         and "fraction" in e.value.message
         and "marketlens.ReturnPoint" in e.value.message
     )
+
+
+def datastore_values(**extra):
+    times = [utc(2026, 1, d) for d in (1, 2, 3)]
+    stamp = pa.timestamp("us", tz="UTC")
+    cols = {
+        "event_time": pa.array(times, stamp),
+        "knowledge_time": pa.array([t + DAY for t in times], stamp),
+        "ingested_at": pa.array([utc(2026, 2, 1)] * 3, stamp),
+        "value": [100.0, 110.0, 99.0],
+    }
+    return pa.table({**cols, **extra})
+
+
+def test_event_time_is_the_time_column_next_to_the_point_in_time_clocks(store, ctx):
+    rid = store.put_dynamic(datastore_values())
+    out = run(SPEC, ctx, result_id=rid, price_column="value")
+    assert [r["t"] for r in out.table.to_pylist()] == [utc(2026, 1, 2), utc(2026, 1, 3)]
+    assert (
+        f"{rid} has no recorded time column; time column 'event_time' was used, not the point-in-time clock "
+        "knowledge_time, ingested_at." in out.notes
+    )
+    # Another timestamp besides the clocks: still ambiguous.
+    other = store.put_dynamic(
+        datastore_values(release_time=pa.array([utc(2026, 1, 9)] * 3, pa.timestamp("us", tz="UTC")))
+    )
+    with pytest.raises(ToolError) as e:
+        run(SPEC, ctx, result_id=other, price_column="value")
+    assert e.value.code == "not_time_series" and "several timestamp columns" in e.value.message

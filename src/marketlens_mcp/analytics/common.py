@@ -332,6 +332,11 @@ def _parent_value(ctx: ToolContext, info: ResultInfo) -> str | None:
     return name if mine is not None and theirs is not None and mine.type == theirs.type else None
 
 
+#: Point-in-time clock columns next to ``event_time`` (a datastore's values):
+#: when a value was known or stored, not the time it describes.
+_CLOCKS = ("knowledge_time", "ingested_at")
+
+
 def resolve(ctx: ToolContext, tool: str, result_id: str, *, series_column: str | None = None) -> Input:
     """The handle's info (ResultNotFound propagates: the server turns it into
     R15) with its time column and series column checked."""
@@ -342,11 +347,17 @@ def resolve(ctx: ToolContext, tool: str, result_id: str, *, series_column: str |
     time = info.time_column
     if time is None and info.model not in BUILTIN_MODELS:
         stamps = [c.name for c in info.columns if is_timestamp(c)]
+        clocks: list[str] = []
         if len(stamps) > 1 and "t" in stamps:
             stamps = ["t"]
+        elif len(stamps) > 1 and "event_time" in stamps and set(stamps) - {"event_time"} <= set(_CLOCKS):
+            clocks, stamps = [c for c in stamps if c != "event_time"], ["event_time"]
         if len(stamps) == 1:
             time = stamps[0]
-            notes.append(f"{info.result_id} has no recorded time column; time column '{time}' was used.")
+            notes.append(
+                f"{info.result_id} has no recorded time column; time column '{time}' was used"
+                + (f", not the point-in-time clock {names(clocks)}." if clocks else ".")
+            )
         elif stamps:
             raise refuse(
                 "not_time_series",
