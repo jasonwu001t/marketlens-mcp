@@ -16,6 +16,7 @@ All notable changes to this project are documented here. The format follows [Kee
 - `providers.data` settings: `mode` (`auto` fetches and keeps, `local` reads only what is stored), `data_dir`, `ttl_hours`, `calendar_ttl_minutes`, `call_timeout_seconds`.
 - Schema 1.1.0: 23 canonical models for the data tools and the units `as_published`, `USD_per_share`, `times`, `ordinal`.
 - The README tool table lists the data tools whether or not the extra is installed, marked "needs the data extra".
+- `market_movers` takes `min_price` (USD) and, for stocks, `exclude_warrants_rights_units`, judged by symbol alone: five letters ending in W, R or U (Nasdaq's fifth letter: NRSNW, CHARR, CCAQU) or a WS, RT or U suffix (AAC-WS, BCAT-RT). With either, Alpaca's top 50 gainers and losers are screened, kept in Alpaca's order, ranked from 1 among the kept and cut to `top`, and the notes say how many were dropped for which reason and when fewer than `top` passed. Without them Alpaca is asked for `top` as before and the rows are unchanged.
 
 ### Changed
 
