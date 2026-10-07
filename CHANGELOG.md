@@ -33,6 +33,7 @@ All notable changes to this project are documented here. The format follows [Kee
 - `market_latest_bars`, `market_latest_quotes` and `market_latest_trades` name the requested tickers Alpaca returned nothing for in a note, as the snapshot tools and the crypto and options latest tools already did, instead of dropping them silently.
 - A `lookback` for bars of 1d or longer (`market_bars`, `crypto_bars`, `options_bars`) starts at 00:00 UTC of its first day, so that day's bar (stamped at midnight New York) is no longer dropped: `lookback=P1Y` at 2026-10-07T08:31Z starts at 2025-10-07T00:00Z, not 08:31Z. Intraday bars are unchanged.
 - `crypto_bars` and `crypto_latest_bars` say when a bar had no trades: Alpaca still sends a bar for such an interval, with `trade_count` and volume 0 but prices and a vwap built from quotes, and a note now counts those bars and names their pairs (at most five), suggesting `trade_count > 0` to keep the traded ones. The rows are unchanged.
+- `reference_option_contracts` and `reference_option_contract` say that `open_interest_date` is usually one trading day before `close_price_date` (OCC publishes open interest the next morning), in the tool descriptions and in the `OptionContract` column descriptions of both dates (schema descriptions only; the version stays 1.1.0).
 
 ## [0.1.0] - Unreleased
 

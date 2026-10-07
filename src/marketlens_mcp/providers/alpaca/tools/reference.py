@@ -46,6 +46,10 @@ CONTRACTS_PAGE_MAX = 10_000
 CA_PAGE_MAX = 1000
 ANNOUNCEMENT_MAX_DAYS = 90
 CALENDAR_DEFAULT_DAYS = 31
+OI_LAG = (
+    "open_interest_date is usually one trading day before close_price_date (OCC publishes open interest "
+    "the next morning)."
+)
 ActionType = Literal[
     "cash_dividend", "stock_dividend", "forward_split", "reverse_split", "unit_split", "spin_off", "cash_merger",
     "stock_merger", "stock_and_cash_merger", "redemption", "name_change", "worthless_removal",
@@ -477,7 +481,7 @@ SPECS = (
         title="Option contracts",
         description="Listed option contracts (OCC symbol, underlying, expiration, strike in USD, type, style, "
         "multiplier, open interest, last close) filtered by underlyings, expiration (exact or from/to), type, "
-        "style, strike range and root; deliverables on request. " + STORED_NOTE,
+        "style, strike range and root; deliverables on request. " + OI_LAG + " " + STORED_NOTE,
         readme="Option contract reference data",
         input_model=ContractsIn,
         output_model=OptionContract,
@@ -491,7 +495,7 @@ SPECS = (
         name="reference_option_contract",
         capability="reference",
         title="Option contract",
-        description="One option contract by OCC symbol, with its deliverables.",
+        description="One option contract by OCC symbol, with its deliverables. " + OI_LAG,
         readme="One contract with deliverables",
         input_model=ContractIn,
         output_model=OptionContract,

@@ -181,6 +181,7 @@
         }
       ],
       "default": null,
+      "description": "The trading day of close_price",
       "title": "Close Price Date"
     },
     "deliverables": {
@@ -249,6 +250,7 @@
         }
       ],
       "default": null,
+      "description": "The date of the open interest count. Open interest is published the next morning, so this is usually one trading day before close_price_date",
       "title": "Open Interest Date"
     },
     "option_type": {
