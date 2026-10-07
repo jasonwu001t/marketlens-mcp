@@ -57,10 +57,20 @@ MAX_PER_MINUTE = 199
 
 R11 = "ALPACA_API_KEY and ALPACA_SECRET_KEY are not set in this server's environment, so Alpaca tools cannot run."
 R11_HINT = "Add both to the env block of this server in your MCP client's configuration."
-NOT_ENTITLED_HINT = (
-    "Your Alpaca plan may not include this feed or data set: set providers.alpaca.stock_feed: iex "
-    "(or delayed_sip) and options_feed: indicative in the marketlens config, or ask for older data."
+#: The 403 hint by data family (the request path's prefix); anything else has no feed to change.
+NOT_ENTITLED_HINTS = (
+    (
+        "/v2/stocks",
+        "Your Alpaca plan may not include this stock feed: set providers.alpaca.stock_feed: iex (or "
+        "delayed_sip) in the marketlens config, or ask for older data.",
+    ),
+    (
+        "/v1beta1/options",
+        "Your Alpaca plan may not include this options feed: set providers.alpaca.options_feed: indicative "
+        "in the marketlens config.",
+    ),
 )
+NOT_ENTITLED_OTHER = "Your Alpaca plan does not include this data set; no marketlens setting will enable it."
 
 Api = Literal["data", "trading"]
 
@@ -209,7 +219,7 @@ class AlpacaClient:
                     hint="Check providers.alpaca.trading_url and data_url in the marketlens config.",
                 )
             if status >= 400:
-                raise self._error(resp)
+                raise self._error(resp, path)
             try:
                 return json.loads(resp.content, parse_float=Decimal) if decimals else resp.json()
             except ValueError as e:
@@ -220,7 +230,7 @@ class AlpacaClient:
                     retryable=True,
                 ) from e
 
-    def _error(self, resp: httpx.Response) -> ToolError:
+    def _error(self, resp: httpx.Response, path: str) -> ToolError:
         status = resp.status_code
         message = self._scrub(_upstream_message(resp))
         if status == 429:
@@ -242,7 +252,7 @@ class AlpacaClient:
             return ToolError(
                 "alpaca_not_entitled",
                 f"Alpaca refused the data (HTTP {status}): {message}",
-                hint=NOT_ENTITLED_HINT,
+                hint=not_entitled_hint(path),
             )
         if status in (401, 403):
             return ToolError(
@@ -256,6 +266,10 @@ class AlpacaClient:
         for secret in (self._key, self._secret):
             message = message.replace(secret, "<redacted>")
         return message[:MESSAGE_MAX]
+
+
+def not_entitled_hint(path: str) -> str:
+    return next((hint for prefix, hint in NOT_ENTITLED_HINTS if path.startswith(prefix)), NOT_ENTITLED_OTHER)
 
 
 def _query(params: Mapping[str, Any]) -> dict[str, str]:

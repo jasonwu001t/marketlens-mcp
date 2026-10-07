@@ -230,6 +230,23 @@ def test_subscription_errors_are_not_entitled(alpaca):
     assert "stock_feed: iex" in err.hint and "delayed_sip" in err.hint
 
 
+@pytest.mark.parametrize(
+    ("path", "says", "never"),
+    [
+        ("/v1beta1/options/quotes/latest", "options_feed: indicative", "stock_feed"),
+        ("/v1beta1/fixed_income/latest/quotes", "no marketlens setting will enable it", "feed"),
+        ("/v1beta1/news", "no marketlens setting will enable it", "feed"),
+    ],
+)
+def test_not_entitled_hint_fits_the_data_family(alpaca, path, says, never):
+    alpaca.add(
+        path, httpx.Response(403, json={"message": "Subscription does not permit querying fixed income"})
+    )
+    err = refused(FakeContext(), "data", path)
+    assert err.code == "alpaca_not_entitled"
+    assert says in err.hint and never not in err.hint
+
+
 @pytest.mark.parametrize("status", [400, 404, 422])
 def test_rejections_carry_alpacas_message_capped(alpaca, status):
     alpaca.add("/v2/assets/ZZZZ", httpx.Response(status, json={"code": 40410000, "message": "x" * 500}))
