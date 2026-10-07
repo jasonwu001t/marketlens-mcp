@@ -23,6 +23,10 @@ All notable changes to this project are documented here. The format follows [Kee
 - A fetch cut at `fetch.max_rows` or `fetch.max_pages` without a page token no longer carries the R16 "call again with page_token" note: the tool's own truncation note stands, and a tool that gave none gets "The data is incomplete; narrow the request." (the answer is still flagged `truncated`).
 - The name `data` is reserved for the built-in provider; a plugin may not take it.
 
+### Fixed
+
+- `analytics_align` takes `by_left` and `by_right` when the two results name the series column differently (bars' `ticker`, returns' `series`); `by` stays the shorthand for a shared name and is refused together with them.
+
 ## [0.1.0] - Unreleased
 
 ### Added

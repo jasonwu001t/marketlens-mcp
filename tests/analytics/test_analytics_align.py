@@ -11,6 +11,7 @@ import pytest
 from analytics_harness import MINUTE, bars, run, unexplained_dynamic, utc
 
 from marketlens_mcp.analytics.tools.align import SPEC
+from marketlens_mcp.analytics.tools.returns import SPEC as RETURNS
 from marketlens_mcp.plugin_api import ToolError
 from marketlens_schema.market import Quote
 
@@ -124,6 +125,55 @@ def right_quotes_ticker(store):
     return store.put_dynamic(
         pa.table({"ticker": syms, "t": pa.array(ts, TS), "bid": bids}), group_column="ticker"
     )
+
+
+def test_by_left_and_by_right_match_bars_with_returns(store, ctx):
+    left = left_bars(store, ("AAPL", "MSFT"))
+    rets = run(RETURNS, ctx, result_id=left)
+    right = store.put(
+        rets.table, tool="analytics_returns", model=rets.model.schema_name, provenance=rets.provenance
+    ).result_id
+    with pytest.raises(ToolError) as e:
+        run(SPEC, ctx, left_result_id=left, right_result_id=right, by="ticker")
+    assert e.value.code == "unknown_column" and "ticker" in e.value.message  # returns name it 'series'
+    out = run(
+        SPEC,
+        ctx,
+        left_result_id=left,
+        right_result_id=right,
+        by_left="ticker",
+        by_right="series",
+        right_columns=["ret"],
+    )
+    rows = out.table.to_pylist()
+    assert [(r["ticker"], r["t"], r["ret"]) for r in rows] == [
+        ("AAPL", M0, None),
+        ("AAPL", M0 + MINUTE, pytest.approx(1.0)),
+        ("AAPL", M0 + 2 * MINUTE, pytest.approx(0.5)),
+        ("AAPL", M0 + 3 * MINUTE, pytest.approx(1 / 3)),
+        ("MSFT", M0, None),
+        ("MSFT", M0 + MINUTE, pytest.approx(1.0)),
+        ("MSFT", M0 + 2 * MINUTE, pytest.approx(0.5)),
+        ("MSFT", M0 + 3 * MINUTE, pytest.approx(1 / 3)),
+    ]
+    assert any("same ticker as series" in n for n in out.notes)
+    default = run(SPEC, ctx, left_result_id=left, right_result_id=right, by_left="ticker", by_right="series")
+    assert "series" not in default.table.column_names  # the right key is not brought over
+
+
+@pytest.mark.parametrize(
+    "keys",
+    [
+        {"by": "ticker", "by_left": "ticker", "by_right": "series"},
+        {"by_left": "ticker"},
+        {"by_right": "series"},
+    ],
+)
+def test_by_with_by_left_or_a_lone_by_side_is_refused(store, ctx, keys):
+    left = left_bars(store)
+    with pytest.raises(ToolError) as e:
+        run(SPEC, ctx, left_result_id=left, right_result_id=right_quotes_ticker(store), **keys)
+    assert e.value.code == "invalid_arguments"
 
 
 def test_right_result_with_several_series_needs_by(store, ctx):

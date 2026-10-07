@@ -37,6 +37,14 @@ class AlignArgs(BaseModel):
     )
     right_result_id: str = result_id_field("The stored time series matched to each left row.")
     by: str | None = Field(None, description="Column present in both results to match within (e.g. ticker).")
+    by_left: str | None = Field(
+        None,
+        description="Left column to match within when the two names differ (with by_right; not with by).",
+    )
+    by_right: str | None = Field(
+        None,
+        description="Right column matched to by_left (e.g. by_left=ticker, by_right=series for returns).",
+    )
     direction: Literal["backward", "forward"] = Field(
         "backward",
         description="backward: the latest right row at or before the left time; forward: the first at or after.",
@@ -54,6 +62,12 @@ class AlignArgs(BaseModel):
     )
 
 
+def _same(bl: str | None, br: str | None) -> str:
+    if bl is None:
+        return ""
+    return f", same {bl}" if bl == br else f", same {bl} as {br}"
+
+
 async def handler(ctx: ToolContext, args: AlignArgs) -> ToolOutput:
     left = resolve(ctx, TOOL, args.left_result_id)
     right = resolve(ctx, TOOL, args.right_result_id)
@@ -66,18 +80,23 @@ async def handler(ctx: ToolContext, args: AlignArgs) -> ToolOutput:
                 f"{TOOL}: tolerance {args.tolerance!r} is not an ISO-8601 duration of weeks, days, hours, minutes "
                 "or seconds (e.g. PT30S, PT5M, PT1H30M, P1D); months and years are not fixed lengths.",
             )
+    if args.by is not None and (args.by_left is not None or args.by_right is not None):
+        raise refuse("invalid_arguments", f"{TOOL}: pass by, or by_left with by_right, not both.")
+    if (args.by_left is None) != (args.by_right is None):
+        raise refuse("invalid_arguments", f"{TOOL}: by_left and by_right go together; pass both.")
+    bl, br = (args.by, args.by) if args.by is not None else (args.by_left, args.by_right)
     left_cols = [c.name for c in left.info.columns]
     right_cols = [c.name for c in right.info.columns]
-    if args.by is not None:
-        for side in (left, right):
-            if side.column(args.by) is None:
+    if bl is not None:
+        for side, col in ((left, bl), (right, br)):
+            if side.column(col) is None:
                 raise refuse(
                     "unknown_column",
-                    f"{TOOL}: by column '{args.by}' is not in {side.label}. Columns: "
+                    f"{TOOL}: by column '{col}' is not in {side.label}. Columns: "
                     f"{names(c.name for c in side.info.columns)}.",
                 )
     if args.right_columns is None:
-        chosen = [c for c in right_cols if c not in (right.time, args.by, "absent")]
+        chosen = [c for c in right_cols if c not in (right.time, br, "absent")]
     else:
         missing = [c for c in args.right_columns if c not in right_cols]
         if missing:
@@ -103,7 +122,7 @@ async def handler(ctx: ToolContext, args: AlignArgs) -> ToolOutput:
         out_names.append(name)
     notes = list(left.notes) + list(right.notes)
     with ctx.results.open([left.rid, right.rid]) as session:
-        if args.by is None and right.group is not None:
+        if br is None and right.group is not None:
             n = scalar(session, f"SELECT count(DISTINCT {qi(right.group)}) FROM {right.table}")
             if n > 1:
                 raise refuse(
@@ -113,7 +132,7 @@ async def handler(ctx: ToolContext, args: AlignArgs) -> ToolOutput:
                 )
         lts, rts = left.ts("l"), "r.__rts"
         cond = f"{lts} >= {rts}" if args.direction == "backward" else f"{lts} <= {rts}"
-        on = (f"l.{qi(args.by)} = r.{qi(args.by)} AND " if args.by else "") + cond
+        on = (f"l.{qi(bl)} = r.{qi(br)} AND " if bl else "") + cond
         if tolerance is None:
             within = "r.__rts IS NOT NULL"
         else:
@@ -128,7 +147,7 @@ async def handler(ctx: ToolContext, args: AlignArgs) -> ToolOutput:
             for c, n in zip(chosen, out_names, strict=False)
         ]
         picks.append(f"CASE WHEN {within} THEN {out_time(rts)} END AS {qi(out_names[-1])}")
-        order = ([f"l.{qi(args.by)}"] if args.by else []) + [f"l.{qi(left.time)}"]
+        order = ([f"l.{qi(bl)}"] if bl else []) + [f"l.{qi(left.time)}"]
         table = session.query(
             f"SELECT l.*, {', '.join(picks)} FROM {left.table} l ASOF LEFT JOIN "
             f"(SELECT *, {right.ts()} AS __rts FROM {right.table} WHERE {qi(right.time)} IS NOT NULL) r ON {on} "
@@ -138,7 +157,7 @@ async def handler(ctx: ToolContext, args: AlignArgs) -> ToolOutput:
     notes.append(
         f"{unmatched} of {table.num_rows} left rows found no right row "
         f"({'at or before' if args.direction == 'backward' else 'at or after'} their time"
-        f"{f', within {args.tolerance}' if args.tolerance else ''}{f', same {args.by}' if args.by else ''})."
+        f"{f', within {args.tolerance}' if args.tolerance else ''}{_same(bl, br)})."
     )
     if renamed:
         notes.append("Right columns renamed: " + ", ".join(f"{a} -> {b}" for a, b in renamed) + ".")
@@ -176,7 +195,8 @@ SPEC = ToolSpec(
         "As-of join of two stored time series, computed locally in DuckDB (ASOF LEFT JOIN): every left row is "
         "kept and gets the right row that is the latest at or before its time (direction backward) or the "
         "first at or after it (forward), optionally within a tolerance (ISO-8601 duration, e.g. PT5M) and "
-        "within the same `by` value (e.g. ticker). Output: the left columns, the chosen right columns (names "
+        "within the same `by` value (e.g. ticker; when the names differ, by_left and by_right, e.g. bars' ticker "
+        "and returns' series). Output: the left columns, the chosen right columns (names "
         "that collide get the suffix, default _right) and matched_t, the matched right row's time; unmatched "
         "right values are None (no_match). Use it to line up series of different frequencies. Large outputs "
         "are stored and you get a result_id."
