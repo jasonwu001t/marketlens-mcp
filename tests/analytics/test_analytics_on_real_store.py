@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import asyncio
 
+import pyarrow as pa
 import pytest
 
 testing = pytest.importorskip("marketlens_mcp.testing")
@@ -16,6 +17,7 @@ from marketlens_mcp.analytics.common import canonical_schema  # noqa: E402
 from marketlens_mcp.analytics.tools import all_specs  # noqa: E402
 from marketlens_mcp.analytics.tools.align import SPEC as ALIGN  # noqa: E402
 from marketlens_mcp.analytics.tools.beta import SPEC as BETA  # noqa: E402
+from marketlens_mcp.analytics.tools.correlation import SPEC as CORRELATION  # noqa: E402
 from marketlens_mcp.analytics.tools.drawdown import SPEC as DRAWDOWN  # noqa: E402
 from marketlens_mcp.analytics.tools.resample import SPEC as RESAMPLE  # noqa: E402
 from marketlens_mcp.analytics.tools.returns import SPEC as RETURNS  # noqa: E402
@@ -123,3 +125,48 @@ def test_a_stored_query_of_one_ticker_is_a_benchmark_like_its_parent(real):
     (row,) = out.rows
     assert (row["series"], row["benchmark"], row["n_obs"]) == ("AAPL", "SPY", 29)
     assert row["beta"] is not None
+
+
+def test_the_analytics_act_on_the_units_a_dynamic_tables_fields_name(real):
+    """A dynamic table's field metadata is its columns' unit (a datastore_query
+    answer labels close USD and implied_vol fraction), and the analytics read
+    units: a USD column is a price, so correlation turns it into returns as it
+    does market_bars' close; a fraction is a ratio, so returns refuses it. The
+    same table unlabelled is correlated as levels."""
+    store, ctx = real
+    times = [M0 + i * 24 * 60 * MINUTE for i in range(6)]
+    closes = {"AAA": [100, 102, 101, 105, 104, 108], "BBB": [50, 50.5, 50.2, 51.5, 51.0, 52.6]}
+
+    def put(labelled: bool) -> str:
+        def field(name, kind, unit):
+            return pa.field(name, kind, metadata={b"unit": unit} if labelled else None)
+
+        schema = pa.schema(
+            [
+                pa.field("ticker", pa.string()),
+                pa.field("event_time", pa.timestamp("us", tz="UTC")),
+                field("close", pa.float64(), b"USD"),
+                field("implied_vol", pa.float64(), b"fraction"),
+            ]
+        )
+        rows = [(t, ts, float(c), 0.3) for t, cs in closes.items() for ts, c in zip(times, cs, strict=True)]
+        table = pa.Table.from_pylist([dict(zip(schema.names, r, strict=True)) for r in rows], schema=schema)
+        return store.put(
+            table,
+            tool="datastore_query",
+            model="marketlens.QueryRow",
+            provenance=Provenance(provider="synthetic", route="GET /rows", fetched_at=M0),
+            time_column="event_time",
+            group_column="ticker",
+        ).result_id
+
+    labelled, plain = put(True), put(False)
+    assert {c.name: c.unit for c in store.info(labelled).columns}["close"] == "USD"
+    as_returns = call(CORRELATION, ctx, result_id=labelled, value_column="close", min_overlap=2)
+    as_levels = call(CORRELATION, ctx, result_id=plain, value_column="close", min_overlap=2)
+    assert any("simple returns" in n for n in as_returns.notes)
+    assert not any("simple returns" in n for n in as_levels.notes)
+    with pytest.raises(ToolError) as e:
+        call(RETURNS, ctx, result_id=labelled, price_column="implied_vol")
+    assert e.value.code == "not_prices" and "fraction" in e.value.message
+    assert isinstance(call(RETURNS, ctx, result_id=plain, price_column="implied_vol"), InlineResult)

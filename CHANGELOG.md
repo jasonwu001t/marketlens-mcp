@@ -17,6 +17,7 @@ All notable changes to this project are documented here. The format follows [Kee
 - Schema 1.1.0: 23 canonical models for the data tools and the units `as_published`, `USD_per_share`, `times`, `ordinal`.
 - The README tool table lists the data tools whether or not the extra is installed, marked "needs the data extra".
 - `market_movers` takes `min_price` (USD) and, for stocks, `exclude_warrants_rights_units`, judged by symbol alone: five letters ending in W, R or U (Nasdaq's fifth letter: NRSNW, CHARR, CCAQU) or a WS, RT or U suffix (AAC-WS, BCAT-RT). With either, Alpaca's top 50 gainers and losers are screened, kept in Alpaca's order, ranked from 1 among the kept and cut to `top`, and the notes say how many were dropped for which reason and when fewer than `top` passed. Without them Alpaca is asked for `top` as before and the rows are unchanged.
+- A dynamic table (`ToolOutput(table=...)` with a schema name for `model`) labels a column's unit in its Arrow field's metadata (`{b"unit": b"percent"}`), and the result's columns carry it, inline or stored. The plugin API is unchanged: an older server ignores the metadata. The analytics tools read those units as they read a model's: a column labelled `price`, `USD` or `percent_of_par` is a price, so `analytics_correlation` correlates its simple returns rather than its levels, and one labelled `fraction` or `fraction_per_year` is a ratio, which `analytics_returns`, `analytics_drawdown` and `analytics_beta` refuse.
 
 ### Changed
 
