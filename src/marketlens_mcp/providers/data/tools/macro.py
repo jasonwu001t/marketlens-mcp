@@ -112,7 +112,7 @@ class ScheduleInputs(Inputs):
 NPS = AbsenceCode.NOT_PROVIDED_BY_SOURCE
 NA = AbsenceCode.NOT_APPLICABLE
 ROUTES = {
-    "fred": "omni fred.series <- api.stlouisfed.org/fred/series/observations (ALFRED vintages)",
+    "fred": "omni fred.series <- api.stlouisfed.org/fred/series/observations, series/vintagedates (ALFRED vintages)",
     "catalog": "omni catalog.series_meta (local, no fetch)",
     "bls": "omni bls.timeseries <- api.bls.gov/publicAPI/v2/timeseries/data",
     "bea": "omni bea.nipa <- apps.bea.gov/api/data (NIPA GetData)",
@@ -461,15 +461,16 @@ SPECS: tuple[ToolSpec, ...] = (
             "the unemployment rate (UNRATE), payrolls (PAYEMS), claims (ICSA), fed funds (FEDFUNDS), Treasury "
             "yields (DGS10), spreads (T10Y2Y), real GDP (GDPC1), PCE prices (PCEPI) and any other FRED id. "
             "value is in the publisher's unit (units; rates stay in percent as FRED publishes them); a '.' "
-            "is null with reason no_data. include_vintages=true returns every stored revision. Needs "
-            "FRED_API_KEY (free).",
+            "is null with reason no_data. knowledge_time is 22:00 UTC of the date of the FRED release a value "
+            "first appeared in (a revision: the release that revised it), so an as_of on that date sees it only "
+            "from then. include_vintages=true returns every stored revision. Needs FRED_API_KEY (free).",
             "vintage",
         ),
         readme="FRED/ALFRED series with vintages and as-of reads",
         input_model=SeriesInputs,
         output_model=EconomicObservation,
         provider="fred",
-        route="omni fred.series <- api.stlouisfed.org/fred/series/observations (ALFRED vintages)",
+        route="omni fred.series <- api.stlouisfed.org/fred/series/observations, series/vintagedates (ALFRED vintages)",
         handler=macro_series,
         golden_test=GOLDEN,
         env=("FRED_API_KEY",),

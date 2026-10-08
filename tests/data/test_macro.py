@@ -61,8 +61,10 @@ def test_macro_series_golden(tmp_path, upstream, keys):
     [
         ("2024-02-01", []),
         ("2024-03-01", [("2024-01-01", 308.417)]),
-        ("2024-03-12T00:00:00Z", [("2024-01-01", 308.5), ("2024-02-01", 310.326)]),
-        ("2024-04-10", [("2024-01-01", 308.5), ("2024-02-01", 310.1), ("2024-03-01", None)]),
+        # FRED's 2024-03-12 vintage is knowable from 22:00 UTC that day, not from its midnight
+        ("2024-03-12", [("2024-01-01", 308.417)]),
+        ("2024-03-12T22:00:00Z", [("2024-01-01", 308.5), ("2024-02-01", 310.326)]),
+        ("2024-04-11", [("2024-01-01", 308.5), ("2024-02-01", 310.1), ("2024-03-01", None)]),
     ],
 )
 def test_macro_series_as_of_two_vintages(tmp_path, upstream, keys, as_of, expected):
@@ -94,8 +96,9 @@ def test_macro_series_vintages_and_window(tmp_path, upstream, keys):
     [
         # between the January print (2024-02-13) and its revision (2024-03-12)
         ("2024-03-01", [("2024-01-01", 308.417)]),
-        # the revision day: both January vintages and February's first print, nothing from 2024-04-10
-        ("2024-03-12T00:00:00Z", [("2024-01-01", 308.417), ("2024-01-01", 308.5), ("2024-02-01", 310.326)]),
+        # the revision's release (22:00 UTC that day): both January vintages and February's first print,
+        # nothing from 2024-04-10
+        ("2024-03-12T22:00:00Z", [("2024-01-01", 308.417), ("2024-01-01", 308.5), ("2024-02-01", 310.326)]),
     ],
 )
 def test_macro_series_vintages_never_show_one_published_after_as_of(
