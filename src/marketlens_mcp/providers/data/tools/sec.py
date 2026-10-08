@@ -621,7 +621,10 @@ async def sec_insider_trades(ctx: ToolContext, args: InsiderInputs) -> ToolOutpu
     rows = []
     for r in records:
         form, when = F.text(r["form"]), F.day(r["transaction_date"])
-        if form not in forms or not F.within(when, start, end):
+        # A Form 4's holdings listed without a transaction (a trust's shares, an
+        # option) are stored beside its transactions as row_kind "holding": not
+        # trades. A store written before row_kind has no column and no such rows.
+        if form not in forms or r.get("row_kind") == "holding" or not F.within(when, start, end):
             continue
         notice = form.startswith("144")
         rows.append(

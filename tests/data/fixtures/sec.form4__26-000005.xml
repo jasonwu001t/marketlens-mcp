@@ -18,6 +18,11 @@
    <transactionAmounts><transactionShares><value>1000</value></transactionShares><transactionPricePerShare><value>50.25</value></transactionPricePerShare><transactionAcquiredDisposedCode><value>D</value></transactionAcquiredDisposedCode></transactionAmounts>
    <postTransactionAmounts><sharesOwnedFollowingTransaction><value>25000</value></sharesOwnedFollowingTransaction></postTransactionAmounts>
   </nonDerivativeTransaction>
+  <nonDerivativeHolding>
+   <securityTitle><value>Common Stock</value></securityTitle>
+   <postTransactionAmounts><sharesOwnedFollowingTransaction><value>12000</value></sharesOwnedFollowingTransaction></postTransactionAmounts>
+   <ownershipNature><directOrIndirectOwnership><value>I</value></directOrIndirectOwnership><natureOfOwnership><value>By Trust</value></natureOfOwnership></ownershipNature>
+  </nonDerivativeHolding>
  </nonDerivativeTable>
  <derivativeTable>
   <derivativeTransaction>
@@ -27,5 +32,14 @@
    <transactionAmounts><transactionShares><value>1000</value></transactionShares><transactionPricePerShare><footnoteId id="F1"/></transactionPricePerShare><transactionAcquiredDisposedCode><value>D</value></transactionAcquiredDisposedCode></transactionAmounts>
    <postTransactionAmounts><sharesOwnedFollowingTransaction><value>9000</value></sharesOwnedFollowingTransaction></postTransactionAmounts>
   </derivativeTransaction>
+  <derivativeHolding>
+   <securityTitle><value>Stock Option (right to buy)</value></securityTitle>
+   <conversionOrExercisePrice><value>40.00</value></conversionOrExercisePrice>
+   <exerciseDate><value>2027-03-01</value></exerciseDate>
+   <expirationDate><value>2035-03-01</value></expirationDate>
+   <underlyingSecurity><underlyingSecurityTitle><value>Common Stock</value></underlyingSecurityTitle><underlyingSecurityShares><value>5000</value></underlyingSecurityShares></underlyingSecurity>
+   <postTransactionAmounts><sharesOwnedFollowingTransaction><value>5000</value></sharesOwnedFollowingTransaction></postTransactionAmounts>
+   <ownershipNature><directOrIndirectOwnership><value>D</value></directOrIndirectOwnership></ownershipNature>
+  </derivativeHolding>
  </derivativeTable>
 </ownershipDocument>
