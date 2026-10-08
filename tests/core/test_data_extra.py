@@ -537,5 +537,6 @@ def test_parity_list_shape():
         ), dataset_id
     # The CSV archive ends in 2019, but marketlens-data reads every later session from Cboe's daily page.
     assert parity.PARITY["cboe.put_call_ratio"] == parity.Excluded(
-        "not_planned", "the CSV archive ends in 2019; each later session is scraped from its own HTML page"
+        "not_planned",
+        "the CSV archive ends in 2019; later sessions come only from scraping a fragile HTML page",
     )

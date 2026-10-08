@@ -1,5 +1,5 @@
 """Every marketlens-data dataset, mapped to the tools that read it or
-excluded with a reason. tests/data/test_parity.py checks this list against
+excluded with a reason. tests/data/test_data_parity.py checks this list against
 ``omni.list_datasets()``, so a dataset added to marketlens-data must be
 placed here before the suite passes."""
 
@@ -82,7 +82,8 @@ PARITY: dict[str, Mapped | Excluded] = {
     "sec_ownership.stakes": Excluded("second_wave", _LATER),
     "sec13f.covers": Excluded("second_wave", _LATER),
     "cboe.put_call_ratio": Excluded(
-        "not_planned", "the CSV archive ends in 2019; each later session is scraped from its own HTML page"
+        "not_planned",
+        "the CSV archive ends in 2019; later sessions come only from scraping a fragile HTML page",
     ),
     "cnn.fear_greed": Excluded("not_planned", "unofficial third-party endpoint"),
     "gdelt.news": Excluded("not_planned", "third-party news metadata; accrues only by polling"),
