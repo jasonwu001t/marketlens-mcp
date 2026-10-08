@@ -60,6 +60,10 @@ def test_d5_rejected_requests_never_echo_the_key(tmp_path, upstream, keys):
     upstream.add(
         r"api\.stlouisfed\.org/fred/series/observations", httpx.Response(400, json={"error_message": "Bad"})
     )
+    # refused, marketlens-data lists the series' vintages, which FRED refuses for an unknown series too
+    upstream.add(
+        r"api\.stlouisfed\.org/fred/series/vintagedates", httpx.Response(400, json={"error_message": "Bad"})
+    )
     err = refused("macro_series", context(tmp_path), series_ids=["NOSUCH"])
     assert err.code == "data_rejected"
     assert err.message.startswith("FRED refused the request: ")

@@ -7,7 +7,7 @@ All notable changes to this project are documented here. The format follows [Kee
 ### Added
 
 - The `data` extra (`pip install "marketlens-mcp[data]"`, Python 3.13 or later): a built-in provider over marketlens-data (import name `omni`) for official data, 25 tools under five new capabilities:
-  - `macro` (on): FRED/ALFRED series with vintages and `as_of` reads, BLS series, BEA NIPA tables (a `Level` value carries a note that BEA's multiplier is not stored), BLS release schedules, the FRED series catalogue.
+  - `macro` (on): FRED/ALFRED series with vintages and `as_of` reads (a value is knowable from 17:00 St. Louis time, 22:00 UTC or 23:00 in winter, of the day FRED posted the release it first appeared in, a revision from the release that revised it; for a series FRED posts after its ALFRED date, such as the ICE BofA spreads, VIX or U. Michigan's survey, that later day), BLS series, BEA NIPA tables (a `Level` value carries a note that BEA's multiplier is not stored), BLS release schedules, the FRED series catalogue.
   - `filings` (on): SEC EDGAR filings, XBRL facts with restatement vintages, point-in-time fundamentals, 8-K Item 2.02 earnings releases and press-release EPS, Form 4 and 144 insider transactions, 13F holdings, fund N-PORT reports and holdings.
   - `fed_treasury` (on): FOMC meetings and statements, NY Fed reference rates (SOFR, EFFR, OBFR, TGCR, BGCR), the Treasury par yield curve, Treasury auctions, debt to the penny and the Treasury General Account.
   - `holidays` (on): US market holidays and early closes from NYSE, SIFMA and OPM, keyless; with Alpaca keys NYSE's dates are cross-checked against Alpaca's trading calendar, and without them the answer says they were not.
