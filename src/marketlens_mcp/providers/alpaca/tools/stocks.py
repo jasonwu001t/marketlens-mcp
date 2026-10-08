@@ -382,30 +382,54 @@ def warrant_right_or_unit(ticker: str) -> bool:
     return len(root) == 5 and root.isalpha() and root[-1] in FIFTH_LETTERS
 
 
-def _screen(rows: list[Mover], args: MoversIn, reasons: Counter[str]) -> list[Mover]:
+def _screen(rows: list[Mover], args: MoversIn, reasons: Counter[tuple[str, str]]) -> list[Mover]:
     """The movers that pass the filters, in Alpaca's order and ranked from 1
-    among themselves; each dropped one is counted under its first reason."""
+    among themselves; each dropped one is counted under its first reason, as
+    (one, many)."""
     kept: list[Mover] = []
     for row in rows:
         if args.min_price is not None and row.price < args.min_price:
-            reasons[f"priced below min_price {args.min_price:g}"] += 1
+            reasons[(f"priced below min_price {args.min_price:g}",) * 2] += 1
         elif args.exclude_warrants_rights_units and warrant_right_or_unit(row.ticker):
-            reasons["warrants, rights or units by symbol"] += 1
+            reasons[("warrant, right or unit by symbol", "warrants, rights or units by symbol")] += 1
         else:
             kept.append(row.model_copy(update={"rank": len(kept) + 1}))
     return kept
 
 
-def _screen_notes(top: int, counts: dict[str, tuple[int, int, int]], reasons: Counter[str]) -> list[str]:
-    """counts: direction -> (ranked by Alpaca, dropped, kept)."""
+def _movers(n: int, direction: str) -> str:
+    return direction if n == 1 else f"{direction}s"
+
+
+def _screen_notes(
+    top: int, counts: dict[str, tuple[int, int, int]], reasons: Counter[tuple[str, str]]
+) -> list[str]:
+    """counts: direction -> (ranked by Alpaca, dropped, kept). The filters are
+    named only for a direction they dropped movers from, and for its shortfall
+    alone only when the movers they screened (kept + dropped, after any skipped
+    record) numbered top or more; when skipped records took those below top,
+    the shortfall names both. A direction Alpaca ranked fewer than top of is
+    short before any filter, and said so apart."""
     notes = []
     if reasons:
-        dropped = " and ".join(f"{d} of {n} {k}s" for k, (n, d, _) in counts.items())
-        why = ", ".join(f"{n} {reason}" for reason, n in reasons.items())
+        dropped = " and ".join(f"{d} of {n} {_movers(n, k)}" for k, (n, d, _) in counts.items() if d)
+        why = ", ".join(f"{n} {one if n == 1 else many}" for (one, many), n in reasons.items())
         notes.append(f"Filters dropped {dropped} Alpaca ranked: {why}.")
-    short = [f"{kept} of {top} {k}s" for k, (_, _, kept) in counts.items() if kept < top]
+    short = [
+        f"{kept} of {top} {_movers(top, k)}" for k, (_, d, kept) in counts.items() if kept < top <= kept + d
+    ]
     if short:
         notes.append(f"Only {' and '.join(short)} passed the filters.")
+    both = [
+        f"{kept} of {top} {_movers(top, k)}"
+        for k, (n, d, kept) in counts.items()
+        if d and kept + d < top <= n
+    ]
+    if both:
+        notes.append(f"Only {' and '.join(both)} fit the model and passed the filters.")
+    few = [f"{n} {_movers(n, k)}" if n else f"no {k}s" for k, (n, _, _) in counts.items() if n < top]
+    if few:
+        notes.append(f"Alpaca ranked {' and '.join(few)}, fewer than the {top} asked for.")
     return notes
 
 
@@ -414,7 +438,7 @@ async def market_movers(ctx: ToolContext, args: MoversIn) -> ToolOutput:
     as_of = None
     screened = args.min_price is not None or args.exclude_warrants_rights_units
     counts: dict[str, tuple[int, int, int]] = {}
-    reasons: Counter[str] = Counter()
+    reasons: Counter[tuple[str, str]] = Counter()
     async with AlpacaClient(ctx) as api:
 
         async def fetch() -> list:
