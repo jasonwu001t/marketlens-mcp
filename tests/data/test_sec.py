@@ -238,6 +238,19 @@ def test_sec_insider_trades_golden(tmp_path, edgar):
     assert {r.form for r in only4.rows} == {"4"}
 
 
+def test_sec_insider_trades_leaves_out_holding_lines(tmp_path, edgar):
+    # marketlens-data stores the holdings a Form 4 lists without a transaction (a
+    # trust's shares, an option) beside its transactions, as row_kind "holding"
+    # rows with no code, shares or price: no trade, so no row here
+    import omni
+
+    out = call("sec_insider_trades", context(tmp_path), ticker="TESTCO", forms=["4"])
+    stored = omni.query("sec_insider.transactions", mode="local", ticker="TESTCO")
+    form4 = stored[stored["form"] == "4"]
+    assert list(form4["row_kind"]) == ["transaction", "transaction", "holding", "holding"]
+    assert [(r.line, r.transaction_code) for r in out.rows] == [(1, "S"), (2, "M")]
+
+
 # --- 13F ----------------------------------------------------------------------------------------------
 
 
