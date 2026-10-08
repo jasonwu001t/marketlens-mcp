@@ -60,8 +60,11 @@ def test_macro_series_golden(tmp_path, upstream, keys):
     ("as_of", "expected"),
     [
         ("2024-02-01", []),
+        # FRED's 2024-02-13 vintage is knowable from 17:00 St. Louis time that day: 23:00 UTC in winter
+        ("2024-02-13T22:30:00Z", []),
+        ("2024-02-13T23:00:00Z", [("2024-01-01", 308.417)]),
         ("2024-03-01", [("2024-01-01", 308.417)]),
-        # FRED's 2024-03-12 vintage is knowable from 22:00 UTC that day, not from its midnight
+        # FRED's 2024-03-12 vintage is knowable from 22:00 UTC that day (daylight time), not from its midnight
         ("2024-03-12", [("2024-01-01", 308.417)]),
         ("2024-03-12T22:00:00Z", [("2024-01-01", 308.5), ("2024-02-01", 310.326)]),
         ("2024-04-11", [("2024-01-01", 308.5), ("2024-02-01", 310.1), ("2024-03-01", None)]),
