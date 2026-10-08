@@ -397,15 +397,22 @@ def _screen(rows: list[Mover], args: MoversIn, reasons: Counter[str]) -> list[Mo
 
 
 def _screen_notes(top: int, counts: dict[str, tuple[int, int, int]], reasons: Counter[str]) -> list[str]:
-    """counts: direction -> (ranked by Alpaca, dropped, kept)."""
+    """counts: direction -> (ranked by Alpaca, dropped, kept). The filters are
+    named only for a direction they dropped movers from; a direction Alpaca
+    ranked fewer than top of is short before any filter, and said so apart."""
     notes = []
     if reasons:
-        dropped = " and ".join(f"{d} of {n} {k}s" for k, (n, d, _) in counts.items())
+        dropped = " and ".join(f"{d} of {n} {k}s" for k, (n, d, _) in counts.items() if d)
         why = ", ".join(f"{n} {reason}" for reason, n in reasons.items())
         notes.append(f"Filters dropped {dropped} Alpaca ranked: {why}.")
-    short = [f"{kept} of {top} {k}s" for k, (_, _, kept) in counts.items() if kept < top]
+    short = [f"{kept} of {top} {k}s" for k, (n, d, kept) in counts.items() if d and kept < top <= n]
     if short:
         notes.append(f"Only {' and '.join(short)} passed the filters.")
+    few = [
+        f"{n} {k}{'s' if n != 1 else ''}" if n else f"no {k}s" for k, (n, _, _) in counts.items() if n < top
+    ]
+    if few:
+        notes.append(f"Alpaca ranked {' and '.join(few)}, fewer than the {top} asked for.")
     return notes
 
 

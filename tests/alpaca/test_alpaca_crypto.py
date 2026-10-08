@@ -150,3 +150,25 @@ def test_market_movers_crypto_golden(specs, ctx, alpaca):
     out = call(specs["market_movers"], ctx, market_type="crypto", top=1)
     doc = check_golden(out, "market_movers__crypto")
     assert [r["ticker"] for r in doc["rows"]] == ["SOL/USD", "DOGE/USD"]
+
+
+def test_market_movers_crypto_min_price_counts_only_what_it_dropped(specs, ctx, alpaca):
+    alpaca.add(
+        "/v1beta1/screener/crypto/movers",
+        {
+            "gainers": [
+                {"symbol": "SOL/USD", "percent_change": 8.5, "change": 11.9, "price": 151.9},
+                {"symbol": "PEPE/USD", "percent_change": 6.1, "change": 0.0000006, "price": 0.0000104},
+            ],
+            "losers": [],
+            "market_type": "crypto",
+            "last_updated": "2026-10-02T19:55:00Z",
+        },
+    )
+    out = call(specs["market_movers"], ctx, market_type="crypto", top=10, min_price=1)
+    assert [r.ticker for r in out.rows] == ["SOL/USD"]
+    # Not "1 of 2 gainers and 0 of 0 losers", nor "0 of 10 losers passed the filters".
+    assert out.notes == [
+        "Filters dropped 1 of 2 gainers Alpaca ranked: 1 priced below min_price 1.",
+        "Alpaca ranked 2 gainers and no losers, fewer than the 10 asked for.",
+    ]
