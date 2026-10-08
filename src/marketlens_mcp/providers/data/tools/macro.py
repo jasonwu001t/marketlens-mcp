@@ -461,9 +461,11 @@ SPECS: tuple[ToolSpec, ...] = (
             "the unemployment rate (UNRATE), payrolls (PAYEMS), claims (ICSA), fed funds (FEDFUNDS), Treasury "
             "yields (DGS10), spreads (T10Y2Y), real GDP (GDPC1), PCE prices (PCEPI) and any other FRED id. "
             "value is in the publisher's unit (units; rates stay in percent as FRED publishes them); a '.' "
-            "is null with reason no_data. knowledge_time is 22:00 UTC of the date of the FRED release a value "
-            "first appeared in (a revision: the release that revised it), so an as_of on that date sees it only "
-            "from then. include_vintages=true returns every stored revision. Needs FRED_API_KEY (free).",
+            "is null with reason no_data. knowledge_time is 22:00 UTC of the day FRED posted the release a value "
+            "first appeared in (a revision: the release that revised it): its ALFRED date, or later for a series "
+            "FRED posts late (e.g. ICE BofA spreads, VIXCLS: a business day; UMCSENT: a month and a day), so an "
+            "as_of on that day sees it only from then. include_vintages=true returns every stored revision. "
+            "Needs FRED_API_KEY (free).",
             "vintage",
         ),
         readme="FRED/ALFRED series with vintages and as-of reads",
