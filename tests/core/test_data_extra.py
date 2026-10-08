@@ -502,14 +502,14 @@ def test_readiness_in_local_mode_needs_no_key():
 
 
 def test_parity_list_shape():
-    assert len(parity.PARITY) == 57
+    assert len(parity.PARITY) == 59
     mapped = {k: v for k, v in parity.PARITY.items() if isinstance(v, parity.Mapped)}
     excluded = {k: v for k, v in parity.PARITY.items() if isinstance(v, parity.Excluded)}
-    assert (len(mapped), len(excluded)) == (27, 30)
+    assert (len(mapped), len(excluded)) == (27, 32)
     kinds = [v.kind for v in excluded.values()]
     assert {k: kinds.count(k) for k in set(kinds)} == {
         "covered": 7,
-        "second_wave": 14,
+        "second_wave": 16,
         "not_planned": 7,
         "internal": 2,
     }
@@ -529,4 +529,14 @@ def test_parity_list_shape():
     )
     assert parity.PARITY["alpaca.news"] == parity.Excluded(
         "covered", "read directly from Alpaca by the built-in Alpaca provider"
+    )
+    # Schedule 13D/G stakes and 13F cover pages: official SEC data that no tool reads yet.
+    for dataset_id in ("sec_ownership.stakes", "sec13f.covers"):
+        assert parity.PARITY[dataset_id] == parity.Excluded(
+            "second_wave", "official source planned for a later release"
+        ), dataset_id
+    # The CSV archive ends in 2019, but marketlens-data reads every later session from Cboe's daily page.
+    assert parity.PARITY["cboe.put_call_ratio"] == parity.Excluded(
+        "not_planned",
+        "the CSV archive ends in 2019; later sessions come only from scraping a fragile HTML page",
     )
