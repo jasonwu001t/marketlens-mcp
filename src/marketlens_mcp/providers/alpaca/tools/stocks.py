@@ -398,14 +398,16 @@ def _screen(rows: list[Mover], args: MoversIn, reasons: Counter[str]) -> list[Mo
 
 def _screen_notes(top: int, counts: dict[str, tuple[int, int, int]], reasons: Counter[str]) -> list[str]:
     """counts: direction -> (ranked by Alpaca, dropped, kept). The filters are
-    named only for a direction they dropped movers from; a direction Alpaca
-    ranked fewer than top of is short before any filter, and said so apart."""
+    named only for a direction they dropped movers from, and for its shortfall
+    only when the movers they screened (kept + dropped, after any skipped
+    record) numbered top or more; a direction Alpaca ranked fewer than top of is
+    short before any filter, and said so apart."""
     notes = []
     if reasons:
         dropped = " and ".join(f"{d} of {n} {k}s" for k, (n, d, _) in counts.items() if d)
         why = ", ".join(f"{n} {reason}" for reason, n in reasons.items())
         notes.append(f"Filters dropped {dropped} Alpaca ranked: {why}.")
-    short = [f"{kept} of {top} {k}s" for k, (n, d, kept) in counts.items() if d and kept < top <= n]
+    short = [f"{kept} of {top} {k}s" for k, (_, d, kept) in counts.items() if kept < top <= kept + d]
     if short:
         notes.append(f"Only {' and '.join(short)} passed the filters.")
     few = [
