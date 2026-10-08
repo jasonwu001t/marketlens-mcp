@@ -351,6 +351,28 @@ def test_market_movers_records_skipped_before_the_filters_are_not_blamed_on_them
     ]
 
 
+def test_market_movers_filter_notes_count_one_mover_in_the_singular(specs, ctx, alpaca):
+    alpaca.add(
+        "/v1beta1/screener/stocks/movers",
+        {
+            "gainers": [{"symbol": "GGROW", "percent_change": 50.82, "change": 0.0031, "price": 0.003}],
+            "losers": [
+                {"symbol": "NRSNW", "percent_change": -34.42, "change": -0.79, "price": 1.515},
+                {"symbol": "BULG", "percent_change": -38.08, "change": -12.99, "price": 21.11},
+            ],
+            "market_type": "stocks",
+            "last_updated": "2026-10-02T19:55:00Z",
+        },
+    )
+    out = call(specs["market_movers"], ctx, top=1, min_price=1, exclude_warrants_rights_units=True)
+    assert [r.ticker for r in out.rows] == ["BULG"]
+    assert out.notes == [
+        "Filters dropped 1 of 1 gainer and 1 of 2 losers Alpaca ranked: 1 priced below min_price 1, "
+        "1 warrant, right or unit by symbol.",
+        "Only 0 of 1 gainer passed the filters.",
+    ]
+
+
 def test_market_movers_symbol_filter_is_for_stocks_only(specs, ctx):
     with pytest.raises(ValidationError, match="exclude_warrants_rights_units applies to stocks only"):
         call(specs["market_movers"], ctx, market_type="crypto", exclude_warrants_rights_units=True)
