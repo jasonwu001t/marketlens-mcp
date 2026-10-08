@@ -344,9 +344,48 @@ def test_market_movers_records_skipped_before_the_filters_are_not_blamed_on_them
         ("loser", 1, "BULG"),
         ("loser", 2, "PFAI"),
     ]
-    # No "Only 1 of 3 gainers" or "2 of 3 losers passed the filters": the skips note covers the rest.
+    # Not "Only 1 of 3 gainers passed the filters": the gainers' shortfall names the skip too. The
+    # losers' is the skip's alone, which the skips note covers.
     assert out.notes == [
         "Filters dropped 1 of 3 gainers Alpaca ranked: 1 priced below min_price 1.",
+        "Only 1 of 3 gainers fit the model and passed the filters.",
+        "Skipped 2 upstream record(s) that do not fit marketlens.Mover: BADX, NOPR.",
+    ]
+
+
+def test_market_movers_a_shortfall_the_filters_share_with_a_skip_is_still_noted(specs, ctx, alpaca):
+    alpaca.add(
+        "/v1beta1/screener/stocks/movers",
+        {
+            # Four ranked, one skipped, two dropped: the filters cause most of the shortfall.
+            "gainers": [
+                {"symbol": "BADX", "percent_change": 61.2, "change": 2.1},
+                {"symbol": "GGROW", "percent_change": 50.82, "change": 0.0031, "price": 0.003},
+                {"symbol": "PENY", "percent_change": 47.1, "change": 0.16, "price": 0.5},
+                {"symbol": "WORX", "percent_change": 44.25, "change": 1.76, "price": 5.75},
+            ],
+            # Five ranked, one skipped, two dropped: the filters alone leave fewer than top.
+            "losers": [
+                {"symbol": "NOPR", "percent_change": -60.5, "change": -1.3},
+                {"symbol": "LOWA", "percent_change": -55.2, "change": -0.4, "price": 0.32},
+                {"symbol": "BULG", "percent_change": -38.08, "change": -12.99, "price": 21.11},
+                {"symbol": "LOWB", "percent_change": -30.1, "change": -0.2, "price": 0.46},
+                {"symbol": "PFAI", "percent_change": -16.67, "change": -1.01, "price": 5.07},
+            ],
+            "market_type": "stocks",
+            "last_updated": "2026-10-02T19:55:00Z",
+        },
+    )
+    out = call(specs["market_movers"], ctx, top=4, min_price=1)
+    assert [(r.direction, r.rank, r.ticker) for r in out.rows] == [
+        ("gainer", 1, "WORX"),
+        ("loser", 1, "BULG"),
+        ("loser", 2, "PFAI"),
+    ]
+    assert out.notes == [
+        "Filters dropped 2 of 4 gainers and 2 of 5 losers Alpaca ranked: 4 priced below min_price 1.",
+        "Only 2 of 4 losers passed the filters.",
+        "Only 1 of 4 gainers fit the model and passed the filters.",
         "Skipped 2 upstream record(s) that do not fit marketlens.Mover: BADX, NOPR.",
     ]
 

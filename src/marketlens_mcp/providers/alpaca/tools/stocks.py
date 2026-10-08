@@ -406,8 +406,9 @@ def _screen_notes(
 ) -> list[str]:
     """counts: direction -> (ranked by Alpaca, dropped, kept). The filters are
     named only for a direction they dropped movers from, and for its shortfall
-    only when the movers they screened (kept + dropped, after any skipped
-    record) numbered top or more; a direction Alpaca ranked fewer than top of is
+    alone only when the movers they screened (kept + dropped, after any skipped
+    record) numbered top or more; when skipped records took those below top,
+    the shortfall names both. A direction Alpaca ranked fewer than top of is
     short before any filter, and said so apart."""
     notes = []
     if reasons:
@@ -419,6 +420,13 @@ def _screen_notes(
     ]
     if short:
         notes.append(f"Only {' and '.join(short)} passed the filters.")
+    both = [
+        f"{kept} of {top} {_movers(top, k)}"
+        for k, (n, d, kept) in counts.items()
+        if d and kept + d < top <= n
+    ]
+    if both:
+        notes.append(f"Only {' and '.join(both)} fit the model and passed the filters.")
     few = [f"{n} {_movers(n, k)}" if n else f"no {k}s" for k, (n, _, _) in counts.items() if n < top]
     if few:
         notes.append(f"Alpaca ranked {' and '.join(few)}, fewer than the {top} asked for.")
