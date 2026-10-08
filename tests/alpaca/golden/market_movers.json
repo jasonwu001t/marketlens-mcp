@@ -26,6 +26,7 @@
   "pages_fetched": 1,
   "provider": "alpaca",
   "request": {
+   "exclude_warrants_rights_units": false,
    "market_type": "stocks",
    "top": 1
   },

@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+from collections import Counter
 from typing import Literal
 
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from marketlens_mcp.plugin_api import ToolContext, ToolOutput
 from marketlens_schema.base import Delay
@@ -45,6 +46,12 @@ NO_TAKER = "Stock trades carry no aggressor side."
 LOT_NOTE = (
     "Quote sizes are shares; Alpaca reported round lots before 2025-11-03, which are converted at 100 shares."
 )
+#: Alpaca's movers screener ranks at most this many gainers and losers.
+MOVERS_MAX = 50
+#: Nasdaq's fifth letter of a five-letter symbol for warrants, rights and units (NRSNW, CHARR, CCAQU).
+FIFTH_LETTERS = frozenset("WRU")
+#: Suffixes after the root for warrants, rights and units (Alpaca's AAC.WS and BCAT.RT, our AAC-WS, BCAT-RT).
+SUFFIXES = frozenset({"WS", "RT", "U"})
 
 
 class BarsIn(Inputs):
@@ -85,6 +92,23 @@ class MostActiveIn(Inputs):
 class MoversIn(Inputs):
     market_type: Literal["stocks", "crypto"] = Field("stocks", description="Screen stocks or crypto.")
     top: int = Field(10, ge=1, le=50, description="How many gainers and how many losers (1-50).")
+    min_price: float | None = Field(
+        None,
+        ge=0,
+        description="Drop movers priced below this (USD), e.g. 1 to leave out sub-dollar listings.",
+    )
+    exclude_warrants_rights_units: bool = Field(
+        False,
+        description="Stocks only: drop warrants, rights and units, judged by symbol alone: five letters ending "
+        "in W, R or U (Nasdaq's fifth letter: NRSNW, CHARR, CCAQU) or a WS, RT or U suffix (AAC-WS, AAC-WS-A, "
+        "BCAT-RT, XYZ-U).",
+    )
+
+    @model_validator(mode="after")
+    def _stocks_only(self) -> MoversIn:
+        if self.exclude_warrants_rights_units and self.market_type != "stocks":
+            raise ValueError("exclude_warrants_rights_units applies to stocks only")
+        return self
 
 
 def _intraday(tf: str) -> bool:
@@ -348,19 +372,60 @@ async def market_most_active(ctx: ToolContext, args: MostActiveIn) -> ToolOutput
     )
 
 
+def warrant_right_or_unit(ticker: str) -> bool:
+    """By symbol alone: a five-letter symbol whose fifth letter is W, R or U, or
+    a root followed by a WS, RT or U suffix. Four-letter symbols and other fifth
+    letters (Z, miscellaneous) are kept."""
+    root, _, suffix = ticker.partition("-")
+    if suffix:
+        return suffix.split("-")[0] in SUFFIXES
+    return len(root) == 5 and root.isalpha() and root[-1] in FIFTH_LETTERS
+
+
+def _screen(rows: list[Mover], args: MoversIn, reasons: Counter[str]) -> list[Mover]:
+    """The movers that pass the filters, in Alpaca's order and ranked from 1
+    among themselves; each dropped one is counted under its first reason."""
+    kept: list[Mover] = []
+    for row in rows:
+        if args.min_price is not None and row.price < args.min_price:
+            reasons[f"priced below min_price {args.min_price:g}"] += 1
+        elif args.exclude_warrants_rights_units and warrant_right_or_unit(row.ticker):
+            reasons["warrants, rights or units by symbol"] += 1
+        else:
+            kept.append(row.model_copy(update={"rank": len(kept) + 1}))
+    return kept
+
+
+def _screen_notes(top: int, counts: dict[str, tuple[int, int, int]], reasons: Counter[str]) -> list[str]:
+    """counts: direction -> (ranked by Alpaca, dropped, kept)."""
+    notes = []
+    if reasons:
+        dropped = " and ".join(f"{d} of {n} {k}s" for k, (n, d, _) in counts.items())
+        why = ", ".join(f"{n} {reason}" for reason, n in reasons.items())
+        notes.append(f"Filters dropped {dropped} Alpaca ranked: {why}.")
+    short = [f"{kept} of {top} {k}s" for k, (_, _, kept) in counts.items() if kept < top]
+    if short:
+        notes.append(f"Only {' and '.join(short)} passed the filters.")
+    return notes
+
+
 async def market_movers(ctx: ToolContext, args: MoversIn) -> ToolOutput:
     skips = Skips(Mover.schema_name)
     as_of = None
+    screened = args.min_price is not None or args.exclude_warrants_rights_units
+    counts: dict[str, tuple[int, int, int]] = {}
+    reasons: Counter[str] = Counter()
     async with AlpacaClient(ctx) as api:
 
         async def fetch() -> list:
             nonlocal as_of
-            data = await api.get("data", f"/v1beta1/screener/{args.market_type}/movers", {"top": args.top})
+            top = MOVERS_MAX if screened else args.top
+            data = await api.get("data", f"/v1beta1/screener/{args.market_type}/movers", {"top": top})
             as_of = parse_ts(data.get("last_updated"))
             out = []
             for direction, key in (("gainer", "gainers"), ("loser", "losers")):
                 ranked = list(enumerate(data.get(key) or [], 1))
-                out += collect(
+                rows = collect(
                     skips,
                     ranked,
                     lambda p, d=direction: mappers.mover(
@@ -368,6 +433,11 @@ async def market_movers(ctx: ToolContext, args: MoversIn) -> ToolOutput:
                     ),
                     lambda p: str(p[1].get("symbol")),
                 )
+                if screened:
+                    kept = _screen(rows, args, reasons)
+                    counts[direction] = (len(ranked), len(rows) - len(kept), len(kept))
+                    rows = kept[: args.top]
+                out += rows
             return out
 
         page = await fetch_once(ctx, fetch)
@@ -381,6 +451,7 @@ async def market_movers(ctx: ToolContext, args: MoversIn) -> ToolOutput:
         delay=Delay.UNKNOWN,
         as_of=as_of,
         page=page,
+        notes=_screen_notes(args.top, counts, reasons),
         skips=skips,
     )
 
@@ -515,7 +586,10 @@ SPECS = (
         capability="market",
         title="Top movers",
         description="Today's top gainers and losers for stocks or crypto: price, change (USD) and "
-        "percent_change as a fraction (0.05 = 5 %), ranked within each direction.",
+        "percent_change as a fraction (0.05 = 5 %), ranked within each direction. Alpaca's lists include "
+        "warrants, rights, units and sub-penny listings: min_price and exclude_warrants_rights_units (stocks, "
+        "by symbol) screen Alpaca's top 50 instead, rank counts the movers kept, and notes say how many were "
+        "dropped and why.",
         readme="Top gainers and losers",
         input_model=MoversIn,
         output_model=Mover,

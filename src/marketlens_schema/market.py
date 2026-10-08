@@ -113,9 +113,13 @@ class OptionContract(CanonicalModel):
     multiplier: float = unit("multiplier")
     size: float | None = unit("multiplier", default=None, description="Contract size in shares")
     open_interest: int | None = unit("contracts", default=None)
-    open_interest_date: Date | None = None
+    open_interest_date: Date | None = Field(
+        default=None,
+        description="The date of the open interest count. Open interest is published the next morning, so this "
+        "is usually one trading day before close_price_date",
+    )
     close_price: float | None = unit("price", default=None)
-    close_price_date: Date | None = None
+    close_price_date: Date | None = Field(default=None, description="The trading day of close_price")
     deliverables: list[OptionDeliverable] | None = None
     provider_contract_id: str | None = None
 

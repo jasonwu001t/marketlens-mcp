@@ -1,7 +1,10 @@
 {
  "absent": {},
  "model": "marketlens.Mover",
- "notes": [],
+ "notes": [
+  "Filters dropped 4 of 7 gainers and 2 of 3 losers Alpaca ranked: 3 priced below min_price 1, 3 warrants, rights or units by symbol.",
+  "Only 1 of 2 losers passed the filters."
+ ],
  "offload": "auto",
  "pagination": {
   "complete": true,
@@ -9,7 +12,7 @@
   "page_cap_hit": false,
   "pages_fetched": 1,
   "row_cap_hit": false,
-  "rows_fetched": 2
+  "rows_fetched": 3
  },
  "provenance": {
   "as_of": "2026-10-02T19:55:00Z",
@@ -26,9 +29,10 @@
   "pages_fetched": 1,
   "provider": "alpaca",
   "request": {
-   "exclude_warrants_rights_units": false,
-   "market_type": "crypto",
-   "top": 1
+   "exclude_warrants_rights_units": true,
+   "market_type": "stocks",
+   "min_price": 1.0,
+   "top": 2
   },
   "route": "GET /v1beta1/screener/{market_type}/movers",
   "schema_version": "1.1.0",
@@ -42,24 +46,35 @@
   {
    "absent": null,
    "as_of": "2026-10-02T19:55:00Z",
-   "change": 11.9,
+   "change": 1.76,
    "direction": "gainer",
-   "market_type": "crypto",
-   "percent_change": 0.085,
-   "price": 151.9,
+   "market_type": "stocks",
+   "percent_change": 0.4425,
+   "price": 5.75,
    "rank": 1,
-   "ticker": "SOL/USD"
+   "ticker": "WORX"
   },
   {
    "absent": null,
    "as_of": "2026-10-02T19:55:00Z",
-   "change": -0.0042,
+   "change": 0.72,
+   "direction": "gainer",
+   "market_type": "stocks",
+   "percent_change": 0.16670000000000001,
+   "price": 5.07,
+   "rank": 2,
+   "ticker": "PFAI"
+  },
+  {
+   "absent": null,
+   "as_of": "2026-10-02T19:55:00Z",
+   "change": -12.99,
    "direction": "loser",
-   "market_type": "crypto",
-   "percent_change": -0.03,
-   "price": 0.1358,
+   "market_type": "stocks",
+   "percent_change": -0.38079999999999997,
+   "price": 21.11,
    "rank": 1,
-   "ticker": "DOGE/USD"
+   "ticker": "BULG"
   }
  ]
 }

@@ -1,0 +1,68 @@
+{
+ "gainers": [
+  {
+   "symbol": "NMCO.RT",
+   "percent_change": 179.0,
+   "change": 0.0134,
+   "price": 0.0209
+  },
+  {
+   "symbol": "CYCUW",
+   "percent_change": 105.26,
+   "change": 0.02,
+   "price": 0.039
+  },
+  {
+   "symbol": "CCAQU",
+   "percent_change": 82.49,
+   "change": 8.81,
+   "price": 19.49
+  },
+  {
+   "symbol": "WORX",
+   "percent_change": 44.25,
+   "change": 1.76,
+   "price": 5.75
+  },
+  {
+   "symbol": "AAC.WS",
+   "percent_change": 30.0,
+   "change": 0.28,
+   "price": 1.2
+  },
+  {
+   "symbol": "PFAI",
+   "percent_change": 16.67,
+   "change": 0.72,
+   "price": 5.07
+  },
+  {
+   "symbol": "SXTC",
+   "percent_change": 12.64,
+   "change": 0.32,
+   "price": 2.83
+  }
+ ],
+ "losers": [
+  {
+   "symbol": "GGROW",
+   "percent_change": -50.82,
+   "change": -0.0031,
+   "price": 0.003
+  },
+  {
+   "symbol": "BULG",
+   "percent_change": -38.08,
+   "change": -12.99,
+   "price": 21.11
+  },
+  {
+   "symbol": "NRSNW",
+   "percent_change": -34.42,
+   "change": -0.79,
+   "price": 1.515
+  }
+ ],
+ "market_type": "stocks",
+ "last_updated": "2026-10-02T19:55:00Z"
+}

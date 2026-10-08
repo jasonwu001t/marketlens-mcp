@@ -16,6 +16,7 @@ All notable changes to this project are documented here. The format follows [Kee
 - `providers.data` settings: `mode` (`auto` fetches and keeps, `local` reads only what is stored), `data_dir`, `ttl_hours`, `calendar_ttl_minutes`, `call_timeout_seconds`.
 - Schema 1.1.0: 23 canonical models for the data tools and the units `as_published`, `USD_per_share`, `times`, `ordinal`.
 - The README tool table lists the data tools whether or not the extra is installed, marked "needs the data extra".
+- `market_movers` takes `min_price` (USD) and, for stocks, `exclude_warrants_rights_units`, judged by symbol alone: five letters ending in W, R or U (Nasdaq's fifth letter: NRSNW, CHARR, CCAQU) or a WS, RT or U suffix (AAC-WS, BCAT-RT). With either, Alpaca's top 50 gainers and losers are screened, kept in Alpaca's order, ranked from 1 among the kept and cut to `top`, and the notes say how many were dropped for which reason and when fewer than `top` passed. Without them Alpaca is asked for `top` as before and the rows are unchanged.
 
 ### Changed
 
@@ -31,6 +32,8 @@ All notable changes to this project are documented here. The format follows [Kee
 - An Alpaca 403 for a data set the plan does not include gets a hint for its data family: stock data names `stock_feed`, options data `options_feed`, and anything else (fixed income, news) says no marketlens setting will enable it, instead of the stock and options feed advice for every endpoint.
 - `market_latest_bars`, `market_latest_quotes` and `market_latest_trades` name the requested tickers Alpaca returned nothing for in a note, as the snapshot tools and the crypto and options latest tools already did, instead of dropping them silently.
 - A `lookback` for bars of 1d or longer (`market_bars`, `crypto_bars`, `options_bars`) starts at 00:00 UTC of its first day, so that day's bar (stamped at midnight New York) is no longer dropped: `lookback=P1Y` at 2026-10-07T08:31Z starts at 2025-10-07T00:00Z, not 08:31Z. Intraday bars are unchanged.
+- `crypto_bars` and `crypto_latest_bars` say when a bar had no trades: Alpaca still sends a bar for such an interval, with `trade_count` and volume 0 but prices and a vwap built from quotes, and a note now counts those bars and names their pairs (at most five), suggesting `trade_count > 0` to keep the traded ones. The rows are unchanged.
+- `reference_option_contracts` and `reference_option_contract` say that `open_interest_date` is usually one trading day before `close_price_date` (OCC publishes open interest the next morning), in the tool descriptions and in the `OptionContract` column descriptions of both dates (schema descriptions only; the version stays 1.1.0).
 
 ## [0.1.0] - Unreleased
 

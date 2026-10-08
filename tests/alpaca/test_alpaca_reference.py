@@ -88,6 +88,17 @@ def test_reference_option_contract_golden_with_deliverables(specs, ctx, alpaca):
     assert (d["type"], d["ticker"], d["amount"], d["allocation_pct"]) == ("equity", "AAPL", "100", 1.0)
 
 
+def test_option_contract_open_interest_trails_the_close_by_a_trading_day_and_says_so(specs):
+    from marketlens_schema.market import OptionContract
+
+    lag = "open_interest_date is usually one trading day before close_price_date"
+    for name in ("reference_option_contracts", "reference_option_contract"):
+        assert lag in specs[name].description, name
+    fields = OptionContract.model_fields
+    assert "usually one trading day before close_price_date" in fields["open_interest_date"].description
+    assert fields["close_price_date"].description == "The trading day of close_price"
+
+
 def test_reference_calendar_golden_converts_new_york_times(specs, ctx, alpaca):
     alpaca.fixture("/v2/calendar", "Calendar")
     out = call(specs["reference_calendar"], ctx, start="2025-12-23", end="2026-06-24")

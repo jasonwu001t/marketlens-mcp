@@ -231,8 +231,66 @@ def test_market_movers_golden(specs, ctx, alpaca):
     alpaca.fixture("/v1beta1/screener/stocks/movers", "Movers__stocks")
     out = call(specs["market_movers"], ctx, top=1)
     doc = check_golden(out, "market_movers")
+    assert alpaca.params() == {"top": "1"}  # no filter: Alpaca's own top, as before
     assert doc["rows"][0]["percent_change"] == pytest.approx(1.4556)
     assert doc["rows"][1]["direction"] == "loser"
+
+
+def test_market_movers_filters_screen_alpacas_top_50_and_say_what_they_dropped(specs, ctx, alpaca):
+    alpaca.fixture("/v1beta1/screener/stocks/movers", "Movers__stocks_screened")
+    out = call(specs["market_movers"], ctx, top=2, min_price=1, exclude_warrants_rights_units=True)
+    doc = check_golden(out, "market_movers__screened")
+    assert alpaca.params() == {"top": "50"}
+    # Kept in Alpaca's order, ranked from 1 among the kept, cut to top (SXTC is the third gainer kept).
+    assert [(r["direction"], r["rank"], r["ticker"]) for r in doc["rows"]] == [
+        ("gainer", 1, "WORX"),
+        ("gainer", 2, "PFAI"),
+        ("loser", 1, "BULG"),
+    ]
+    assert doc["notes"] == [
+        "Filters dropped 4 of 7 gainers and 2 of 3 losers Alpaca ranked: 3 priced below min_price 1, "
+        "3 warrants, rights or units by symbol.",
+        "Only 1 of 2 losers passed the filters.",
+    ]
+
+
+def test_market_movers_min_price_alone_keeps_warrants_priced_above_it(specs, ctx, alpaca):
+    alpaca.fixture("/v1beta1/screener/stocks/movers", "Movers__stocks_screened")
+    out = call(specs["market_movers"], ctx, top=3, min_price=1)
+    assert [r.ticker for r in out.rows if r.direction == "gainer"] == ["CCAQU", "WORX", "AAC-WS"]
+    assert out.notes[0] == (
+        "Filters dropped 2 of 7 gainers and 1 of 3 losers Alpaca ranked: 3 priced below min_price 1."
+    )
+
+
+def test_market_movers_symbol_filter_is_for_stocks_only(specs, ctx):
+    with pytest.raises(ValidationError, match="exclude_warrants_rights_units applies to stocks only"):
+        call(specs["market_movers"], ctx, market_type="crypto", exclude_warrants_rights_units=True)
+
+
+@pytest.mark.parametrize(
+    ("ticker", "dropped"),
+    [
+        ("NRSNW", True),  # Nasdaq fifth letter W: warrant
+        ("CHARR", True),  # R: right
+        ("CCAQU", True),  # U: unit
+        ("BCAT-RT", True),  # Alpaca's BCAT.RT
+        ("AAC-WS", True),
+        ("AAC-WS-A", True),
+        ("XYZ-U", True),
+        ("AAPL", False),
+        ("GOOGL", False),
+        ("BRK-B", False),
+        ("SNOW", False),  # four letters: the fifth-letter rule does not apply
+        ("PENU", False),
+        ("AMPGZ", False),  # Z is "miscellaneous", left alone
+        ("BAC-PL", False),
+    ],
+)
+def test_warrant_right_or_unit_is_judged_by_symbol(ticker, dropped):
+    from marketlens_mcp.providers.alpaca.tools.stocks import warrant_right_or_unit
+
+    assert warrant_right_or_unit(ticker) is dropped
 
 
 @pytest.mark.parametrize(

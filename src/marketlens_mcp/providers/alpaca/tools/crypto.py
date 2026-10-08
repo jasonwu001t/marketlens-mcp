@@ -3,6 +3,7 @@ the data location is ``providers.alpaca.crypto_location`` (default us)."""
 
 from __future__ import annotations
 
+from collections import Counter
 from typing import Literal
 
 from pydantic import Field
@@ -18,6 +19,7 @@ from .common import (
     CONTINUE_DOC,
     END_DOC,
     LOOKBACK_DOC,
+    SKIP_SAMPLE,
     SORT_DOC,
     START_DOC,
     STORED_NOTE,
@@ -45,6 +47,9 @@ BASE = "/v1beta3/crypto/{loc}"
 QUOTE_SKIP = ("bid_exchange", "ask_exchange", "conditions", "tape")
 TRADE_SKIP = ("exchange", "conditions", "tape")
 NO_VENUE = "Alpaca crypto {what} carry no exchange, conditions or tape."
+NO_TRADES_DOC = (
+    "A bar with trade_count 0 had no trades: Alpaca fills it from quotes, and notes name the pairs."
+)
 
 
 class BarsIn(Inputs):
@@ -86,6 +91,21 @@ def _absent(kind: str) -> dict:
 def quote_currency(pair: str) -> str:
     """Prices of a pair are in its quote leg (ETH/BTC is priced in BTC)."""
     return pair.partition("/")[2] or "USD"
+
+
+def no_trades_note(rows: list[Bar]) -> list[str]:
+    """Alpaca still sends a bar for an interval without trades: trade_count and
+    volume are 0 and its prices and vwap come from quotes. Name the pairs."""
+    pairs = Counter(r.ticker for r in rows if r.trade_count == 0)
+    if not pairs:
+        return []
+    named = ", ".join(p if n == 1 else f"{p} ({n})" for p, n in pairs.most_common(SKIP_SAMPLE))
+    if len(pairs) > SKIP_SAMPLE:
+        named += f" and {len(pairs) - SKIP_SAMPLE} more pair(s)"
+    return [
+        f"{pairs.total()} of {len(rows)} bar(s) had no trades (trade_count 0, volume 0): {named}. Alpaca built "
+        "them from quotes, so their prices and vwap are not trade prices; trade_count > 0 keeps the traded bars."
+    ]
 
 
 def _mapper(kind: str, ticker: str, timeframe: str = "1min"):
@@ -148,6 +168,7 @@ async def _history(
         as_of=win.end or ctx.now(),
         page=page,
         absent=_absent(kind),
+        notes=no_trades_note(page.rows) if kind == "bars" else [],
         skips=skips,
     )
 
@@ -193,7 +214,7 @@ async def _latest(ctx: ToolContext, args: LatestIn, kind: Literal["bars", "quote
         as_of=latest_t(page.rows),
         page=page,
         absent=_absent(kind),
-        notes=missing_note(args.tickers, page.rows),
+        notes=missing_note(args.tickers, page.rows) + (no_trades_note(page.rows) if kind == "bars" else []),
         skips=skips,
     )
 
@@ -298,7 +319,7 @@ SPECS = (
         title="Crypto bars",
         description="Historical OHLCV bars for crypto pairs (prices in the quote currency, volume in base "
         "units), one row per pair and bar start (UTC). timeframe default 1h; window by start/end or lookback "
-        "(default P1D)." + _SIZE,
+        "(default P1D). " + NO_TRADES_DOC + _SIZE,
         readme="OHLCV bars for crypto pairs",
         input_model=BarsIn,
         output_model=Bar,
@@ -342,7 +363,7 @@ SPECS = (
         name="crypto_latest_bars",
         capability="market",
         title="Latest crypto bars",
-        description="The latest one-minute bar for each crypto pair.",
+        description="The latest one-minute bar for each crypto pair. " + NO_TRADES_DOC,
         readme="Latest minute bar per pair",
         input_model=LatestIn,
         output_model=Bar,

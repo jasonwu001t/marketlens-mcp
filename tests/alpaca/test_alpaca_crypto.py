@@ -68,6 +68,50 @@ def test_crypto_latest_bars_golden(specs, ctx, alpaca):
     assert "No data from Alpaca for: ZZZ/USD." in missing.notes
 
 
+NO_TRADES = (
+    "Alpaca built them from quotes, so their prices and vwap are not trade prices; "
+    "trade_count > 0 keeps the traded bars."
+)
+
+
+def test_crypto_latest_bars_note_the_pairs_whose_bar_had_no_trades(specs, ctx, alpaca):
+    alpaca.fixture("/v1beta3/crypto/us/latest/bars", "CryptoLatestBars__no_trades")
+    out = call(specs["crypto_latest_bars"], ctx, tickers=["BTC/USD", "LTC/USD", "ETH/USD"])
+    # The rows stay as Alpaca sent them; only the note is added.
+    assert [(r.ticker, r.volume, r.trade_count, r.vwap) for r in out.rows] == [
+        ("BTC/USD", 0.51, 41, 62147.2),
+        ("LTC/USD", 0.0, 0, 66.0256),
+        ("ETH/USD", 0.0, 0, 2576.45),
+    ]
+    assert out.notes == [
+        f"2 of 3 bar(s) had no trades (trade_count 0, volume 0): LTC/USD, ETH/USD. {NO_TRADES}"
+    ]
+
+
+def test_crypto_bars_note_the_bars_without_trades_per_pair(specs, ctx, alpaca):
+    alpaca.fixture("/v1beta3/crypto/us/bars", "CryptoBars__no_trades")
+    out = call(specs["crypto_bars"], ctx, tickers=["BTC/USD", "ETH/USD"], timeframe="1min")
+    assert len(out.rows) == 4
+    assert out.notes == [
+        f"3 of 4 bar(s) had no trades (trade_count 0, volume 0): ETH/USD (2), BTC/USD. {NO_TRADES}"
+    ]
+
+
+def test_no_trades_note_names_five_pairs_at_most():
+    from marketlens_mcp.providers.alpaca import mappers
+    from marketlens_mcp.providers.alpaca.tools.crypto import no_trades_note
+
+    raw = {"t": "2026-10-02T19:57:00Z", "o": 1, "h": 1, "l": 1, "c": 1, "v": 0, "n": 0, "vw": 1}
+    pairs = [f"C{i}/USD" for i in range(7)]
+    rows = [mappers.bar(raw, ticker=p, asset_class="crypto", timeframe="1min") for p in pairs]
+    (note,) = no_trades_note(rows)
+    assert note.startswith(
+        "7 of 7 bar(s) had no trades (trade_count 0, volume 0): C0/USD, C1/USD, C2/USD, C3/USD, C4/USD "
+        "and 2 more pair(s). "
+    )
+    assert no_trades_note([]) == []
+
+
 def test_crypto_latest_quotes_golden(specs, ctx, alpaca):
     alpaca.fixture("/v1beta3/crypto/us/latest/quotes", "CryptoLatestQuotes")
     check_golden(call(specs["crypto_latest_quotes"], ctx, tickers=["BTC/USD"]), "crypto_latest_quotes")
