@@ -186,7 +186,9 @@ class ToolOutput:
       converts them to Arrow, decides inline vs stored, and builds the
       response.
     * ``table``: an Arrow table already in the model's canonical Arrow types
-      (analytics computed in DuckDB), same treatment as rows.
+      (analytics computed in DuckDB), same treatment as rows. A dynamic
+      table's field may name its column's unit in metadata
+      (``{b"unit": b"percent"}``); the result's columns carry it.
     * ``stored``: the handler already wrote the result (``ctx.results.put``);
       the middleware returns its marker without re-reading it.
 

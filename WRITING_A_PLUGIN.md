@@ -198,6 +198,8 @@ What the example shows:
 
 The full text is the docstring of `marketlens_schema/base.py`. Field names are snake_case and vendor-neutral; equities are `ticker` in SEC style (`BRK-B`), crypto pairs `BTC/USD`, options `occ_symbol`; instants are timezone-aware UTC (`UtcDatetime`); exact money is `DecimalStr` (never built from a float); every numeric field states its unit with `unit("price")`, `unit("shares")`, ... (`marketlens_schema.UNITS`); percentages are fractions. Models subclass `CanonicalModel`, which forbids extra fields and is frozen; set `time_column`, `group_column` and `value_columns` so that the result store's preview and the analytics tools pick sensible defaults.
 
+A dynamic table (`ToolOutput(table=..., model="marketlens.QueryRow")`) has no model to state units, so a handler names a column's unit in its Arrow field's metadata, `pa.field("rate", pa.float64(), metadata={b"unit": b"percent"})`, and the result's columns carry it.
+
 ## Large results
 
 Return rows and let the server decide: results above 200 rows or about 6,000 tokens are stored and the model gets a marker with a `result_id`. For advanced cases a handler may write to the store itself (`ctx.results.put(...)`) and return `ToolOutput(stored=info, ...)`, or set `offload="always"`.

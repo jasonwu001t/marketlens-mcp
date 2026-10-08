@@ -292,3 +292,36 @@ def test_inline_table_for_a_model_without_its_absent_column_types_the_real_colum
     )
     assert [c.name for c in stored.columns] == t.column_names
     assert {c.name: c.unit for c in stored.columns}["ret"] == "fraction"
+
+
+def test_a_dynamic_tables_field_metadata_labels_its_units_inline_and_stored(store):
+    """A dynamic table has no model to carry x-unit: a handler labels a column
+    with its Arrow field's metadata, and the label reaches the columns of the
+    inline answer and of a stored result alike. A label, never a conversion."""
+    schema = pa.schema(
+        [
+            pa.field("rate", pa.float64(), metadata={b"unit": b"percent"}),
+            pa.field("volume", pa.int64(), metadata={b"unit": b"shares"}),
+            pa.field("tenor", pa.string()),
+        ]
+    )
+    t = pa.Table.from_pydict(
+        {"rate": [5.31, 5.29], "volume": [10, 20], "tenor": ["10Y", "10Y"]}, schema=schema
+    )
+    inline = finalize(
+        store,
+        ToolOutput(model="marketlens.QueryRow", provenance=provenance(), table=t),
+        tool="datastore_query",
+    )
+    assert isinstance(inline, InlineResult)
+    assert {c.name: c.unit for c in inline.columns} == {"rate": "percent", "volume": "shares", "tenor": None}
+    assert inline.rows[0]["rate"] == 5.31
+
+    big = pa.Table.from_pydict({"rate": [5.0] * 201}, schema=pa.schema([schema.field("rate")]))
+    marker = finalize(
+        store,
+        ToolOutput(model="marketlens.QueryRow", provenance=provenance(), table=big),
+        tool="datastore_query",
+    )
+    assert isinstance(marker, ResultMarker)
+    assert {c.name: c.unit for c in store.info(marker.result_id).columns} == {"rate": "percent"}

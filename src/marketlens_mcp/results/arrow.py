@@ -272,12 +272,25 @@ def column_infos_for(
 
 
 def column_infos_from_schema(schema: pa.Schema, units: Mapping[str, str] | None = None) -> list[ColumnInfo]:
-    """ColumnInfo for a dynamic result (types from the Arrow schema)."""
+    """ColumnInfo for a dynamic result (types from the Arrow schema). A column's
+    unit is ``units``' entry, else the one its Arrow field carries in metadata
+    (``{b"unit": b"percent"}``): how a handler labels a dynamic table, which has
+    no model to state ``x-unit``."""
     units = units or {}
     return [
-        ColumnInfo(name=f.name, type=duckdb_type(f.type), unit=units.get(f.name), nullable=f.nullable)
+        ColumnInfo(
+            name=f.name,
+            type=duckdb_type(f.type),
+            unit=units.get(f.name) or _field_unit(f),
+            nullable=f.nullable,
+        )
         for f in schema
     ]
+
+
+def _field_unit(field: pa.Field) -> str | None:
+    raw = (field.metadata or {}).get(b"unit")
+    return raw.decode("utf-8") if raw else None
 
 
 # --- JSON-safe values ------------------------------------------------------------------------
