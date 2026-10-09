@@ -225,8 +225,9 @@ def test_a_carried_columns_source_outlives_the_result_that_computed_it(tmp_path)
     """A drawdown column in an aligned result, or in a query of a query, was
     read as returns again once the drawdown result had expired (each result's
     24 hours run from its creation, so a parent goes first) or a result between
-    them was dropped: analytics_align and results_query record each carried
-    column's source_model when they create the result."""
+    them was dropped: analytics_align, analytics_resample and results_query
+    record each carried column's source_model when they create the result,
+    and never an aligned result's or query answer's own model."""
     now = [M0]
     store = StoreRoot(tmp_path, StoreLimits(ttl_hours=24), clock=lambda: now[0]).session("test")
     ctx = testing.make_context(store=store, capabilities=["analytics", "results"])
@@ -240,6 +241,8 @@ def test_a_carried_columns_source_outlives_the_result_that_computed_it(tmp_path)
     middle = call(query, ctx, sql=f"SELECT t, series, drawdown FROM {dd}", store=True).result_id
     nested = call(query, ctx, sql=f"SELECT * FROM {middle}", store=True).result_id
     both = call(ALIGN, ctx, left_result_id=rets, right_result_id=spy_rets, tolerance="PT0S", store=True)
+    weekly = call(RESAMPLE, ctx, result_id=aligned.result_id, timeframe="1w", store=True).result_id
+    of_aligned = call(query, ctx, sql=f"SELECT * FROM {aligned.result_id}", store=True).result_id
     # Shown with the columns it was recorded for, and only those.
     columns = {c["name"]: c for c in aligned.model_dump(mode="json")["columns"]}
     assert columns["drawdown"]["source_model"] == "marketlens.DrawdownPoint"
@@ -247,12 +250,18 @@ def test_a_carried_columns_source_outlives_the_result_that_computed_it(tmp_path)
     assert {c.name: c.source_model for c in store.info(nested).columns}[
         "drawdown"
     ] == "marketlens.DrawdownPoint"
+    # Carried on by a resample or a query of the aligned result; its own matched_t
+    # is not recorded as computed by marketlens.Aligned.
+    for rid in (weekly, of_aligned):
+        recorded = {c.name: (c.unit, c.source_model) for c in store.info(rid).columns}
+        assert recorded["drawdown"] == ("fraction", "marketlens.DrawdownPoint")
+        assert recorded["close"] == ("price", "marketlens.Bar") and recorded["matched_t"] == ("UTC", None)
     store.drop(middle)
     now[0] += dt.timedelta(hours=13)
     with pytest.raises(ResultNotFound) as gone:
         store.info(dd)
     assert gone.value.reason == "expired"
-    for rid in (aligned.result_id, nested):
+    for rid in (aligned.result_id, nested, weekly, of_aligned):
         with pytest.raises(ToolError) as e:
             call(VOLATILITY, ctx, result_id=rid, price_column="drawdown", window=2, periods_per_year=252)
         assert (

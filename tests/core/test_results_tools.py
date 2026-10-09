@@ -187,6 +187,24 @@ def test_a_stored_answer_records_the_model_its_columns_came_from(setup):
     }
     shown = {c["name"]: c for c in third.model_dump(mode="json")["columns"]}
     assert shown["close"]["source_model"] == "marketlens.Bar" and "source_model" not in shown["ticker"]
+    # An answer that recorded none (stored before source_model was): a query of
+    # it records none either, not that answer's own model, marketlens.QueryRow.
+    unrecorded = store.put(
+        store.read(second.result_id, limit=1000),
+        tool="results_query",
+        model="marketlens.QueryRow",
+        provenance=provenance(),
+        time_column="t",
+        group_column="ticker",
+        column_units={"t": "UTC", "close": "price"},
+        parents=[second.result_id],
+    )
+    fourth = call(ctx, "results_query", sql=f"SELECT * FROM {unrecorded.result_id}", store=True)
+    assert {c.name: (c.unit, c.source_model) for c in store.info(fourth.result_id).columns} == {
+        "ticker": (None, None),
+        "t": ("UTC", None),
+        "close": ("price", None),
+    }
 
 
 def test_query_over_news_is_external_text(setup):

@@ -41,7 +41,7 @@ from marketlens_mcp.results_api import (
     ResultNotFound,
     ResultSession,
 )
-from marketlens_schema import BUILTIN_MODELS, QUERY_ROW_SCHEMA_NAME, CanonicalModel
+from marketlens_schema import ALIGNED_SCHEMA_NAME, BUILTIN_MODELS, QUERY_ROW_SCHEMA_NAME, CanonicalModel
 from marketlens_schema.base import TIMEFRAME_RE, AbsenceCode, AbsenceReason, Delay, Provenance
 
 CAPABILITY = "analytics"
@@ -342,8 +342,11 @@ class Input:
 
     def sources(self) -> dict[str, str]:
         """The model that computed each column that has a unit: the one it
-        recorded (a carried column), else this result's."""
-        return {c.name: c.source_model or self.model for c in self.info.columns if c.unit}
+        recorded (a carried column), else this result's, unless this is a query
+        answer or aligned result, which records none of its own (its other
+        columns' source is not known)."""
+        own = None if self.model in (QUERY_ROW_SCHEMA_NAME, ALIGNED_SCHEMA_NAME) else self.model
+        return {c.name: s for c in self.info.columns if c.unit and (s := c.source_model or own)}
 
 
 def _parent_value(ctx: ToolContext, info: ResultInfo) -> str | None:
