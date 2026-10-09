@@ -727,7 +727,8 @@ SPECS = (
         title="Corporate actions",
         description="Processed corporate actions, one row per action with action_type (16 types: dividends, "
         "splits, mergers, spin-offs, name changes, ...): process, ex, record, payable and effective dates, cash "
-        "rate per share (USD), old/new ratio legs, related tickers; columns that do not apply to a type are null "
+        "paid per share in cash_rate (USD, for every action that pays cash; rate repeats it for dividends, "
+        "redemptions and cash mergers), old/new ratio legs, related tickers; columns that do not apply to a type are null "
         "(not_applicable). Filter by tickers, CUSIPs, types and process-date window (default today). "
         + STORED_NOTE,
         readme="Processed corporate actions",

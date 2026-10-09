@@ -202,6 +202,9 @@ def test_reference_corporate_actions_golden_one_row_per_action(specs, ctx, alpac
         by_type["cash_dividend"]["rate"] == 0.125
         and by_type["cash_dividend"]["absent"]["old_rate"] == "not_applicable"
     )
+    # cash paid per share is in cash_rate for every type that pays cash, dividends included
+    assert by_type["cash_dividend"]["cash_rate"] == 0.125
+    assert by_type["capital_gains_distribution"]["cash_rate"] == pytest.approx(0.56874)
     assert (
         by_type["cash_dividend"]["isin"] is None
         and by_type["cash_dividend"]["absent"]["isin"] == "not_provided_by_source"

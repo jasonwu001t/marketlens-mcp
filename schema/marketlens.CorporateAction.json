@@ -113,6 +113,7 @@
         }
       ],
       "default": null,
+      "description": "Cash paid per share for every action that pays cash: dividends, capital gains distributions, redemptions, partial calls, cash mergers, and the cash leg of stock-and-cash mergers and reorganizations",
       "title": "Cash Rate",
       "x-unit": "price"
     },
@@ -294,7 +295,7 @@
         }
       ],
       "default": null,
-      "description": "Cash per share (dividends, redemptions, cash mergers)",
+      "description": "The type's own rate: cash per share for dividends, capital gains distributions, redemptions, partial calls and cash mergers (the same value as cash_rate)",
       "title": "Rate",
       "x-unit": "price"
     },

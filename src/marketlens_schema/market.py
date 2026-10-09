@@ -199,9 +199,18 @@ class CorporateAction(CanonicalModel):
     payable_date: Date | None = None
     effective_date: Date | None = None
     rate: float | None = unit(
-        "price", default=None, description="Cash per share (dividends, redemptions, cash mergers)"
+        "price",
+        default=None,
+        description="The type's own rate: cash per share for dividends, capital gains distributions, "
+        "redemptions, partial calls and cash mergers (the same value as cash_rate)",
     )
-    cash_rate: float | None = unit("price", default=None)
+    cash_rate: float | None = unit(
+        "price",
+        default=None,
+        description="Cash paid per share for every action that pays cash: dividends, capital gains "
+        "distributions, redemptions, partial calls, cash mergers, and the cash leg of stock-and-cash mergers "
+        "and reorganizations",
+    )
     old_rate: float | None = unit("fraction", default=None, description="Split/merger ratio leg (old)")
     new_rate: float | None = unit("fraction", default=None, description="Split/merger ratio leg (new)")
     new_ticker: Ticker | None = None

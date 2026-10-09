@@ -239,7 +239,10 @@ _CUSIPS = (
 #: action_type -> (canonical field -> Alpaca field, dates that apply). Fields not
 #: listed are not applicable to the type (None with not_applicable).
 CA_FIELDS: dict[str, tuple[dict[str, str], tuple[str, ...]]] = {
-    "cash_dividend": ({**_SYM, "rate": "rate", "special": "special", "foreign": "foreign"}, _D),
+    "cash_dividend": (
+        {**_SYM, "rate": "rate", "cash_rate": "rate", "special": "special", "foreign": "foreign"},
+        _D,
+    ),
     "stock_dividend": ({**_SYM, "new_rate": "rate"}, _D),
     "forward_split": ({**_SYM, "old_rate": "old_rate", "new_rate": "new_rate"}, _D),
     "reverse_split": (
@@ -259,7 +262,10 @@ CA_FIELDS: dict[str, tuple[dict[str, str], tuple[str, ...]]] = {
         ("process_date", "payable_date", "effective_date"),
     ),
     "spin_off": ({**_SRC, "old_rate": "source_rate", "new_rate": "new_rate"}, _D),
-    "cash_merger": ({**_ACQ, "rate": "rate"}, ("process_date", "payable_date", "effective_date")),
+    "cash_merger": (
+        {**_ACQ, "rate": "rate", "cash_rate": "rate"},
+        ("process_date", "payable_date", "effective_date"),
+    ),
     "stock_merger": (
         {**_ACQ, "old_rate": "acquiree_rate", "new_rate": "acquirer_rate"},
         ("process_date", "payable_date", "effective_date"),
@@ -268,16 +274,22 @@ CA_FIELDS: dict[str, tuple[dict[str, str], tuple[str, ...]]] = {
         {**_ACQ, "old_rate": "acquiree_rate", "new_rate": "acquirer_rate", "cash_rate": "cash_rate"},
         ("process_date", "payable_date", "effective_date"),
     ),
-    "redemption": ({**_SYM, "rate": "rate"}, ("process_date", "payable_date")),
+    "redemption": ({**_SYM, "rate": "rate", "cash_rate": "rate"}, ("process_date", "payable_date")),
     "name_change": (dict(_OLD), ("process_date",)),
     "worthless_removal": (dict(_SYM), ("process_date",)),
     "rights_distribution": ({**_SRC, "new_rate": "rate"}, _D),
-    "partial_call": ({**_SYM, "rate": "price"}, ("process_date", "record_date", "payable_date")),
+    "partial_call": (
+        {**_SYM, "rate": "price", "cash_rate": "price"},
+        ("process_date", "record_date", "payable_date"),
+    ),
     "reorganization": (
         {**_SYM, "cash_rate": "cash_rate"},
         ("process_date", "payable_date", "effective_date"),
     ),
-    "capital_gains_distribution": ({**_SYM, "rate": "long_term_rate+short_term_rate"}, _D),
+    "capital_gains_distribution": (
+        {**_SYM, "rate": "long_term_rate+short_term_rate", "cash_rate": "long_term_rate+short_term_rate"},
+        _D,
+    ),
 }
 _TICKER_FIELDS = {"ticker", "new_ticker", "old_ticker", "acquirer_ticker", "acquiree_ticker", "source_ticker"}
 _NUMBER_FIELDS = {"rate", "cash_rate", "old_rate", "new_rate"}
