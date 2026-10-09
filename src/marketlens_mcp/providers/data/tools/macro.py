@@ -503,8 +503,9 @@ SPECS: tuple[ToolSpec, ...] = (
             "Bureau of Labor Statistics monthly series (CPI-U CUUR0000SA0, core CPI CUUR0000SA0L1E, the "
             "unemployment rate LNS14000000, payrolls CES0000000001, JOLTS openings JTS000000000000000JOL), "
             "fetched in decade blocks. value is as BLS publishes it; BLS serves only the latest revision and "
-            "no release date, so knowledge_time is an approximation (period + release lag). BLS_API_KEY is "
-            "optional (raises BLS's daily limit).",
+            "no release date, so knowledge_time is the release of the month in BLS's own archive (08:30 ET; "
+            "JOLTS 10:00 ET), or the fetch for a release not listed yet; a revision seen later is a new "
+            "vintage at the release it came with. BLS_API_KEY is optional (raises BLS's daily limit).",
             "lagged",
         ),
         readme="BLS monthly series (CPI, unemployment, payrolls, JOLTS)",
@@ -526,7 +527,8 @@ SPECS: tuple[ToolSpec, ...] = (
             "units the publisher's unit. BEA states a value's multiplier separately and it is not stored: a "
             "units of 'Level' is not in ones (NIPA dollar levels are usually millions of dollars; check the "
             "table's header). BEA serves the latest revision only, so knowledge_time is period end plus a "
-            "release lag. Needs BEA_API_KEY (free).",
+            "release lag at 08:30 ET, the newest period's is the table's last revision date, and a revision "
+            "seen later is a new vintage from that date. Needs BEA_API_KEY (free).",
             "lagged",
         ),
         readme="BEA NIPA tables (GDP, PCE, income, profits)",

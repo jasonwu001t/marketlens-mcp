@@ -31,6 +31,13 @@ def bls_routes(upstream):
         return fixture_json(f"bls.timeseries__{body['startyear']}.json")
 
     upstream.add(BLS, respond, method="POST")
+    # omni dates each month from BLS's archive of the release (LNS: the Employment Situation),
+    # which it reads at most once an hour per process: tests count the API requests only
+    upstream.text_file(r"www\.bls\.gov/bls/news-release/empsit\.htm", "bls.release_archive__empsit.html")
+
+
+def bls_bodies(upstream) -> list[dict]:
+    return [json.loads(r.content) for r in upstream.requests if r.url.host == "api.bls.gov"]
 
 
 # --- macro_series ------------------------------------------------------------------------------
@@ -203,11 +210,9 @@ def test_macro_bls_series_golden_in_decade_blocks(tmp_path, upstream, keys):
     bls_routes(upstream)
     out = call("macro_bls_series", context(tmp_path), series_ids=["lns14000000"])
     doc = check_golden(out, "macro_bls_series")
-    blocks = sorted(
-        (b["startyear"], b["endyear"]) for b in (json.loads(r.content) for r in upstream.requests)
-    )
+    blocks = sorted((b["startyear"], b["endyear"]) for b in bls_bodies(upstream))
     assert blocks == [("2010", "2019"), ("2020", "2026")]  # default 10 years back; capped at this year
-    assert {json.loads(r.content)["registrationkey"] for r in upstream.requests} == {KEYS["BLS_API_KEY"]}
+    assert {b["registrationkey"] for b in bls_bodies(upstream)} == {KEYS["BLS_API_KEY"]}
     # 2016-09 is before the default window (10 years back from 2026-10-02); M13 annual rows dropped
     assert [(r["date"], r["period"], r["value"]) for r in doc["rows"]] == [
         ("2016-10-01", "M10", 4.9),
@@ -217,13 +222,14 @@ def test_macro_bls_series_golden_in_decade_blocks(tmp_path, upstream, keys):
         ("2026-08-01", "M08", None),
         ("2026-09-01", "M09", 4.3),
     ]
-    assert doc["rows"][0]["knowledge_time"] == "2016-11-05T00:00:00Z"  # month + 35-day release lag
+    # the Employment Situation that released it, 08:30 EDT (was the month + 35 days: 2016-11-05)
+    assert doc["rows"][0]["knowledge_time"] == "2016-11-04T12:30:00Z"
 
 
 def test_macro_bls_series_without_a_key_sends_none(tmp_path, upstream):
     bls_routes(upstream)
     call("macro_bls_series", context(tmp_path), series_ids=["LNS14000000"], start="2021-01-01")
-    bodies = [json.loads(r.content) for r in upstream.requests]
+    bodies = bls_bodies(upstream)
     assert [(b["startyear"], b["endyear"]) for b in bodies] == [("2020", "2026")]
     assert all("registrationkey" not in b for b in bodies)
 
