@@ -1,5 +1,6 @@
 """Reference data (capability ``reference``): assets, option contracts and
-exchanges, the market calendar and clock, corporate actions. The asset,
+exchanges, stock exchanges, condition codes, the market calendar and clock,
+corporate actions. The asset,
 contract, calendar, clock and announcement endpoints live on the trading API
 (paper or live base by portfolio.environment); the rest on the data API."""
 
@@ -13,17 +14,19 @@ from pydantic import Field, model_validator
 from marketlens_mcp.plugin_api import ToolContext, ToolOutput
 from marketlens_schema.market import (
     Asset,
+    ConditionCode,
     CorporateAction,
     CorporateActionAnnouncement,
     MarketCalendarDay,
     MarketClock,
     OptionContract,
     OptionExchange,
+    StockExchange,
 )
 
 from .. import mappers_reference as m
 from ..client import AlpacaClient
-from ..convert import alpaca_symbol, path_symbol
+from ..convert import NEW_YORK, alpaca_symbol, path_symbol
 from .common import (
     CONTINUE_DOC,
     STORED_NOTE,
@@ -34,6 +37,7 @@ from .common import (
     Skips,
     TickerOrPair,
     absence,
+    check_option_filters,
     collect,
     output,
     request_of,
@@ -49,6 +53,21 @@ CALENDAR_DEFAULT_DAYS = 31
 OI_LAG = (
     "open_interest_date is usually one trading day before close_price_date (OCC publishes open interest "
     "the next morning)."
+)
+#: OPRA participant codes Alpaca's option exchange list lacks, named as Alpaca
+#: names the rest ("ABBREVIATION - name"). Source: OPRA Binary Data Recipient
+#: Interface Specification 6.4b (2026-08-25), section 4.01.1 Participant ID; OPRA
+#: added both in 6.3a (2026-02-20).
+OPRA_PARTICIPANTS = {"G": "MX2 - MX2 Options", "V": "IEX - IEX Options LLC"}
+ASSET_DOC = (
+    "The answer is the paper or live account's view (provenance environment: shortable, easy to borrow and "
+    "margin requirements can differ). cusip is null (not_provided_by_source) whenever Alpaca omits it, as it "
+    "currently does for every asset although its specification lists the field."
+)
+DECLARATION_NOTE = (
+    "Alpaca applied the window to a declaration date it returns for dividends only: split, merger and spin-off "
+    "rows carry no declaration_date (null), so their place in the window cannot be checked here. Filter them by "
+    "ex_date, record_date or payable_date to check."
 )
 ActionType = Literal[
     "cash_dividend", "stock_dividend", "forward_split", "reverse_split", "unit_split", "spin_off", "cash_merger",
@@ -78,7 +97,11 @@ class ContractsIn(Inputs):
     underlyings: EquityTickers | None = Field(None, description="Underlying stock tickers.")
     status: Literal["active", "inactive"] | None = Field(None, description="Alpaca's default is active only.")
     expiration: date | None = Field(None, description="Exact expiration date.")
-    expiration_from: date | None = Field(None, description="Earliest expiration date, inclusive.")
+    expiration_from: date | None = Field(
+        None,
+        description="Earliest expiration date, inclusive. With no expiration filter at all, active contracts "
+        "default to today (New York) on; Alpaca alone would stop at the coming weekend.",
+    )
     expiration_to: date | None = Field(None, description="Latest expiration date, inclusive.")
     option_type: Literal["call", "put"] | None = None
     style: Literal["american", "european"] | None = None
@@ -87,6 +110,11 @@ class ContractsIn(Inputs):
     root_symbol: str | None = Field(None, max_length=10, description="OCC root, for adjusted contracts.")
     show_deliverables: bool = Field(False, description="Include each contract's deliverables.")
     page_token: str | None = Field(None, max_length=2000, description=CONTINUE_DOC)
+
+    @model_validator(mode="after")
+    def _ranges(self) -> ContractsIn:
+        check_option_filters(self.strike_min, self.strike_max, self.expiration_from, self.expiration_to)
+        return self
 
 
 class ContractIn(Inputs):
@@ -111,7 +139,9 @@ class AnnouncementsIn(Inputs):
     ticker: EquityTicker | None = Field(None, description="Only announcements initiated by this ticker.")
     cusip: str | None = Field(None, max_length=12, description="Only announcements initiated by this CUSIP.")
     date_type: Literal["declaration_date", "ex_date", "record_date", "payable_date"] | None = Field(
-        None, description="Which date since/until filter on."
+        None,
+        description="Which date since/until filter on. Alpaca returns declaration_date for dividends only, so a "
+        "declaration_date window over splits, mergers or spin-offs cannot be checked against the rows.",
     )
 
     @model_validator(mode="after")
@@ -120,6 +150,26 @@ class AnnouncementsIn(Inputs):
             raise ValueError("until must not be before since")
         if (self.until - self.since).days > ANNOUNCEMENT_MAX_DAYS:
             raise ValueError("since and until may be at most 90 days apart (an Alpaca limit)")
+        return self
+
+
+class ConditionsIn(Inputs):
+    asset_class: Literal["us_equity", "us_option"] = Field(
+        description="Stock (us_equity) or option (us_option) condition codes."
+    )
+    tick_type: Literal["trade", "quote"] = Field(
+        "trade", description="Trade or quote conditions (default trade)."
+    )
+    tape: Literal["A", "B", "C"] | None = Field(
+        None,
+        description="Stocks only: tape A (NYSE-listed), B (NYSE American, NYSE Arca, regional) or C "
+        "(Nasdaq-listed); omit for all three.",
+    )
+
+    @model_validator(mode="after")
+    def _tape_for_stocks(self) -> ConditionsIn:
+        if self.tape and self.asset_class == "us_option":
+            raise ValueError("tape applies to stock condition codes only")
         return self
 
 
@@ -166,6 +216,7 @@ async def reference_assets(ctx: ToolContext, args: AssetsIn) -> ToolOutput:
         Asset,
         page.rows,
         route="GET /v2/assets",
+        environment=ctx.portfolio_environment,
         operation="get-v2-assets",
         request=request_of(args),
         page=page,
@@ -187,6 +238,7 @@ async def reference_asset(ctx: ToolContext, args: AssetIn) -> ToolOutput:
         Asset,
         page.rows,
         route="GET /v2/assets/{symbol_or_asset_id}",
+        environment=ctx.portfolio_environment,
         operation="get-v2-assets-symbol_or_asset_id",
         request=request_of(args),
         page=page,
@@ -194,14 +246,35 @@ async def reference_asset(ctx: ToolContext, args: AssetIn) -> ToolOutput:
     )
 
 
+def _expiration_default(ctx: ToolContext, args: ContractsIn) -> tuple[date | None, list[str]]:
+    """Without an expiration filter Alpaca lists only contracts expiring by the
+    coming weekend (its expiration_date_lte default). Active contracts then
+    start today in New York, with no upper bound; inactive ones keep Alpaca's
+    window, and the note says which window applied."""
+    if args.expiration or args.expiration_from or args.expiration_to:
+        return None, []
+    if args.status == "inactive":
+        return None, [
+            "No expiration filter was given, so Alpaca's default window applies: inactive contracts expiring "
+            "up to the coming weekend. Pass expiration_from or expiration_to for another window."
+        ]
+    today = ctx.now().astimezone(NEW_YORK).date()
+    return today, [
+        f"No expiration filter was given, so contracts expiring on or after {today.isoformat()} (today in New "
+        "York) are listed, with no upper bound; Alpaca alone would stop at the coming weekend."
+    ]
+
+
 async def reference_option_contracts(ctx: ToolContext, args: ContractsIn) -> ToolOutput:
     skips = Skips(OptionContract.schema_name)
+    default_from, notes = _expiration_default(ctx, args)
+    expiration_from = args.expiration_from or default_from
     async with AlpacaClient(ctx) as api:
         params = {
             "underlying_symbols": [alpaca_symbol(t) for t in args.underlyings] if args.underlyings else None,
             "status": args.status,
             "expiration_date": args.expiration.isoformat() if args.expiration else None,
-            "expiration_date_gte": args.expiration_from.isoformat() if args.expiration_from else None,
+            "expiration_date_gte": expiration_from.isoformat() if expiration_from else None,
             "expiration_date_lte": args.expiration_to.isoformat() if args.expiration_to else None,
             "type": args.option_type,
             "style": args.style,
@@ -238,10 +311,12 @@ async def reference_option_contracts(ctx: ToolContext, args: ContractsIn) -> Too
         OptionContract,
         page.rows,
         route="GET /v2/options/contracts",
+        environment=ctx.portfolio_environment,
         operation="get-options-contracts",
-        request=request_of(args),
+        request=request_of(args, expiration_from=default_from.isoformat() if default_from else None),
         page=page,
         absent=absent,
+        notes=notes,
         skips=skips,
     )
 
@@ -265,6 +340,7 @@ async def reference_option_contract(ctx: ToolContext, args: ContractIn) -> ToolO
         OptionContract,
         page.rows,
         route="GET /v2/options/contracts/{symbol_or_id}",
+        environment=ctx.portfolio_environment,
         operation="get-option-contract-symbol_or_id",
         request=request_of(args),
         page=page,
@@ -291,6 +367,7 @@ async def reference_calendar(ctx: ToolContext, args: CalendarIn) -> ToolOutput:
         MarketCalendarDay,
         page.rows,
         route="GET /v2/calendar",
+        environment=ctx.portfolio_environment,
         operation="LegacyCalendar",
         request=request_of(args, start=start.isoformat(), end=end.isoformat()),
         page=page,
@@ -313,6 +390,7 @@ async def reference_clock(ctx: ToolContext, args: NoArgs) -> ToolOutput:
         MarketClock,
         page.rows,
         route="GET /v2/clock",
+        environment=ctx.portfolio_environment,
         operation="LegacyClock",
         request={},
         as_of=as_of,
@@ -343,9 +421,13 @@ async def reference_corporate_action_announcements(ctx: ToolContext, args: Annou
         CorporateActionAnnouncement,
         page.rows,
         route="GET /v2/corporate_actions/announcements",
+        environment=ctx.portfolio_environment,
         operation="get-v2-corporate_actions-announcements",
         request=request_of(args),
         page=page,
+        notes=[DECLARATION_NOTE]
+        if args.date_type == "declaration_date" and set(args.ca_types) - {"dividend"}
+        else [],
         skips=skips,
     )
 
@@ -364,6 +446,7 @@ async def reference_corporate_action_announcement(ctx: ToolContext, args: Announ
         CorporateActionAnnouncement,
         page.rows,
         route="GET /v2/corporate_actions/announcements/{id}",
+        environment=ctx.portfolio_environment,
         operation="get-v2-corporate_actions-announcements-id",
         request=request_of(args),
         page=page,
@@ -372,7 +455,7 @@ async def reference_corporate_action_announcement(ctx: ToolContext, args: Announ
 
 
 async def reference_corporate_actions(ctx: ToolContext, args: CorporateActionsIn) -> ToolOutput:
-    skips = Skips(CorporateAction.schema_name)
+    skips = Skips(CorporateAction.schema_name, detailed=True)
     async with AlpacaClient(ctx) as api:
         params = {
             "symbols": [alpaca_symbol(t) for t in args.tickers] if args.tickers else None,
@@ -393,7 +476,8 @@ async def reference_corporate_actions(ctx: ToolContext, args: CorporateActionsIn
             for key, records in (data.get("corporate_actions") or {}).items():
                 action_type = m.CA_ARRAYS.get(key)
                 if action_type is None:
-                    skips.labels.extend(f"{key}:{r.get('id')}" for r in records or [])
+                    for r in records or []:
+                        skips.add(f"{key}:{r.get('id')}", "an action type this tool does not map")
                     continue
                 rows += collect(
                     skips,
@@ -412,8 +496,19 @@ async def reference_corporate_actions(ctx: ToolContext, args: CorporateActionsIn
         operation="CorporateActions",
         request=request_of(args),
         page=page,
+        notes=_cusip_only_note(page.rows),
         skips=skips,
     )
+
+
+def _cusip_only_note(rows: list[CorporateAction]) -> list[str]:
+    n = sum(1 for r in rows if "unparseable" in (r.absent or {}).values())
+    if not n:
+        return []
+    return [
+        f"{n} action(s) name an instrument by CUSIP only (a CVR, an escrow or another right with no ticker): "
+        "that ticker column is null (unparseable) and the instrument is in cusip, acquirer_cusip or new_cusip."
+    ]
 
 
 async def reference_option_exchanges(ctx: ToolContext, args: NoArgs) -> ToolOutput:
@@ -430,14 +525,94 @@ async def reference_option_exchanges(ctx: ToolContext, args: NoArgs) -> ToolOutp
             )
 
         page = await fetch_once(ctx, fetch)
+    listed = {r.code for r in page.rows}
+    added = {code: name for code, name in OPRA_PARTICIPANTS.items() if code not in listed}
+    notes = (
+        [
+            "Not in Alpaca's list, so added from OPRA's participant codes (OPRA Binary Data Recipient Interface "
+            "Specification 6.4b, section 4.01.1): " + ", ".join(f"{c} ({n})" for c, n in added.items()) + "."
+        ]
+        if added
+        else []
+    )
     return output(
         ctx,
         OptionExchange,
-        page.rows,
+        [*page.rows, *(m.option_exchange(code, name) for code, name in added.items())],
         route="GET /v1beta1/options/meta/exchanges",
         operation="OptionMetaExchanges",
         request={},
         page=page,
+        notes=notes,
+        skips=skips,
+    )
+
+
+async def reference_stock_exchanges(ctx: ToolContext, args: NoArgs) -> ToolOutput:
+    skips = Skips(StockExchange.schema_name)
+    async with AlpacaClient(ctx) as api:
+
+        async def fetch() -> list:
+            data = await api.get("data", "/v2/stocks/meta/exchanges")
+            return collect(
+                skips,
+                list((data or {}).items()),
+                lambda kv: m.stock_exchange(kv[0], kv[1]),
+                lambda kv: str(kv[0]),
+            )
+
+        page = await fetch_once(ctx, fetch)
+    return output(
+        ctx,
+        StockExchange,
+        page.rows,
+        route="GET /v2/stocks/meta/exchanges",
+        operation="StockMetaExchanges",
+        request={},
+        page=page,
+        skips=skips,
+    )
+
+
+async def reference_condition_codes(ctx: ToolContext, args: ConditionsIn) -> ToolOutput:
+    skips = Skips(ConditionCode.schema_name)
+    option = args.asset_class == "us_option"
+    route = (
+        "GET /v1beta1/options/meta/conditions/{ticktype}"
+        if option
+        else "GET /v2/stocks/meta/conditions/{ticktype}"
+    )
+    path = route.removeprefix("GET ").replace("{ticktype}", args.tick_type)
+    async with AlpacaClient(ctx) as api:
+
+        def rows(data: dict, tape: str | None) -> list:
+            return collect(
+                skips,
+                list((data or {}).items()),
+                lambda kv: m.condition_code(
+                    kv[0], kv[1], asset_class=args.asset_class, tick_type=args.tick_type, tape=tape
+                ),
+                lambda kv: f"{tape}:{kv[0]}" if tape else str(kv[0]),
+            )
+
+        async def fetch() -> list:
+            if option:
+                return rows(await api.get("data", path), None)
+            out: list = []
+            for tape in [args.tape] if args.tape else ["A", "B", "C"]:
+                out += rows(await api.get("data", path, {"tape": tape}), tape)
+            return out
+
+        page = await fetch_once(ctx, fetch)
+    return output(
+        ctx,
+        ConditionCode,
+        page.rows,
+        route=route,
+        operation="OptionMetaConditions" if option else "StockMetaConditions",
+        request=request_of(args),
+        page=page,
+        absent={"tape": absence("not_applicable", "Option condition codes have no tape.")} if option else {},
         skips=skips,
     )
 
@@ -451,7 +626,10 @@ SPECS = (
         title="Assets",
         description="Tradable assets with their attributes: ticker, class, venue, status, tradable, marginable, "
         "shortable, easy to borrow, fractionable, margin requirements (fractions), crypto order increments. "
-        "Filter by status, class, exchange or attributes; the full list is large. " + STORED_NOTE,
+        "Filter by status, class, exchange or attributes; the full list is large. "
+        + ASSET_DOC
+        + " "
+        + STORED_NOTE,
         readme="Asset list with trading attributes",
         input_model=AssetsIn,
         output_model=Asset,
@@ -465,7 +643,8 @@ SPECS = (
         name="reference_asset",
         capability="reference",
         title="Asset",
-        description="One asset by stock ticker (BRK-B) or crypto pair (BTC/USD), with its trading attributes.",
+        description="One asset by stock ticker (BRK-B) or crypto pair (BTC/USD), with its trading attributes. "
+        + ASSET_DOC,
         readme="One asset's attributes",
         input_model=AssetIn,
         output_model=Asset,
@@ -481,7 +660,11 @@ SPECS = (
         title="Option contracts",
         description="Listed option contracts (OCC symbol, underlying, expiration, strike in USD, type, style, "
         "multiplier, open interest, last close) filtered by underlyings, expiration (exact or from/to), type, "
-        "style, strike range and root; deliverables on request. " + OI_LAG + " " + STORED_NOTE,
+        "style, strike range and root; deliverables on request. With no expiration filter, active contracts "
+        "expiring from today (New York) on are listed: Alpaca's own default stops at the coming weekend. "
+        + OI_LAG
+        + " "
+        + STORED_NOTE,
         readme="Option contract reference data",
         input_model=ContractsIn,
         output_model=OptionContract,
@@ -541,7 +724,7 @@ SPECS = (
         title="Corporate action announcements",
         description="Announced corporate actions (dividends, mergers, spin-offs, splits) in a window of at most "
         "90 days by declaration, ex, record or payable date, optionally for one ticker or CUSIP: dates, cash per "
-        "share (USD) and old/new rates.",
+        "share (USD) and old/new ratio legs (shares). Alpaca returns a declaration date for dividends only.",
         readme="Announced dividends, splits, mergers",
         input_model=AnnouncementsIn,
         output_model=CorporateActionAnnouncement,
@@ -571,7 +754,8 @@ SPECS = (
         title="Corporate actions",
         description="Processed corporate actions, one row per action with action_type (16 types: dividends, "
         "splits, mergers, spin-offs, name changes, ...): process, ex, record, payable and effective dates, cash "
-        "rate per share (USD), old/new ratio legs, related tickers; columns that do not apply to a type are null "
+        "paid per share in cash_rate (USD, for every action that pays cash; rate repeats it for dividends, "
+        "redemptions and cash mergers), old/new ratio legs, related tickers; columns that do not apply to a type are null "
         "(not_applicable). Filter by tickers, CUSIPs, types and process-date window (default today). "
         + STORED_NOTE,
         readme="Processed corporate actions",
@@ -587,7 +771,9 @@ SPECS = (
         name="reference_option_exchanges",
         capability="reference",
         title="Option exchanges",
-        description="Option exchange codes and names (to read the exchange columns of option quotes and trades).",
+        description="Option exchange codes and names (to read the exchange columns of option quotes and trades). "
+        "OPRA participants Alpaca's list lacks (G: MX2 Options, V: IEX Options) are added from OPRA's own "
+        "specification, with a note.",
         readme="Option exchange codes",
         input_model=NoArgs,
         output_model=OptionExchange,
@@ -596,5 +782,36 @@ SPECS = (
         golden_test=GOLDEN,
         operations=("OptionMetaExchanges",),
         parity=("get_option_exchange_codes",),
+    ),
+    spec(
+        name="reference_stock_exchanges",
+        capability="reference",
+        title="Stock exchanges",
+        description="Stock exchange codes and names, to read the exchange columns of stock quotes and trades "
+        "(market_quotes, market_trades, market_latest_*).",
+        readme="Stock exchange codes",
+        input_model=NoArgs,
+        output_model=StockExchange,
+        route=f"GET /v2/stocks/meta/exchanges{_M}",
+        handler=reference_stock_exchanges,
+        golden_test=GOLDEN,
+        operations=("StockMetaExchanges",),
+        parity=(),
+    ),
+    spec(
+        name="reference_condition_codes",
+        capability="reference",
+        title="Condition codes",
+        description="Trade or quote condition codes and their names, to read the conditions columns of stock "
+        "and option trades and quotes: stocks per tape (A NYSE-listed, B NYSE American, NYSE Arca and regional, "
+        "C Nasdaq-listed; all three by default), options without a tape.",
+        readme="Trade and quote condition codes",
+        input_model=ConditionsIn,
+        output_model=ConditionCode,
+        route=f"GET /v2/stocks/meta/conditions/{{ticktype}}, GET /v1beta1/options/meta/conditions/{{ticktype}}{_M}",
+        handler=reference_condition_codes,
+        golden_test=GOLDEN,
+        operations=("StockMetaConditions", "OptionMetaConditions"),
+        parity=(),
     ),
 )

@@ -20,7 +20,7 @@
   },
   "$id": "urn:marketlens:schema:1:marketlens.CorporateAction",
   "additionalProperties": false,
-  "description": "One processed corporate action. Columns that do not apply to the\naction's type are None with code not_applicable (response-level).",
+  "description": "One processed corporate action. Columns that do not apply to the\naction's type are None with code not_applicable (response-level). An\ninstrument the provider names by CUSIP only (a CVR, an escrow or another\nright with no ticker) has a None ticker column with code unparseable; its\nCUSIP is in cusip, acquirer_cusip or new_cusip.",
   "properties": {
     "absent": {
       "anyOf": [
@@ -50,6 +50,19 @@
       ],
       "default": null,
       "title": "Acquiree Ticker"
+    },
+    "acquirer_cusip": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "CUSIP of the acquirer's security (mergers)",
+      "title": "Acquirer Cusip"
     },
     "acquirer_ticker": {
       "anyOf": [
@@ -100,6 +113,7 @@
         }
       ],
       "default": null,
+      "description": "Cash paid per share for every action that pays cash: dividends, capital gains distributions, redemptions, partial calls, cash mergers, and the cash leg of stock-and-cash mergers and reorganizations",
       "title": "Cash Rate",
       "x-unit": "price"
     },
@@ -178,6 +192,19 @@
       "default": null,
       "title": "Isin"
     },
+    "new_cusip": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "CUSIP of the new security (splits, name changes, spin-offs, rights)",
+      "title": "New Cusip"
+    },
     "new_rate": {
       "anyOf": [
         {
@@ -188,9 +215,9 @@
         }
       ],
       "default": null,
-      "description": "Split/merger ratio leg (new)",
+      "description": "Ratio leg: shares of the new, acquirer or spun-off security for every old_rate old shares; for a stock dividend or a rights distribution, new shares or rights per share held",
       "title": "New Rate",
-      "x-unit": "fraction"
+      "x-unit": "shares"
     },
     "new_ticker": {
       "anyOf": [
@@ -215,9 +242,9 @@
         }
       ],
       "default": null,
-      "description": "Split/merger ratio leg (old)",
+      "description": "Ratio leg: shares of the old, acquiree or source security; new_rate new shares are delivered for every old_rate old shares (a 1-for-10 reverse split: old_rate 10, new_rate 1)",
       "title": "Old Rate",
-      "x-unit": "fraction"
+      "x-unit": "shares"
     },
     "old_ticker": {
       "anyOf": [
@@ -268,7 +295,7 @@
         }
       ],
       "default": null,
-      "description": "Cash per share (dividends, redemptions, cash mergers)",
+      "description": "The type's own rate: cash per share for dividends, capital gains distributions, redemptions, partial calls and cash mergers (the same value as cash_rate)",
       "title": "Rate",
       "x-unit": "price"
     },

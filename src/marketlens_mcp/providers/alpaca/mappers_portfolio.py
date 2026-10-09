@@ -49,11 +49,12 @@ def mask_account_number(number: str | None) -> str | None:
 
 
 def instrument(symbol: str | None, asset_class: str | None) -> tuple[str | None, str | None]:
-    """(ticker, occ_symbol): an option's ticker is its underlying (OCC root)."""
+    """(ticker, occ_symbol): an option's ticker is its underlying (the OCC root
+    without an adjusted contract's digit)."""
     if not symbol:
         return None, None
     if asset_class == "us_option" or (asset_class in (None, "") and is_occ(symbol)):
-        return parse_occ(symbol).root, symbol
+        return parse_occ(symbol).underlying, symbol
     return to_ticker(symbol, asset_class), None
 
 

@@ -3,6 +3,7 @@ provenance and output building."""
 
 from __future__ import annotations
 
+from collections import Counter
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -25,6 +26,8 @@ from .. import convert
 
 ALPACA_ENV = ("ALPACA_API_KEY", "ALPACA_SECRET_KEY")
 SKIP_SAMPLE = 5
+#: How many skipped records a detailed skip note names, each with its reason.
+SKIP_DETAIL_MAX = 50
 
 
 class Inputs(BaseModel):
@@ -65,6 +68,18 @@ def _one_occ(v: str) -> str:
     return convert.occ_symbols([v])[0]
 
 
+def check_option_filters(
+    strike_min: float | None, strike_max: float | None, expiration_from: Any, expiration_to: Any
+) -> None:
+    """Refuse an inverted strike or expiration range, which no contract can match."""
+    if strike_min is not None and strike_max is not None and strike_min > strike_max:
+        raise ValueError(f"strike_min ({strike_min:g}) must not be above strike_max ({strike_max:g})")
+    if expiration_from is not None and expiration_to is not None and expiration_from > expiration_to:
+        raise ValueError(
+            f"expiration_from ({expiration_from}) must not be after expiration_to ({expiration_to})"
+        )
+
+
 #: One stock ticker, normalised (brk.b -> BRK-B).
 EquityTicker = Annotated[str, Field(max_length=20), AfterValidator(_one_equity)]
 #: One stock ticker or crypto pair.
@@ -85,7 +100,10 @@ CryptoPairs = Annotated[
 OccSymbols = Annotated[
     list[str],
     Field(
-        min_length=1, max_length=100, description='OCC option symbols, e.g. ["AAPL250117C00150000"] (1-100).'
+        min_length=1,
+        max_length=100,
+        description='OCC option symbols, e.g. ["AAPL250117C00150000"] (1-100); an adjusted contract\'s root '
+        'carries a digit ("ETHA1261009C00005000").',
     ),
     AfterValidator(convert.occ_symbols),
 ]
@@ -182,16 +200,54 @@ def option_feed(configured: str) -> tuple[str, Delay]:
 
 @dataclass
 class Skips:
-    """Upstream records that did not fit the canonical model, reported in notes."""
+    """Upstream records that did not fit the canonical model, reported in notes.
+    A ``detailed`` note counts them by group (the label's part before ":") and
+    names each one, up to SKIP_DETAIL_MAX, with the reason ``collect`` recorded."""
 
     model: str
     labels: list[str] = field(default_factory=list)
+    detailed: bool = False
+    reasons: dict[str, str] = field(default_factory=dict)
+
+    def add(self, label: str, reason: str) -> None:
+        self.labels.append(label)
+        self.reasons.setdefault(label, reason)
 
     def note(self) -> list[str]:
         if not self.labels:
             return []
-        sample = ", ".join(self.labels[:SKIP_SAMPLE])
-        return [f"Skipped {len(self.labels)} upstream record(s) that do not fit {self.model}: {sample}."]
+        if not self.detailed:
+            sample = ", ".join(self.labels[:SKIP_SAMPLE])
+            return [f"Skipped {len(self.labels)} upstream record(s) that do not fit {self.model}: {sample}."]
+        groups = Counter(label.split(":", 1)[0] for label in self.labels if ":" in label)
+        by_group = f" ({', '.join(f'{g} {n}' for g, n in groups.items())})" if groups else ""
+        named = "; ".join(
+            f"{label} ({self.reasons[label]})" if label in self.reasons else label
+            for label in self.labels[:SKIP_DETAIL_MAX]
+        )
+        more = len(self.labels) - SKIP_DETAIL_MAX
+        rest = f"; and {more} more (narrow the request to see them)" if more > 0 else ""
+        return [
+            f"Skipped {len(self.labels)} upstream record(s) that do not fit {self.model}{by_group}: {named}{rest}."
+        ]
+
+
+def skip_reason(error: Exception) -> str:
+    """A short reason for a skipped record: the fields that failed and their values."""
+    if isinstance(error, ValidationError):
+        parts = []
+        for err in error.errors()[:3]:
+            where = ".".join(str(x) for x in err["loc"]) or "record"
+            if err["type"] == "missing":
+                parts.append(f"{where} missing")
+            elif err["type"] == "string_pattern_mismatch":
+                parts.append(f"{where} {str(err.get('input'))[:40]!r} is not of the field's form")
+            else:
+                parts.append(f"{where}: {err['msg']}")
+        return ", ".join(parts)[:200]
+    if isinstance(error, KeyError):
+        return f"no {error.args[0]!r} field"
+    return f"{type(error).__name__}: {error}"[:200]
 
 
 def collect(
@@ -203,8 +259,8 @@ def collect(
     for item in items:
         try:
             out = mapper(item)
-        except (ValidationError, ValueError, TypeError, KeyError, ArithmeticError):
-            skips.labels.append(label(item))
+        except (ValidationError, ValueError, TypeError, KeyError, ArithmeticError) as e:
+            skips.add(label(item), skip_reason(e))
             continue
         if out is None:
             continue

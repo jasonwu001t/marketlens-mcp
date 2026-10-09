@@ -131,9 +131,38 @@ class OptionExchange(CanonicalModel):
     name: str
 
 
+class StockExchange(CanonicalModel):
+    """A stock exchange code as the exchange columns of stock quotes and trades carry it."""
+
+    schema_name: ClassVar[str] = "marketlens.StockExchange"
+
+    code: str
+    name: str
+
+
+class ConditionCode(CanonicalModel):
+    """A trade or quote condition code and its name, as the conditions columns of
+    stock and option quotes and trades carry it."""
+
+    schema_name: ClassVar[str] = "marketlens.ConditionCode"
+
+    asset_class: Literal["us_equity", "us_option"]
+    tick_type: Literal["trade", "quote"]
+    tape: Literal["A", "B", "C"] | None = Field(
+        default=None,
+        description="The stock tape the code is published for: A (NYSE-listed), B (NYSE American, NYSE Arca and "
+        "regional listings), C (Nasdaq-listed); null for options",
+    )
+    code: str
+    name: str
+
+
 class CorporateAction(CanonicalModel):
     """One processed corporate action. Columns that do not apply to the
-    action's type are None with code not_applicable (response-level)."""
+    action's type are None with code not_applicable (response-level). An
+    instrument the provider names by CUSIP only (a CVR, an escrow or another
+    right with no ticker) has a None ticker column with code unparseable; its
+    CUSIP is in cusip, acquirer_cusip or new_cusip."""
 
     schema_name: ClassVar[str] = "marketlens.CorporateAction"
     time_column: ClassVar[str | None] = None
@@ -170,11 +199,30 @@ class CorporateAction(CanonicalModel):
     payable_date: Date | None = None
     effective_date: Date | None = None
     rate: float | None = unit(
-        "price", default=None, description="Cash per share (dividends, redemptions, cash mergers)"
+        "price",
+        default=None,
+        description="The type's own rate: cash per share for dividends, capital gains distributions, "
+        "redemptions, partial calls and cash mergers (the same value as cash_rate)",
     )
-    cash_rate: float | None = unit("price", default=None)
-    old_rate: float | None = unit("fraction", default=None, description="Split/merger ratio leg (old)")
-    new_rate: float | None = unit("fraction", default=None, description="Split/merger ratio leg (new)")
+    cash_rate: float | None = unit(
+        "price",
+        default=None,
+        description="Cash paid per share for every action that pays cash: dividends, capital gains "
+        "distributions, redemptions, partial calls, cash mergers, and the cash leg of stock-and-cash mergers "
+        "and reorganizations",
+    )
+    old_rate: float | None = unit(
+        "shares",
+        default=None,
+        description="Ratio leg: shares of the old, acquiree or source security; new_rate new shares are "
+        "delivered for every old_rate old shares (a 1-for-10 reverse split: old_rate 10, new_rate 1)",
+    )
+    new_rate: float | None = unit(
+        "shares",
+        default=None,
+        description="Ratio leg: shares of the new, acquirer or spun-off security for every old_rate old shares; "
+        "for a stock dividend or a rights distribution, new shares or rights per share held",
+    )
     new_ticker: Ticker | None = None
     old_ticker: Ticker | None = None
     acquirer_ticker: Ticker | None = None
@@ -182,6 +230,10 @@ class CorporateAction(CanonicalModel):
     source_ticker: Ticker | None = None
     special: bool | None = None
     foreign: bool | None = None
+    acquirer_cusip: str | None = Field(default=None, description="CUSIP of the acquirer's security (mergers)")
+    new_cusip: str | None = Field(
+        default=None, description="CUSIP of the new security (splits, name changes, spin-offs, rights)"
+    )
 
 
 class CorporateActionAnnouncement(CanonicalModel):
@@ -202,8 +254,17 @@ class CorporateActionAnnouncement(CanonicalModel):
     payable_date: Date | None = None
     effective_date: Date | None = None
     cash: DecimalStr | None = unit("USD", default=None, description="Cash per share")
-    old_rate: DecimalStr | None = unit("fraction", default=None)
-    new_rate: DecimalStr | None = unit("fraction", default=None)
+    old_rate: DecimalStr | None = unit(
+        "shares",
+        default=None,
+        description="Ratio leg: shares of the old or target security; old_rate old shares become new_rate new "
+        "shares (a 1-for-10 reverse split: old_rate 10, new_rate 1; 1 and 1 for a cash dividend)",
+    )
+    new_rate: DecimalStr | None = unit(
+        "shares",
+        default=None,
+        description="Ratio leg: shares of the new or initiating security for every old_rate old shares",
+    )
 
 
 # --- stocks and crypto ------------------------------------------------------------------------
@@ -416,7 +477,10 @@ class OptionTrade(CanonicalModel):
 class OptionSnapshot(CanonicalModel):
     """Latest state of one contract with greeks and implied volatility (the
     rows of options_snapshots and options_chain). Expiration, strike and type
-    are parsed from the OCC symbol. Greeks are the provider's, per share:
+    are parsed from the OCC symbol. day_* come from the contract's latest daily
+    bar, which is an earlier session than today's for a contract that has not
+    traded today (day_t dates it), and prev_close from the bar before that
+    (prev_t). Greeks are the provider's, per share:
     delta per 1.00 move of the underlying, gamma per 1.00 move squared, theta
     in premium per calendar day, vega in premium per 1 point (0.01) of IV, rho
     in premium per 1 point (0.01) of rate. ml-alpaca verifies these conventions
@@ -452,7 +516,24 @@ class OptionSnapshot(CanonicalModel):
     day_low: float | None = unit("price", default=None)
     day_close: float | None = unit("price", default=None)
     day_volume: float | None = unit("contracts", default=None)
+    day_t: UtcDatetime | None = unit(
+        "UTC",
+        default=None,
+        description="Start of the daily bar day_open..day_volume come from (00:00 New York of its session): the "
+        "contract's latest daily bar, an earlier session than today's when it has not traded today",
+    )
     prev_close: float | None = unit("price", default=None)
+    prev_t: UtcDatetime | None = unit(
+        "UTC", default=None, description="Start of the daily bar prev_close comes from: the one before day_t"
+    )
+    open_interest: int | None = unit(
+        "contracts", default=None, description="Open contracts as of open_interest_date (options_chain only)"
+    )
+    open_interest_date: Date | None = Field(
+        default=None,
+        description="The date of the open interest count. Open interest is published the next morning, so this "
+        "is usually the trading day before day_t",
+    )
     implied_volatility: float | None = unit("fraction_per_year", default=None)
     delta: float | None = unit("per_share_greek", default=None)
     gamma: float | None = unit("per_share_greek", default=None)
@@ -529,6 +610,8 @@ MARKET_MODELS: tuple[type[CanonicalModel], ...] = (
     OptionDeliverable,
     OptionContract,
     OptionExchange,
+    StockExchange,
+    ConditionCode,
     CorporateAction,
     CorporateActionAnnouncement,
     Bar,

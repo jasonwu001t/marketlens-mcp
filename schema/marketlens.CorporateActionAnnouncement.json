@@ -167,8 +167,9 @@
         }
       ],
       "default": null,
+      "description": "Ratio leg: shares of the new or initiating security for every old_rate old shares",
       "title": "New Rate",
-      "x-unit": "fraction"
+      "x-unit": "shares"
     },
     "old_rate": {
       "anyOf": [
@@ -181,8 +182,9 @@
         }
       ],
       "default": null,
+      "description": "Ratio leg: shares of the old or target security; old_rate old shares become new_rate new shares (a 1-for-10 reverse split: old_rate 10, new_rate 1; 1 and 1 for a cash dividend)",
       "title": "Old Rate",
-      "x-unit": "fraction"
+      "x-unit": "shares"
     },
     "payable_date": {
       "anyOf": [

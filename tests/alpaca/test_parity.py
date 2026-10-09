@@ -186,10 +186,10 @@ def test_every_exclusion_has_a_known_kind_and_a_reason():
 def test_counts(specs):
     operations = spec_operations()
     assert len(operations) == 103
-    assert len(specs) == 53
+    assert len(specs) == 55
     assert sum(len(s.parity_names) for s in specs.values()) == 55
-    assert len({op for s in specs.values() for op in s.upstream_operations}) == 50
-    assert len(EXCLUDED_OPERATIONS) == 53
+    assert len({op for s in specs.values() for op in s.upstream_operations}) == 53
+    assert len(EXCLUDED_OPERATIONS) == 50
 
 
 # --- the checks truly fail -------------------------------------------------------------------

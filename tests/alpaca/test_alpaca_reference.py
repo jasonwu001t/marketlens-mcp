@@ -1,9 +1,12 @@
 """Reference tools: reference_assets, reference_asset, reference_option_contracts,
 reference_option_contract, reference_calendar, reference_clock,
 reference_corporate_action_announcements, reference_corporate_action_announcement,
-reference_corporate_actions, reference_option_exchanges."""
+reference_corporate_actions, reference_option_exchanges, reference_stock_exchanges,
+reference_condition_codes."""
 
 from __future__ import annotations
+
+from datetime import UTC, datetime
 
 import httpx
 import pytest
@@ -34,8 +37,22 @@ def test_reference_assets_golden(specs, ctx, alpaca):
 
 def test_reference_assets_use_the_live_base_in_live_mode(specs, alpaca):
     alpaca.fixture("/v2/assets", "Assets")
-    call(specs["reference_assets"], FakeContext(portfolio_environment=Environment.LIVE))
+    out = call(specs["reference_assets"], FakeContext(portfolio_environment=Environment.LIVE))
     assert alpaca.requests[0].url.host == "api.alpaca.markets"
+    assert out.provenance.environment == Environment.LIVE
+
+
+def test_trading_api_reference_reads_name_the_account_environment(specs, ctx, alpaca):
+    alpaca.fixture("/v2/assets/NVDA", "Asset__brk")
+    alpaca.fixture("/v2/clock", "Clock")
+    alpaca.fixture("/v1beta1/options/meta/exchanges", "OptionMetaExchanges")
+    assert call(specs["reference_asset"], ctx, ticker="NVDA").provenance.environment == Environment.PAPER
+    assert call(specs["reference_clock"], ctx).provenance.environment == Environment.PAPER
+    # the market data API has no account behind it
+    assert call(specs["reference_option_exchanges"], ctx).provenance.environment is None
+    for name in ("reference_assets", "reference_asset"):
+        assert "paper or live account's view" in specs[name].description
+        assert "cusip is null (not_provided_by_source) whenever Alpaca omits it" in specs[name].description
 
 
 def test_reference_asset_golden(specs, ctx, alpaca):
@@ -199,6 +216,9 @@ def test_reference_corporate_actions_golden_one_row_per_action(specs, ctx, alpac
         by_type["cash_dividend"]["rate"] == 0.125
         and by_type["cash_dividend"]["absent"]["old_rate"] == "not_applicable"
     )
+    # cash paid per share is in cash_rate for every type that pays cash, dividends included
+    assert by_type["cash_dividend"]["cash_rate"] == 0.125
+    assert by_type["capital_gains_distribution"]["cash_rate"] == pytest.approx(0.56874)
     assert (
         by_type["cash_dividend"]["isin"] is None
         and by_type["cash_dividend"]["absent"]["isin"] == "not_provided_by_source"
@@ -225,4 +245,231 @@ def test_corporate_action_ids_exclude_other_filters(specs, ctx):
 def test_reference_option_exchanges_golden(specs, ctx, alpaca):
     alpaca.fixture("/v1beta1/options/meta/exchanges", "OptionMetaExchanges")
     doc = check_golden(call(specs["reference_option_exchanges"], ctx), "reference_option_exchanges")
-    assert [r["code"] for r in doc["rows"]] == ["A", "Q"]
+    assert [r["code"] for r in doc["rows"]] == ["A", "Q", "G", "V"]
+    assert doc["rows"][2]["name"] == "MX2 - MX2 Options" and doc["rows"][3]["name"] == "IEX - IEX Options LLC"
+    assert doc["notes"] == [
+        "Not in Alpaca's list, so added from OPRA's participant codes (OPRA Binary Data Recipient Interface "
+        "Specification 6.4b, section 4.01.1): G (MX2 - MX2 Options), V (IEX - IEX Options LLC)."
+    ]
+
+
+def test_option_exchanges_add_only_the_codes_alpaca_lacks(specs, ctx, alpaca):
+    alpaca.add("/v1beta1/options/meta/exchanges", {"A": "AMEX - NYSE American", "G": "MX2 - MX2 Options"})
+    out = call(specs["reference_option_exchanges"], ctx)
+    assert [r.code for r in out.rows] == ["A", "G", "V"]
+    assert out.notes[0].endswith("section 4.01.1): V (IEX - IEX Options LLC).")
+
+
+def test_reference_option_contracts_keep_adjusted_contracts(specs, ctx, alpaca):
+    adjusted = {
+        **load_fixture("OptionContracts__page1")["option_contracts"][0],
+        "symbol": "ETHA1261009C00005000",
+        "name": "ETHA1 Oct 09 2026 5 Call",
+        "root_symbol": "ETHA1",
+        "underlying_symbol": "ETHA",
+        "strike_price": "5",
+        "expiration_date": "2026-10-09",
+    }
+    alpaca.add("/v2/options/contracts", {"option_contracts": [adjusted], "next_page_token": None})
+    out = call(specs["reference_option_contracts"], ctx, underlyings=["ETHA"], expiration="2026-10-09")
+    assert [(r.occ_symbol, r.root_symbol, r.underlying) for r in out.rows] == [
+        ("ETHA1261009C00005000", "ETHA1", "ETHA")
+    ]
+    assert not any("Skipped" in n for n in out.notes)
+    alpaca.add("/v2/options/contracts/ETHA1261009C00005000", adjusted)
+    one = call(specs["reference_option_contract"], ctx, occ_symbol="etha1261009c00005000")
+    assert one.rows[0].occ_symbol == "ETHA1261009C00005000"
+
+
+def test_option_contracts_without_an_expiration_filter_start_today_in_new_york(specs, alpaca):
+    alpaca.fixture("/v2/options/contracts", "OptionContracts__page2")
+    late_evening = FakeContext(
+        fixed_now=datetime(2026, 10, 3, 2, 0, tzinfo=UTC)
+    )  # 22:00 on Oct 2 in New York
+    out = call(specs["reference_option_contracts"], late_evening, underlyings=["AAPL"], strike_min=340)
+    assert alpaca.params()["expiration_date_gte"] == "2026-10-02"
+    assert "expiration_date_lte" not in alpaca.params()
+    assert out.provenance.request["expiration_from"] == "2026-10-02"
+    assert any("on or after 2026-10-02 (today in New York)" in n for n in out.notes)
+    assert "coming weekend" in specs["reference_option_contracts"].description
+
+
+def test_option_contracts_with_any_expiration_filter_send_only_that(specs, ctx, alpaca):
+    alpaca.fixture("/v2/options/contracts", "OptionContracts__page2")
+    for given, sent in (
+        ({"expiration_to": "2026-12-18"}, {"expiration_date_lte": "2026-12-18"}),
+        ({"expiration": "2026-10-16"}, {"expiration_date": "2026-10-16"}),
+        ({"expiration_from": "2026-11-01"}, {"expiration_date_gte": "2026-11-01"}),
+    ):
+        out = call(specs["reference_option_contracts"], ctx, underlyings=["AAPL"], **given)
+        expiry = {k: v for k, v in alpaca.params().items() if k.startswith("expiration")}
+        assert expiry == sent and out.notes == []
+
+
+def test_inactive_option_contracts_keep_alpacas_window_and_say_so(specs, ctx, alpaca):
+    alpaca.fixture("/v2/options/contracts", "OptionContracts__page2")
+    out = call(specs["reference_option_contracts"], ctx, underlyings=["AAPL"], status="inactive")
+    assert not any(k.startswith("expiration") for k in alpaca.params())
+    assert any("Alpaca's default window applies" in n for n in out.notes)
+
+
+def test_reference_stock_exchanges_golden(specs, ctx, alpaca):
+    alpaca.fixture("/v2/stocks/meta/exchanges", "StockMetaExchanges")
+    doc = check_golden(call(specs["reference_stock_exchanges"], ctx), "reference_stock_exchanges")
+    assert [(r["code"], r["name"]) for r in doc["rows"]] == [("N", "New York Stock Exchange"), ("V", "IEX")]
+    assert alpaca.requests[0].url.host == "data.alpaca.markets"
+
+
+def test_reference_condition_codes_golden_stocks_one_tape(specs, ctx, alpaca):
+    alpaca.fixture("/v2/stocks/meta/conditions/trade", "StockMetaConditions__trade_C", match={"tape": "C"})
+    out = call(specs["reference_condition_codes"], ctx, asset_class="us_equity", tape="C")
+    doc = check_golden(out, "reference_condition_codes")
+    assert alpaca.params() == {"tape": "C"}
+    assert {(r["tape"], r["tick_type"]) for r in doc["rows"]} == {("C", "trade")}
+    assert doc["rows"][0]["code"] == "@" and doc["rows"][0]["name"] == "Regular Sale"
+
+
+def test_stock_condition_codes_default_to_all_three_tapes(specs, ctx, alpaca):
+    alpaca.fixture("/v2/stocks/meta/conditions/quote", "StockMetaConditions__trade_C")
+    out = call(specs["reference_condition_codes"], ctx, asset_class="us_equity", tick_type="quote")
+    assert [alpaca.params(i)["tape"] for i in range(3)] == ["A", "B", "C"]
+    assert [r.tape for r in out.rows] == ["A"] * 3 + ["B"] * 3 + ["C"] * 3
+    assert out.provenance.operation == "StockMetaConditions"
+
+
+def test_option_condition_codes_have_no_tape(specs, ctx, alpaca):
+    alpaca.fixture("/v1beta1/options/meta/conditions/trade", "OptionMetaConditions__trade")
+    out = call(specs["reference_condition_codes"], ctx, asset_class="us_option")
+    assert [(r.code, r.tape) for r in out.rows][0] == ("a", None)
+    assert out.absent["tape"].code == "not_applicable" and alpaca.params() == {}
+    assert out.provenance.route == "GET /v1beta1/options/meta/conditions/{ticktype}"
+    with pytest.raises(ValidationError, match="tape applies to stock condition codes only"):
+        call(specs["reference_condition_codes"], ctx, asset_class="us_option", tape="A")
+
+
+def test_corporate_actions_keep_instruments_named_by_cusip_only(specs, ctx, alpaca):
+    # Synthetic records in the shape Alpaca sends for a CVR, an escrow and a CUSIP-only reverse split.
+    cvr_cash = {
+        "id": "0b6f2c1e-1111-4a5e-9c55-000000000001",
+        "acquiree_symbol": "021CVR014",
+        "acquiree_cusip": "021CVR014",
+        "rate": 0.9936,
+        "process_date": "2026-10-02",
+        "payable_date": "2026-10-02",
+        "effective_date": "2026-10-02",
+    }
+    escrow_acquirer = {
+        "id": "0b6f2c1e-1111-4a5e-9c55-000000000002",
+        "acquiree_symbol": "ATAI",
+        "acquiree_cusip": "04650F101",
+        "acquiree_rate": 1,
+        "acquirer_symbol": "G88CVR017",  # letter first: shaped like a ticker, but it is the acquirer's CUSIP
+        "acquirer_cusip": "G88CVR017",
+        "acquirer_rate": 1,
+        "cash_rate": 6.75,
+        "process_date": "2026-09-14",
+        "payable_date": "2026-09-14",
+        "effective_date": "2026-09-11",
+    }
+    cusip_split = {
+        "id": "0b6f2c1e-1111-4a5e-9c55-000000000003",
+        "symbol": "09175M606",
+        "old_cusip": "09175M606",
+        "new_symbol": "09175M861",
+        "new_cusip": "09175M861",
+        "old_rate": 5,
+        "new_rate": 1,
+        "process_date": "2026-08-26",
+        "ex_date": "2026-08-26",
+    }
+    body = {
+        "corporate_actions": {
+            "cash_mergers": [cvr_cash],
+            "stock_and_cash_mergers": [escrow_acquirer],
+            "reverse_splits": [cusip_split],
+        },
+        "next_page_token": None,
+    }
+    alpaca.add("/v1/corporate-actions", body)
+    out = call(specs["reference_corporate_actions"], ctx, start="2026-08-01", end="2026-10-08")
+    by = {r.action_type: r for r in out.rows}
+    assert len(out.rows) == 3 and not any(n.startswith("Skipped") for n in out.notes)
+    cash = by["cash_merger"]
+    assert (cash.ticker, cash.cusip, cash.rate, cash.absent["ticker"]) == (
+        None,
+        "021CVR014",
+        0.9936,
+        "unparseable",
+    )
+    merger = by["stock_and_cash_merger"]
+    assert (merger.ticker, merger.acquirer_ticker, merger.acquirer_cusip) == ("ATAI", None, "G88CVR017")
+    assert merger.absent["acquirer_ticker"] == "unparseable"
+    split = by["reverse_split"]
+    assert (split.ticker, split.new_ticker, split.cusip, split.new_cusip) == (
+        None,
+        None,
+        "09175M606",
+        "09175M861",
+    )
+    assert "3 action(s) name an instrument by CUSIP only" in " ".join(out.notes)
+
+
+def test_corporate_actions_name_every_skipped_record_with_its_type_and_reason(specs, ctx, alpaca):
+    bad = [{"id": f"bad-{i}", "symbol": "FCF", "cusip": "319829107", "rate": "n/a"} for i in range(6)]
+    body = {
+        "corporate_actions": {"cash_dividends": bad, "future_actions": [{"id": "new-1"}]},
+        "next_page_token": None,
+    }
+    alpaca.add("/v1/corporate-actions", body)
+    out = call(specs["reference_corporate_actions"], ctx, start="2026-08-01", end="2026-10-08")
+    (note,) = [n for n in out.notes if n.startswith("Skipped")]
+    assert note.startswith(
+        "Skipped 7 upstream record(s) that do not fit marketlens.CorporateAction (cash_dividends 6, "
+        "future_actions 1): cash_dividends:bad-0 ("
+    )
+    assert all(f"cash_dividends:bad-{i}" in note for i in range(6))
+    assert "future_actions:new-1 (an action type this tool does not map)" in note
+    assert "cash_dividends:bad-5 (ValueError: could not convert string to float: 'n/a')" in note
+
+
+def test_a_declaration_date_window_over_splits_says_alpaca_returns_no_such_date(specs, ctx, alpaca):
+    alpaca.fixture("/v2/corporate_actions/announcements", "Announcements")
+    args = {"since": "2026-08-10", "until": "2026-10-08", "date_type": "declaration_date"}
+    out = call(specs["reference_corporate_action_announcements"], ctx, ca_types=["split", "merger"], **args)
+    assert alpaca.params()["date_type"] == "declaration_date"
+    assert any(
+        n.startswith("Alpaca applied the window to a declaration date it returns for dividends")
+        for n in out.notes
+    )
+    dividends = call(specs["reference_corporate_action_announcements"], ctx, ca_types=["dividend"], **args)
+    assert dividends.notes == []
+    by_ex = call(
+        specs["reference_corporate_action_announcements"],
+        ctx,
+        ca_types=["split"],
+        **{**args, "date_type": "ex_date"},
+    )
+    assert by_ex.notes == []
+
+
+def test_ratio_legs_are_shares_not_fractions():
+    from marketlens_schema.market import CorporateAction, CorporateActionAnnouncement
+
+    for model in (CorporateAction, CorporateActionAnnouncement):
+        props = model.model_json_schema()["properties"]
+        for leg in ("old_rate", "new_rate"):
+            assert props[leg]["x-unit"] == "shares", (model.__name__, leg)
+            assert props[leg]["description"].startswith("Ratio leg: shares of the")
+
+
+def test_skip_reasons_name_the_field_and_value():
+    from marketlens_mcp.providers.alpaca.tools.common import skip_reason
+    from marketlens_schema.market import OptionTrade, StockExchange
+
+    with pytest.raises(ValidationError) as pattern:
+        OptionTrade(occ_symbol="NOT-OCC", underlying="AAPL", t=datetime.now(UTC), price=1, size=1)
+    assert skip_reason(pattern.value) == "occ_symbol 'NOT-OCC' is not of the field's form"
+    with pytest.raises(ValidationError) as missing:
+        StockExchange(code="N")
+    assert skip_reason(missing.value) == "name missing"
+    assert skip_reason(KeyError("symbol")) == "no 'symbol' field"

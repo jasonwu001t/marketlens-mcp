@@ -50,10 +50,11 @@
   {
    "absent": {
     "acquiree_ticker": "not_applicable",
+    "acquirer_cusip": "not_applicable",
     "acquirer_ticker": "not_applicable",
-    "cash_rate": "not_applicable",
     "effective_date": "not_applicable",
     "isin": "not_provided_by_source",
+    "new_cusip": "not_applicable",
     "new_rate": "not_applicable",
     "new_ticker": "not_applicable",
     "old_rate": "not_applicable",
@@ -61,16 +62,18 @@
     "source_ticker": "not_applicable"
    },
    "acquiree_ticker": null,
+   "acquirer_cusip": null,
    "acquirer_ticker": null,
    "action_id": "11cfd108-292e-4cc6-bfbf-5999cdbc4029",
    "action_type": "cash_dividend",
-   "cash_rate": null,
+   "cash_rate": 0.125,
    "currency": "USD",
    "cusip": "319829107",
    "effective_date": null,
    "ex_date": "2026-05-04",
    "foreign": false,
    "isin": null,
+   "new_cusip": null,
    "new_rate": null,
    "new_ticker": null,
    "old_rate": null,
@@ -86,12 +89,14 @@
   {
    "absent": {
     "acquiree_ticker": "not_applicable",
+    "acquirer_cusip": "not_applicable",
     "acquirer_ticker": "not_applicable",
     "cash_rate": "not_applicable",
     "currency": "not_provided_by_source",
     "effective_date": "not_applicable",
     "foreign": "not_applicable",
     "isin": "not_provided_by_source",
+    "new_cusip": "not_applicable",
     "new_ticker": "not_applicable",
     "old_ticker": "not_applicable",
     "rate": "not_applicable",
@@ -99,6 +104,7 @@
     "special": "not_applicable"
    },
    "acquiree_ticker": null,
+   "acquirer_cusip": null,
    "acquirer_ticker": null,
    "action_id": "189bd849-ab9f-4b4d-aaaa-a6d415fd976d",
    "action_type": "forward_split",
@@ -109,6 +115,7 @@
    "ex_date": "2026-08-22",
    "foreign": null,
    "isin": null,
+   "new_cusip": null,
    "new_rate": 2.0,
    "new_ticker": null,
    "old_rate": 1.0,
@@ -124,6 +131,7 @@
   {
    "absent": {
     "acquiree_ticker": "not_applicable",
+    "acquirer_cusip": "not_applicable",
     "acquirer_ticker": "not_applicable",
     "cash_rate": "not_applicable",
     "currency": "not_provided_by_source",
@@ -140,6 +148,7 @@
     "special": "not_applicable"
    },
    "acquiree_ticker": null,
+   "acquirer_cusip": null,
    "acquirer_ticker": null,
    "action_id": "5a774c35-edec-4532-a812-a56d0bbb623a",
    "action_type": "name_change",
@@ -150,6 +159,7 @@
    "ex_date": null,
    "foreign": null,
    "isin": null,
+   "new_cusip": "Y9390M103",
    "new_rate": null,
    "new_ticker": "VFS",
    "old_rate": null,
@@ -168,6 +178,7 @@
     "ex_date": "not_applicable",
     "foreign": "not_applicable",
     "isin": "not_provided_by_source",
+    "new_cusip": "not_applicable",
     "new_ticker": "not_applicable",
     "old_ticker": "not_applicable",
     "rate": "not_applicable",
@@ -176,6 +187,7 @@
     "special": "not_applicable"
    },
    "acquiree_ticker": "MLVF",
+   "acquirer_cusip": "31931U102",
    "acquirer_ticker": "FRBA",
    "action_id": "e5248356-2c06-42cf-aeb9-1595bd616cdb",
    "action_type": "stock_and_cash_merger",
@@ -186,6 +198,7 @@
    "ex_date": null,
    "foreign": null,
    "isin": null,
+   "new_cusip": null,
    "new_rate": 0.7733,
    "new_ticker": null,
    "old_rate": 1.0,
@@ -201,6 +214,7 @@
   {
    "absent": {
     "acquiree_ticker": "not_applicable",
+    "acquirer_cusip": "not_applicable",
     "acquirer_ticker": "not_applicable",
     "cash_rate": "not_applicable",
     "currency": "not_provided_by_source",
@@ -213,6 +227,7 @@
     "special": "not_applicable"
    },
    "acquiree_ticker": null,
+   "acquirer_cusip": null,
    "acquirer_ticker": null,
    "action_id": "82e602f6-35bc-4651-a5dd-f6d88ff37c55",
    "action_type": "spin_off",
@@ -223,6 +238,7 @@
    "ex_date": "2026-08-15",
    "foreign": null,
    "isin": null,
+   "new_cusip": "85237B101",
    "new_rate": 1.0,
    "new_ticker": "SRM",
    "old_rate": 19.35,
@@ -238,10 +254,11 @@
   {
    "absent": {
     "acquiree_ticker": "not_applicable",
+    "acquirer_cusip": "not_applicable",
     "acquirer_ticker": "not_applicable",
-    "cash_rate": "not_applicable",
     "effective_date": "not_applicable",
     "foreign": "not_applicable",
+    "new_cusip": "not_applicable",
     "new_rate": "not_applicable",
     "new_ticker": "not_applicable",
     "old_rate": "not_applicable",
@@ -250,16 +267,18 @@
     "special": "not_applicable"
    },
    "acquiree_ticker": null,
+   "acquirer_cusip": null,
    "acquirer_ticker": null,
    "action_id": "98c905a1-08c7-450c-8669-b8e7aee8b44d",
    "action_type": "capital_gains_distribution",
-   "cash_rate": null,
+   "cash_rate": 0.56874,
    "currency": "USD",
    "cusip": "36261K509",
    "effective_date": null,
    "ex_date": "2025-12-26",
    "foreign": null,
    "isin": "US36261K5090",
+   "new_cusip": null,
    "new_rate": null,
    "new_ticker": null,
    "old_rate": null,
@@ -275,6 +294,7 @@
   {
    "absent": {
     "acquiree_ticker": "not_applicable",
+    "acquirer_cusip": "not_applicable",
     "acquirer_ticker": "not_applicable",
     "cash_rate": "not_applicable",
     "currency": "not_provided_by_source",
@@ -287,6 +307,7 @@
     "special": "not_applicable"
    },
    "acquiree_ticker": null,
+   "acquirer_cusip": null,
    "acquirer_ticker": null,
    "action_id": "69794cfd-0adc-4e11-9211-9210a9cf8932",
    "action_type": "rights_distribution",
@@ -297,6 +318,7 @@
    "ex_date": "2026-04-17",
    "foreign": null,
    "isin": null,
+   "new_cusip": "454089111",
    "new_rate": 1.0,
    "new_ticker": "IFN-RTWI",
    "old_rate": null,

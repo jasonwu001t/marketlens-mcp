@@ -28,7 +28,7 @@
   },
   "$id": "urn:marketlens:schema:1:marketlens.OptionSnapshot",
   "additionalProperties": false,
-  "description": "Latest state of one contract with greeks and implied volatility (the\nrows of options_snapshots and options_chain). Expiration, strike and type\nare parsed from the OCC symbol. Greeks are the provider's, per share:\ndelta per 1.00 move of the underlying, gamma per 1.00 move squared, theta\nin premium per calendar day, vega in premium per 1 point (0.01) of IV, rho\nin premium per 1 point (0.01) of rate. ml-alpaca verifies these conventions\nagainst Alpaca's documentation and corrects the descriptions if they differ.",
+  "description": "Latest state of one contract with greeks and implied volatility (the\nrows of options_snapshots and options_chain). Expiration, strike and type\nare parsed from the OCC symbol. day_* come from the contract's latest daily\nbar, which is an earlier session than today's for a contract that has not\ntraded today (day_t dates it), and prev_close from the bar before that\n(prev_t). Greeks are the provider's, per share:\ndelta per 1.00 move of the underlying, gamma per 1.00 move squared, theta\nin premium per calendar day, vega in premium per 1 point (0.01) of IV, rho\nin premium per 1 point (0.01) of rate. ml-alpaca verifies these conventions\nagainst Alpaca's documentation and corrects the descriptions if they differ.",
   "properties": {
     "absent": {
       "anyOf": [
@@ -155,6 +155,21 @@
       "title": "Day Open",
       "x-unit": "price"
     },
+    "day_t": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Start of the daily bar day_open..day_volume come from (00:00 New York of its session): the contract's latest daily bar, an earlier session than today's when it has not traded today",
+      "title": "Day T",
+      "x-unit": "UTC"
+    },
     "day_volume": {
       "anyOf": [
         {
@@ -253,9 +268,37 @@
       "x-unit": "UTC"
     },
     "occ_symbol": {
-      "pattern": "^(?P<root>[A-Z]{1,6})(?P<yymmdd>\\d{6})(?P<cp>[CP])(?P<strike>\\d{8})$",
+      "pattern": "^(?P<root>[A-Z][A-Z0-9]{0,5})(?P<yymmdd>\\d{6})(?P<cp>[CP])(?P<strike>\\d{8})$",
       "title": "Occ Symbol",
       "type": "string"
+    },
+    "open_interest": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Open contracts as of open_interest_date (options_chain only)",
+      "title": "Open Interest",
+      "x-unit": "contracts"
+    },
+    "open_interest_date": {
+      "anyOf": [
+        {
+          "format": "date",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The date of the open interest count. Open interest is published the next morning, so this is usually the trading day before day_t",
+      "title": "Open Interest Date"
     },
     "option_type": {
       "$ref": "#/$defs/OptionType"
@@ -272,6 +315,21 @@
       "default": null,
       "title": "Prev Close",
       "x-unit": "price"
+    },
+    "prev_t": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Start of the daily bar prev_close comes from: the one before day_t",
+      "title": "Prev T",
+      "x-unit": "UTC"
     },
     "quote_t": {
       "anyOf": [

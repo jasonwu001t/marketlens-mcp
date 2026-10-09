@@ -212,6 +212,12 @@ class OccParts:
     option_type: str
     strike: float
 
+    @property
+    def underlying(self) -> str:
+        """The root without an adjusted contract's digit suffix (ETHA1 -> ETHA):
+        OCC adjusts a contract by appending a digit to its root."""
+        return self.root.rstrip("0123456789")
+
 
 def parse_occ(symbol: str) -> OccParts:
     m = OCC_RE.match(symbol)

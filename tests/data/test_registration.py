@@ -33,10 +33,10 @@ def test_25_specs_register_and_satisfy_the_manifest():
         assert set(entry.env) >= set(spec.env) and "OMNI_DATA_DIR" in entry.env
 
 
-def test_tools_json_lists_69_with_defaults_and_72_with_calendars(capsys, tmp_path):
+def test_tools_json_lists_71_with_defaults_and_74_with_calendars(capsys, tmp_path):
     assert cli.main(["tools", "--json"]) == 0
     body = json.loads(capsys.readouterr().out)
-    assert len(body["tools"]) == 69
+    assert len(body["tools"]) == 71
     listed = {t["name"]: t for t in body["tools"] if t["name"].startswith("calendar_")}
     assert list(listed) == ["calendar_us_holidays"]
     assert listed["calendar_us_holidays"]["capability"] == "holidays"
@@ -45,7 +45,7 @@ def test_tools_json_lists_69_with_defaults_and_72_with_calendars(capsys, tmp_pat
     p.write_text("capabilities:\n  calendars: true\n", encoding="utf-8")
     assert cli.main(["tools", "--json"]) == 0
     tools = {t["name"]: t for t in json.loads(capsys.readouterr().out)["tools"]}
-    assert len(tools) == 72
+    assert len(tools) == 74
     assert tools["calendar_economic"] == {
         "name": "calendar_economic",
         "capability": "calendars",

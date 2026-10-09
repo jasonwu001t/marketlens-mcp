@@ -248,7 +248,7 @@ def option_bar(raw: Raw, *, occ: str, timeframe: str) -> OptionBar:
         OptionBar,
         {
             "occ_symbol": occ,
-            "underlying": parse_occ(occ).root,
+            "underlying": parse_occ(occ).underlying,
             "timeframe": timeframe,
             "t": parse_ts(raw["t"]),
             "open": num(raw["o"]),
@@ -265,7 +265,7 @@ def option_bar(raw: Raw, *, occ: str, timeframe: str) -> OptionBar:
 def option_quote(raw: Raw, *, occ: str) -> OptionQuote:
     data: dict[str, Any] = {
         "occ_symbol": occ,
-        "underlying": parse_occ(occ).root,
+        "underlying": parse_occ(occ).underlying,
         "t": parse_ts(raw["t"]),
         "condition": text(raw.get("c")),
     }
@@ -282,7 +282,7 @@ def option_trade(raw: Raw, *, occ: str) -> OptionTrade:
         OptionTrade,
         {
             "occ_symbol": occ,
-            "underlying": parse_occ(occ).root,
+            "underlying": parse_occ(occ).underlying,
             "t": parse_ts(raw["t"]),
             "price": num(raw["p"]),
             "size": num(raw["s"]),
@@ -294,7 +294,8 @@ def option_trade(raw: Raw, *, occ: str) -> OptionTrade:
 
 def option_snapshot(raw: Raw | None, *, occ: str, underlying: str | None = None) -> OptionSnapshot | None:
     """Expiration, strike and type come from the OCC symbol; the underlying is
-    the one requested (options_chain) or the OCC root. Greeks and implied
+    the one requested (options_chain) or the OCC root without an adjusted
+    contract's digit. Greeks and implied
     volatility are Alpaca's (Black-Scholes), absent when Alpaca omits them."""
     if not raw:
         return None
@@ -307,7 +308,7 @@ def option_snapshot(raw: Raw | None, *, occ: str, underlying: str | None = None)
     greeks = raw.get("greeks") or {}
     data: dict[str, Any] = {
         "occ_symbol": occ,
-        "underlying": underlying or parts.root,
+        "underlying": underlying or parts.underlying,
         "expiration_date": parts.expiration,
         "strike": parts.strike,
         "option_type": parts.option_type,
@@ -321,7 +322,9 @@ def option_snapshot(raw: Raw | None, *, occ: str, underlying: str | None = None)
         "day_low": num(db.get("l")),
         "day_close": num(db.get("c")),
         "day_volume": num(db.get("v")),
+        "day_t": parse_ts(db.get("t")),
         "prev_close": num(pdb.get("c")),
+        "prev_t": parse_ts(pdb.get("t")),
         "implied_volatility": num(raw.get("impliedVolatility")),
         **{g: num(greeks.get(g)) for g in ("delta", "gamma", "theta", "vega", "rho")},
     }
@@ -331,7 +334,9 @@ def option_snapshot(raw: Raw | None, *, occ: str, underlying: str | None = None)
             values, side_codes = _side(lq, prefix, lots=False)
             data.update({k: v for k, v in values.items() if not k.endswith("_exchange")})
             codes.update({k: v for k, v in side_codes.items() if not k.endswith("_exchange")})
-    return build_row(OptionSnapshot, data, codes)
+    # Alpaca's snapshots carry no open interest: options_chain joins it in, and
+    # options_snapshots explains it once for the whole response.
+    return build_row(OptionSnapshot, data, codes, skip=("open_interest", "open_interest_date"))
 
 
 # --- fixed income and news -------------------------------------------------------------------

@@ -349,3 +349,10 @@ def test_ids_in_paths_are_refused_when_they_could_change_the_route(specs, ctx):
     ):
         with pytest.raises(ValidationError):
             call(specs[tool], ctx, **{arg: "../orders"})
+
+
+def test_an_adjusted_option_positions_ticker_is_its_underlying(specs, ctx, alpaca):
+    adjusted = {**load_fixture("Positions")[2], "symbol": "ETHA1261009C00005000"}
+    alpaca.add("/v2/positions/ETHA1261009C00005000", adjusted)
+    out = call(specs["portfolio_position"], ctx, occ_symbol="ETHA1261009C00005000")
+    assert (out.rows[0].ticker, out.rows[0].occ_symbol) == ("ETHA", "ETHA1261009C00005000")

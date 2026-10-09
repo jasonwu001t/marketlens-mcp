@@ -1,7 +1,9 @@
 {
  "absent": {},
  "model": "marketlens.OptionExchange",
- "notes": [],
+ "notes": [
+  "Not in Alpaca's list, so added from OPRA's participant codes (OPRA Binary Data Recipient Interface Specification 6.4b, section 4.01.1): G (MX2 - MX2 Options), V (IEX - IEX Options LLC)."
+ ],
  "offload": "auto",
  "pagination": {
   "complete": true,
@@ -44,6 +46,16 @@
    "absent": null,
    "code": "Q",
    "name": "Nasdaq Options"
+  },
+  {
+   "absent": null,
+   "code": "G",
+   "name": "MX2 - MX2 Options"
+  },
+  {
+   "absent": null,
+   "code": "V",
+   "name": "IEX - IEX Options LLC"
   }
  ]
 }

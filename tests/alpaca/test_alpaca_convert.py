@@ -72,6 +72,16 @@ def test_occ_symbols_are_parsed():
         c.occ_symbols(["AAPL"])
 
 
+def test_an_adjusted_contracts_root_carries_a_digit():
+    p = c.parse_occ("ETHA1261009C00005000")
+    assert (p.root, p.underlying, p.expiration, p.strike) == ("ETHA1", "ETHA", date(2026, 10, 9), 5.0)
+    assert c.parse_occ("AAPL250117C00150000").underlying == "AAPL"
+    assert c.occ_symbols(["etha1261009c00005000"]) == ["ETHA1261009C00005000"]
+    for bad in ("1ETHA261009C00005000", "ETHAXYZ261009C00005000", "ETHA1261009X00005000"):
+        with pytest.raises(ValueError, match="not an OCC option symbol"):
+            c.occ_symbols([bad])
+
+
 def test_decimals_never_come_from_binary_floats():
     assert c.dec("103820.56") == Decimal("103820.56")
     assert c.dec(Decimal("1.10")) == Decimal("1.10")

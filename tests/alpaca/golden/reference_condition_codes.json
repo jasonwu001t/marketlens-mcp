@@ -1,0 +1,67 @@
+{
+ "absent": {},
+ "model": "marketlens.ConditionCode",
+ "notes": [],
+ "offload": "auto",
+ "pagination": {
+  "complete": true,
+  "next_page_token": null,
+  "page_cap_hit": false,
+  "pages_fetched": 1,
+  "row_cap_hit": false,
+  "rows_fetched": 3
+ },
+ "provenance": {
+  "as_of": null,
+  "authority": null,
+  "cached": false,
+  "dataset": null,
+  "delay": "unknown",
+  "derived_from": [],
+  "environment": null,
+  "feed": null,
+  "knowledge_time": null,
+  "lag_days": null,
+  "operation": "StockMetaConditions",
+  "pages_fetched": 1,
+  "provider": "alpaca",
+  "request": {
+   "asset_class": "us_equity",
+   "tape": "C",
+   "tick_type": "trade"
+  },
+  "route": "GET /v2/stocks/meta/conditions/{ticktype}",
+  "schema_version": "1.1.0",
+  "stale": null,
+  "truncated": false,
+  "truncation_note": null,
+  "upstream_request_id": null
+ },
+ "risk": null,
+ "rows": [
+  {
+   "absent": null,
+   "asset_class": "us_equity",
+   "code": "@",
+   "name": "Regular Sale",
+   "tape": "C",
+   "tick_type": "trade"
+  },
+  {
+   "absent": null,
+   "asset_class": "us_equity",
+   "code": "A",
+   "name": "Acquisition",
+   "tape": "C",
+   "tick_type": "trade"
+  },
+  {
+   "absent": null,
+   "asset_class": "us_equity",
+   "code": "B",
+   "name": "Bunched Trade",
+   "tape": "C",
+   "tick_type": "trade"
+  }
+ ]
+}

@@ -737,6 +737,7 @@
     "marketlens.BetaPoint",
     "marketlens.BetaResult",
     "marketlens.BrokerWatchlist",
+    "marketlens.ConditionCode",
     "marketlens.CorporateAction",
     "marketlens.CorporateActionAnnouncement",
     "marketlens.CorrelationCell",
@@ -784,6 +785,7 @@
     "marketlens.ReleaseScheduleEntry",
     "marketlens.ReturnPoint",
     "marketlens.Snapshot",
+    "marketlens.StockExchange",
     "marketlens.Trade",
     "marketlens.TreasuryAuction",
     "marketlens.TreasuryCashBalance",
@@ -2413,7 +2415,7 @@
   },
   "MARKET_MODELS": {
    "kind": "value",
-   "repr": "(<class 'marketlens_schema.market.Asset'>, <class 'marketlens_schema.market.MarketClock'>, <class 'marketlens_schema.market.MarketCalendarDay'>, <class 'marketlens_schema.market.OptionDeliverable'>, <class 'marketlens_schema.market.OptionContract'>, <class 'marketlens_schema.market.OptionExchange'>, <class 'marketlens_schema.market.CorporateAction'>, <class 'marketlens_schema.market.CorporateActionAnnouncement'>, <class 'marketlens_schema.market.Bar'>, <class 'marketlens_schema.market.Quote'>, <class 'marketlens_schema.market.Trade'>, <class 'marketlens_schema.market.Snapshot'>, <class 'marketlens_schema.market.OrderBookLevel'>, <class 'marketlens_schema.market.MostActive'>, <class 'marketlens_schema.market.Mover'>, <class 'marketlens_schema.market.OptionBar'>, <class 'marketlens_schema.market.OptionQuote'>, <class 'marketlens_schema.market.OptionTrade'>, <class 'marketlens_schema.market.OptionSnapshot'>, <class 'marketlens_schema.market.FixedIncomeQuote'>, <class 'marketlens_schema.market.NewsItem'>, <class 'marketlens_schema.market.ProviderDocument'>)"
+   "repr": "(<class 'marketlens_schema.market.Asset'>, <class 'marketlens_schema.market.MarketClock'>, <class 'marketlens_schema.market.MarketCalendarDay'>, <class 'marketlens_schema.market.OptionDeliverable'>, <class 'marketlens_schema.market.OptionContract'>, <class 'marketlens_schema.market.OptionExchange'>, <class 'marketlens_schema.market.StockExchange'>, <class 'marketlens_schema.market.ConditionCode'>, <class 'marketlens_schema.market.CorporateAction'>, <class 'marketlens_schema.market.CorporateActionAnnouncement'>, <class 'marketlens_schema.market.Bar'>, <class 'marketlens_schema.market.Quote'>, <class 'marketlens_schema.market.Trade'>, <class 'marketlens_schema.market.Snapshot'>, <class 'marketlens_schema.market.OrderBookLevel'>, <class 'marketlens_schema.market.MostActive'>, <class 'marketlens_schema.market.Mover'>, <class 'marketlens_schema.market.OptionBar'>, <class 'marketlens_schema.market.OptionQuote'>, <class 'marketlens_schema.market.OptionTrade'>, <class 'marketlens_schema.market.OptionSnapshot'>, <class 'marketlens_schema.market.FixedIncomeQuote'>, <class 'marketlens_schema.market.NewsItem'>, <class 'marketlens_schema.market.ProviderDocument'>)"
   },
   "MarketCalendarDay": {
    "classvars": {
@@ -4015,7 +4017,7 @@
      "required": false
     },
     "occ_symbol": {
-     "annotation": "typing.Optional[typing.Annotated[str, StringConstraints(strip_whitespace=None, to_upper=None, to_lower=None, strict=None, min_length=None, max_length=None, pattern='^(?P<root>[A-Z]{1,6})(?P<yymmdd>\\\\d{6})(?P<cp>[CP])(?P<strike>\\\\d{8})$', ascii_only=None)]]",
+     "annotation": "typing.Optional[typing.Annotated[str, StringConstraints(strip_whitespace=None, to_upper=None, to_lower=None, strict=None, min_length=None, max_length=None, pattern='^(?P<root>[A-Z][A-Z0-9]{0,5})(?P<yymmdd>\\\\d{6})(?P<cp>[CP])(?P<strike>\\\\d{8})$', ascii_only=None)]]",
      "default": "None",
      "required": false
     },
@@ -4345,7 +4347,7 @@
      "required": false
     },
     "occ_symbol": {
-     "annotation": "typing.Optional[typing.Annotated[str, StringConstraints(strip_whitespace=None, to_upper=None, to_lower=None, strict=None, min_length=None, max_length=None, pattern='^(?P<root>[A-Z]{1,6})(?P<yymmdd>\\\\d{6})(?P<cp>[CP])(?P<strike>\\\\d{8})$', ascii_only=None)]]",
+     "annotation": "typing.Optional[typing.Annotated[str, StringConstraints(strip_whitespace=None, to_upper=None, to_lower=None, strict=None, min_length=None, max_length=None, pattern='^(?P<root>[A-Z][A-Z0-9]{0,5})(?P<yymmdd>\\\\d{6})(?P<cp>[CP])(?P<strike>\\\\d{8})$', ascii_only=None)]]",
      "default": "None",
      "required": false
     },
@@ -4490,7 +4492,7 @@
      "required": false
     },
     "occ_symbol": {
-     "annotation": "typing.Optional[typing.Annotated[str, StringConstraints(strip_whitespace=None, to_upper=None, to_lower=None, strict=None, min_length=None, max_length=None, pattern='^(?P<root>[A-Z]{1,6})(?P<yymmdd>\\\\d{6})(?P<cp>[CP])(?P<strike>\\\\d{8})$', ascii_only=None)]]",
+     "annotation": "typing.Optional[typing.Annotated[str, StringConstraints(strip_whitespace=None, to_upper=None, to_lower=None, strict=None, min_length=None, max_length=None, pattern='^(?P<root>[A-Z][A-Z0-9]{0,5})(?P<yymmdd>\\\\d{6})(?P<cp>[CP])(?P<strike>\\\\d{8})$', ascii_only=None)]]",
      "default": "None",
      "required": false
     },
@@ -4669,7 +4671,7 @@
      "required": false
     },
     "occ_symbol": {
-     "annotation": "typing.Optional[typing.Annotated[str, StringConstraints(strip_whitespace=None, to_upper=None, to_lower=None, strict=None, min_length=None, max_length=None, pattern='^(?P<root>[A-Z]{1,6})(?P<yymmdd>\\\\d{6})(?P<cp>[CP])(?P<strike>\\\\d{8})$', ascii_only=None)]]",
+     "annotation": "typing.Optional[typing.Annotated[str, StringConstraints(strip_whitespace=None, to_upper=None, to_lower=None, strict=None, min_length=None, max_length=None, pattern='^(?P<root>[A-Z][A-Z0-9]{0,5})(?P<yymmdd>\\\\d{6})(?P<cp>[CP])(?P<strike>\\\\d{8})$', ascii_only=None)]]",
      "default": "None",
      "required": false
     },

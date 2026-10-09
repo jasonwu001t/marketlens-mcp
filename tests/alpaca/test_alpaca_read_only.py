@@ -148,6 +148,7 @@ HTTP_CASES: dict[str, Case] = {
         (
             r("/v1beta1/options/snapshots/AAPL", "OptionChain__page2", match={"page_token": "Q0hBSU58Mg=="}),
             r("/v1beta1/options/snapshots/AAPL", "OptionChain__page1"),
+            r("/v2/options/contracts", "OptionContracts__chain"),
         ),
         {
             "underlying": "aapl",
@@ -188,6 +189,14 @@ HTTP_CASES: dict[str, Case] = {
     ),
     "reference_option_contract": Case(
         (r(f"/v2/options/contracts/{C1}", "OptionContract"),), {"occ_symbol": C1}, "reference_option_contract"
+    ),
+    "reference_stock_exchanges": Case(
+        (r("/v2/stocks/meta/exchanges", "StockMetaExchanges"),), {}, "reference_stock_exchanges"
+    ),
+    "reference_condition_codes": Case(
+        (r("/v2/stocks/meta/conditions/trade", "StockMetaConditions__trade_C", match={"tape": "C"}),),
+        {"asset_class": "us_equity", "tape": "C"},
+        "reference_condition_codes",
     ),
     "reference_calendar": Case(
         (r("/v2/calendar", "Calendar"),), {"start": "2025-12-23", "end": "2026-06-24"}, "reference_calendar"
