@@ -67,9 +67,19 @@ def parse_instant(value: str) -> datetime:
     """User input: an ISO date (00:00 UTC) or a datetime with a zone."""
     s = value.strip()
     if re.fullmatch(r"\d{4}-\d{2}-\d{2}", s):
-        return datetime.combine(date.fromisoformat(s), time(0), UTC)
-    if _TS_RE.match(s):
-        return parse_ts(s)  # type: ignore[return-value]
+        try:
+            return datetime.combine(date.fromisoformat(s), time(0), UTC)
+        except ValueError as e:
+            raise ValueError(f"{value!r} is not a valid date ({e})") from None
+    m = _TS_RE.match(s)
+    if m:
+        tz = m["tz"].lstrip("+-").replace(":", "")
+        if tz not in ("Z", "z") and (int(tz[:2]) > 23 or int(tz[2:]) > 59):
+            raise ValueError(f"{value!r} has a UTC offset out of range; offsets run from -23:59 to +23:59")
+        try:
+            return parse_ts(s)  # type: ignore[return-value]
+        except ValueError as e:
+            raise ValueError(f"{value!r} is not a valid date and time ({e})") from None
     if re.match(r"^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}", s):
         raise ValueError(f"{value!r} has no time zone; add Z or an offset such as -05:00")
     raise ValueError(f"{value!r} is not an ISO date (2026-01-02) or datetime with a time zone")

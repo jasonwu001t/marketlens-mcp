@@ -68,7 +68,7 @@ def validation_message(tool: str, exc: ValidationError) -> str:
     parts = []
     for e in exc.errors(include_url=False, include_input=False)[:3]:
         loc = ".".join(str(p) for p in e.get("loc", ())) or "arguments"
-        parts.append(f"{loc}: {e.get('msg', 'invalid')}")
+        parts.append(f"{loc}: {str(e.get('msg', 'invalid')).rstrip('.')}")
     more = exc.error_count() - len(parts)
     suffix = f" (and {more} more)" if more > 0 else ""
     return f"Invalid arguments for {tool}: " + "; ".join(parts) + suffix + "."

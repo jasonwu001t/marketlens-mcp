@@ -40,6 +40,7 @@ All notable changes to this project are documented here. The format follows [Kee
 - The 403 for recent SIP data says to end the window 15 minutes ago or use `stock_feed: delayed_sip`, instead of telling a config that already has `delayed_sip` to set it.
 - The `lookback` descriptions of the quote, trade and news tools no longer carry the bar tools' "Bars of 1d or longer start at 00:00 UTC of the first day."
 - `fixed_income_latest_quotes` checks each ISIN's check digit (ISO 6166) and refuses a wrong one by name before asking Alpaca: "'US91282CMM01' is not a valid ISIN: its check digit is 1, the code needs 0".
+- Error texts keep an echoed one-segment input such as `/USD` as typed ("'/USD' is not a crypto pair") instead of scrubbing it to `<path>`: only a Windows path or an absolute path of two or more segments is scrubbed. A refusal whose validator text already ends in a period no longer ends in "..", and a datetime with an impossible UTC offset (`+25:00`) or date (`2026-02-30`) is refused by name ("has a UTC offset out of range; offsets run from -23:59 to +23:59") instead of with Python's `timedelta` text.
 
 ## [0.1.0] - Unreleased
 

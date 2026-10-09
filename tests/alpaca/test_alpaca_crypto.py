@@ -60,6 +60,35 @@ def test_a_future_crypto_end_is_cut_to_now_and_as_of_is_now(specs, ctx, alpaca):
     assert out.notes[0] == "end 2027-01-01 is in the future: the window ends now, 2026-10-02T20:00:00Z."
 
 
+@pytest.mark.parametrize(
+    ("tool", "arguments", "message"),
+    [
+        (
+            "crypto_latest_quotes",
+            {"tickers": ["/USD"]},
+            "Invalid arguments for crypto_latest_quotes: tickers: Value error, '/USD' is not a crypto pair "
+            "(expected BASE/QUOTE, e.g. BTC/USD).",
+        ),
+        (
+            "crypto_trades",
+            {"tickers": ["BTC/USD"], "start": "2026-10-08T00:00:00+25:00"},
+            "Invalid arguments for crypto_trades: start: Value error, '2026-10-08T00:00:00+25:00' has a UTC offset "
+            "out of range; offsets run from -23:59 to +23:59.",
+        ),
+    ],
+)
+def test_refusals_echo_the_input_and_end_in_one_period(specs, ctx, tool, arguments, message):
+    import asyncio
+
+    from marketlens_mcp.pipeline import execute
+    from marketlens_mcp.plugin_api import ToolError
+
+    with pytest.raises(ToolError) as e:
+        asyncio.run(execute(specs[tool], ctx, arguments))
+    assert e.value.code == "invalid_arguments"
+    assert e.value.message == message
+
+
 def test_crypto_location_setting_picks_the_path(specs, alpaca):
     alpaca.fixture("/v1beta3/crypto/eu-1/bars", "CryptoBars")
     out = call(specs["crypto_bars"], FakeContext(settings={"crypto_location": "eu-1"}), tickers=["BTC/USD"])
