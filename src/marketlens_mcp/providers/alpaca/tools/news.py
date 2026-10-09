@@ -3,6 +3,7 @@ output risk is ``external_text``, so the trust envelope marks it untrusted."""
 
 from __future__ import annotations
 
+import html
 import re
 from collections.abc import Callable
 from typing import Literal
@@ -82,9 +83,10 @@ def news_symbols(tickers: list[str]) -> list[str]:
 
 
 def matcher(query: str) -> Callable[[NewsItem], bool]:
-    """Every word of ``query`` as a whole word, in any case, in the headline or summary."""
+    """Every word of ``query`` as a whole word, in any case, in the headline or
+    summary, read with their HTML entities decoded (Alpaca sends Wednesday&#39;s)."""
     words = [re.compile(rf"(?<!\w){re.escape(w)}(?!\w)", re.IGNORECASE) for w in query.split()]
-    return lambda row: all(w.search(f"{row.headline}\n{row.summary or ''}") for w in words)
+    return lambda row: all(w.search(html.unescape(f"{row.headline}\n{row.summary or ''}")) for w in words)
 
 
 def class_note(tickers: list[str] | None, seen: set[str], page, start_token: str | None) -> list[str]:

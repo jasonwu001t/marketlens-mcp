@@ -225,6 +225,17 @@ def test_news_query_pages_on_past_articles_it_filters_out(specs, ctx, alpaca):
     assert out.notes[-1].startswith("query 'tariff': 1 of the 3 article(s)")
 
 
+@pytest.mark.parametrize(
+    ("query", "found"), [("Wednesday's", True), ("S&P 500", True), ("39", False), ("amp", False)]
+)
+def test_news_query_reads_the_text_with_its_html_entities_decoded(specs, ctx, alpaca, query, found):
+    # As Alpaca sends summaries live: "Wednesday&#39;s regular session", "S&amp;P 500".
+    summary = "Two of 11 sectors are higher in Wednesday&#39;s regular session; the S&amp;P 500 slips."
+    alpaca.add("/v1beta1/news", {"news": [_article(1, ["SPY"], "Sectors", summary)], "next_page_token": None})
+    out = call(specs["news_search"], ctx, query=query, lookback="P1D")
+    assert (len(out.rows) == 1) is found
+
+
 @pytest.mark.parametrize("query", ["", "  ", "!!"])
 def test_news_query_needs_a_word(specs, ctx, query):
     with pytest.raises(ValidationError):
