@@ -44,12 +44,28 @@ def _check_duration(v: str) -> str:
     return v.strip().upper()
 
 
+def isin_check_digit(body: str) -> int:
+    """The check digit of an ISIN's first 11 characters (ISO 6166): letters
+    become 10-35, then the Luhn sum from the right, doubling the rightmost."""
+    digits = "".join(str(int(c, 36)) for c in body)
+    total = 0
+    for i, ch in enumerate(reversed(digits)):
+        d = int(ch) * (2 if i % 2 == 0 else 1)
+        total += d - 9 if d > 9 else d
+    return (10 - total % 10) % 10
+
+
 def _check_isins(v: list[str]) -> list[str]:
     out = []
     for item in v:
         s = item.strip().upper()
         if not ISIN_RE.match(s):
             raise ValueError(f"'{item}' is not an ISIN (12 characters, e.g. US912797SX61)")
+        check = isin_check_digit(s[:11])
+        if int(s[11]) != check:
+            raise ValueError(
+                f"'{item}' is not a valid ISIN: its check digit is {s[11]}, the code needs {check}"
+            )
         out.append(s)
     return out
 

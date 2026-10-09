@@ -39,6 +39,7 @@ All notable changes to this project are documented here. The format follows [Kee
 - An `end` later than the newest data the feed serves is cut to it, with a note, and `provenance.as_of` is that end, never a future instant: with `stock_feed: delayed_sip` the stock history tools end 16 minutes before now (Alpaca refuses a plan without real-time SIP the last 15 minutes of SIP history, HTTP 403 "recent SIP data"; the extra minute covers clock skew), where they failed before; every other window ends at now at the latest. Without an end, `as_of` on the delayed SIP feed is 16 minutes before now.
 - The 403 for recent SIP data says to end the window 15 minutes ago or use `stock_feed: delayed_sip`, instead of telling a config that already has `delayed_sip` to set it.
 - The `lookback` descriptions of the quote, trade and news tools no longer carry the bar tools' "Bars of 1d or longer start at 00:00 UTC of the first day."
+- `fixed_income_latest_quotes` checks each ISIN's check digit (ISO 6166) and refuses a wrong one by name before asking Alpaca: "'US91282CMM01' is not a valid ISIN: its check digit is 1, the code needs 0".
 
 ## [0.1.0] - Unreleased
 

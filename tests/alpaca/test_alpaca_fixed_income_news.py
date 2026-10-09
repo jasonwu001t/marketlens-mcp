@@ -11,9 +11,9 @@ NEWS_CURSOR = "TkVXU3wy"  # synthetic next-page cursor in News__page1
 
 def test_fixed_income_latest_quotes_golden(specs, ctx, alpaca):
     alpaca.fixture("/v1beta1/fixed_income/latest/quotes", "FixedIncomeLatestQuotes")
-    out = call(specs["fixed_income_latest_quotes"], ctx, isins=["us912797sx61", "US91282CJL54"])
+    out = call(specs["fixed_income_latest_quotes"], ctx, isins=["us912797sx61", "US91282CJL55"])
     doc = check_golden(out, "fixed_income_latest_quotes")
-    assert alpaca.params() == {"isins": "US912797SX61,US91282CJL54"}
+    assert alpaca.params() == {"isins": "US912797SX61,US91282CJL55"}
     live, no_bid = doc["rows"]
     assert live["bid_ytm"] == pytest.approx(0.05236154) and live["ask_ytw"] == pytest.approx(0.02226923)
     assert live["bid_price"] == pytest.approx(99.81091667)  # percent of par, unchanged
@@ -24,6 +24,23 @@ def test_fixed_income_latest_quotes_golden(specs, ctx, alpaca):
 def test_fixed_income_refuses_a_non_isin(specs, ctx):
     with pytest.raises(ValidationError, match="'912797SX6'"):
         call(specs["fixed_income_latest_quotes"], ctx, isins=["912797SX6"])
+
+
+def test_fixed_income_refuses_a_wrong_check_digit_before_asking_alpaca(specs, ctx, alpaca):
+    with pytest.raises(
+        ValidationError, match="'US91282CMM01' is not a valid ISIN: its check digit is 1, the code needs 0"
+    ):
+        call(specs["fixed_income_latest_quotes"], ctx, isins=["US91282CMM01"])
+    assert alpaca.requests == []
+
+
+@pytest.mark.parametrize(
+    "isin", ["US0378331005", "AU0000XVGZA3", "GB0002634946", "US38259P5089", "US912797SX61"]
+)
+def test_isin_check_digit_of_known_isins(isin):
+    from marketlens_mcp.providers.alpaca.tools.common import isin_check_digit
+
+    assert isin_check_digit(isin[:11]) == int(isin[11])
 
 
 def test_news_search_golden_pages_and_untrusted_text(specs, ctx, alpaca):
