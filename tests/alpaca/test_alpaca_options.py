@@ -42,6 +42,21 @@ def test_an_option_date_end_includes_that_new_york_day(specs, ctx, alpaca, tool,
     )
 
 
+@pytest.mark.parametrize(
+    ("tool", "path", "fixture"),
+    [
+        ("options_bars", "/v1beta1/options/bars", "OptionBars"),
+        ("options_trades", "/v1beta1/options/trades", "OptionTrades"),
+    ],
+)
+def test_option_history_names_the_contracts_alpaca_returned_nothing_for(
+    specs, ctx, alpaca, tool, path, fixture
+):
+    alpaca.fixture(path, fixture)
+    out = call(specs[tool], ctx, occ_symbols=[C1, P1])
+    assert f"No data from Alpaca for: {P1} in this window." in out.notes
+
+
 def test_options_refuse_a_non_occ_symbol(specs, ctx):
     with pytest.raises(ValidationError, match="'AAPL'"):
         call(specs["options_bars"], ctx, occ_symbols=["AAPL"])

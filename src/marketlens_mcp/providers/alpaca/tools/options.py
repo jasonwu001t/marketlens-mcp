@@ -34,6 +34,7 @@ from .common import (
     TimeframeIn,
     collect,
     latest_t,
+    missing_in_window_note,
     missing_note,
     option_feed,
     output,
@@ -131,7 +132,7 @@ async def options_bars(ctx: ToolContext, args: BarsIn) -> ToolOutput:
         request=request_of(args, **win.fields()),
         as_of=win.as_of,
         page=page,
-        notes=list(win.notes),
+        notes=[*win.notes, *missing_in_window_note(args.occ_symbols, page, args.page_token, "occ_symbol")],
         skips=skips,
     )
 
@@ -168,7 +169,7 @@ async def options_trades(ctx: ToolContext, args: TradesIn) -> ToolOutput:
         request=request_of(args, **win.fields()),
         as_of=win.as_of,
         page=page,
-        notes=list(win.notes),
+        notes=[*win.notes, *missing_in_window_note(args.occ_symbols, page, args.page_token, "occ_symbol")],
         skips=skips,
     )
 

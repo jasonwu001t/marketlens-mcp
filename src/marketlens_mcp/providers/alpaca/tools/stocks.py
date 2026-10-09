@@ -33,6 +33,7 @@ from .common import (
     absence,
     collect,
     latest_t,
+    missing_in_window_note,
     missing_note,
     output,
     request_of,
@@ -172,7 +173,7 @@ async def market_bars(ctx: ToolContext, args: BarsIn) -> ToolOutput:
         delay=delay,
         as_of=win.as_of,
         page=page,
-        notes=list(win.notes),
+        notes=[*win.notes, *missing_in_window_note(args.tickers, page, args.page_token)],
         skips=skips,
     )
 
@@ -229,6 +230,7 @@ async def _ticks(ctx: ToolContext, args: TicksIn, kind: Literal["quotes", "trade
     notes = [*win.notes, LOT_NOTE] if kind == "quotes" else list(win.notes)
     if dropped:
         notes.append(f"Dropped {dropped} trade(s) Alpaca marks canceled or incorrect.")
+    notes += missing_in_window_note(args.tickers, page, args.page_token)
     absent = {} if kind == "quotes" else {"taker_side": absence("not_applicable", NO_TAKER)}
     return output(
         ctx,

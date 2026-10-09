@@ -265,6 +265,42 @@ def test_market_trades_golden_drops_canceled_trades(specs, ctx, alpaca):
     assert any("canceled" in n for n in doc["notes"])
 
 
+@pytest.mark.parametrize(
+    ("tool", "path", "fixture", "has"),
+    [
+        ("market_bars", "/v2/stocks/bars", "StockBars__intraday", "MSFT"),
+        ("market_quotes", "/v2/stocks/quotes", "StockQuotes", "AAPL"),
+        ("market_trades", "/v2/stocks/trades", "StockTrades", "BRK-B"),
+        ("crypto_bars", "/v1beta3/crypto/us/bars", "CryptoBars", "BTC/USD"),
+        ("crypto_quotes", "/v1beta3/crypto/us/quotes", "CryptoQuotes", "BTC/USD"),
+        ("crypto_trades", "/v1beta3/crypto/us/trades", "CryptoTrades", "ETH/USD"),
+    ],
+)
+def test_history_tools_name_the_instruments_alpaca_returned_nothing_for(
+    specs, ctx, alpaca, tool, path, fixture, has
+):
+    alpaca.fixture(path, fixture)
+    other = "FOO/USD" if "/" in has else "ZZZZQ"
+    out = call(specs[tool], ctx, tickers=[has, other])
+    assert {r.ticker for r in out.rows} == {has}
+    assert f"No data from Alpaca for: {other} in this window." in out.notes
+
+
+def test_a_cut_or_continued_history_fetch_names_no_missing_instrument(specs, alpaca):
+    # Alpaca pages through the tickers in turn: a cut fetch lacks the later ones for that reason alone.
+    alpaca.fixture("/v2/stocks/bars", "StockBars__page2", match={"page_token": CURSOR})
+    alpaca.fixture("/v2/stocks/bars", "StockBars__page1")
+    cut = call(
+        specs["market_bars"],
+        FakeContext(limits=FetchLimits(max_rows=2, max_pages=20)),
+        tickers=["AAPL", "BRK-B"],
+    )
+    assert not any("No data from Alpaca" in n for n in cut.notes)
+    continued = call(specs["market_bars"], FakeContext(), tickers=["AAPL", "BRK-B"], page_token=CURSOR)
+    assert {r.ticker for r in continued.rows} == {"BRK-B"}
+    assert not any("No data from Alpaca" in n for n in continued.notes)
+
+
 def test_market_latest_bars_golden(specs, ctx, alpaca):
     alpaca.fixture("/v2/stocks/bars/latest", "StockLatestBars")
     out = call(specs["market_latest_bars"], ctx, tickers=["AAPL", "BRK-B"])

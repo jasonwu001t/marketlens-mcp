@@ -41,6 +41,8 @@ All notable changes to this project are documented here. The format follows [Kee
 - The `lookback` descriptions of the quote, trade and news tools no longer carry the bar tools' "Bars of 1d or longer start at 00:00 UTC of the first day."
 - `fixed_income_latest_quotes` checks each ISIN's check digit (ISO 6166) and refuses a wrong one by name before asking Alpaca: "'US91282CMM01' is not a valid ISIN: its check digit is 1, the code needs 0".
 - Error texts keep an echoed one-segment input such as `/USD` as typed ("'/USD' is not a crypto pair") instead of scrubbing it to `<path>`: only a Windows path or an absolute path of two or more segments is scrubbed. A refusal whose validator text already ends in a period no longer ends in "..", and a datetime with an impossible UTC offset (`+25:00`) or date (`2026-02-30`) is refused by name ("has a UTC offset out of range; offsets run from -23:59 to +23:59") instead of with Python's `timedelta` text.
+- `market_bars`, `market_quotes`, `market_trades`, `crypto_bars`, `crypto_quotes`, `crypto_trades`, `options_bars` and `options_trades` name the requested instruments Alpaca returned nothing for ("No data from Alpaca for: ZZZZQ in this window."), as the latest and snapshot tools do, instead of an empty answer with no word; a fetch that was cut or continued from a page token says nothing of the kind, since Alpaca pages through the instruments in turn.
+- `crypto_bars` says when its newest bar is still forming (crypto trades around the clock, so the current day's or hour's bar holds the trades up to now only), naming the bar's start and its pairs. The rows are unchanged.
 
 ## [0.1.0] - Unreleased
 

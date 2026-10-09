@@ -89,6 +89,49 @@ def test_refusals_echo_the_input_and_end_in_one_period(specs, ctx, tool, argumen
     assert e.value.message == message
 
 
+def _daily(t: str, close: float) -> dict:
+    return {"t": t, "o": close, "h": close, "l": close, "c": close, "v": 1.5, "n": 12, "vw": close}
+
+
+def test_crypto_bars_say_the_newest_bar_is_still_forming(specs, ctx, alpaca):
+    alpaca.add(
+        "/v1beta3/crypto/us/bars",
+        {
+            "bars": {
+                "BTC/USD": [_daily("2026-10-01T00:00:00Z", 61000), _daily("2026-10-02T00:00:00Z", 62150.75)],
+                "ETH/USD": [_daily("2026-10-01T00:00:00Z", 2500), _daily("2026-10-02T00:00:00Z", 2576.45)],
+            },
+            "next_page_token": None,
+        },
+    )
+    out = call(specs["crypto_bars"], ctx, tickers=["BTC/USD", "ETH/USD"], timeframe="1d", lookback="P1D")
+    assert len(out.rows) == 4  # the rows are unchanged
+    assert out.notes == [
+        "The 1d bar from 2026-10-02T00:00:00Z (BTC/USD, ETH/USD) is still forming: it holds trades up to now "
+        "(2026-10-02T20:00:00Z) only, not a whole 1d."
+    ]
+
+
+@pytest.mark.parametrize(
+    ("timeframe", "start", "forming"),
+    [
+        ("1h", "2026-10-02T19:00:00Z", False),  # closes at 20:00, now
+        ("1h", "2026-10-02T19:30:00Z", True),
+        ("15min", "2026-10-02T19:45:00Z", False),
+        ("1w", "2026-09-28T00:00:00Z", True),
+        ("1mo", "2026-09-01T00:00:00Z", False),
+        ("1mo", "2026-10-01T00:00:00Z", True),
+        ("12mo", "2026-01-01T00:00:00Z", True),
+    ],
+)
+def test_forming_bar_by_timeframe(timeframe, start, forming):
+    from marketlens_mcp.providers.alpaca import mappers
+    from marketlens_mcp.providers.alpaca.tools.crypto import forming_bar_note
+
+    row = mappers.bar(_daily(start, 1.0), ticker="BTC/USD", asset_class="crypto", timeframe=timeframe)
+    assert bool(forming_bar_note([row], timeframe, NOW)) is forming
+
+
 def test_crypto_location_setting_picks_the_path(specs, alpaca):
     alpaca.fixture("/v1beta3/crypto/eu-1/bars", "CryptoBars")
     out = call(specs["crypto_bars"], FakeContext(settings={"crypto_location": "eu-1"}), tickers=["BTC/USD"])

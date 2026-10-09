@@ -4,6 +4,7 @@ the data location is ``providers.alpaca.crypto_location`` (default us)."""
 from __future__ import annotations
 
 from collections import Counter
+from datetime import datetime, timedelta
 from typing import Literal
 
 from pydantic import Field
@@ -34,6 +35,7 @@ from .common import (
     absence,
     collect,
     latest_t,
+    missing_in_window_note,
     missing_note,
     output,
     request_of,
@@ -109,6 +111,40 @@ def no_trades_note(rows: list[Bar]) -> list[str]:
     ]
 
 
+def _bar_end(t: datetime, timeframe: str) -> datetime:
+    """When a bar of ``timeframe`` starting at ``t`` closes."""
+    n, unit = int(timeframe.rstrip("minhdwo")), timeframe.lstrip("0123456789")
+    if unit == "mo":
+        months = t.month - 1 + n
+        return t.replace(year=t.year + months // 12, month=months % 12 + 1)
+    return (
+        t
+        + {
+            "min": timedelta(minutes=n),
+            "h": timedelta(hours=n),
+            "d": timedelta(days=n),
+            "w": timedelta(weeks=n),
+        }[unit]
+    )
+
+
+def forming_bar_note(rows: list[Bar], timeframe: str, now: datetime) -> list[str]:
+    """Crypto trades around the clock, so the newest bar is often the one still
+    forming: it holds the trades up to now only. Name its pairs."""
+    forming = [r for r in rows if _bar_end(r.t, timeframe) > now]
+    if not forming:
+        return []
+    pairs = sorted({r.ticker for r in forming})
+    named = ", ".join(pairs[:SKIP_SAMPLE]) + (
+        f" and {len(pairs) - SKIP_SAMPLE} more pair(s)" if len(pairs) > SKIP_SAMPLE else ""
+    )
+    start = min(r.t for r in forming)
+    return [
+        f"The {timeframe} bar from {iso_z(start)} ({named}) is still forming: it holds trades up to now "
+        f"({iso_z(now)}) only, not a whole {timeframe}."
+    ]
+
+
 def _mapper(kind: str, ticker: str, timeframe: str = "1min"):
     ccy = quote_currency(ticker)
     if kind == "bars":
@@ -169,7 +205,15 @@ async def _history(
         as_of=win.as_of,
         page=page,
         absent=_absent(kind),
-        notes=[*win.notes, *(no_trades_note(page.rows) if kind == "bars" else [])],
+        notes=[
+            *win.notes,
+            *missing_in_window_note(args.tickers, page, args.page_token),
+            *(
+                no_trades_note(page.rows) + forming_bar_note(page.rows, timeframe, ctx.now())
+                if kind == "bars"
+                else []
+            ),
+        ],
         skips=skips,
     )
 

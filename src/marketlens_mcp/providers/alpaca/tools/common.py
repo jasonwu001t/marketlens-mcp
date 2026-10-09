@@ -387,6 +387,18 @@ def missing_note(requested: Iterable[str], rows: Iterable[Any], attr: str = "tic
     return [f"No data from Alpaca for: {', '.join(missing)}."] if missing else []
 
 
+def missing_in_window_note(
+    requested: Iterable[str], page: PageResult, start_token: str | None, attr: str = "ticker"
+) -> list[str]:
+    """missing_note for a history fetch: only when it ran from its first page
+    to its last (Alpaca pages through the instruments in turn, so a cut or
+    continued fetch lacks some of them for that reason alone)."""
+    if start_token is not None or not page.complete or page.row_cap_hit or page.page_cap_hit:
+        return []
+    note = missing_note(requested, page.rows, attr)
+    return [n.removesuffix(".") + " in this window." for n in note]
+
+
 def spec(
     *,
     name: str,
