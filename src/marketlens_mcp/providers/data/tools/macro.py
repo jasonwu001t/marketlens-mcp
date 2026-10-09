@@ -528,10 +528,10 @@ SPECS: tuple[ToolSpec, ...] = (
             "quarterly or monthly frequency; series_id is the line's series code, title its description, "
             "units the publisher's unit. BEA states a value's multiplier separately and it is not stored: a "
             "units of 'Level' is not in ones (NIPA dollar levels are usually millions of dollars; check the "
-            "table's header). BEA serves the latest revision only; knowledge_time is the period's first "
-            "release in BEA's news releases (T10101-T10111: the advance estimate; monthly tables: Personal "
-            "Income and Outlays; an as_of before 1996-07 returns none), else the table's last revision "
-            "date (the newest period, other tables, a revision). Needs BEA_API_KEY (free).",
+            "table's header). BEA serves the latest revision only, so knowledge_time is the table's last "
+            "revision date, never before the period's first release; history older than the first sync "
+            "takes that sync's date, so an earlier as_of returns none of it (GDP vintages: macro_series). "
+            "A revision seen later is a new vintage. Needs BEA_API_KEY (free).",
             "lagged",
         ),
         readme="BEA NIPA tables (GDP, PCE, income, profits)",

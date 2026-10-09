@@ -12,7 +12,9 @@
     {"TableName": "T10101", "SeriesCode": "DPCERL", "LineNumber": "2", "LineDescription": "Personal consumption expenditures", "TimePeriod": "2026Q1", "METRIC_NAME": "Fisher Quantity Index", "CL_UNIT": "Percent change, annual rate", "UNIT_MULT": "0", "DataValue": "0.9", "NoteRef": "T10101"},
     {"TableName": "T10101", "SeriesCode": "DPCERL", "LineNumber": "2", "LineDescription": "Personal consumption expenditures", "TimePeriod": "2026Q2", "METRIC_NAME": "Fisher Quantity Index", "CL_UNIT": "Percent change, annual rate", "UNIT_MULT": "0", "DataValue": "(NA)", "NoteRef": "T10101"}
    ],
-   "Notes": []
+   "Notes": [
+    {"NoteRef": "T10101", "NoteText": "Table 1.1.1. Percent Change From Preceding Period in Real Gross Domestic Product [Percent] - LastRevised: July 30, 2026"}
+   ]
   }
  }
 }
