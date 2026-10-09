@@ -19,6 +19,7 @@ from ..common import (
     PROVIDER,
     Input,
     bar_timeframe,
+    check_unique_times,
     dynamic_output,
     finite,
     model_output,
@@ -31,6 +32,8 @@ from ..common import (
     resolve,
     result_id_field,
     rows,
+    scalar,
+    store_field,
     tf_interval,
     tf_nests,
     tf_seconds,
@@ -70,6 +73,7 @@ class ResampleArgs(BaseModel):
     series_column: str | None = Field(
         None, description="Column naming each series. Default: the result's group column."
     )
+    store: bool = store_field()
 
 
 def _check_target(inp: Input, source: str, target: str) -> None:
@@ -109,6 +113,31 @@ def _non_finite(session: ResultSession, inp: Input, values: list[str]) -> tuple[
     ]
     (row,) = rows(session, f"SELECT {', '.join(parts)} FROM {inp.table}")
     return row["c0"], [c for i, c in enumerate(values) if row[f"c{i + 1}"]]
+
+
+def _times(inp: Input) -> str:
+    """SELECT s, ts: the series and time of every row with a time."""
+    return f"SELECT {inp.series()} AS s, {inp.ts()} AS ts FROM {inp.table} WHERE {qi(inp.time)} IS NOT NULL"
+
+
+def _merged_note(session: ResultSession, inp: Input, agg: str) -> list[str]:
+    """A note when the series column puts several values of the result's own
+    series column (several tickers) in one series: each bucket then
+    aggregates across them, which only some aggregations mean."""
+    own = inp.info.group_column
+    if own is None or inp.group is None or own == inp.group or inp.column(own) is None:
+        return []
+    merged = scalar(
+        session,
+        f"SELECT count(*) FROM (SELECT {qi(inp.group)} FROM {inp.table} GROUP BY 1 "
+        f"HAVING count(DISTINCT {qi(own)}) > 1)",
+    )
+    if not merged:
+        return []
+    return [
+        f"series_column {inp.group} puts several {own} values in one series ({plural(merged, 'series')}), so each "
+        f"bucket's {agg} is taken across them."
+    ]
 
 
 def _group_key(inp: Input) -> tuple[str, str]:
@@ -230,6 +259,9 @@ async def handler(ctx: ToolContext, args: ResampleArgs) -> ToolOutput:
         if source is not None:
             _check_target(inp, source, target)
         if is_bar:
+            # One bar per time and series: a series_column that merges several
+            # tickers would make each bucket's open one ticker's and close another's.
+            check_unique_times(session, TOOL, inp, _times(inp))
             values = list(_BAR_VALUES)
             sql = _bar_sql(inp, target, columns, values)
         else:
@@ -240,6 +272,7 @@ async def handler(ctx: ToolContext, args: ResampleArgs) -> ToolOutput:
                     f"{TOOL}: {inp.label} has no numeric value column to aggregate.",
                 )
             sql = _generic_sql(inp, target, args.agg, columns, values)
+            notes += _merged_note(session, inp, args.agg)
         skipped, bad_columns = _non_finite(session, inp, values)
         table = session.query(sql)
     skipped_text = (
@@ -273,7 +306,7 @@ async def handler(ctx: ToolContext, args: ResampleArgs) -> ToolOutput:
     prov = provenance(ctx, TOOL, [inp.info], args)
     cls = BUILTIN_MODELS.get(inp.model)
     if cls is not None:
-        return model_output(table, cls, prov, notes=notes, absent=absent, inputs=[inp.info])
+        return model_output(table, cls, prov, notes=notes, absent=absent, inputs=[inp.info], store=args.store)
     return dynamic_output(
         ctx,
         TOOL,
@@ -285,6 +318,9 @@ async def handler(ctx: ToolContext, args: ResampleArgs) -> ToolOutput:
         notes=notes,
         absent=absent,
         inputs=[inp.info],
+        units=inp.units(),
+        sources=inp.sources(),
+        store=args.store,
     )
 
 
@@ -296,7 +332,7 @@ SPEC = ToolSpec(
         "Resample a stored time series to a coarser timeframe, computed locally in DuckDB. Bars: open = first, "
         "high = max, low = min, close = last, volume = sum, trade_count = sum (None if any bar lacks it), vwap "
         "= volume-weighted (None when the volume is 0); the target must be coarser than the bars and hold whole "
-        "bars. Other series (quotes, trades, snapshots, portfolio history, query results): each value column "
+        "bars, and a series may not hold two bars at one time (a series_column that merges tickers). Other series (quotes, trades, snapshots, portfolio history, query results): each value column "
         "aggregated with agg (last, first, mean, sum, min, max) per series and bucket; other columns come from "
         "the bucket's last row. Rows with a NaN or infinite value are skipped. Buckets are UTC-aligned (weeks "
         "start Monday 00:00 UTC; t = bucket start). The output has the input's model. Large outputs are stored "

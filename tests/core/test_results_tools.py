@@ -17,7 +17,7 @@ from marketlens_mcp.plugin_api import ToolError
 from marketlens_mcp.results import tools as rt
 from marketlens_mcp.results.arrow import rows_to_table
 from marketlens_mcp.results.store import StoreLimits, StoreRoot
-from marketlens_mcp.results_api import InlineResult, ResultMarker
+from marketlens_mcp.results_api import ColumnInfo, InlineResult, ResultInfo, ResultMarker
 from marketlens_mcp.testing import call_tool, make_context
 from marketlens_schema.market import Bar, NewsItem
 
@@ -104,10 +104,18 @@ def test_query_default_limit_and_truncation_note(setup):
 
 
 def test_query_max_rows_bounds(setup):
-    ctx, *_ = setup
+    """max_rows above results.query_max_rows was refused although the
+    description said a larger LIMIT is lowered: it is lowered too, with a note."""
+    ctx, _, bars, *_ = setup
     with pytest.raises(ToolError) as info:
-        call(ctx, "results_query", sql="SELECT 1", max_rows=201)
+        call(ctx, "results_query", sql="SELECT 1", max_rows=0)
     assert info.value.code == "invalid_arguments"
+    out = call(ctx, "results_query", sql=f"SELECT ticker FROM {bars.result_id}", max_rows=500)
+    assert isinstance(out, InlineResult) and out.row_count == 200
+    assert any(
+        "max_rows 500 is above results.query_max_rows (200), so it was lowered" in n for n in out.notes
+    )
+    assert any(n.startswith("Truncated: yes; more than 200 rows") for n in out.notes)
 
 
 def test_query_byte_cap_offloads_its_own_result(setup):
@@ -160,6 +168,57 @@ def test_query_store_true_keeps_the_parents_time_series_columns_and_units(setup)
         kept = store.info(call(ctx, "results_query", sql=sql, store=True).result_id)
         assert (kept.time_column, kept.group_column) == (None, None), sql
         assert all(c.unit is None for c in kept.columns), sql
+
+
+def test_a_stored_answer_records_the_model_its_columns_came_from(setup):
+    """A column a stored answer keeps with its unit records the model of the
+    result that computed it (source_model), through a query of a query, so it
+    is known after that result is gone (analytics_volatility tells a drawdown
+    from returns by it); other columns' JSON has no source_model."""
+    ctx, store, bars, *_ = setup
+    first = call(ctx, "results_query", sql=f"SELECT ticker, t, close FROM {bars.result_id}", store=True)
+    second = call(ctx, "results_query", sql=f"SELECT * FROM {first.result_id}", store=True)
+    store.drop(first.result_id)
+    third = call(ctx, "results_query", sql=f"SELECT * FROM {second.result_id}", store=True)
+    assert {c.name: c.source_model for c in store.info(third.result_id).columns} == {
+        "ticker": None,
+        "t": "marketlens.Bar",
+        "close": "marketlens.Bar",
+    }
+    shown = {c["name"]: c for c in third.model_dump(mode="json")["columns"]}
+    assert shown["close"]["source_model"] == "marketlens.Bar" and "source_model" not in shown["ticker"]
+    # An answer that recorded none (stored before source_model was): a query of
+    # it records none either, not that answer's own model, marketlens.QueryRow.
+    unrecorded = store.put(
+        store.read(second.result_id, limit=1000),
+        tool="results_query",
+        model="marketlens.QueryRow",
+        provenance=provenance(),
+        time_column="t",
+        group_column="ticker",
+        column_units={"t": "UTC", "close": "price"},
+        parents=[second.result_id],
+    )
+    fourth = call(ctx, "results_query", sql=f"SELECT * FROM {unrecorded.result_id}", store=True)
+    assert {c.name: (c.unit, c.source_model) for c in store.info(fourth.result_id).columns} == {
+        "ticker": (None, None),
+        "t": ("UTC", None),
+        "close": ("price", None),
+    }
+
+
+def test_a_columns_json_schema_describes_its_fields_where_source_model_is_left_out():
+    """source_model is left out of a column's JSON when None, and the JSON
+    Schema of a column, alone or in a result, still lists every field in
+    serialization mode as in validation mode (not an opaque object)."""
+    assert "source_model" not in ColumnInfo(name="x", type="DOUBLE").model_dump(mode="json")
+    kept = ColumnInfo(name="x", type="DOUBLE", source_model="marketlens.Bar").model_dump(mode="json")
+    assert kept["source_model"] == "marketlens.Bar"
+    for model in (ColumnInfo, ResultInfo, ResultMarker, InlineResult):
+        for mode in ("validation", "serialization"):
+            schema = model.model_json_schema(mode=mode)
+            column = schema if model is ColumnInfo else schema["$defs"]["ColumnInfo"]
+            assert set(column.get("properties", {})) == set(ColumnInfo.model_fields), (model.__name__, mode)
 
 
 def test_query_over_news_is_external_text(setup):
@@ -347,3 +406,66 @@ def test_export_without_a_folder(store):
     with pytest.raises(ToolError) as e:
         call(make_context(store=store), "results_export", result_id=info.result_id, format="csv")
     assert e.value.code == "export_dir_missing"
+
+
+def test_query_answers_whole_number_sums_as_numbers(setup):
+    """sum() over integers is a HUGEINT, which came back as the string '1008'
+    next to count(*)'s 1008; exact decimals stay strings."""
+    ctx, _, bars, *_ = setup
+    sql = (
+        f"SELECT sum(CASE WHEN close > 0 THEN 1 ELSE 0 END) AS s, count(*) AS c, "
+        f"CAST(1.25 AS DECIMAL(10, 2)) AS d, CAST(9223372036854775808 AS HUGEINT) AS huge "
+        f"FROM {bars.result_id}"
+    )
+    out = call(ctx, "results_query", sql=sql)
+    # Beyond BIGINT a whole number stays an exact string.
+    assert out.rows == [{"s": 1200, "c": 1200, "d": "1.25", "huge": "9223372036854775808"}]
+    assert [c.type for c in out.columns] == ["BIGINT", "BIGINT", "DECIMAL(10,2)", "DECIMAL(38,0)"]
+    stored = call(ctx, "results_query", sql=sql, store=True)
+    assert [c.type for c in stored.columns][:2] == ["BIGINT", "BIGINT"]
+
+
+def test_query_of_a_dropped_result_says_it_was_dropped(setup):
+    """results_query of a dropped result gave sql_table (not one of this
+    session's results) where results_describe gave result_dropped."""
+    ctx, _, bars, small, *_ = setup
+    call(ctx, "results_drop", result_id=small.result_id)
+    for name in ("results_query", "results_describe"):
+        arguments = {"sql": f"SELECT count(*) FROM {small.result_id}"} if name == "results_query" else {}
+        with pytest.raises(ToolError) as info:
+            call(ctx, name, **(arguments or {"result_id": small.result_id}))
+        assert info.value.code == "result_dropped", name
+        assert small.result_id in info.value.message
+    with pytest.raises(ToolError) as info:
+        call(ctx, "results_query", sql="SELECT * FROM r_00000000ff")
+    assert info.value.code == "sql_table" and bars.result_id in info.value.message
+
+
+def test_query_refuses_pivot_with_the_way_round_it(setup):
+    ctx, _, bars, *_ = setup
+    for sql in (
+        f"PIVOT {bars.result_id} ON ticker USING last(close) GROUP BY t",
+        f"SELECT * FROM (PIVOT {bars.result_id} ON ticker USING last(close) GROUP BY t) LIMIT 2",
+    ):
+        with pytest.raises(ToolError) as info:
+            call(ctx, "results_query", sql=sql)
+        assert info.value.code == "sql_forbidden"
+        assert (
+            "PIVOT and UNPIVOT are not allowed" in info.value.message
+            and "FILTER (WHERE" in info.value.message
+        )
+
+
+def test_query_stored_for_size_says_which_limit_and_the_description_names_the_limits(setup):
+    ctx, _, bars, *_ = setup
+    out = call(ctx, "results_query", sql=f"SELECT * FROM {bars.result_id}", max_rows=200)
+    assert isinstance(out, ResultMarker)
+    assert any("bytes as JSON) is larger than results.query_max_bytes (24,000 bytes)" in n for n in out.notes)
+    text = SPECS["results_query"].description
+    for words in (
+        "PIVOT and UNPIVOT are not",
+        "at most 8 results",
+        "24,000 bytes",
+        "decimals come back as strings",
+    ):
+        assert words in text

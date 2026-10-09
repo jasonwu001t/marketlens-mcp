@@ -24,7 +24,7 @@ import math
 import re
 import types
 import typing
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from decimal import Decimal
 from typing import Any
@@ -41,7 +41,7 @@ from marketlens_mcp.results_api import (
     ResultNotFound,
     ResultSession,
 )
-from marketlens_schema import BUILTIN_MODELS, QUERY_ROW_SCHEMA_NAME, CanonicalModel
+from marketlens_schema import ALIGNED_SCHEMA_NAME, BUILTIN_MODELS, QUERY_ROW_SCHEMA_NAME, CanonicalModel
 from marketlens_schema.base import TIMEFRAME_RE, AbsenceCode, AbsenceReason, Delay, Provenance
 
 CAPABILITY = "analytics"
@@ -79,6 +79,18 @@ _NAIVE_TIMESTAMPS = frozenset({"TIMESTAMP", "TIMESTAMP_NS", "TIMESTAMP_MS", "TIM
 
 def result_id_field(description: str) -> Any:
     return Field(pattern=RESULT_ID_RE.pattern, description=description)
+
+
+def optional_result_id_field(description: str) -> Any:
+    return Field(None, pattern=RESULT_ID_RE.pattern, description=description)
+
+
+def store_field() -> Any:
+    return Field(
+        False,
+        description="Keep the output as a stored result even when it is small, and get its result_id (for "
+        "results_query or another analytics tool); larger outputs are always stored.",
+    )
 
 
 def refuse(code: str, message: str, hint: str | None = None) -> ToolError:
@@ -167,13 +179,25 @@ def tf_nests(source: str, target: str) -> bool:
     return False
 
 
-def default_periods_per_year(tf: str) -> float | None:
-    """Contract 6.2: 1d 252, 1w 52, 1mo 12, 1h 1638 (252 x 6.5), Nmin 98280 / N
-    (252 x 390 / N); other timeframes have no default."""
+def default_periods_per_year(tf: str, *, crypto: bool = False, extended: bool = False) -> float | None:
+    """Contract 6.2, by market. US equity sessions: 1d 252, 1w 52, 1mo 12,
+    1h 1638 (252 x 6.5), Nmin 98280 / N (252 x 390 / N); with extended hours
+    (04:00-20:00 New York, 16 hours) 1h 4032 and Nmin 241920 / N. Crypto,
+    every day around the clock: 1d 365, 1w 52, 1mo 12, Nh 8760 / N, Nmin
+    525600 / N. Other timeframes have no default."""
     n, u = tf_parts(tf)
+    if crypto:
+        if u == "min":
+            return 525600 / n
+        if u == "h":
+            return 8760 / n
+        return {"1d": 365.0, "1w": 52.0, "1mo": 12.0}.get(tf)
+    minutes = 960 if extended else 390
     if u == "min":
-        return 98280 / n
-    return {"1d": 252.0, "1w": 52.0, "1mo": 12.0, "1h": 1638.0}.get(tf)
+        return 252 * minutes / n
+    if tf == "1h":
+        return 252 * minutes / 60
+    return {"1d": 252.0, "1w": 52.0, "1mo": 12.0}.get(tf)
 
 
 _DURATION = re.compile(r"^P(?:(\d+)W)?(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+(?:\.\d+)?)S)?)?$")
@@ -181,8 +205,8 @@ _DURATION = re.compile(r"^P(?:(\d+)W)?(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\
 
 def parse_duration(text: str) -> dt.timedelta | None:
     """An ISO-8601 duration of weeks, days, hours, minutes and seconds
-    ("PT30S", "PT1H30M", "P2D"); None for anything else (months and years are
-    not fixed lengths) or a zero duration."""
+    ("PT30S", "PT1H30M", "P2D", "PT0S" for none); None for anything else
+    (months and years are not fixed lengths)."""
     m = _DURATION.match(text)
     if not m or text.endswith("T") or not any(m.groups()):
         return None
@@ -197,7 +221,7 @@ def parse_duration(text: str) -> dt.timedelta | None:
         )
     except OverflowError:  # beyond timedelta's range: not a usable duration
         return None
-    return delta if delta > dt.timedelta(0) else None
+    return delta
 
 
 # --- canonical Arrow types of the output models ---------------------------------------------------
@@ -311,6 +335,18 @@ class Input:
 
     def numeric_columns(self) -> list[str]:
         return [c.name for c in self.info.columns if is_numeric(c)]
+
+    def units(self) -> dict[str, str]:
+        """The unit of each column that has one."""
+        return {c.name: c.unit for c in self.info.columns if c.unit}
+
+    def sources(self) -> dict[str, str]:
+        """The model that computed each column that has a unit: the one it
+        recorded (a carried column), else this result's, unless this is a query
+        answer or aligned result, which records none of its own (its other
+        columns' source is not known)."""
+        own = None if self.model in (QUERY_ROW_SCHEMA_NAME, ALIGNED_SCHEMA_NAME) else self.model
+        return {c.name: s for c in self.info.columns if c.unit and (s := c.source_model or own)}
 
 
 def _parent_value(ctx: ToolContext, info: ResultInfo) -> str | None:
@@ -440,8 +476,11 @@ def points_sql(inp: Input, value: str, *, positive: bool) -> str:
     )
 
 
-def skipped_notes(session: ResultSession, inp: Input, value: str, *, positive: bool) -> list[str]:
-    """Notes counting the rows ``points_sql`` leaves out."""
+def skipped_notes(
+    session: ResultSession, inp: Input, value: str, *, positive: bool, hint: str | None = None
+) -> list[str]:
+    """Notes counting the rows ``points_sql`` leaves out; ``hint`` follows the
+    count of non-positive values."""
     t, v = qi(inp.time), qi(value)
     parts = [
         f"count(*) FILTER (WHERE {t} IS NULL)",
@@ -474,6 +513,7 @@ def skipped_notes(session: ResultSession, inp: Input, value: str, *, positive: b
     if nonpositive:
         notes.append(
             f"Skipped {plural(nonpositive, 'row')} with {value} <= 0 (returns and drawdowns need positive values)."
+            + (f" {hint}" if hint else "")
         )
     return notes
 
@@ -621,8 +661,10 @@ def model_output(
     notes: Sequence[str] = (),
     absent: dict[str, AbsenceReason] | None = None,
     inputs: Sequence[ResultInfo] = (),
+    store: bool = False,
 ) -> ToolOutput:
-    """A canonical-model output; the server's offload decides inline or stored."""
+    """A canonical-model output; the server's offload decides inline or
+    stored (always stored with ``store``)."""
     return ToolOutput(
         model=model,
         provenance=prov,
@@ -630,18 +672,39 @@ def model_output(
         notes=list(notes),
         absent=dict(absent or {}),
         risk=risk(inputs),
+        offload="always" if store else "auto",
     )
 
 
 def utc_times(table: pa.Table) -> pa.Table:
     """Every zoned timestamp column labelled UTC (DuckDB labels them with the
-    connection's zone; the instants are unchanged)."""
+    connection's zone; the instants are unchanged). Field metadata (a
+    column's unit) is kept."""
     fields = [
-        pa.field(f.name, pa.timestamp(f.type.unit, tz="UTC"), f.nullable)
+        f.with_type(pa.timestamp(f.type.unit, tz="UTC"))
         if pa.types.is_timestamp(f.type) and f.type.tz is not None
         else f
         for f in table.schema
     ]
+    return table.cast(pa.schema(fields))
+
+
+def with_units(
+    table: pa.Table, units: Mapping[str, str], sources: Mapping[str, str] | None = None
+) -> pa.Table:
+    """``table`` with each named column's unit in its Arrow field metadata
+    (``{b"unit": ...}``), and with ``sources`` the model that computed it
+    (``{b"source_model": ...}``): how a dynamic table labels its columns' units,
+    which the inline answer and the store both read."""
+    sources = sources or {}
+    fields = []
+    for f in table.schema:
+        meta = {
+            k: v.encode("utf-8")
+            for k, v in ((b"unit", units.get(f.name)), (b"source_model", sources.get(f.name)))
+            if v
+        }
+        fields.append(f.with_metadata({**(f.metadata or {}), **meta}) if meta else f)
     return table.cast(pa.schema(fields))
 
 
@@ -664,13 +727,20 @@ def dynamic_output(
     notes: Sequence[str] = (),
     absent: dict[str, AbsenceReason] | None = None,
     inputs: Sequence[ResultInfo] = (),
+    units: Mapping[str, str] | None = None,
+    sources: Mapping[str, str] | None = None,
+    store: bool = False,
 ) -> ToolOutput:
-    """A dynamic-schema output. Small: the table (inline). Large: stored here
-    with its time and series columns, which the offload cannot know for a
-    dynamic schema, so the stored result chains into other analytics tools."""
+    """A dynamic-schema output. Small (and not ``store``): the table (inline).
+    Large: stored here with its time and series columns, which the offload
+    cannot know for a dynamic schema, so the stored result chains into other
+    analytics tools. ``units`` labels columns (a price stays a price for the
+    next tool), and ``sources`` the model each carried column was computed by
+    (a drawdown stays a drawdown after its result is gone)."""
     out_risk = risk(inputs)
-    table = utc_times(table)
-    if _small(table):
+    units = {k: v for k, v in (units or {}).items() if v}
+    table = with_units(utc_times(table), units, sources)
+    if not store and _small(table):
         return ToolOutput(
             model=model,
             provenance=prov,
@@ -689,6 +759,7 @@ def dynamic_output(
         parents=list(prov.derived_from),
         time_column=time_column,
         group_column=group_column,
+        column_units=units or None,
     )
     return ToolOutput(
         model=model, provenance=prov, stored=info, notes=list(notes), absent=dict(absent or {}), risk=out_risk

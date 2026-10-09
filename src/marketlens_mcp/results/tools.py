@@ -18,6 +18,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from marketlens_schema import QUERY_ROW_SCHEMA_NAME, Delay, Provenance
 
+from ..manifest import DYNAMIC_MODELS
 from ..offload import estimate_tokens
 from ..plugin_api import ToolContext, ToolError, ToolOutput, ToolSpec
 from ..results_api import RESULT_ID_RE
@@ -60,7 +61,10 @@ class QueryArgs(BaseModel):
         "result_id as a table name, e.g. SELECT ticker, max(close) FROM r_8c1f0a9d3e GROUP BY ticker."
     )
     max_rows: int = Field(
-        50, ge=1, le=200, description="Rows to return (1-200). A LIMIT above it is lowered."
+        50,
+        ge=1,
+        description="Rows to return (default 50, at most results.query_max_rows, 200 unless configured lower). A "
+        "larger max_rows or LIMIT is lowered to it, with a note.",
     )
     store: bool = Field(
         False,
@@ -70,12 +74,16 @@ class QueryArgs(BaseModel):
 
 def _inherited(store: FileResultStore, out: QueryOutcome) -> dict:
     """What a stored answer over one parent keeps of it: the parent's time and
-    series columns and its column units, only for columns that are still there
-    with the same name and type, and only when the time column is one of them;
-    so the answer chains into analytics as the parent would."""
+    series columns and its column units, with the model each such column came
+    from (the one the parent recorded for it, else the parent's, unless the
+    parent is itself a query answer or aligned result, which records none of
+    its own), only for columns that are still there with the same name and
+    type, and only when the time column is one of them; so the answer chains
+    into analytics as the parent would, after the parent is gone too."""
     if len(out.result_ids) != 1:
         return {}
     parent = store.info(out.result_ids[0])
+    own = None if parent.model in DYNAMIC_MODELS else parent.model
     types = {f.name: duckdb_type(f.type) for f in out.table.schema}
     same = {c.name: c for c in parent.columns if types.get(c.name) == c.type}
     if parent.time_column not in same:
@@ -84,19 +92,22 @@ def _inherited(store: FileResultStore, out: QueryOutcome) -> dict:
         "time_column": parent.time_column,
         "group_column": parent.group_column if parent.group_column in same else None,
         "column_units": {n: c.unit for n, c in same.items() if c.unit},
+        "column_sources": {n: s for n, c in same.items() if c.unit and (s := c.source_model or own)},
     }
 
 
 async def results_query(ctx: ToolContext, args: QueryArgs) -> ToolOutput:
     store = _store(ctx)
     limits = store.limits
-    if args.max_rows > limits.query_max_rows:
-        raise ToolError(
-            "invalid_arguments", f"max_rows must be at most {limits.query_max_rows} in this configuration."
-        )
-    out = store.query(args.sql, max_rows=args.max_rows, store=args.store)
-    cap = limits.fetch_max_rows if args.store else args.max_rows
+    max_rows = min(args.max_rows, limits.query_max_rows)
+    out = store.query(args.sql, max_rows=max_rows, store=args.store)
+    cap = limits.fetch_max_rows if args.store else max_rows
     notes = [f"Executed: {out.executed_sql}"]
+    if max_rows < args.max_rows and not args.store:
+        notes.append(
+            f"max_rows {args.max_rows} is above results.query_max_rows ({limits.query_max_rows}), so it was lowered "
+            "to that; pass store=true to keep the full answer as a new result."
+        )
     if out.truncated:
         notes.append(
             f"Truncated: yes; more than {cap} rows matched and only the first {cap} are kept. Aggregate, filter, "
@@ -107,17 +118,18 @@ async def results_query(ctx: ToolContext, args: QueryArgs) -> ToolOutput:
     request = {"sql": args.sql[:4000], "max_rows": args.max_rows, "store": args.store}
     prov = _provenance(ctx, "duckdb:results_query", request, list(out.result_ids))
     rows = table_rows(out.table) if not args.store else None
-    keep = args.store or (
-        rows is not None
-        and (
-            len(json.dumps(rows, separators=(",", ":")).encode()) > limits.query_max_bytes
-            or estimate_tokens(rows) > limits.inline_max_tokens
-        )
-    )
+    size = len(json.dumps(rows, separators=(",", ":")).encode()) if rows is not None else 0
+    too_big = size > limits.query_max_bytes
+    keep = args.store or too_big or (rows is not None and estimate_tokens(rows) > limits.inline_max_tokens)
     if keep and not args.store:
+        limit = (
+            f"results.query_max_bytes ({limits.query_max_bytes:,} bytes)"
+            if too_big
+            else f"results.inline_max_tokens ({limits.inline_max_tokens:,} tokens)"
+        )
         notes.append(
-            f"The answer is larger than results.query_max_bytes ({limits.query_max_bytes} bytes), so it was "
-            "stored as a new result."
+            f"The answer ({out.row_count} rows, {size:,} bytes as JSON) is larger than {limit}, so it was stored "
+            "as a new result: query it, or select fewer columns or rows to see it inline."
         )
     if keep:
         info = store.put(
@@ -410,11 +422,13 @@ SPECS: tuple[ToolSpec, ...] = (
         "results",
         "Query stored results",
         "Run ONE read-only SQL SELECT (DuckDB dialect; WITH, joins, window functions, ASOF JOIN and "
-        "time_bucket allowed) over results stored in this session, using each result_id as a table name. "
-        "Returns at most max_rows rows (default 50, at most 200; a larger LIMIT is lowered). Larger answers, "
-        "or store=true, are kept as a new result and you get its result_id; a query of one result keeps its "
-        "time and series columns when they are unchanged, so it chains into analytics. Files, settings, other sessions "
-        "and every write are refused.",
+        "time_bucket allowed; PIVOT and UNPIVOT are not: use max(x) FILTER (WHERE ...) per column) over at most 8 "
+        "results stored in this session, using each result_id as a table name. Returns at most max_rows rows "
+        "(default 50, at most 200; a larger max_rows or LIMIT is lowered). An answer over results.query_max_bytes "
+        "(24,000 bytes of JSON by default) or about 6,000 tokens, or store=true, is kept as a new result and you "
+        "get its result_id; a query of one result keeps its time and series columns when they are unchanged, so "
+        "it chains into analytics. Exact decimals come back as strings (CAST to DOUBLE for a number); whole-number "
+        "sums are numbers. Files, settings, other sessions and every write are refused.",
         "Read-only SQL over this session's results (one SELECT, forced LIMIT)",
         QueryArgs,
         results_query,

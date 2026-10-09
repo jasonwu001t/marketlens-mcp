@@ -28,6 +28,7 @@ from ..common import (
     result_id_field,
     series_counts,
     skipped_notes,
+    store_field,
 )
 
 TOOL = "analytics_drawdown"
@@ -49,6 +50,7 @@ class DrawdownArgs(BaseModel):
     mode: Literal["max", "series"] = Field(
         "max", description="max: one summary row per series; series: the drawdown at every observation."
     )
+    store: bool = store_field()
 
 
 def _series_sql(dd: str) -> str:
@@ -118,7 +120,7 @@ async def handler(ctx: ToolContext, args: DrawdownArgs) -> ToolOutput:
     if note:
         notes.append(note)
     prov = provenance(ctx, TOOL, [inp.info], args)
-    return model_output(table, model, prov, notes=notes, inputs=[inp.info])
+    return model_output(table, model, prov, notes=notes, inputs=[inp.info], store=args.store)
 
 
 SPEC = ToolSpec(

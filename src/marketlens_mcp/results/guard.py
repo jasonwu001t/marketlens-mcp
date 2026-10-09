@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import logging
 import re
-from collections.abc import Collection
+from collections.abc import Callable, Collection
 from dataclasses import dataclass
 
 import sqlglot
@@ -26,6 +26,11 @@ from ..results_api import RESULT_ID_RE, QueryRefused
 
 MAX_SQL_CHARS = 20_000
 MAX_RESULTS_PER_QUERY = 8
+PIVOT_REFUSAL = (
+    "PIVOT and UNPIVOT are not allowed in results_query. Pivot with one aggregate per value instead, e.g. "
+    "SELECT t, max(close) FILTER (WHERE ticker = 'AAPL') AS aapl, max(close) FILTER (WHERE ticker = 'SPY') AS spy "
+    "FROM <result_id> GROUP BY t; unpivot with UNION ALL."
+)
 
 #: Functions refused by name (lower case). The belt; the connection's
 #: disabled external access is the wall.
@@ -235,8 +240,11 @@ def _cte_references(root: exp.Expression) -> set[int]:
     return {id(table) for table in root.find_all(exp.Table) if _binds_to_cte(table)}
 
 
-def check(sql: str, *, live_ids: Collection[str]) -> Checked:
-    """Steps 1-5. Raises QueryRefused with a readable reason."""
+def check(sql: str, *, live_ids: Collection[str], gone: Callable[[str], None] | None = None) -> Checked:
+    """Steps 1-5. Raises QueryRefused with a readable reason. ``gone`` is
+    called with a result-id-shaped table name that is not live, before it is
+    refused as an unknown table: the store raises ResultNotFound there for a
+    result of the session that was dropped, expired or evicted."""
     if not isinstance(sql, str) or not sql.strip() or "\x00" in sql:
         raise QueryRefused("sql_empty", "The SQL is empty (or contains a NUL character).")
     if len(sql) > MAX_SQL_CHARS:
@@ -252,6 +260,8 @@ def check(sql: str, *, live_ids: Collection[str]) -> Checked:
             "sql_multiple", f"Send exactly one statement; this SQL has {len(statements)} (separated by ';')."
         )
     root = statements[0]
+    if any(isinstance(node, exp.Pivot) for node in root.walk()):
+        raise QueryRefused("sql_forbidden", PIVOT_REFUSAL)
     if not _is_select_tree(root):
         raise QueryRefused(
             "sql_not_select",
@@ -291,6 +301,8 @@ def check(sql: str, *, live_ids: Collection[str]) -> Checked:
             if name not in referenced:
                 referenced.append(name)
             continue
+        if bare and RESULT_ID_RE.match(name) and gone is not None:
+            gone(name)
         shown = (
             table.sql(dialect="duckdb")
             if not isinstance(ident, exp.Identifier)

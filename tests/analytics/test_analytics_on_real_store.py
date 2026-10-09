@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import asyncio
+import datetime as dt
 
 import pyarrow as pa
 import pytest
@@ -23,8 +24,9 @@ from marketlens_mcp.analytics.tools.resample import SPEC as RESAMPLE  # noqa: E4
 from marketlens_mcp.analytics.tools.returns import SPEC as RETURNS  # noqa: E402
 from marketlens_mcp.analytics.tools.volatility import SPEC as VOLATILITY  # noqa: E402
 from marketlens_mcp.plugin_api import ToolError  # noqa: E402
+from marketlens_mcp.results.store import StoreLimits, StoreRoot  # noqa: E402
 from marketlens_mcp.results.tools import SPECS as RESULTS_SPECS  # noqa: E402
-from marketlens_mcp.results_api import InlineResult, ResultMarker  # noqa: E402
+from marketlens_mcp.results_api import InlineResult, ResultMarker, ResultNotFound  # noqa: E402
 from marketlens_schema import BUILTIN_MODELS  # noqa: E402
 from marketlens_schema.analytics import ANALYTICS_MODELS  # noqa: E402
 from marketlens_schema.base import Provenance  # noqa: E402
@@ -170,3 +172,103 @@ def test_the_analytics_act_on_the_units_a_dynamic_tables_fields_name(real):
         call(RETURNS, ctx, result_id=labelled, price_column="implied_vol")
     assert e.value.code == "not_prices" and "fraction" in e.value.message
     assert isinstance(call(RETURNS, ctx, result_id=plain, price_column="implied_vol"), InlineResult)
+
+
+def test_aligned_and_resampled_columns_keep_their_units(real):
+    """The aligned answer (inline or stored) and a resampled query answer keep
+    each column's unit, so the next tool still knows a price is a price."""
+    store, ctx = real
+    (query,) = [s for s in RESULTS_SPECS if s.name == "results_query"]
+    left = put_bars(store, bars("AAPL", [1.0, 2.0, 3.0], start=M0, step=MINUTE, timeframe="1min"))
+    right = put_bars(store, bars("SPY", [5.0, 6.0], start=M0, step=MINUTE, timeframe="1min"))
+    inline = call(ALIGN, ctx, left_result_id=left, right_result_id=right, right_columns=["close"])
+    assert isinstance(inline, InlineResult)
+    units = {c.name: c.unit for c in inline.columns}
+    assert (units["close"], units["close_right"], units["matched_t"]) == ("price", "price", "UTC")
+    big = put_bars(
+        store, bars("AAPL", [float(i + 1) for i in range(300)], start=M0, step=MINUTE, timeframe="1min")
+    )
+    stored = call(ALIGN, ctx, left_result_id=big, right_result_id=right, right_columns=["close"])
+    assert isinstance(stored, ResultMarker)
+    assert {c.name: c.unit for c in store.info(stored.result_id).columns}["close_right"] == "price"
+    kept = call(query, ctx, sql=f"SELECT t, ticker, close FROM {big}", store=True)
+    resampled = call(RESAMPLE, ctx, result_id=kept.result_id, timeframe="5min")
+    assert isinstance(resampled, InlineResult)
+    assert {c.name: c.unit for c in resampled.columns}["close"] == "price"
+
+
+def test_store_true_keeps_a_small_output_of_every_analytics_tool(real):
+    """analytics_drawdown mode=max came back inline with no result_id and no way
+    to keep it: every analytics tool takes store=true."""
+    store, ctx = real
+    closes = [100 * (1 + 0.01 * ((i * 7) % 5 - 2)) for i in range(25)]
+    both = put_bars(store, bars("AAPL", closes) + bars("SPY", [c * 4 + i for i, c in enumerate(closes)]))
+    spy = put_bars(store, bars("SPY", [c * 4 + i for i, c in enumerate(closes)]))
+    calls = {
+        DRAWDOWN: {"result_id": both},
+        RETURNS: {"result_id": both},
+        VOLATILITY: {"result_id": both, "window": "all"},
+        CORRELATION: {"result_id": both},
+        BETA: {"asset_result_id": both, "benchmark_result_id": spy},
+        RESAMPLE: {"result_id": both, "timeframe": "1w"},
+        ALIGN: {"left_result_id": both, "right_result_id": spy, "right_columns": ["close"]},
+    }
+    assert {spec.name for spec in calls} == {spec.name for spec in all_specs()}
+    for spec, arguments in calls.items():
+        assert isinstance(call(spec, ctx, **arguments), InlineResult), spec.name
+        marker = call(spec, ctx, **arguments, store=True)
+        assert isinstance(marker, ResultMarker), spec.name
+        assert store.info(marker.result_id).parents[0] == both
+
+
+def test_a_carried_columns_source_outlives_the_result_that_computed_it(tmp_path):
+    """A drawdown column in an aligned result, or in a query of a query, was
+    read as returns again once the drawdown result had expired (each result's
+    24 hours run from its creation, so a parent goes first) or a result between
+    them was dropped: analytics_align, analytics_resample and results_query
+    record each carried column's source_model when they create the result,
+    and never an aligned result's or query answer's own model."""
+    now = [M0]
+    store = StoreRoot(tmp_path, StoreLimits(ttl_hours=24), clock=lambda: now[0]).session("test")
+    ctx = testing.make_context(store=store, capabilities=["analytics", "results"])
+    (query,) = [s for s in RESULTS_SPECS if s.name == "results_query"]
+    closes = [100.0, 102.0, 99.0, 103.0, 101.0, 104.0]
+    aapl, spy = put_bars(store, bars("AAPL", closes)), put_bars(store, bars("SPY", closes[::-1]))
+    dd = call(DRAWDOWN, ctx, result_id=aapl, mode="series", store=True).result_id
+    rets, spy_rets = (call(RETURNS, ctx, result_id=p, store=True).result_id for p in (aapl, spy))
+    now[0] += dt.timedelta(hours=12)
+    aligned = call(ALIGN, ctx, left_result_id=spy, right_result_id=dd, tolerance="PT0S", store=True)
+    middle = call(query, ctx, sql=f"SELECT t, series, drawdown FROM {dd}", store=True).result_id
+    nested = call(query, ctx, sql=f"SELECT * FROM {middle}", store=True).result_id
+    both = call(ALIGN, ctx, left_result_id=rets, right_result_id=spy_rets, tolerance="PT0S", store=True)
+    weekly = call(RESAMPLE, ctx, result_id=aligned.result_id, timeframe="1w", store=True).result_id
+    of_aligned = call(query, ctx, sql=f"SELECT * FROM {aligned.result_id}", store=True).result_id
+    # Shown with the columns it was recorded for, and only those.
+    columns = {c["name"]: c for c in aligned.model_dump(mode="json")["columns"]}
+    assert columns["drawdown"]["source_model"] == "marketlens.DrawdownPoint"
+    assert "source_model" not in columns["ticker"] and "source_model" not in columns["matched_t"]
+    assert {c.name: c.source_model for c in store.info(nested).columns}[
+        "drawdown"
+    ] == "marketlens.DrawdownPoint"
+    # Carried on by a resample or a query of the aligned result; its own matched_t
+    # is not recorded as computed by marketlens.Aligned.
+    for rid in (weekly, of_aligned):
+        recorded = {c.name: (c.unit, c.source_model) for c in store.info(rid).columns}
+        assert recorded["drawdown"] == ("fraction", "marketlens.DrawdownPoint")
+        assert recorded["close"] == ("price", "marketlens.Bar") and recorded["matched_t"] == ("UTC", None)
+    store.drop(middle)
+    now[0] += dt.timedelta(hours=13)
+    with pytest.raises(ResultNotFound) as gone:
+        store.info(dd)
+    assert gone.value.reason == "expired"
+    for rid in (aligned.result_id, nested, weekly, of_aligned):
+        with pytest.raises(ToolError) as e:
+            call(VOLATILITY, ctx, result_id=rid, price_column="drawdown", window=2, periods_per_year=252)
+        assert (
+            e.value.code == "not_prices"
+            and "computed by a marketlens.DrawdownPoint result" in e.value.message
+        )
+    out = call(
+        VOLATILITY, ctx, result_id=both.result_id, price_column="ret_right", window=2, periods_per_year=252
+    )
+    assert any("ret_right was computed by a marketlens.ReturnPoint result" in n for n in out.notes)

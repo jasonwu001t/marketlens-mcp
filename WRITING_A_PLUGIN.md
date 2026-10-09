@@ -198,7 +198,7 @@ What the example shows:
 
 The full text is the docstring of `marketlens_schema/base.py`. Field names are snake_case and vendor-neutral; equities are `ticker` in SEC style (`BRK-B`), crypto pairs `BTC/USD`, options `occ_symbol`; instants are timezone-aware UTC (`UtcDatetime`); exact money is `DecimalStr` (never built from a float); every numeric field states its unit with `unit("price")`, `unit("shares")`, ... (`marketlens_schema.UNITS`); percentages are fractions. Models subclass `CanonicalModel`, which forbids extra fields and is frozen; set `time_column`, `group_column` and `value_columns` so that the result store's preview and the analytics tools pick sensible defaults.
 
-A dynamic table (`ToolOutput(table=..., model="marketlens.QueryRow")`) has no model to state units, so a handler names a column's unit in its Arrow field's metadata, `pa.field("rate", pa.float64(), metadata={b"unit": b"percent"})`, and the result's columns carry it.
+A dynamic table (`ToolOutput(table=..., model="marketlens.QueryRow")`) has no model to state units, so a handler names a column's unit in its Arrow field's metadata, `pa.field("rate", pa.float64(), metadata={b"unit": b"percent"})`, and the result's columns carry it. A column carried from another result can also name the model that computed it, `b"source_model": b"marketlens.ReturnPoint"` (the column's `source_model`): `analytics_volatility` reads a `fraction` column of a dynamic table as returns by default only when that is `marketlens.ReturnPoint`, and refuses one that names no model unless `input_kind` says what it holds.
 
 ## Large results
 

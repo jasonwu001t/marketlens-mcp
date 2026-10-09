@@ -51,6 +51,14 @@ class ColumnInfo(BaseModel):
     max: JSONScalar = None
     null_reason: AbsenceReason | None = None
     description: str | None = None
+    source_model: str | None = Field(
+        None,
+        # Only carried columns have one: every other column's JSON stays as it was.
+        exclude_if=lambda v: v is None,
+        description="A column a query answer or aligned result carried, with its unit, from another result: the "
+        "model of the result that computed it (e.g. marketlens.DrawdownPoint), recorded when this result was "
+        "created, so it outlives that result. Left out when None.",
+    )
 
 
 class ResultInfo(BaseModel):
