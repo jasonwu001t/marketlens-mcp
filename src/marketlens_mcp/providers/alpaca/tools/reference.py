@@ -23,7 +23,7 @@ from marketlens_schema.market import (
 
 from .. import mappers_reference as m
 from ..client import AlpacaClient
-from ..convert import alpaca_symbol, path_symbol
+from ..convert import NEW_YORK, alpaca_symbol, path_symbol
 from .common import (
     CONTINUE_DOC,
     STORED_NOTE,
@@ -78,7 +78,11 @@ class ContractsIn(Inputs):
     underlyings: EquityTickers | None = Field(None, description="Underlying stock tickers.")
     status: Literal["active", "inactive"] | None = Field(None, description="Alpaca's default is active only.")
     expiration: date | None = Field(None, description="Exact expiration date.")
-    expiration_from: date | None = Field(None, description="Earliest expiration date, inclusive.")
+    expiration_from: date | None = Field(
+        None,
+        description="Earliest expiration date, inclusive. With no expiration filter at all, active contracts "
+        "default to today (New York) on; Alpaca alone would stop at the coming weekend.",
+    )
     expiration_to: date | None = Field(None, description="Latest expiration date, inclusive.")
     option_type: Literal["call", "put"] | None = None
     style: Literal["american", "european"] | None = None
@@ -194,14 +198,35 @@ async def reference_asset(ctx: ToolContext, args: AssetIn) -> ToolOutput:
     )
 
 
+def _expiration_default(ctx: ToolContext, args: ContractsIn) -> tuple[date | None, list[str]]:
+    """Without an expiration filter Alpaca lists only contracts expiring by the
+    coming weekend (its expiration_date_lte default). Active contracts then
+    start today in New York, with no upper bound; inactive ones keep Alpaca's
+    window, and the note says which window applied."""
+    if args.expiration or args.expiration_from or args.expiration_to:
+        return None, []
+    if args.status == "inactive":
+        return None, [
+            "No expiration filter was given, so Alpaca's default window applies: inactive contracts expiring "
+            "up to the coming weekend. Pass expiration_from or expiration_to for another window."
+        ]
+    today = ctx.now().astimezone(NEW_YORK).date()
+    return today, [
+        f"No expiration filter was given, so contracts expiring on or after {today.isoformat()} (today in New "
+        "York) are listed, with no upper bound; Alpaca alone would stop at the coming weekend."
+    ]
+
+
 async def reference_option_contracts(ctx: ToolContext, args: ContractsIn) -> ToolOutput:
     skips = Skips(OptionContract.schema_name)
+    default_from, notes = _expiration_default(ctx, args)
+    expiration_from = args.expiration_from or default_from
     async with AlpacaClient(ctx) as api:
         params = {
             "underlying_symbols": [alpaca_symbol(t) for t in args.underlyings] if args.underlyings else None,
             "status": args.status,
             "expiration_date": args.expiration.isoformat() if args.expiration else None,
-            "expiration_date_gte": args.expiration_from.isoformat() if args.expiration_from else None,
+            "expiration_date_gte": expiration_from.isoformat() if expiration_from else None,
             "expiration_date_lte": args.expiration_to.isoformat() if args.expiration_to else None,
             "type": args.option_type,
             "style": args.style,
@@ -239,9 +264,10 @@ async def reference_option_contracts(ctx: ToolContext, args: ContractsIn) -> Too
         page.rows,
         route="GET /v2/options/contracts",
         operation="get-options-contracts",
-        request=request_of(args),
+        request=request_of(args, expiration_from=default_from.isoformat() if default_from else None),
         page=page,
         absent=absent,
+        notes=notes,
         skips=skips,
     )
 
@@ -481,7 +507,11 @@ SPECS = (
         title="Option contracts",
         description="Listed option contracts (OCC symbol, underlying, expiration, strike in USD, type, style, "
         "multiplier, open interest, last close) filtered by underlyings, expiration (exact or from/to), type, "
-        "style, strike range and root; deliverables on request. " + OI_LAG + " " + STORED_NOTE,
+        "style, strike range and root; deliverables on request. With no expiration filter, active contracts "
+        "expiring from today (New York) on are listed: Alpaca's own default stops at the coming weekend. "
+        + OI_LAG
+        + " "
+        + STORED_NOTE,
         readme="Option contract reference data",
         input_model=ContractsIn,
         output_model=OptionContract,

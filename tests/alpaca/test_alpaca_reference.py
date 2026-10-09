@@ -5,6 +5,8 @@ reference_corporate_actions, reference_option_exchanges."""
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 import httpx
 import pytest
 from alpaca_harness import FakeContext, call, check_golden, load_fixture
@@ -247,3 +249,35 @@ def test_reference_option_contracts_keep_adjusted_contracts(specs, ctx, alpaca):
     alpaca.add("/v2/options/contracts/ETHA1261009C00005000", adjusted)
     one = call(specs["reference_option_contract"], ctx, occ_symbol="etha1261009c00005000")
     assert one.rows[0].occ_symbol == "ETHA1261009C00005000"
+
+
+def test_option_contracts_without_an_expiration_filter_start_today_in_new_york(specs, alpaca):
+    alpaca.fixture("/v2/options/contracts", "OptionContracts__page2")
+    late_evening = FakeContext(
+        fixed_now=datetime(2026, 10, 3, 2, 0, tzinfo=UTC)
+    )  # 22:00 on Oct 2 in New York
+    out = call(specs["reference_option_contracts"], late_evening, underlyings=["AAPL"], strike_min=340)
+    assert alpaca.params()["expiration_date_gte"] == "2026-10-02"
+    assert "expiration_date_lte" not in alpaca.params()
+    assert out.provenance.request["expiration_from"] == "2026-10-02"
+    assert any("on or after 2026-10-02 (today in New York)" in n for n in out.notes)
+    assert "coming weekend" in specs["reference_option_contracts"].description
+
+
+def test_option_contracts_with_any_expiration_filter_send_only_that(specs, ctx, alpaca):
+    alpaca.fixture("/v2/options/contracts", "OptionContracts__page2")
+    for given, sent in (
+        ({"expiration_to": "2026-12-18"}, {"expiration_date_lte": "2026-12-18"}),
+        ({"expiration": "2026-10-16"}, {"expiration_date": "2026-10-16"}),
+        ({"expiration_from": "2026-11-01"}, {"expiration_date_gte": "2026-11-01"}),
+    ):
+        out = call(specs["reference_option_contracts"], ctx, underlyings=["AAPL"], **given)
+        expiry = {k: v for k, v in alpaca.params().items() if k.startswith("expiration")}
+        assert expiry == sent and out.notes == []
+
+
+def test_inactive_option_contracts_keep_alpacas_window_and_say_so(specs, ctx, alpaca):
+    alpaca.fixture("/v2/options/contracts", "OptionContracts__page2")
+    out = call(specs["reference_option_contracts"], ctx, underlyings=["AAPL"], status="inactive")
+    assert not any(k.startswith("expiration") for k in alpaca.params())
+    assert any("Alpaca's default window applies" in n for n in out.notes)
