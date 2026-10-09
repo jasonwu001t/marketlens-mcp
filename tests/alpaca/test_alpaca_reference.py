@@ -460,3 +460,16 @@ def test_ratio_legs_are_shares_not_fractions():
         for leg in ("old_rate", "new_rate"):
             assert props[leg]["x-unit"] == "shares", (model.__name__, leg)
             assert props[leg]["description"].startswith("Ratio leg: shares of the")
+
+
+def test_skip_reasons_name_the_field_and_value():
+    from marketlens_mcp.providers.alpaca.tools.common import skip_reason
+    from marketlens_schema.market import OptionTrade, StockExchange
+
+    with pytest.raises(ValidationError) as pattern:
+        OptionTrade(occ_symbol="NOT-OCC", underlying="AAPL", t=datetime.now(UTC), price=1, size=1)
+    assert skip_reason(pattern.value) == "occ_symbol 'NOT-OCC' is not of the field's form"
+    with pytest.raises(ValidationError) as missing:
+        StockExchange(code="N")
+    assert skip_reason(missing.value) == "name missing"
+    assert skip_reason(KeyError("symbol")) == "no 'symbol' field"
