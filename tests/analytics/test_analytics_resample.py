@@ -279,3 +279,27 @@ def test_single_bar_and_empty_buckets(store, ctx):
     one = store.put_rows(bars("AAPL", [7.0], start=M0, timeframe="1min"))
     (r,) = output_rows(run(SPEC, ctx, result_id=one, timeframe="1d"), Bar)
     assert (r.t, r.open, r.close, r.volume) == (utc(2026, 1, 5), 7.0, 7.0, 1000.0)
+
+
+def test_a_series_column_that_merges_tickers_of_bars_is_refused(store, ctx):
+    """series_column=asset_class over AAPL, SPY and TLT bars made each weekly bar
+    from three tickers (open AAPL's, high SPY's, close TLT's); like the other
+    analytics, two bars at one time in a series are refused."""
+    rows = minute_bars("AAPL") + minute_bars("SPY") + minute_bars("TLT")
+    rid = store.put_rows(rows)
+    with pytest.raises(ToolError) as e:
+        run(SPEC, ctx, result_id=rid, timeframe="5min", series_column="asset_class")
+    assert e.value.code == "duplicate_timestamps" and "asset_class" in e.value.message
+    assert len(output_rows(run(SPEC, ctx, result_id=rid, timeframe="5min"), Bar)) == 6
+
+
+def test_other_series_merged_by_series_column_carry_a_note(store, ctx):
+    other = [t.model_copy(update={"ticker": "MSFT", "t": t.t + MINUTE / 120}) for t in trades()]
+    rid = store.put_rows(trades() + other, tool="market_trades")
+    out = run(SPEC, ctx, result_id=rid, timeframe="1min", agg="sum", series_column="asset_class")
+    assert any(
+        "series_column asset_class puts several ticker values in one series (1 series)" in n and "sum" in n
+        for n in out.notes
+    )
+    plain = run(SPEC, ctx, result_id=rid, timeframe="1min", agg="sum")
+    assert not any("puts several" in n for n in plain.notes)
