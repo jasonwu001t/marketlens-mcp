@@ -94,6 +94,8 @@ _NEW_YORK = "America/New_York"
 _YEAR_SECONDS = 365.25 * 86400
 #: Fewest gaps between observations for their median spacing to overrule (or stand in for) the timeframe.
 _MIN_GAPS = 5
+#: Observations a median of less than this apart (seconds) are counted a day; further apart, over their span.
+_DAILY = 1.5 * 86400
 #: Results computed by results_query or analytics_align: their columns come from the results they were computed from.
 _DYNAMIC = (QUERY_ROW_SCHEMA_NAME, ALIGNED_SCHEMA_NAME)
 
@@ -196,14 +198,17 @@ def _per_day(session: ResultSession, rets: str, *, crypto: bool) -> float:
     )
 
 
-def _observed(session: ResultSession, rets: str, *, intraday: bool, crypto: bool) -> tuple[float, str]:
-    """periods_per_year counted from the observations themselves, and how."""
-    if intraday:
+def _observed(session: ResultSession, rets: str, *, by_day: bool, crypto: bool) -> tuple[float, str]:
+    """periods_per_year counted from the observations themselves, and how: a
+    day (sessions or days a year x the observations of the median day), or
+    over the time they span (which, for weekdays, is biased by the weekends
+    at its ends, so it is kept for observations further apart)."""
+    if by_day:
         per_day = _per_day(session, rets, crypto=crypto)
         days = 365 if crypto else 252
         return days * per_day, (
-            f"{days} {'days' if crypto else 'sessions'} a year x the median {per_day:g} observations a "
-            f"{'UTC' if crypto else 'New York'} day"
+            f"{days} {'days' if crypto else 'sessions'} a year x the median {per_day:g} "
+            f"observation{'' if per_day == 1 else 's'} a {'UTC' if crypto else 'New York'} day"
         )
     (row,) = rows(
         session,
@@ -227,7 +232,8 @@ def _annualisation(ctx: ToolContext, session: ResultSession, inp: Input, rets: s
     up to 16 hours when the bars include extended hours), or, when the
     observations are much further apart than the timeframe says (a weekly
     sample of daily bars kept as 1d) or there is no timeframe, their own
-    number per year."""
+    count: a day's (x 252 sessions, or 365 days for crypto) when they are a
+    day apart or less, else their number per year over their span."""
     tf = bar_timeframe(ctx, session, TOOL, inp)
     source = inp.rid
     labelled = f"{inp.rid} is labelled {tf}"
@@ -248,9 +254,10 @@ def _annualisation(ctx: ToolContext, session: ResultSession, inp: Input, rets: s
             "periods_per_year (252 for daily equity bars, 365 for daily crypto bars, 52 for weekly).",
         )
     if tf is None or (counted and spacing >= 2 * tf_seconds(tf)):
-        intraday = spacing < 86400 if tf is None else tf_parts(tf)[1] in ("min", "h")
-        crypto = intraday and _every_day(ctx, session, inp, rets)
-        ppy, how = _observed(session, rets, intraday=intraday, crypto=crypto)
+        # By the spacing, whatever the timeframe says: one 1h bar a Friday is a weekly series.
+        by_day = spacing < _DAILY
+        crypto = by_day and _every_day(ctx, session, inp, rets)
+        ppy, how = _observed(session, rets, by_day=by_day, crypto=crypto)
         why = (
             f"{inp.rid} has no bar timeframe, and its observations are a median {_span(spacing)} apart"
             if tf is None

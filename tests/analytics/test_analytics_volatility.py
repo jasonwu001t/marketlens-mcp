@@ -352,6 +352,46 @@ def test_sparse_intraday_bars_count_their_observations_a_day(store, ctx):
     assert any("labelled 1min" in n and "5 minutes apart" in n and "252 sessions" in n for n in out.notes)
 
 
+def test_a_weekly_or_monthly_sample_of_intraday_bars_is_counted_over_its_span(store, ctx):
+    """One 1h bar a Friday (a results_query filter keeps timeframe 1h) was
+    annualised as 252 sessions x 1 bar a New York day, overstating volatility
+    2.2 times: observations more than a day apart are counted per year over
+    their span, whatever the timeframe says."""
+    friday = utc(2026, 1, 9, 19)
+    for timeframe, step, n, ppy in (("1h", 7 * DAY, 20, 52.0), ("15min", 30 * DAY, 12, 12.0)):
+        closes = [100 * (1 + 0.01 * ((i * 7) % 5 - 2)) ** i for i in range(n)]
+        rid = store.put_rows(bars("AAPL", closes, start=friday, step=step, timeframe=timeframe))
+        out = run(SPEC, ctx, result_id=rid, window="all")
+        assert ppy_of(out) == {ppy}, timeframe
+        assert any(
+            f"labelled {timeframe}" in note and "their number per year over the time they span" in note
+            for note in out.notes
+        )
+    # A weekly query answer with no timeframe column takes the 15min of its bars, and is weekly all the same.
+    prices = store.put_rows(day_bars("AAPL", 26, start=OPEN_BELL))
+    weekly = store.put(
+        pa.table(
+            {
+                "t": pa.array([friday + i * 7 * DAY for i in range(10)], pa.timestamp("us", tz="UTC")),
+                "series": ["AAPL"] * 10,
+                "close": [100.0 + (i * 7) % 5 for i in range(10)],
+            }
+        ),
+        tool="results_query",
+        model="marketlens.QueryRow",
+        provenance=source_provenance(route="duckdb:results_query"),
+        time_column="t",
+        group_column="series",
+        column_units={"close": "price"},
+        parents=[prices],
+    ).result_id
+    out = run(SPEC, ctx, result_id=weekly, window="all")
+    assert ppy_of(out) == {52.0}
+    assert any(
+        f"{weekly} was computed from 15min results" in n and "a median 7 days apart" in n for n in out.notes
+    )
+
+
 def test_a_short_daily_sample_over_a_weekend_stays_daily(store, ctx):
     times = [utc(2026, 1, 8, 21), utc(2026, 1, 9, 21), utc(2026, 1, 12, 21)]
     rid = store.put_rows(bars("AAPL", [100, 101, 99], times=times))
@@ -400,12 +440,12 @@ def test_store_keeps_a_small_output(store, ctx):
     assert run(SPEC, ctx, result_id=rid, window=3, store=True).offload == "always"
 
 
-def query_returns(store, rets, units=None, times=None, parents=()):
+def query_returns(store, rets, units=None, times=None, parents=(), series="PORT"):
     t0 = utc(2026, 3, 2)
     table = pa.table(
         {
             "t": pa.array(times or [t0 + i * DAY for i in range(len(rets))], pa.timestamp("us", tz="UTC")),
-            "series": ["PORT"] * len(rets),
+            "series": [series] * len(rets),
             "ret": rets,
         }
     )
@@ -482,21 +522,32 @@ WEEKDAYS = [utc(2026, 3, 2, 21) + d * DAY for d in range(26) if d % 7 < 5]
 
 def test_without_a_timeframe_the_observations_are_counted(store, ctx):
     """A portfolio's daily returns from results_query had no timeframe, so
-    periods_per_year was required: with at least 5 returns, their number per
-    year over the time they span is used, and the note says so."""
-    rets = [0.01 * ((i * 7) % 5 - 2) for i in range(len(WEEKDAYS))]
-    rid = query_returns(store, rets, times=WEEKDAYS)
-    out = run(SPEC, ctx, result_id=rid, window="all", input_kind="returns")
-    ppy = round(19 / 25 * 365.25)  # 20 observations, 19 intervals over 25 days
-    (row,) = output_rows(out, VolatilityPoint)
-    assert row.periods_per_year == ppy
-    assert row.volatility == pytest.approx(statistics.stdev(rets) * math.sqrt(ppy), rel=1e-12)
-    assert any(
-        f"periods_per_year = {ppy}: {rid} has no bar timeframe, and its observations are a median 1 day apart"
-        in n
-        and "their number per year over the time they span" in n
-        for n in out.notes
-    )
+    periods_per_year was required: with at least 5 returns they are counted.
+    A day apart or less, per New York day (UTC day for crypto) x 252 sessions
+    (365 days): ten weekdays from a Monday were 299 a year over their calendar
+    span, which leaves out the weekends at its ends. Further apart, their
+    number per year over the time they span."""
+    for days in (WEEKDAYS, WEEKDAYS[:10]):
+        rets = [0.01 * ((i * 7) % 5 - 2) for i in range(len(days))]
+        rid = query_returns(store, rets, times=days)
+        out = run(SPEC, ctx, result_id=rid, window="all", input_kind="returns")
+        (row,) = output_rows(out, VolatilityPoint)
+        assert row.periods_per_year == 252.0, len(days)
+        assert row.volatility == pytest.approx(statistics.stdev(rets) * math.sqrt(252), rel=1e-12)
+        assert any(
+            f"periods_per_year = 252: {rid} has no bar timeframe, and its observations are a median 1 day apart"
+            in n
+            and "252 sessions a year x the median 1 observation a New York day" in n
+            for n in out.notes
+        )
+    every_day = [utc(2026, 3, 2) + i * DAY for i in range(10)]
+    crypto = query_returns(store, RETS * 2, times=every_day, series="BTC/USD")
+    assert ppy_of(run(SPEC, ctx, result_id=crypto, window="all", input_kind="returns")) == {365.0}
+    fridays = [utc(2026, 3, 6, 21) + i * 7 * DAY for i in range(8)]
+    weekly = query_returns(store, [0.01 * ((i * 7) % 5 - 2) for i in range(8)], times=fridays)
+    out = run(SPEC, ctx, result_id=weekly, window="all", input_kind="returns")
+    assert ppy_of(out) == {float(round(7 / 49 * 365.25))}  # 7 intervals over 49 days: 52
+    assert any("their number per year over the time they span" in n for n in out.notes)
 
 
 def test_a_query_answer_takes_the_timeframe_it_was_computed_from(store, ctx):
