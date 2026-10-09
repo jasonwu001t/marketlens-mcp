@@ -14,7 +14,7 @@ from collections.abc import Iterable, Mapping
 from datetime import UTC, datetime
 from typing import Any
 
-from marketlens_schema.base import TICKER_RE, AbsenceCode
+from marketlens_schema.base import TICKER_RE, AbsenceCode, normalize_ticker
 from marketlens_schema.market import (
     Bar,
     FixedIncomeQuote,
@@ -398,12 +398,14 @@ def fixed_income_quote(raw: Raw, *, isin: str) -> FixedIncomeQuote:
 
 def news_item(raw: Raw, *, include_content: bool) -> tuple[NewsItem, int]:
     """A news article; returns the row and how many of its symbols were not
-    tickers (dropped). Text fields are untrusted third-party prose."""
+    tickers (dropped). A share class tagged BRK.B or BRK/B is the ticker
+    BRK-B. Text fields are untrusted third-party prose."""
     tickers, dropped = [], 0
     for sym in raw.get("symbols") or []:
-        t = to_ticker(str(sym), "us_equity")
+        t = normalize_ticker(str(sym))
         if TICKER_RE.match(t):
-            tickers.append(t)
+            if t not in tickers:
+                tickers.append(t)
         else:
             dropped += 1
     row = build_row(

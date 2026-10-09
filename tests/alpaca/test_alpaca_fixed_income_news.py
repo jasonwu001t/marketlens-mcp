@@ -49,7 +49,7 @@ def test_news_search_golden_pages_and_untrusted_text(specs, ctx, alpaca):
     out = call(specs["news_search"], ctx, tickers=["aapl", "brk.b"])
     doc = check_golden(out, "news_search")
     assert alpaca.params(0) == {
-        "symbols": "AAPL,BRK.B",
+        "symbols": "AAPL,BRK.B,BRK/B",  # a share class is tagged both ways
         "start": "2026-09-25T20:00:00Z",
         "sort": "desc",
         "include_content": "false",
@@ -85,6 +85,39 @@ def test_news_lookback_doc_says_nothing_of_bars(specs):
         assert "Bars" not in doc, name
     for name in ("market_bars", "crypto_bars", "options_bars"):
         assert "Bars of 1d or longer" in specs[name].input_model.model_fields["lookback"].description, name
+
+
+def _article(i: int, symbols: list[str], headline: str = "Synthetic headline", summary: str = "") -> dict:
+    return {
+        "id": i,
+        "headline": headline,
+        "summary": summary,
+        "author": "A. Writer",
+        "created_at": "2026-10-02T11:08:42Z",
+        "updated_at": "2026-10-02T11:08:43Z",
+        "symbols": symbols,
+        "source": "benzinga",
+        "url": f"https://www.example.com/news/{i}",
+    }
+
+
+def test_news_share_class_tags_are_tickers_both_ways(specs, ctx, alpaca):
+    alpaca.add(
+        "/v1beta1/news", {"news": [_article(1, ["BRK", "BRK/B", "BRK/A", "BRK.B"])], "next_page_token": None}
+    )
+    out = call(specs["news_search"], ctx, tickers=["BRK-B"], lookback="P30D")
+    assert alpaca.params()["symbols"] == "BRK.B,BRK/B"
+    assert out.rows[0].tickers == ["BRK", "BRK-B", "BRK-A"]  # BRK/B and BRK.B are one ticker, kept once
+    assert out.notes == []  # nothing dropped as "not a ticker", and BRK-B is tagged
+
+
+def test_news_names_a_share_class_no_article_is_tagged_with(specs, ctx, alpaca):
+    alpaca.add("/v1beta1/news", {"news": [_article(1, ["BRK", "AAPL"])], "next_page_token": None})
+    out = call(specs["news_search"], ctx, tickers=["BRK-B", "AAPL"], lookback="P30D")
+    assert out.notes == [
+        "No article in the window is tagged BRK-B (as BRK.B or BRK/B); the news may tag the company by its root "
+        "alone: ask for BRK."
+    ]
 
 
 def test_news_search_with_content(specs, ctx, alpaca):
