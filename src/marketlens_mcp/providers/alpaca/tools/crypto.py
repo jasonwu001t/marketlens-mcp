@@ -7,7 +7,7 @@ from collections import Counter
 from datetime import datetime, timedelta
 from typing import Literal
 
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from marketlens_mcp.plugin_api import ToolContext, ToolOutput
 from marketlens_schema.base import Delay
@@ -45,7 +45,7 @@ from .common import (
     stale_rows_note,
     window,
 )
-from .marketdata import fetch_grouped, fetch_once
+from .marketdata import HISTORY_PAGE_MAX, fetch_grouped, fetch_once
 
 GOLDEN = "tests/alpaca/test_alpaca_crypto.py"
 CR = "crypto"
@@ -79,6 +79,22 @@ class TicksIn(Inputs):
     lookback: Duration | None = Field(None, description=LOOKBACK_DOC + " Default PT15M.")
     sort: Literal["asc", "desc"] = Field("asc", description=SORT_DOC)
     page_token: str | None = Field(None, max_length=2000, description=CONTINUE_DOC)
+
+
+class TradesIn(TicksIn):
+    limit: int | None = Field(
+        None,
+        ge=1,
+        le=HISTORY_PAGE_MAX,
+        description="At most this many trades per pair in the window, the first in sort order: sort desc with "
+        "limit 100 gives each pair's latest 100 (one request per pair; not with page_token).",
+    )
+
+    @model_validator(mode="after")
+    def _one_way(self) -> TradesIn:
+        if self.limit is not None and self.page_token is not None:
+            raise ValueError("limit takes each pair's first trades; page_token continues a fetch without it")
+        return self
 
 
 class LatestIn(Inputs):
@@ -162,7 +178,7 @@ def _mapper(kind: str, ticker: str, timeframe: str = "1min"):
 
 
 async def _history(
-    ctx: ToolContext, args: BarsIn | TicksIn, kind: Literal["bars", "quotes", "trades"]
+    ctx: ToolContext, args: BarsIn | TicksIn | TradesIn, kind: Literal["bars", "quotes", "trades"]
 ) -> ToolOutput:
     model = {"bars": Bar, "quotes": Quote, "trades": Trade}[kind]
     operation = {"bars": "CryptoBars", "quotes": "CryptoQuotes", "trades": "CryptoTrades"}[kind]
@@ -191,15 +207,33 @@ async def _history(
             "end": iso_z(win.end),
             "sort": args.sort,
         }
-        page = await fetch_grouped(
-            ctx,
-            api,
-            path=f"{BASE.format(loc=loc)}/{kind}",
-            params=params,
-            key=kind,
-            mapper=rows,
-            start_token=args.page_token,
-        )
+        limit = getattr(args, "limit", None)
+        if limit is None:
+            page = await fetch_grouped(
+                ctx,
+                api,
+                path=f"{BASE.format(loc=loc)}/{kind}",
+                params=params,
+                key=kind,
+                mapper=rows,
+                start_token=args.page_token,
+            )
+        else:
+
+            async def first_of_each() -> list:
+                """One request per pair: Alpaca's limit counts across all the pairs of a request."""
+                out = []
+                for pair in args.tickers:
+                    data = await api.get(
+                        "data",
+                        f"{BASE.format(loc=loc)}/{kind}",
+                        {**params, "symbols": [pair], "limit": limit},
+                    )
+                    for symbol, records in (data.get(kind) or {}).items():
+                        out.extend(rows(symbol, list(records or [])[:limit]))
+                return out
+
+            page = await fetch_once(ctx, first_of_each)
     return output(
         ctx,
         model,
@@ -233,7 +267,7 @@ async def crypto_quotes(ctx: ToolContext, args: TicksIn) -> ToolOutput:
     return await _history(ctx, args, "quotes")
 
 
-async def crypto_trades(ctx: ToolContext, args: TicksIn) -> ToolOutput:
+async def crypto_trades(ctx: ToolContext, args: TradesIn) -> ToolOutput:
     return await _history(ctx, args, "trades")
 
 
@@ -415,9 +449,10 @@ SPECS = (
         capability="market",
         title="Crypto trades",
         description="Historical crypto trades (size in base units) with the taker side (buy/sell). Window by "
-        "start/end or lookback (default PT15M)." + _SIZE,
+        "start/end or lookback (default PT15M); limit keeps each pair's first trades in sort order (sort desc: "
+        "the latest)." + _SIZE,
         readme="Historical crypto trades",
-        input_model=TicksIn,
+        input_model=TradesIn,
         output_model=Trade,
         route=f"GET {BASE}/trades{_R}",
         handler=crypto_trades,

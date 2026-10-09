@@ -21,6 +21,7 @@ All notable changes to this project are documented here. The format follows [Kee
 - `news_search` takes `query`: only articles whose headline or summary has every word of it, as whole words in any case. Alpaca's news API has no text search, so the server filters the articles Alpaca returns for the window and tickers (the fetch still reads them all, and the fetch limits apply before the filter), and a note says how many of how many matched.
 - `market_most_active` rows carry each stock's `price` (latest trade), `change`, `change_pct` and `change_basis` from its snapshot (one `GET /v2/stocks/snapshots` for the list, on the configured `stock_feed`, computed as `market_snapshots` does; when the snapshots cannot be read the columns are null with a note), and the tool takes `min_price`: Alpaca's top 100 are screened, ranked from 1 among the kept and cut to `top`, and notes say how many were dropped (below the price, or without one) and any shortfall. `MostActive` gains the four optional columns (schema 1.1.0, unreleased).
 - `market_movers` takes `quote_currency` for crypto (USD, USDT, USDC, BTC, ETH or EUR): only pairs quoted in it are kept (Alpaca's list has BAT/USD, BAT/USDC and UNI/BTC side by side), screening Alpaca's top 50 like the other filters.
+- `crypto_trades` takes `limit`: at most that many trades per pair in the window, the first in sort order (`sort="desc", limit=100` is each pair's latest 100), one request per pair since Alpaca's own limit counts across the pairs of a request; it is refused together with `page_token`.
 
 ### Changed
 

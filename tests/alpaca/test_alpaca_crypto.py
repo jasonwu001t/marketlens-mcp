@@ -406,3 +406,36 @@ def test_market_movers_without_filters_say_when_alpaca_ranked_fewer_than_top(spe
     out = call(specs["market_movers"], ctx, market_type="crypto", top=5)
     assert alpaca.params() == {"top": "5"} and len(out.rows) == 9
     assert out.notes == ["Alpaca ranked 4 losers, fewer than the 5 asked for."]
+
+
+def _trades(pair: str, *times: str) -> dict:
+    return {
+        "trades": {
+            pair: [{"t": t, "p": 100.0 + i, "s": 0.1, "i": i, "tks": "B"} for i, t in enumerate(times)]
+        },
+        "next_page_token": "MORE",  # Alpaca would page on: limit takes the first trades only
+    }
+
+
+def test_crypto_trades_limit_takes_each_pairs_latest_trades(specs, ctx, alpaca):
+    alpaca.add(
+        "/v1beta3/crypto/us/trades",
+        _trades("BTC/USD", "2026-10-02T19:59:59Z", "2026-10-02T19:59:58Z"),
+        match={"symbols": "BTC/USD"},
+    )
+    alpaca.add(
+        "/v1beta3/crypto/us/trades", _trades("ETH/USD", "2026-10-02T19:59:57Z"), match={"symbols": "ETH/USD"}
+    )
+    out = call(
+        specs["crypto_trades"], ctx, tickers=["BTC/USD", "ETH/USD"], sort="desc", limit=2, lookback="PT1H"
+    )
+    # One request per pair: Alpaca's limit counts across the pairs of one request.
+    assert [alpaca.params(i)["symbols"] for i in range(2)] == ["BTC/USD", "ETH/USD"]
+    assert {(alpaca.params(i)["limit"], alpaca.params(i)["sort"]) for i in range(2)} == {("2", "desc")}
+    assert [(r.ticker, r.t.second) for r in out.rows] == [("BTC/USD", 59), ("BTC/USD", 58), ("ETH/USD", 57)]
+    assert out.pagination.complete and out.provenance.request["limit"] == 2
+
+
+def test_crypto_trades_limit_and_page_token_are_refused_together(specs, ctx):
+    with pytest.raises(ValidationError, match="limit takes each pair's first trades"):
+        call(specs["crypto_trades"], ctx, tickers=["BTC/USD"], limit=5, page_token="X")
