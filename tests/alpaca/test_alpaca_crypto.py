@@ -339,3 +339,70 @@ def test_market_movers_crypto_min_price_counts_only_what_it_dropped(specs, ctx, 
         "Filters dropped 1 of 2 gainers Alpaca ranked: 1 priced below min_price 1.",
         "Alpaca ranked 2 gainers and no losers, fewer than the 10 asked for.",
     ]
+
+
+def _mover(symbol: str, price: float, pct: float) -> dict:
+    return {"symbol": symbol, "percent_change": pct, "change": price * pct / 100, "price": price}
+
+
+def _movers(gainers: list[tuple[str, float]], losers: list[tuple[str, float]]) -> dict:
+    return {
+        "gainers": [_mover(s, p, 10.0 - i) for i, (s, p) in enumerate(gainers)],
+        "losers": [_mover(s, p, -5.0 - i) for i, (s, p) in enumerate(losers)],
+        "market_type": "crypto",
+        "last_updated": "2026-10-02T19:55:00Z",
+    }
+
+
+def test_market_movers_crypto_quote_currency_keeps_one_quote_leg(specs, ctx, alpaca):
+    alpaca.add(
+        "/v1beta1/screener/crypto/movers",
+        _movers(
+            [
+                ("BAT/USD", 0.11),
+                ("BAT/USDC", 0.11),
+                ("UNI/BTC", 0.0000884),
+                ("DOT/USD", 1.17),
+                ("BTC/USDT", 82893.0),
+            ],
+            [("ETH/BTC", 0.03), ("SOL/USD", 151.9)],
+        ),
+    )
+    out = call(specs["market_movers"], ctx, market_type="crypto", top=2, quote_currency="usd")
+    assert alpaca.params() == {"top": "50"}
+    assert [(r.direction, r.rank, r.ticker) for r in out.rows] == [
+        ("gainer", 1, "BAT/USD"),
+        ("gainer", 2, "DOT/USD"),
+        ("loser", 1, "SOL/USD"),
+    ]
+    assert out.notes == [
+        "Filters dropped 3 of 5 gainers and 1 of 2 losers Alpaca ranked: 4 not quoted in USD.",
+        "Only 1 of 2 losers passed the filters.",
+    ]
+    assert out.provenance.request["quote_currency"] == "USD"
+
+
+@pytest.mark.parametrize(
+    ("args", "message"),
+    [
+        ({"market_type": "crypto", "quote_currency": "XYZ"}, "'XYZ' is not a quote currency"),
+        ({"market_type": "stocks", "quote_currency": "USD"}, "quote_currency applies to crypto only"),
+    ],
+)
+def test_market_movers_quote_currency_is_checked(specs, ctx, args, message):
+    with pytest.raises(ValidationError, match=message):
+        call(specs["market_movers"], ctx, **args)
+
+
+def test_market_movers_without_filters_say_when_alpaca_ranked_fewer_than_top(specs, ctx, alpaca):
+    # Alpaca's crypto list is short: top 5 gave 5 gainers and 4 losers, 9 rows with no word.
+    alpaca.add(
+        "/v1beta1/screener/crypto/movers",
+        _movers(
+            [("BAT/USD", 0.11), ("DOT/USD", 1.17), ("ARB/USD", 0.18), ("LDO/USD", 0.42), ("UNI/USD", 7.3)],
+            [("ETH/BTC", 0.03), ("SOL/USD", 151.9), ("XRP/USD", 0.5), ("AVAX/USD", 9.1)],
+        ),
+    )
+    out = call(specs["market_movers"], ctx, market_type="crypto", top=5)
+    assert alpaca.params() == {"top": "5"} and len(out.rows) == 9
+    assert out.notes == ["Alpaca ranked 4 losers, fewer than the 5 asked for."]

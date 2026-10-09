@@ -7,10 +7,10 @@ from collections import Counter
 from datetime import datetime, timedelta
 from typing import Literal
 
-from pydantic import Field, model_validator
+from pydantic import Field, field_validator, model_validator
 
 from marketlens_mcp.plugin_api import ToolContext, ToolError, ToolOutput
-from marketlens_schema.base import Delay
+from marketlens_schema.base import CRYPTO_QUOTE_CURRENCIES, Delay
 from marketlens_schema.market import Bar, MostActive, Mover, Quote, Snapshot, Trade
 
 from .. import mappers
@@ -127,7 +127,13 @@ class MoversIn(Inputs):
     min_price: float | None = Field(
         None,
         ge=0,
-        description="Drop movers priced below this (USD), e.g. 1 to leave out sub-dollar listings.",
+        description="Drop movers priced below this (USD; for crypto, the pair's quote currency), e.g. 1 to "
+        "leave out sub-dollar listings.",
+    )
+    quote_currency: str | None = Field(
+        None,
+        description="Crypto only: keep the pairs quoted in this currency (USD, USDT, USDC, BTC, ETH or EUR), "
+        "e.g. USD to leave out BTC/USDT and ETH/BTC beside BTC/USD.",
     )
     exclude_warrants_rights_units: bool = Field(
         False,
@@ -137,10 +143,22 @@ class MoversIn(Inputs):
         "(names are read once and kept a day; a partnership's common units are kept).",
     )
 
+    @field_validator("quote_currency")
+    @classmethod
+    def _quote(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        q = v.strip().upper()
+        if q not in CRYPTO_QUOTE_CURRENCIES:
+            raise ValueError(f"'{v}' is not a quote currency ({', '.join(sorted(CRYPTO_QUOTE_CURRENCIES))})")
+        return q
+
     @model_validator(mode="after")
     def _stocks_only(self) -> MoversIn:
         if self.exclude_warrants_rights_units and self.market_type != "stocks":
             raise ValueError("exclude_warrants_rights_units applies to stocks only")
+        if self.quote_currency and self.market_type != "crypto":
+            raise ValueError("quote_currency applies to crypto only")
         return self
 
 
@@ -546,7 +564,9 @@ def _screen(
     (one, many)."""
     kept: list[Mover] = []
     for row in rows:
-        if args.min_price is not None and row.price < args.min_price:
+        if args.quote_currency and row.ticker.partition("/")[2] != args.quote_currency:
+            reasons[(f"not quoted in {args.quote_currency}",) * 2] += 1
+        elif args.min_price is not None and row.price < args.min_price:
             reasons[(f"priced below min_price {args.min_price:g}",) * 2] += 1
         elif args.exclude_warrants_rights_units and warrant_right_or_unit(row.ticker):
             reasons[("warrant, right or unit by symbol", "warrants, rights or units by symbol")] += 1
@@ -596,7 +616,7 @@ def _screen_notes(
 async def market_movers(ctx: ToolContext, args: MoversIn) -> ToolOutput:
     skips = Skips(Mover.schema_name)
     as_of = None
-    screened = args.min_price is not None or args.exclude_warrants_rights_units
+    screened = args.min_price is not None or args.exclude_warrants_rights_units or bool(args.quote_currency)
     counts: dict[str, tuple[int, int, int]] = {}
     reasons: Counter[tuple[str, str]] = Counter()
     notes: list[str] = []
@@ -631,6 +651,8 @@ async def market_movers(ctx: ToolContext, args: MoversIn) -> ToolOutput:
                     kept = _screen(rows, args, reasons, names)
                     counts[direction] = (len(ranked), len(rows) - len(kept), len(kept))
                     rows = kept[: args.top]
+                else:
+                    counts[direction] = (len(ranked), 0, len(rows))
                 out += rows
             return out
 
@@ -787,9 +809,9 @@ SPECS = (
         title="Top movers",
         description="Today's top gainers and losers for stocks or crypto: price, change (USD) and "
         "percent_change as a fraction (0.05 = 5 %), ranked within each direction. Alpaca's lists include "
-        "warrants, rights, units and sub-penny listings: min_price and exclude_warrants_rights_units (stocks, "
-        "by symbol and asset name) screen Alpaca's top 50 instead, rank counts the movers kept, and notes say "
-        "how many were dropped and why.",
+        "warrants, rights, units and sub-penny listings: min_price, exclude_warrants_rights_units (stocks, by "
+        "symbol and asset name) and quote_currency (crypto) screen Alpaca's top 50 instead, rank counts the "
+        "movers kept, and notes say how many were dropped and why, and when a direction has fewer than top.",
         readme="Top gainers and losers",
         input_model=MoversIn,
         output_model=Mover,
