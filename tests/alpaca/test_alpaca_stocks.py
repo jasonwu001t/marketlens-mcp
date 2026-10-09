@@ -569,6 +569,14 @@ def test_market_most_active_min_price_screens_the_top_100(specs, ctx, alpaca):
     ]
 
 
+def test_market_most_active_min_price_does_not_blame_itself_for_a_short_list(specs, ctx, alpaca):
+    alpaca.add("/v1beta1/screener/stocks/most-actives", _actives("NVDA", "AAPL"))
+    alpaca.add("/v2/stocks/snapshots", {"NVDA": _price(187.6), "AAPL": _price(255.8)})
+    out = call(specs["market_most_active"], ctx, top=3, min_price=5)
+    assert [r.ticker for r in out.rows] == ["NVDA", "AAPL"]
+    assert out.notes == ["Alpaca ranked 2, fewer than the 3 asked for."]
+
+
 def test_market_most_active_without_snapshots_still_ranks(specs, ctx, alpaca):
     alpaca.fixture("/v1beta1/screener/stocks/most-actives", "MostActives")
     alpaca.add(

@@ -522,8 +522,10 @@ def _min_price_screen(
         notes.append(
             f"min_price dropped {below + unpriced} of the {ranked} most active Alpaca ranked: {', '.join(why)}."
         )
-    if len(kept) < args.top:
+    if why and len(kept) < args.top <= len(kept) + below + unpriced:
         notes.append(f"Only {len(kept)} of the {args.top} asked for passed min_price.")
+    if ranked < args.top:
+        notes.append(f"Alpaca ranked {ranked}, fewer than the {args.top} asked for.")
     return kept[: args.top]
 
 
