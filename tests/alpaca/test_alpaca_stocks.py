@@ -4,13 +4,31 @@ market_movers (golden outputs + the behaviours behind them)."""
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+from urllib.parse import parse_qsl
+
 import pytest
-from alpaca_harness import FakeContext, call, check_golden
+from alpaca_harness import NOW, FakeContext, call, check_golden
 from pydantic import ValidationError
 
 from marketlens_mcp.plugin_api import FetchLimits, ToolError
 
 CURSOR = "QUFQTHxEfDIwMjYtMTAtMDE="  # the synthetic next-page cursor in StockBars__page1
+
+
+def asset_names(alpaca, names: dict[str, str] | None = None):
+    """The active-asset list market_movers reads names from (synthetic, trimmed to what a test needs)."""
+    names = names or {
+        "WORX": "SharpLink Gaming Ltd. Ordinary Shares",
+        "BULG": "Bulgari Holdings Inc. Common Stock",
+    }
+    return alpaca.add(
+        "/v2/assets",
+        [
+            {"symbol": sym, "name": name, "class": "us_equity", "status": "active"}
+            for sym, name in names.items()
+        ],
+    )
 
 
 def test_market_bars_golden_two_pages_and_brk_b(specs, ctx, alpaca):
@@ -105,18 +123,161 @@ def test_delayed_sip_is_sent_as_sip_on_history_and_marked_delayed(specs, alpaca)
         ("1h", "2025-10-07T08:31:05Z"),
     ],
 )
-def test_a_daily_lookback_starts_at_the_first_days_utc_midnight(specs, ctx, alpaca, timeframe, start):
+def test_a_daily_lookback_starts_at_the_first_days_utc_midnight(specs, alpaca, timeframe, start):
     # The 2025-10-07 daily bar is stamped 04:00Z (midnight New York): a start at 08:31:05Z would drop it.
     alpaca.fixture("/v2/stocks/bars", "StockBars__intraday")
     call(
         specs["market_bars"],
-        ctx,
+        FakeContext(fixed_now=datetime(2026, 10, 8, tzinfo=UTC)),
         tickers=["MSFT"],
         timeframe=timeframe,
         lookback="P1Y",
         end="2026-10-07T04:31:05-04:00",
     )
     assert alpaca.params()["start"] == start
+
+
+@pytest.mark.parametrize(
+    ("tool", "path", "fixture"),
+    [
+        ("market_bars", "/v2/stocks/bars", "StockBars__intraday"),
+        ("market_quotes", "/v2/stocks/quotes", "StockQuotes"),
+        ("market_trades", "/v2/stocks/trades", "StockTrades"),
+    ],
+)
+def test_a_date_end_includes_that_new_york_day(specs, ctx, alpaca, tool, path, fixture):
+    # A daily bar is stamped at midnight New York (04:00Z): 00:00Z of the end date would drop that day's bar.
+    alpaca.fixture(path, fixture)
+    out = call(specs[tool], ctx, tickers=["MSFT"], start="2026-09-28", end="2026-10-01")
+    assert alpaca.params()["end"] == "2026-10-02T03:59:59.999999Z"
+    assert out.provenance.request["end"] == "2026-10-02T03:59:59.999999Z"
+    assert out.provenance.as_of == datetime(2026, 10, 2, 3, 59, 59, 999999, tzinfo=UTC)
+    assert out.notes[0] == (
+        "end 2026-10-01 is a date: the window includes that whole day, to midnight New York time "
+        "(2026-10-02T03:59:59.999999Z)."
+    )
+
+
+def test_a_date_end_alone_with_the_same_start_is_one_day(specs, ctx, alpaca):
+    alpaca.fixture("/v2/stocks/bars", "StockBars__intraday")
+    call(specs["market_bars"], ctx, tickers=["MSFT"], start="2026-10-01", end="2026-10-01")
+    assert (alpaca.params()["start"], alpaca.params()["end"]) == (
+        "2026-10-01T00:00:00Z",
+        "2026-10-02T03:59:59.999999Z",
+    )
+
+
+@pytest.mark.parametrize(
+    ("tool", "path", "fixture"),
+    [
+        ("market_bars", "/v2/stocks/bars", "StockBars__intraday"),
+        ("market_quotes", "/v2/stocks/quotes", "StockQuotes"),
+        ("market_trades", "/v2/stocks/trades", "StockTrades"),
+    ],
+)
+@pytest.mark.parametrize("end", ["2026-10-10", "2026-10-02T19:50:00Z"])
+def test_an_end_past_the_delayed_sip_feeds_reach_is_cut_with_a_note(specs, alpaca, tool, path, fixture, end):
+    # A plan without real-time SIP is refused the last 15 minutes ("recent SIP data", HTTP 403).
+    alpaca.fixture(path, fixture)
+    ctx = FakeContext(settings={"stock_feed": "delayed_sip"})
+    out = call(specs[tool], ctx, tickers=["MSFT"], start="2026-10-02", end=end)
+    assert alpaca.params()["end"] == "2026-10-02T19:44:00Z"  # NOW - 16 minutes
+    assert out.provenance.as_of == datetime(2026, 10, 2, 19, 44, tzinfo=UTC)
+    assert out.notes[0] == (
+        f"end {end} is later than the newest data the delayed SIP feed serves (16 minutes before now): the "
+        "window ends at 2026-10-02T19:44:00Z."
+    )
+
+
+def test_an_end_within_the_delayed_sip_feeds_reach_is_kept(specs, alpaca):
+    alpaca.fixture("/v2/stocks/bars", "StockBars__intraday")
+    ctx = FakeContext(settings={"stock_feed": "delayed_sip"})
+    out = call(specs["market_bars"], ctx, tickers=["MSFT"], timeframe="1h", end="2026-10-02T19:40:00Z")
+    assert alpaca.params()["end"] == "2026-10-02T19:40:00Z" and out.notes == []
+
+
+def test_without_an_end_the_delayed_sip_feed_reaches_back_to_its_lag(specs, alpaca):
+    alpaca.fixture("/v2/stocks/trades", "StockTrades")
+    ctx = FakeContext(settings={"stock_feed": "delayed_sip"})
+    out = call(specs["market_trades"], ctx, tickers=["BRK-B"])
+    assert "end" not in alpaca.params()  # Alpaca's own default end
+    assert out.provenance.as_of == datetime(2026, 10, 2, 19, 44, tzinfo=UTC)
+    assert out.notes[0] == (
+        "the default lookback PT20M reaches back from the newest data the delayed SIP feed serves (16 minutes "
+        "before now): the window starts at 2026-10-02T19:24:00Z."
+    )
+
+
+def test_a_future_end_on_a_real_time_feed_is_cut_to_now(specs, ctx, alpaca):
+    alpaca.fixture("/v2/stocks/bars", "StockBars__intraday")
+    out = call(specs["market_bars"], ctx, tickers=["MSFT"], start="2026-10-01", end="2026-10-10")
+    assert alpaca.params()["end"] == "2026-10-02T20:00:00Z"
+    assert out.provenance.as_of == NOW
+    assert out.notes[0] == "end 2026-10-10 is in the future: the window ends now, 2026-10-02T20:00:00Z."
+
+
+def test_a_start_past_the_delayed_sip_feeds_reach_is_refused(specs, alpaca):
+    ctx = FakeContext(settings={"stock_feed": "delayed_sip"})
+    with pytest.raises(ToolError) as e:
+        call(
+            specs["market_trades"],
+            ctx,
+            tickers=["MSFT"],
+            start="2026-10-02T19:50:00Z",
+            end="2026-10-02T19:55:00Z",
+        )
+    assert e.value.code == "invalid_arguments"
+    assert e.value.message == (
+        "start (2026-10-02T19:50:00Z) is not before the newest data the delayed SIP feed serves "
+        "(2026-10-02T19:44:00Z); pass an earlier start."
+    )
+    assert alpaca.requests == []
+
+
+@pytest.mark.parametrize(
+    ("tool", "start"),
+    [("market_trades", "2026-10-02T19:55:00Z"), ("market_quotes", "2026-10-02T19:44:00Z")],
+)
+def test_a_start_past_the_delayed_sip_feeds_reach_without_an_end_is_refused(specs, alpaca, tool, start):
+    # Live: start now-5min, no end -> Alpaca 403 "recent SIP data"; start now-30min, no end -> served.
+    ctx = FakeContext(settings={"stock_feed": "delayed_sip"})
+    with pytest.raises(ToolError) as e:
+        call(specs[tool], ctx, tickers=["AAPL"], start=start)
+    assert e.value.code == "invalid_arguments"
+    assert e.value.message == (
+        f"start ({start}) is not before the newest data the delayed SIP feed serves (2026-10-02T19:44:00Z); "
+        "pass an earlier start."
+    )
+    assert alpaca.requests == []
+
+
+def test_a_lookback_without_an_end_reaches_back_from_the_delayed_sip_feeds_newest_data(specs, alpaca):
+    alpaca.fixture("/v2/stocks/trades", "StockTrades")
+    ctx = FakeContext(settings={"stock_feed": "delayed_sip"})
+    out = call(specs["market_trades"], ctx, tickers=["AAPL"], lookback="PT5M")
+    assert alpaca.params()["start"] == "2026-10-02T19:39:00Z" and "end" not in alpaca.params()
+    assert out.provenance.as_of == datetime(2026, 10, 2, 19, 44, tzinfo=UTC)
+    assert out.notes[0] == (
+        "lookback PT5M reaches back from the newest data the delayed SIP feed serves (16 minutes before now): "
+        "the window starts at 2026-10-02T19:39:00Z."
+    )
+
+
+def test_a_lookback_without_an_end_on_a_real_time_feed_says_nothing_of_a_lag(specs, ctx, alpaca):
+    alpaca.fixture("/v2/stocks/trades", "StockTrades")
+    out = call(specs["market_trades"], ctx, tickers=["AAPL"], lookback="PT5M")
+    assert alpaca.params()["start"] == "2026-10-02T19:55:00Z"
+    assert not any("reaches back" in n for n in out.notes)
+
+
+def test_a_future_start_without_an_end_is_refused(specs, ctx, alpaca):
+    with pytest.raises(ToolError) as e:
+        call(specs["market_bars"], ctx, tickers=["AAPL"], start="2026-10-03")
+    assert e.value.message == (
+        "start (2026-10-03T00:00:00Z) is not before the newest data Alpaca serves (2026-10-02T20:00:00Z); "
+        "pass an earlier start."
+    )
+    assert alpaca.requests == []
 
 
 def test_start_and_lookback_together_are_refused(specs, ctx, alpaca):
@@ -170,6 +331,42 @@ def test_market_trades_golden_drops_canceled_trades(specs, ctx, alpaca):
     assert any("canceled" in n for n in doc["notes"])
 
 
+@pytest.mark.parametrize(
+    ("tool", "path", "fixture", "has"),
+    [
+        ("market_bars", "/v2/stocks/bars", "StockBars__intraday", "MSFT"),
+        ("market_quotes", "/v2/stocks/quotes", "StockQuotes", "AAPL"),
+        ("market_trades", "/v2/stocks/trades", "StockTrades", "BRK-B"),
+        ("crypto_bars", "/v1beta3/crypto/us/bars", "CryptoBars", "BTC/USD"),
+        ("crypto_quotes", "/v1beta3/crypto/us/quotes", "CryptoQuotes", "BTC/USD"),
+        ("crypto_trades", "/v1beta3/crypto/us/trades", "CryptoTrades", "ETH/USD"),
+    ],
+)
+def test_history_tools_name_the_instruments_alpaca_returned_nothing_for(
+    specs, ctx, alpaca, tool, path, fixture, has
+):
+    alpaca.fixture(path, fixture)
+    other = "FOO/USD" if "/" in has else "ZZZZQ"
+    out = call(specs[tool], ctx, tickers=[has, other])
+    assert {r.ticker for r in out.rows} == {has}
+    assert f"No data from Alpaca for: {other} in this window." in out.notes
+
+
+def test_a_cut_or_continued_history_fetch_names_no_missing_instrument(specs, alpaca):
+    # Alpaca pages through the tickers in turn: a cut fetch lacks the later ones for that reason alone.
+    alpaca.fixture("/v2/stocks/bars", "StockBars__page2", match={"page_token": CURSOR})
+    alpaca.fixture("/v2/stocks/bars", "StockBars__page1")
+    cut = call(
+        specs["market_bars"],
+        FakeContext(limits=FetchLimits(max_rows=2, max_pages=20)),
+        tickers=["AAPL", "BRK-B"],
+    )
+    assert not any("No data from Alpaca" in n for n in cut.notes)
+    continued = call(specs["market_bars"], FakeContext(), tickers=["AAPL", "BRK-B"], page_token=CURSOR)
+    assert {r.ticker for r in continued.rows} == {"BRK-B"}
+    assert not any("No data from Alpaca" in n for n in continued.notes)
+
+
 def test_market_latest_bars_golden(specs, ctx, alpaca):
     alpaca.fixture("/v2/stocks/bars/latest", "StockLatestBars")
     out = call(specs["market_latest_bars"], ctx, tickers=["AAPL", "BRK-B"])
@@ -208,6 +405,85 @@ def test_market_latest_names_tickers_alpaca_returned_nothing_for(specs, ctx, alp
     assert "No data from Alpaca for: QQQQX." in out.notes
 
 
+STALE_QRVO = (
+    "QRVO (2026-09-25T21:53:31.828953Z) is more than a day older than the newest row (2026-10-02T00:00:00.015000Z), "
+    "which provenance.as_of shows: stopped trading (delisted, halted), or seldom traded; each row's t says when."
+)
+OFFICIAL_SPY = (
+    "The latest record of SPY is a market center's official close or open message (SIP condition M, Q or 9), "
+    "not a trade: its price is that venue's official price and its size is not one trade's size; market_trades "
+    "with sort desc shows the trades before it."
+)
+
+
+def test_market_latest_trades_label_an_official_close_and_name_a_stale_ticker(specs, ctx, alpaca):
+    alpaca.add(
+        "/v2/stocks/trades/latest",
+        {
+            "trades": {
+                # NYSE Arca's official close at 20:00 New York: a message, not a trade of 1,174,832 shares.
+                "SPY": {
+                    "t": "2026-10-02T00:00:00.015Z",
+                    "p": 773.93,
+                    "s": 1174832,
+                    "x": "P",
+                    "c": [" ", "M"],
+                    "i": 1,
+                    "z": "B",
+                },
+                "QRVO": {
+                    "t": "2026-09-25T21:53:31.828953Z",
+                    "p": 115.0,
+                    "s": 152,
+                    "x": "D",
+                    "c": ["@", "T"],
+                    "i": 2,
+                    "z": "C",
+                },
+            }
+        },
+    )
+    out = call(specs["market_latest_trades"], ctx, tickers=["SPY", "QRVO"])
+    assert {r.ticker for r in out.rows} == {"SPY", "QRVO"}  # labelled, not dropped
+    assert out.provenance.as_of == datetime(2026, 10, 2, 0, 0, 0, 15000, tzinfo=UTC)
+    assert out.notes == [STALE_QRVO, OFFICIAL_SPY]
+
+
+def test_market_latest_quotes_name_a_stale_ticker(specs, ctx, alpaca):
+    quote = {"bp": 1.0, "bs": 1, "bx": "V", "ap": 1.1, "as": 1, "ax": "V", "c": ["R"], "z": "C"}
+    alpaca.add(
+        "/v2/stocks/quotes/latest",
+        {"quotes": {"QRVO": {**quote, "t": "2026-09-25T23:33:48Z"}}},
+        match={"symbols": "QRVO"},
+    )
+    alpaca.add(
+        "/v2/stocks/quotes/latest",
+        {
+            "quotes": {
+                "AAPL": {**quote, "t": "2026-10-02T19:59:58Z"},
+                "QRVO": {**quote, "t": "2026-09-25T23:33:48Z"},
+            }
+        },
+    )
+    out = call(specs["market_latest_quotes"], ctx, tickers=["AAPL", "QRVO"])
+    assert out.notes == [
+        "QRVO (2026-09-25T23:33:48Z) is more than a day older than the newest row (2026-10-02T19:59:58Z), which "
+        "provenance.as_of shows: stopped trading (delisted, halted), or seldom traded; each row's t says when."
+    ]
+    one = call(specs["market_latest_quotes"], ctx, tickers=["QRVO"])
+    assert not any("older than the newest row" in n for n in one.notes)
+
+
+def test_market_snapshots_label_an_official_close_as_the_last_trade(specs, ctx, alpaca):
+    alpaca.add(
+        "/v2/stocks/snapshots",
+        {"SPY": _snap("2026-10-02T00:00:00.015Z", 773.93, [" ", "M"], "2026-10-01T04:00:00Z", 773.5, 770.0)},
+    )
+    out = call(specs["market_snapshots"], ctx, tickers=["SPY"])
+    assert out.rows[0].change_basis == "day_close"  # 20:00 New York is after the session
+    assert out.notes[-1] == OFFICIAL_SPY
+
+
 def test_market_snapshots_golden(specs, ctx, alpaca):
     alpaca.fixture("/v2/stocks/snapshots", "StockSnapshots")
     out = call(specs["market_snapshots"], ctx, tickers=["AAPL", "BRK-B", "ZZZZ"])
@@ -219,12 +495,149 @@ def test_market_snapshots_golden(specs, ctx, alpaca):
     assert any("ZZZZ" in n for n in doc["notes"])
 
 
+def _snap(last_t: str, last: float, conditions: list[str], day_t: str, day_close: float, prev: float) -> dict:
+    bar = {"o": day_close, "h": day_close, "l": day_close, "v": 1000, "n": 10, "vw": day_close}
+    return {
+        "latestTrade": {"t": last_t, "p": last, "s": 100, "x": "P", "c": conditions, "z": "C", "i": 1},
+        "dailyBar": {**bar, "t": day_t, "c": day_close},
+        "prevDailyBar": {**bar, "t": "2026-10-01T04:00:00Z", "c": prev},
+    }
+
+
+AFTER = (
+    "not last_price: their last trade falls outside the latest session's regular hours (an extended-hours "
+    "trade, or none since the session), so the change is that session's close against the one before."
+)
+
+
+def test_market_snapshots_after_the_close_give_the_sessions_change(specs, ctx, alpaca):
+    # NVDA traded at 230.7446 after hours (18:00 New York); the session closed at 230.48 against 237.47.
+    alpaca.add(
+        "/v2/stocks/snapshots",
+        {
+            "NVDA": _snap(
+                "2026-10-02T22:00:00Z", 230.7446, ["@", "T"], "2026-10-02T04:00:00Z", 230.48, 237.47
+            ),
+            "AAPL": _snap("2026-10-02T19:59:59Z", 255.8, ["@"], "2026-10-02T04:00:00Z", 255.7, 250.0),
+        },
+    )
+    out = call(specs["market_snapshots"], ctx, tickers=["NVDA", "AAPL"])
+    nvda, aapl = sorted(out.rows, key=lambda r: r.ticker != "NVDA")
+    assert nvda.change_basis == "day_close" and nvda.last_price == 230.7446
+    assert nvda.change == pytest.approx(230.48 - 237.47)
+    assert nvda.change_pct == pytest.approx(
+        (230.48 - 237.47) / 237.47
+    )  # -2.94 %, not the -2.83 % of the trade
+    assert aapl.change_basis == "last_trade" and aapl.change == pytest.approx(5.8)
+    assert out.notes == [
+        f"change and change_pct of NVDA compare day_close with prev_close (change_basis day_close), {AFTER}"
+    ]
+
+
+@pytest.mark.parametrize(
+    ("last_t", "conditions", "day_t", "basis"),
+    [
+        ("2026-10-02T13:30:00Z", ["@"], "2026-10-02T04:00:00Z", "last_trade"),  # 09:30 New York, the open
+        ("2026-10-02T19:59:59Z", ["@"], "2026-10-02T04:00:00Z", "last_trade"),
+        ("2026-10-02T20:00:00.2Z", ["@", "6"], "2026-10-02T04:00:00Z", "day_close"),  # 16:00 closing print
+        ("2026-10-02T13:29:59Z", ["@", "T"], "2026-10-02T04:00:00Z", "day_close"),  # pre-market
+        ("2026-10-02T18:00:00Z", ["@", "T"], "2026-10-02T04:00:00Z", "day_close"),  # early close: Form T
+        ("2026-10-03T12:00:00Z", ["@", "T"], "2026-10-02T04:00:00Z", "day_close"),  # next morning
+        ("2026-09-25T19:00:00Z", ["@"], "2026-10-02T04:00:00Z", "day_close"),  # stopped trading
+        ("2026-01-05T15:00:00Z", ["@"], "2026-01-05T05:00:00Z", "last_trade"),  # winter: 10:00 New York
+        ("2026-01-05T21:00:00Z", ["@"], "2026-01-05T05:00:00Z", "day_close"),  # winter: 16:00 New York
+    ],
+)
+def test_stock_change_basis_is_the_day_bars_regular_session(last_t, conditions, day_t, basis):
+    from marketlens_mcp.providers.alpaca.convert import parse_ts
+    from marketlens_mcp.providers.alpaca.mappers import change_basis
+
+    got = change_basis("us_equity", parse_ts(last_t), parse_ts(day_t), conditions, has_day_close=True)
+    assert got == basis
+
+
+def test_change_basis_without_a_day_close_is_the_last_trade():
+    from marketlens_mcp.providers.alpaca.convert import parse_ts
+    from marketlens_mcp.providers.alpaca.mappers import change_basis
+
+    t = parse_ts("2026-10-02T22:00:00Z")
+    assert change_basis("us_equity", t, None, ["T"], has_day_close=False) == "last_trade"
+
+
+def test_snapshot_columns_say_what_change_is():
+    from marketlens_schema.market import Snapshot
+
+    for name in ("change", "change_pct", "change_basis", "day_close", "prev_close", "last_price"):
+        assert Snapshot.model_fields[name].description, name
+
+
 def test_market_most_active_golden(specs, ctx, alpaca):
     alpaca.fixture("/v1beta1/screener/stocks/most-actives", "MostActives")
+    alpaca.fixture("/v2/stocks/snapshots", "StockSnapshots__most_actives")
     out = call(specs["market_most_active"], ctx, by="trades", top=2)
     doc = check_golden(out, "market_most_active")
-    assert alpaca.params() == {"by": "trades", "top": "2"}
+    assert alpaca.params(0) == {"by": "trades", "top": "2"}
+    assert alpaca.params(1) == {"symbols": "NVDA,BRK.B", "feed": "iex"}  # one snapshot request for the list
     assert [(r["rank"], r["ticker"]) for r in doc["rows"]] == [(1, "NVDA"), (2, "BRK-B")]
+    nvda, brk = doc["rows"]
+    assert (nvda["price"], nvda["change_basis"]) == (187.6, "last_trade")
+    assert nvda["change"] == pytest.approx(2.6) and nvda["change_pct"] == pytest.approx(2.6 / 185.0)
+    # BRK-B last traded after hours: its change is the session's, as market_snapshots gives it.
+    assert (brk["price"], brk["change_basis"]) == (503.4, "day_close")
+    assert brk["change"] == pytest.approx(2.8)
+    assert doc["notes"][-1].startswith("change and change_pct of BRK-B compare day_close with prev_close")
+
+
+def _actives(*symbols: str) -> dict:
+    return {
+        "most_actives": [
+            {"symbol": s, "volume": 1000 - i, "trade_count": 100 - i} for i, s in enumerate(symbols)
+        ],
+        "last_updated": "2026-10-02T19:55:01Z",
+    }
+
+
+def _price(p: float) -> dict:
+    return {
+        "latestTrade": {"t": "2026-10-02T19:54:59Z", "p": p, "s": 1, "x": "Q", "c": ["@"], "z": "C", "i": 1}
+    }
+
+
+def test_market_most_active_min_price_screens_the_top_100(specs, ctx, alpaca):
+    alpaca.add("/v1beta1/screener/stocks/most-actives", _actives("SNDL", "NVDA", "PENY", "AAPL", "GONE"))
+    alpaca.add(
+        "/v2/stocks/snapshots",
+        {"SNDL": _price(1.9), "NVDA": _price(187.6), "PENY": _price(0.4), "AAPL": _price(255.8)},
+    )
+    out = call(specs["market_most_active"], ctx, top=3, min_price=5)
+    assert alpaca.params(0) == {"by": "volume", "top": "100"}
+    assert [(r.rank, r.ticker, r.price) for r in out.rows] == [(1, "NVDA", 187.6), (2, "AAPL", 255.8)]
+    assert out.notes == [
+        "min_price dropped 3 of the 5 most active Alpaca ranked: 2 priced below min_price 5, 1 without a snapshot "
+        "price.",
+        "Only 2 of the 3 asked for passed min_price.",
+    ]
+
+
+def test_market_most_active_min_price_does_not_blame_itself_for_a_short_list(specs, ctx, alpaca):
+    alpaca.add("/v1beta1/screener/stocks/most-actives", _actives("NVDA", "AAPL"))
+    alpaca.add("/v2/stocks/snapshots", {"NVDA": _price(187.6), "AAPL": _price(255.8)})
+    out = call(specs["market_most_active"], ctx, top=3, min_price=5)
+    assert [r.ticker for r in out.rows] == ["NVDA", "AAPL"]
+    assert out.notes == ["Alpaca ranked 2, fewer than the 3 asked for."]
+
+
+def test_market_most_active_without_snapshots_still_ranks(specs, ctx, alpaca):
+    alpaca.fixture("/v1beta1/screener/stocks/most-actives", "MostActives")
+    alpaca.add(
+        "/v2/stocks/snapshots", {"message": "subscription does not permit querying SIP data"}, status=403
+    )
+    out = call(specs["market_most_active"], ctx, by="trades", top=2)
+    assert [r.ticker for r in out.rows] == ["NVDA", "BRK-B"]
+    assert out.rows[0].price is None and out.rows[0].absent["price"] == "no_data"
+    assert out.notes == [
+        "Prices could not be read from the snapshots (alpaca_not_entitled): price and change are null."
+    ]
 
 
 def test_market_movers_golden(specs, ctx, alpaca):
@@ -238,6 +651,7 @@ def test_market_movers_golden(specs, ctx, alpaca):
 
 def test_market_movers_filters_screen_alpacas_top_50_and_say_what_they_dropped(specs, ctx, alpaca):
     alpaca.fixture("/v1beta1/screener/stocks/movers", "Movers__stocks_screened")
+    asset_names(alpaca)
     out = call(specs["market_movers"], ctx, top=2, min_price=1, exclude_warrants_rights_units=True)
     doc = check_golden(out, "market_movers__screened")
     assert alpaca.params() == {"top": "50"}
@@ -288,6 +702,7 @@ def test_market_movers_a_short_list_from_alpaca_is_not_blamed_on_the_filters(spe
 )
 def test_market_movers_names_the_filters_only_where_alpaca_ranked_top_or_more(specs, ctx, alpaca, top, short):
     alpaca.fixture("/v1beta1/screener/stocks/movers", "Movers__stocks_screened")
+    asset_names(alpaca)
     out = call(specs["market_movers"], ctx, top=top, min_price=1, exclude_warrants_rights_units=True)
     assert out.notes == [
         "Filters dropped 4 of 7 gainers and 2 of 3 losers Alpaca ranked: 3 priced below min_price 1, "
@@ -403,6 +818,7 @@ def test_market_movers_filter_notes_count_one_mover_in_the_singular(specs, ctx, 
             "last_updated": "2026-10-02T19:55:00Z",
         },
     )
+    asset_names(alpaca)
     out = call(specs["market_movers"], ctx, top=1, min_price=1, exclude_warrants_rights_units=True)
     assert [r.ticker for r in out.rows] == ["BULG"]
     assert out.notes == [
@@ -417,6 +833,82 @@ def test_market_movers_symbol_filter_is_for_stocks_only(specs, ctx):
         call(specs["market_movers"], ctx, market_type="crypto", exclude_warrants_rights_units=True)
 
 
+MOVERS_BY_NAME = {
+    "gainers": [
+        {"symbol": "NE.WSA", "percent_change": 40.0, "change": 2.0, "price": 7.0},
+        {"symbol": "ZWRT", "percent_change": 30.0, "change": 1.5, "price": 6.5},
+        {"symbol": "ET", "percent_change": 9.0, "change": 1.5, "price": 18.1},
+        {"symbol": "RTON", "percent_change": 8.0, "change": 0.6, "price": 8.1},
+        {"symbol": "NEWCO", "percent_change": 7.0, "change": 0.5, "price": 7.6},
+    ],
+    "losers": [],
+    "market_type": "stocks",
+    "last_updated": "2026-10-02T19:55:00Z",
+}
+NAMES = {
+    "NE.WSA": "Noble Corporation plc Tranche 2 Warrants",
+    "ZWRT": "Zeta Holdings Tranche 3 Warrants",  # synthetic: a warrant whose symbol says nothing
+    "ET": "Energy Transfer LP Common Units",
+    "RTON": "Right On Brands Inc Common Stock",
+}
+
+
+def test_market_movers_drop_warrants_by_symbol_and_by_asset_name(specs, ctx, alpaca):
+    alpaca.add("/v1beta1/screener/stocks/movers", MOVERS_BY_NAME)
+    names = asset_names(alpaca, NAMES)
+    out = call(specs["market_movers"], ctx, top=3, exclude_warrants_rights_units=True)
+    # NE-WSA by symbol, ZWRT by name; a partnership's common units and "Right On" stay; NEWCO is not listed.
+    assert [r.ticker for r in out.rows] == ["ET", "RTON", "NEWCO"]
+    assert out.notes == [
+        "Filters dropped 2 of 5 gainers Alpaca ranked: 1 warrant, right or unit by symbol, 1 warrant, right or "
+        "unit by asset name.",
+        "Alpaca ranked no losers, fewer than the 3 asked for.",
+    ]
+    assert dict(parse_qsl(names_request(alpaca).url.query.decode())) == {
+        "status": "active",
+        "asset_class": "us_equity",
+    }
+    # The names are read once and kept: a second screen asks Alpaca for the movers only.
+    call(specs["market_movers"], ctx, top=3, exclude_warrants_rights_units=True)
+    assert names.calls == 1
+
+
+def names_request(alpaca):
+    return next(r for r in alpaca.requests if r.url.path == "/v2/assets")
+
+
+def test_market_movers_judge_by_symbol_alone_when_the_names_cannot_be_read(specs, ctx, alpaca):
+    alpaca.add("/v1beta1/screener/stocks/movers", MOVERS_BY_NAME)
+    alpaca.add("/v2/assets", {"message": "forbidden"}, status=403)
+    out = call(specs["market_movers"], ctx, top=5, exclude_warrants_rights_units=True)
+    assert [r.ticker for r in out.rows] == ["ZWRT", "ET", "RTON", "NEWCO"]
+    assert out.notes[-1] == (
+        "Alpaca's asset names could not be read (alpaca_auth), so warrants, rights and units were judged by "
+        "symbol alone."
+    )
+
+
+def test_name_rule_is_conservative():
+    from marketlens_mcp.providers.alpaca.tools.stocks import NAME_RE
+
+    for name in (
+        "Noble Corporation plc Tranche 2 Warrants",
+        "KAIROUS ACQUISITION CORP LTD Warrant   09/15/2026",
+        "AIB Acquisition Corporation Rights",
+        "AA Mission Acquisition Corp. II Units, each consisting of one Class A ordinary share",
+    ):
+        assert NAME_RE.search(name), name
+    for name in (
+        "Energy Transfer LP Common Units",
+        "USD PARTNERS LP COM UNIT REPSTG LTD PARTNER INTS",
+        "NextEra Energy, Inc. 7.299% Corporate Units",
+        "Right On Brands Inc Common Stock",
+        "UnitedHealth Group Incorporated Common Stock",
+        "Uniti Group Inc. Common Stock",
+    ):
+        assert not NAME_RE.search(name), name
+
+
 @pytest.mark.parametrize(
     ("ticker", "dropped"),
     [
@@ -426,7 +918,11 @@ def test_market_movers_symbol_filter_is_for_stocks_only(specs, ctx):
         ("BCAT-RT", True),  # Alpaca's BCAT.RT
         ("AAC-WS", True),
         ("AAC-WS-A", True),
+        ("NE-WSA", True),  # Noble's tranche 2 warrants: a WS series
+        ("XYZ-WSB", True),
+        ("ABC-RTWI", True),  # rights, when issued
         ("XYZ-U", True),
+        ("XYZ-UN", True),
         ("AAPL", False),
         ("GOOGL", False),
         ("BRK-B", False),
@@ -434,6 +930,9 @@ def test_market_movers_symbol_filter_is_for_stocks_only(specs, ctx):
         ("PENU", False),
         ("AMPGZ", False),  # Z is "miscellaneous", left alone
         ("BAC-PL", False),
+        ("NEE-PRS", False),  # NextEra's corporate units trade as a preferred series
+        ("BRK-A", False),
+        ("XYZ-WI", False),  # when issued, not a warrant
     ],
 )
 def test_warrant_right_or_unit_is_judged_by_symbol(ticker, dropped):

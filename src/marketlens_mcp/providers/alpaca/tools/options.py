@@ -17,10 +17,20 @@ from marketlens_schema.market import OptionBar, OptionQuote, OptionSnapshot, Opt
 
 from .. import mappers
 from ..client import AlpacaClient
-from ..convert import NEW_YORK, alpaca_symbol, integer, iso_z, parse_date, path_symbol, timeframe_to_alpaca
+from ..convert import (
+    NEW_YORK,
+    alpaca_symbol,
+    integer,
+    iso_z,
+    parse_date,
+    parse_instant,
+    path_symbol,
+    timeframe_to_alpaca,
+)
 from .common import (
+    BARS_LOOKBACK_DOC,
     CONTINUE_DOC,
-    END_DOC,
+    END_DOC_NY,
     LOOKBACK_DOC,
     SORT_DOC,
     START_DOC,
@@ -38,6 +48,7 @@ from .common import (
     check_option_filters,
     collect,
     latest_t,
+    missing_in_window_note,
     missing_note,
     option_feed,
     output,
@@ -82,8 +93,8 @@ class BarsIn(Inputs):
     occ_symbols: OccSymbols
     timeframe: TimeframeIn = Field("1d", description=TIMEFRAME_DOC)
     start: Instant | None = Field(None, description=START_DOC)
-    end: Instant | None = Field(None, description=END_DOC)
-    lookback: Duration | None = Field(None, description=LOOKBACK_DOC + " Default P30D.")
+    end: Instant | None = Field(None, description=END_DOC_NY)
+    lookback: Duration | None = Field(None, description=LOOKBACK_DOC + BARS_LOOKBACK_DOC + " Default P30D.")
     sort: Literal["asc", "desc"] = Field("asc", description=SORT_DOC)
     page_token: str | None = Field(None, max_length=2000, description=CONTINUE_DOC)
 
@@ -91,7 +102,7 @@ class BarsIn(Inputs):
 class TradesIn(Inputs):
     occ_symbols: OccSymbols
     start: Instant | None = Field(None, description=START_DOC)
-    end: Instant | None = Field(None, description=END_DOC)
+    end: Instant | None = Field(None, description=END_DOC_NY)
     lookback: Duration | None = Field(None, description=LOOKBACK_DOC + " Default P1D.")
     sort: Literal["asc", "desc"] = Field("asc", description=SORT_DOC)
     page_token: str | None = Field(None, max_length=2000, description=CONTINUE_DOC)
@@ -132,28 +143,35 @@ def history_window(
     timeframe: str | None = None,
 ) -> tuple[Window, Delay, datetime, list[str]]:
     """The window of options_bars and options_trades, the delay of their OPRA
-    data, the instant it reflects and a note. With options_feed other than
-    opra, an end later than 15 minutes ago is moved back to then (Alpaca
-    refuses it), and a window that starts after then is refused here."""
-    win = window(ctx, args.start, args.end, args.lookback, default, timeframe=timeframe)
+    data, the instant it reflects and its notes. A date given alone as `end`
+    is a New York day. With options_feed other than opra, an end later than
+    15 minutes ago is moved back to then (Alpaca refuses it), and a window that
+    starts after then is refused here."""
     if option_feed(api.settings.options_feed)[1] is Delay.REALTIME:
-        return win, Delay.REALTIME, win.end or ctx.now(), []
+        win = window(
+            ctx, args.start, args.end, args.lookback, default, timeframe=timeframe, day_zone=NEW_YORK
+        )
+        return win, Delay.REALTIME, win.as_of, list(win.notes)
     latest = ctx.now() - OPRA_DELAY
-    if win.start >= latest:
+    if args.start and parse_instant(args.start) >= latest:
         raise ToolError(
             "invalid_arguments",
-            f"The window starts at {iso_z(win.start)}, within the last 15 minutes, which Alpaca serves only "
-            "with real-time OPRA access; ask for an earlier window.",
+            f"The window starts at {iso_z(parse_instant(args.start))}, within the last 15 minutes, which Alpaca "
+            "serves only with real-time OPRA access; ask for an earlier window.",
             hint="Set providers.alpaca.options_feed: opra in the marketlens config if your plan includes OPRA.",
         )
-    if win.end is None or win.end <= latest:
-        return win, Delay.DELAYED, win.end or latest, []
-    note = (
-        f"end {iso_z(win.end)} is later than Alpaca serves without real-time OPRA access (options_feed: "
-        f"{api.settings.options_feed}), so the window ends 15 minutes ago, at {iso_z(latest)}. Set "
-        "providers.alpaca.options_feed: opra if your plan includes OPRA."
+    win = window(
+        ctx,
+        args.start,
+        args.end,
+        args.lookback,
+        default,
+        timeframe=timeframe,
+        day_zone=NEW_YORK,
+        lag=OPRA_DELAY,
+        lagging=f"{api.settings.options_feed} options feed",
     )
-    return Window(win.start, latest, win.lookback), Delay.DELAYED, latest, [note]
+    return win, Delay.DELAYED, win.as_of, list(win.notes)
 
 
 async def options_bars(ctx: ToolContext, args: BarsIn) -> ToolOutput:
@@ -196,7 +214,7 @@ async def options_bars(ctx: ToolContext, args: BarsIn) -> ToolOutput:
         delay=delay,
         as_of=as_of,
         page=page,
-        notes=notes,
+        notes=[*notes, *missing_in_window_note(args.occ_symbols, page, args.page_token, "occ_symbol")],
         skips=skips,
     )
 
@@ -235,7 +253,7 @@ async def options_trades(ctx: ToolContext, args: TradesIn) -> ToolOutput:
         delay=delay,
         as_of=as_of,
         page=page,
-        notes=notes,
+        notes=[*notes, *missing_in_window_note(args.occ_symbols, page, args.page_token, "occ_symbol")],
         skips=skips,
     )
 

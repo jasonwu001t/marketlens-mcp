@@ -30,7 +30,7 @@
   },
   "$id": "urn:marketlens:schema:1:marketlens.Snapshot",
   "additionalProperties": false,
-  "description": "The latest state of one stock or crypto pair. ``change`` and\n``change_pct`` are derived by the adapter from last_price and prev_close.",
+  "description": "The latest state of one stock or crypto pair. ``change`` and\n``change_pct`` are derived by the adapter against prev_close, from the\nprice ``change_basis`` names: the last trade while it falls in the latest\nsession, else that session's day_close.",
   "properties": {
     "absent": {
       "anyOf": [
@@ -113,8 +113,26 @@
         }
       ],
       "default": null,
+      "description": "The change_basis price minus prev_close, in the row's currency",
       "title": "Change",
       "x-unit": "price"
+    },
+    "change_basis": {
+      "anyOf": [
+        {
+          "enum": [
+            "last_trade",
+            "day_close"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The price change is measured from: last_trade while the last trade falls in the latest session (stocks: the day bar's regular hours, 09:30-16:00 New York; crypto: since the day bar began), else day_close, the session's change (after an extended-hours or a stale last trade)",
+      "title": "Change Basis"
     },
     "change_pct": {
       "anyOf": [
@@ -126,6 +144,7 @@
         }
       ],
       "default": null,
+      "description": "change / prev_close as a fraction (0.05 = 5 %)",
       "title": "Change Pct",
       "x-unit": "fraction"
     },
@@ -144,6 +163,7 @@
         }
       ],
       "default": null,
+      "description": "The latest session's daily bar close (stocks: regular hours)",
       "title": "Day Close",
       "x-unit": "price"
     },
@@ -183,6 +203,7 @@
         }
       ],
       "default": null,
+      "description": "The latest session's daily bar (today's, in progress while it trades)",
       "title": "Day Open",
       "x-unit": "price"
     },
@@ -222,6 +243,7 @@
         }
       ],
       "default": null,
+      "description": "The latest trade's price (may be an extended-hours or an old trade)",
       "title": "Last Price",
       "x-unit": "price"
     },
@@ -249,6 +271,7 @@
         }
       ],
       "default": null,
+      "description": "When the latest trade happened",
       "title": "Last T",
       "x-unit": "UTC"
     },
@@ -262,6 +285,7 @@
         }
       ],
       "default": null,
+      "description": "The latest minute bar's close",
       "title": "Minute Close",
       "x-unit": "price"
     },
@@ -289,6 +313,7 @@
         }
       ],
       "default": null,
+      "description": "The close of the session before day_*",
       "title": "Prev Close",
       "x-unit": "price"
     },

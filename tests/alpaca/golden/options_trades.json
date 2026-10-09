@@ -1,7 +1,9 @@
 {
  "absent": {},
  "model": "marketlens.OptionTrade",
- "notes": [],
+ "notes": [
+  "the default lookback P1D reaches back from the newest data the indicative options feed serves (15 minutes before now): the window starts at 2026-10-01T19:45:00Z."
+ ],
  "offload": "auto",
  "pagination": {
   "complete": true,
@@ -31,7 +33,7 @@
     "AAPL261016C00250000"
    ],
    "sort": "asc",
-   "start": "2026-10-01T20:00:00Z"
+   "start": "2026-10-01T19:45:00Z"
   },
   "route": "GET /v1beta1/options/trades",
   "schema_version": "1.1.0",

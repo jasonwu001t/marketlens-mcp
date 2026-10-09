@@ -4,9 +4,10 @@ the data location is ``providers.alpaca.crypto_location`` (default us)."""
 from __future__ import annotations
 
 from collections import Counter
+from datetime import datetime, timedelta
 from typing import Literal
 
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from marketlens_mcp.plugin_api import ToolContext, ToolOutput
 from marketlens_schema.base import Delay
@@ -16,6 +17,7 @@ from .. import mappers
 from ..client import AlpacaClient
 from ..convert import iso_z, timeframe_to_alpaca, to_ticker
 from .common import (
+    BARS_LOOKBACK_DOC,
     CONTINUE_DOC,
     END_DOC,
     LOOKBACK_DOC,
@@ -32,14 +34,18 @@ from .common import (
     TimeframeIn,
     absence,
     collect,
+    day_close_basis_note,
     latest_t,
+    missing_in_window_note,
     missing_note,
+    named,
     output,
     request_of,
     spec,
+    stale_rows_note,
     window,
 )
-from .marketdata import fetch_grouped, fetch_once
+from .marketdata import HISTORY_PAGE_MAX, fetch_grouped, fetch_once
 
 GOLDEN = "tests/alpaca/test_alpaca_crypto.py"
 CR = "crypto"
@@ -47,6 +53,10 @@ BASE = "/v1beta3/crypto/{loc}"
 QUOTE_SKIP = ("bid_exchange", "ask_exchange", "conditions", "tape")
 TRADE_SKIP = ("exchange", "conditions", "tape")
 NO_VENUE = "Alpaca crypto {what} carry no exchange, conditions or tape."
+STALE_TRADE = (
+    "their last trade is older than the current day bar, so last_price is stale and the change is the day "
+    "bar's close against the previous one"
+)
 NO_TRADES_DOC = (
     "A bar with trade_count 0 had no trades: Alpaca fills it from quotes, and notes name the pairs."
 )
@@ -57,7 +67,7 @@ class BarsIn(Inputs):
     timeframe: TimeframeIn = Field("1h", description=TIMEFRAME_DOC)
     start: Instant | None = Field(None, description=START_DOC)
     end: Instant | None = Field(None, description=END_DOC)
-    lookback: Duration | None = Field(None, description=LOOKBACK_DOC + " Default P1D.")
+    lookback: Duration | None = Field(None, description=LOOKBACK_DOC + BARS_LOOKBACK_DOC + " Default P1D.")
     sort: Literal["asc", "desc"] = Field("asc", description=SORT_DOC)
     page_token: str | None = Field(None, max_length=2000, description=CONTINUE_DOC)
 
@@ -69,6 +79,22 @@ class TicksIn(Inputs):
     lookback: Duration | None = Field(None, description=LOOKBACK_DOC + " Default PT15M.")
     sort: Literal["asc", "desc"] = Field("asc", description=SORT_DOC)
     page_token: str | None = Field(None, max_length=2000, description=CONTINUE_DOC)
+
+
+class TradesIn(TicksIn):
+    limit: int | None = Field(
+        None,
+        ge=1,
+        le=HISTORY_PAGE_MAX,
+        description="At most this many trades per pair in the window, the first in sort order: sort desc with "
+        "limit 100 gives each pair's latest 100 (one request per pair; not with page_token).",
+    )
+
+    @model_validator(mode="after")
+    def _one_way(self) -> TradesIn:
+        if self.limit is not None and self.page_token is not None:
+            raise ValueError("limit takes each pair's first trades; page_token continues a fetch without it")
+        return self
 
 
 class LatestIn(Inputs):
@@ -108,6 +134,37 @@ def no_trades_note(rows: list[Bar]) -> list[str]:
     ]
 
 
+def _bar_end(t: datetime, timeframe: str) -> datetime:
+    """When a bar of ``timeframe`` starting at ``t`` closes."""
+    n, unit = int(timeframe.rstrip("minhdwo")), timeframe.lstrip("0123456789")
+    if unit == "mo":
+        months = t.month - 1 + n
+        return t.replace(year=t.year + months // 12, month=months % 12 + 1)
+    return (
+        t
+        + {
+            "min": timedelta(minutes=n),
+            "h": timedelta(hours=n),
+            "d": timedelta(days=n),
+            "w": timedelta(weeks=n),
+        }[unit]
+    )
+
+
+def forming_bar_note(rows: list[Bar], timeframe: str, now: datetime) -> list[str]:
+    """Crypto trades around the clock, so the newest bar is often the one still
+    forming: it holds the trades up to now only. Name its pairs."""
+    forming = [r for r in rows if _bar_end(r.t, timeframe) > now]
+    if not forming:
+        return []
+    pairs = sorted({r.ticker for r in forming})
+    start = min(r.t for r in forming)
+    return [
+        f"The {timeframe} bar from {iso_z(start)} ({named(pairs, ' pair(s)')}) is still forming: it holds "
+        f"trades up to now ({iso_z(now)}) only, not a whole {timeframe}."
+    ]
+
+
 def _mapper(kind: str, ticker: str, timeframe: str = "1min"):
     ccy = quote_currency(ticker)
     if kind == "bars":
@@ -118,7 +175,7 @@ def _mapper(kind: str, ticker: str, timeframe: str = "1min"):
 
 
 async def _history(
-    ctx: ToolContext, args: BarsIn | TicksIn, kind: Literal["bars", "quotes", "trades"]
+    ctx: ToolContext, args: BarsIn | TicksIn | TradesIn, kind: Literal["bars", "quotes", "trades"]
 ) -> ToolOutput:
     model = {"bars": Bar, "quotes": Quote, "trades": Trade}[kind]
     operation = {"bars": "CryptoBars", "quotes": "CryptoQuotes", "trades": "CryptoTrades"}[kind]
@@ -147,15 +204,33 @@ async def _history(
             "end": iso_z(win.end),
             "sort": args.sort,
         }
-        page = await fetch_grouped(
-            ctx,
-            api,
-            path=f"{BASE.format(loc=loc)}/{kind}",
-            params=params,
-            key=kind,
-            mapper=rows,
-            start_token=args.page_token,
-        )
+        limit = getattr(args, "limit", None)
+        if limit is None:
+            page = await fetch_grouped(
+                ctx,
+                api,
+                path=f"{BASE.format(loc=loc)}/{kind}",
+                params=params,
+                key=kind,
+                mapper=rows,
+                start_token=args.page_token,
+            )
+        else:
+
+            async def first_of_each() -> list:
+                """One request per pair: Alpaca's limit counts across all the pairs of a request."""
+                out = []
+                for pair in args.tickers:
+                    data = await api.get(
+                        "data",
+                        f"{BASE.format(loc=loc)}/{kind}",
+                        {**params, "symbols": [pair], "limit": limit},
+                    )
+                    for symbol, records in (data.get(kind) or {}).items():
+                        out.extend(rows(symbol, list(records or [])[:limit]))
+                return out
+
+            page = await fetch_once(ctx, first_of_each)
     return output(
         ctx,
         model,
@@ -165,10 +240,18 @@ async def _history(
         request=request_of(args, **win.fields(), location=loc),
         feed=loc,
         delay=Delay.REALTIME,
-        as_of=win.end or ctx.now(),
+        as_of=win.as_of,
         page=page,
         absent=_absent(kind),
-        notes=no_trades_note(page.rows) if kind == "bars" else [],
+        notes=[
+            *win.notes,
+            *missing_in_window_note(args.tickers, page, args.page_token),
+            *(
+                no_trades_note(page.rows) + forming_bar_note(page.rows, timeframe, ctx.now())
+                if kind == "bars"
+                else []
+            ),
+        ],
         skips=skips,
     )
 
@@ -181,7 +264,7 @@ async def crypto_quotes(ctx: ToolContext, args: TicksIn) -> ToolOutput:
     return await _history(ctx, args, "quotes")
 
 
-async def crypto_trades(ctx: ToolContext, args: TicksIn) -> ToolOutput:
+async def crypto_trades(ctx: ToolContext, args: TradesIn) -> ToolOutput:
     return await _history(ctx, args, "trades")
 
 
@@ -214,7 +297,9 @@ async def _latest(ctx: ToolContext, args: LatestIn, kind: Literal["bars", "quote
         as_of=latest_t(page.rows),
         page=page,
         absent=_absent(kind),
-        notes=missing_note(args.tickers, page.rows) + (no_trades_note(page.rows) if kind == "bars" else []),
+        notes=missing_note(args.tickers, page.rows)
+        + stale_rows_note(page.rows)
+        + (no_trades_note(page.rows) if kind == "bars" else []),
         skips=skips,
     )
 
@@ -267,7 +352,9 @@ async def crypto_snapshots(ctx: ToolContext, args: LatestIn) -> ToolOutput:
         delay=Delay.REALTIME,
         as_of=latest_t(page.rows),
         page=page,
-        notes=missing_note(args.tickers, page.rows),
+        notes=missing_note(args.tickers, page.rows)
+        + stale_rows_note(page.rows)
+        + day_close_basis_note(page.rows, STALE_TRADE),
         skips=skips,
     )
 
@@ -294,6 +381,16 @@ async def crypto_orderbooks(ctx: ToolContext, args: OrderbooksIn) -> ToolOutput:
     notes = missing_note(args.tickers, page.rows)
     if empty:
         notes.append(f"Dropped {empty} price level(s) of size 0 (no liquidity).")
+    sides = Counter((r.ticker, r.side) for r in page.rows)
+    short = [
+        f"{t} {sides[(t, 'bid')]} bid and {sides[(t, 'ask')]} ask"
+        for t in dict.fromkeys(r.ticker for r in page.rows)
+        if min(sides[(t, "bid")], sides[(t, "ask")]) < args.depth
+    ]
+    if short:
+        notes.append(
+            f"Alpaca's book had fewer levels than the depth of {args.depth} asked for: {named(short)} level(s)."
+        )
     return output(
         ctx,
         OrderBookLevel,
@@ -349,9 +446,10 @@ SPECS = (
         capability="market",
         title="Crypto trades",
         description="Historical crypto trades (size in base units) with the taker side (buy/sell). Window by "
-        "start/end or lookback (default PT15M)." + _SIZE,
+        "start/end or lookback (default PT15M); limit keeps each pair's first trades in sort order (sort desc: "
+        "the latest)." + _SIZE,
         readme="Historical crypto trades",
-        input_model=TicksIn,
+        input_model=TradesIn,
         output_model=Trade,
         route=f"GET {BASE}/trades{_R}",
         handler=crypto_trades,
@@ -406,7 +504,9 @@ SPECS = (
         capability="market",
         title="Crypto snapshots",
         description="Latest state per crypto pair: last trade, best bid/ask, latest minute close, today's "
-        "OHLCV and VWAP, previous close, and change / change_pct (fraction) derived from them.",
+        "OHLCV and VWAP (UTC day), previous close, and change / change_pct (fraction) against the previous close: "
+        "from the last trade while it is from today, else from today's bar close (a pair whose last trade is "
+        "older), as change_basis says, with a note.",
         readme="Last trade, quote, day bar, change",
         input_model=LatestIn,
         output_model=Snapshot,
@@ -422,7 +522,7 @@ SPECS = (
         title="Crypto order books",
         description="The latest order book per crypto pair as one row per price level and side (level 0 is "
         "the best price; size in base units), up to depth levels per side (default 20). Empty levels are "
-        "dropped and counted in notes.",
+        "dropped and counted in notes, and a book with fewer levels than depth is named in notes.",
         readme="Order book levels per pair",
         input_model=OrderbooksIn,
         output_model=OrderBookLevel,

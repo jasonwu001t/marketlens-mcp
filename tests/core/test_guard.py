@@ -180,6 +180,9 @@ def test_scrub_replaces_paths_but_not_pairs_or_words():
     assert guard.scrub("Cannot open C:\\Users\\me\\x.db now") == "Cannot open <path> now"
     assert guard.scrub("ticker BTC/USD and 1/2 are fine") == "ticker BTC/USD and 1/2 are fine"
     assert guard.scrub("open /etc/hosts") == "open <path>"
+    # An echoed one-segment input names no directory: it stays as typed.
+    assert guard.scrub("'/USD' is not a crypto pair") == "'/USD' is not a crypto pair"
+    assert guard.scrub("see /tmp/") == "see <path>"
 
 
 def test_lockdown_proofs_in_a_result_session(two_sessions):

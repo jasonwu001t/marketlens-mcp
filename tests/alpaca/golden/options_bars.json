@@ -1,7 +1,9 @@
 {
  "absent": {},
  "model": "marketlens.OptionBar",
- "notes": [],
+ "notes": [
+  "the default lookback P30D reaches back from the newest data the indicative options feed serves (15 minutes before now): the window starts at 2026-09-02T00:00:00Z."
+ ],
  "offload": "auto",
  "pagination": {
   "complete": true,

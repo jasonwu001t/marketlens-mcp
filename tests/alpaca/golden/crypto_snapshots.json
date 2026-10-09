@@ -51,6 +51,7 @@
    "bid_price": 62149.5,
    "bid_size": 0.3544,
    "change": 1150.75,
+   "change_basis": "last_trade",
    "change_pct": 0.018864754098360657,
    "currency": "USD",
    "day_close": 62150.75,

@@ -33,6 +33,38 @@ def test_options_bars_golden(specs, ctx, alpaca):
     assert (prov["feed"], prov["delay"], prov["as_of"]) == ("opra", "delayed", "2026-10-02T19:45:00Z")
 
 
+@pytest.mark.parametrize(
+    ("tool", "path", "fixture"),
+    [
+        ("options_bars", "/v1beta1/options/bars", "OptionBars"),
+        ("options_trades", "/v1beta1/options/trades", "OptionTrades"),
+    ],
+)
+def test_an_option_date_end_includes_that_new_york_day(specs, ctx, alpaca, tool, path, fixture):
+    # Option daily bars are stamped at midnight New York (04:00Z), as stock bars are.
+    alpaca.fixture(path, fixture)
+    out = call(specs[tool], ctx, occ_symbols=[C1], start="2026-09-28", end="2026-10-01")
+    assert alpaca.params()["end"] == "2026-10-02T03:59:59.999999Z"
+    assert out.notes[0].startswith(
+        "end 2026-10-01 is a date: the window includes that whole day, to midnight New York"
+    )
+
+
+@pytest.mark.parametrize(
+    ("tool", "path", "fixture"),
+    [
+        ("options_bars", "/v1beta1/options/bars", "OptionBars"),
+        ("options_trades", "/v1beta1/options/trades", "OptionTrades"),
+    ],
+)
+def test_option_history_names_the_contracts_alpaca_returned_nothing_for(
+    specs, ctx, alpaca, tool, path, fixture
+):
+    alpaca.fixture(path, fixture)
+    out = call(specs[tool], ctx, occ_symbols=[C1, P1])
+    assert f"No data from Alpaca for: {P1} in this window." in out.notes
+
+
 def test_options_refuse_a_non_occ_symbol(specs, ctx):
     with pytest.raises(ValidationError, match="'AAPL'"):
         call(specs["options_bars"], ctx, occ_symbols=["AAPL"])
@@ -42,7 +74,7 @@ def test_options_trades_golden(specs, ctx, alpaca):
     alpaca.fixture("/v1beta1/options/trades", "OptionTrades")
     out = call(specs["options_trades"], ctx, occ_symbols=[C1])
     check_golden(out, "options_trades")
-    assert alpaca.params()["start"] == "2026-10-01T20:00:00Z"
+    assert alpaca.params()["start"] == "2026-10-01T19:45:00Z"  # P1D back from 15 minutes ago
 
 
 def test_options_latest_trades_golden(specs, ctx, alpaca):
@@ -152,16 +184,28 @@ def test_option_history_ends_15_minutes_ago_without_realtime_opra(specs, ctx, al
         "delayed",
         "2026-10-02T19:45:00+00:00",
     )
-    assert any(n.startswith("end 2026-10-03T00:00:00Z is later than Alpaca serves") for n in out.notes)
+    assert any(
+        n.startswith("end 2026-10-03 is later than the newest data the indicative options feed serves")
+        for n in out.notes
+    )
     assert "15 minutes" in specs[tool].description
 
 
-def test_option_history_with_realtime_opra_keeps_the_end(specs, alpaca):
+def test_option_history_with_realtime_opra_keeps_a_recent_end_and_cuts_a_future_one(specs, alpaca):
+    # With real-time OPRA the last 15 minutes are served: an end inside them is kept as given.
     alpaca.fixture("/v1beta1/options/trades", "OptionTrades")
     opra = FakeContext(settings={"options_feed": "opra"})
-    out = call(specs["options_trades"], opra, occ_symbols=[C1], start="2026-10-01", end="2026-10-03")
-    assert alpaca.params()["end"] == "2026-10-03T00:00:00Z" and out.notes == []
+    out = call(
+        specs["options_trades"], opra, occ_symbols=[C1], start="2026-10-01", end="2026-10-02T19:55:00Z"
+    )
+    assert alpaca.params()["end"] == "2026-10-02T19:55:00Z"
+    assert not any("later than" in n or "in the future" in n for n in out.notes)
     assert (out.provenance.feed, out.provenance.delay) == ("opra", "realtime")
+    # An end in the future is cut to now, as for every tool with a window (a date is a New York day).
+    alpaca.fixture("/v1beta1/options/trades", "OptionTrades")
+    out = call(specs["options_trades"], opra, occ_symbols=[C1], start="2026-10-01", end="2026-10-03")
+    assert alpaca.params()["end"] == "2026-10-02T20:00:00Z"
+    assert any(n.startswith("end 2026-10-03 is in the future") for n in out.notes)
 
 
 def test_option_history_inside_the_last_15_minutes_is_refused_without_realtime_opra(specs, ctx, alpaca):

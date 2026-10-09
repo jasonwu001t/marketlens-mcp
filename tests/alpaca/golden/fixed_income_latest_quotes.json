@@ -28,7 +28,7 @@
   "request": {
    "isins": [
     "US912797SX61",
-    "US91282CJL54"
+    "US91282CJL55"
    ]
   },
   "route": "GET /v1beta1/fixed_income/latest/quotes",
@@ -68,7 +68,7 @@
    "bid_size": null,
    "bid_ytm": null,
    "bid_ytw": null,
-   "isin": "US91282CJL54",
+   "isin": "US91282CJL55",
    "t": "2026-10-02T06:55:00Z"
   }
  ]

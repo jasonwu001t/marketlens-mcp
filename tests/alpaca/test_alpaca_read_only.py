@@ -83,7 +83,10 @@ HTTP_CASES: dict[str, Case] = {
         "market_snapshots",
     ),
     "market_most_active": Case(
-        (r("/v1beta1/screener/stocks/most-actives", "MostActives"),),
+        (
+            r("/v1beta1/screener/stocks/most-actives", "MostActives"),
+            r("/v2/stocks/snapshots", "StockSnapshots__most_actives"),
+        ),
         {"by": "trades", "top": 2},
         "market_most_active",
     ),
@@ -162,7 +165,7 @@ HTTP_CASES: dict[str, Case] = {
     # market: fixed income
     "fixed_income_latest_quotes": Case(
         (r("/v1beta1/fixed_income/latest/quotes", "FixedIncomeLatestQuotes"),),
-        {"isins": ["us912797sx61", "US91282CJL54"]},
+        {"isins": ["us912797sx61", "US91282CJL55"]},
         "fixed_income_latest_quotes",
     ),
     # news

@@ -126,7 +126,9 @@ _FORBIDDEN_NODES: tuple[type[exp.Expression], ...] = tuple(
 
 _SET_OPERATIONS = tuple(getattr(exp, n) for n in ("Union", "Intersect", "Except") if hasattr(exp, n))
 
-_PATH_RE = re.compile(r"""(?<![\w.\-/<>~:])(?:[A-Za-z]:\\|/)[^\s"'`,;)]+""")
+#: A Windows path, or an absolute path of two or more segments: "/etc/hosts" is
+#: scrubbed, an echoed "/USD" (one segment, no directory) is not.
+_PATH_RE = re.compile(r"""(?<![\w.\-/<>~:])(?:[A-Za-z]:\\[^\s"'`,;)]+|/[^\s"'`,;)/]+/[^\s"'`,;)]*)""")
 
 logging.getLogger("sqlglot").setLevel(logging.ERROR)
 

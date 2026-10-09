@@ -123,6 +123,24 @@ def test_instants_from_user_input():
         c.parse_instant("2026-01-02T14:30:00")
 
 
+@pytest.mark.parametrize(
+    ("value", "message"),
+    [
+        (
+            "2026-10-08T00:00:00+25:00",
+            "'2026-10-08T00:00:00+25:00' has a UTC offset out of range; offsets run from -23:59 to +23:59",
+        ),
+        ("2026-10-08T00:00:00-0960", "'2026-10-08T00:00:00-0960' has a UTC offset out of range"),
+        ("2026-02-30", "'2026-02-30' is not a valid date (day is out of range for month)"),
+        ("2026-02-30T10:00:00Z", "'2026-02-30T10:00:00Z' is not a valid date and time (day is out of range"),
+    ],
+)
+def test_impossible_instants_are_refused_by_name(value, message):
+    with pytest.raises(ValueError) as e:
+        c.parse_instant(value)
+    assert str(e.value).startswith(message)
+
+
 def test_timeframes_translate_both_ways():
     pairs = {
         "1min": "1Min",

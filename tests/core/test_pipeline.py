@@ -9,6 +9,7 @@ import datetime as dt
 import ml_example_plugin as ex
 import pytest
 from coresupport import FIXED_NOW, bar_table, provenance, run
+from pydantic import ValidationError
 
 from marketlens_mcp.plugin_api import ToolContext, ToolError, ToolOutput
 from marketlens_mcp.results_api import InlineResult, ResultMarker
@@ -46,6 +47,26 @@ def test_invalid_arguments_are_readable(store):
     with pytest.raises(ToolError) as info:
         run(call_tool(ex.THINGS, ctx, colour="red"))
     assert "colour" in info.value.message
+
+
+def test_a_validator_message_ending_in_a_period_gets_no_second_one():
+    from pydantic import BaseModel, field_validator
+
+    from marketlens_mcp.pipeline import validation_message
+
+    class In(BaseModel):
+        start: str
+
+        @field_validator("start")
+        @classmethod
+        def _bad(cls, v: str) -> str:
+            raise ValueError("offset must be between -24 and +24 hours, not 25.")
+
+    with pytest.raises(ValidationError) as info:
+        In(start="x")
+    assert validation_message("t", info.value) == (
+        "Invalid arguments for t: start: Value error, offset must be between -24 and +24 hours, not 25."
+    )
 
 
 def test_unexpected_exceptions_become_internal_error(store, caplog):

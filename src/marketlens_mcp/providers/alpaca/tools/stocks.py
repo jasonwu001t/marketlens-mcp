@@ -2,21 +2,25 @@
 
 from __future__ import annotations
 
+import re
 from collections import Counter
+from datetime import datetime, timedelta
 from typing import Literal
 
-from pydantic import Field, model_validator
+from pydantic import Field, field_validator, model_validator
 
-from marketlens_mcp.plugin_api import ToolContext, ToolOutput
-from marketlens_schema.base import Delay
+from marketlens_mcp.plugin_api import ToolContext, ToolError, ToolOutput
+from marketlens_schema.base import CRYPTO_QUOTE_CURRENCIES, Delay
 from marketlens_schema.market import Bar, MostActive, Mover, Quote, Snapshot, Trade
 
 from .. import mappers
 from ..client import AlpacaClient
-from ..convert import alpaca_symbol, iso_z, parse_ts, timeframe_to_alpaca, to_ticker
+from ..convert import NEW_YORK, alpaca_symbol, iso_z, parse_ts, timeframe_to_alpaca, to_ticker
 from .common import (
+    BARS_LOOKBACK_DOC,
     CONTINUE_DOC,
-    END_DOC,
+    DELAYED_SIP,
+    END_DOC_NY,
     LOOKBACK_DOC,
     SORT_DOC,
     START_DOC,
@@ -30,12 +34,17 @@ from .common import (
     TimeframeIn,
     absence,
     collect,
+    day_close_basis_note,
     latest_t,
+    missing_in_window_note,
     missing_note,
+    named,
     output,
     request_of,
     spec,
+    stale_rows_note,
     stock_feed,
+    stock_lag,
     window,
 )
 from .marketdata import fetch_grouped, fetch_once
@@ -43,24 +52,41 @@ from .marketdata import fetch_grouped, fetch_once
 GOLDEN = "tests/alpaca/test_alpaca_stocks.py"
 EQ = "us_equity"
 NO_TAKER = "Stock trades carry no aggressor side."
+AFTER_SESSION = (
+    "their last trade falls outside the latest session's regular hours (an extended-hours trade, or none since "
+    "the session), so the change is that session's close against the one before"
+)
 LOT_NOTE = (
     "Quote sizes are shares; Alpaca reported round lots before 2025-11-03, which are converted at 100 shares."
 )
+#: SIP trade conditions of messages that are not trades: a market center's
+#: official close (M) or open (Q), and a corrected consolidated close (9), on
+#: both the CTA (tapes A, B) and the UTP (tape C) plans.
+NOT_TRADES = frozenset({"M", "Q", "9"})
 #: Alpaca's movers screener ranks at most this many gainers and losers.
 MOVERS_MAX = 50
+#: Alpaca's most-actives screener ranks at most this many.
+MOST_ACTIVE_MAX = 100
 #: Nasdaq's fifth letter of a five-letter symbol for warrants, rights and units (NRSNW, CHARR, CCAQU).
 FIFTH_LETTERS = frozenset("WRU")
-#: Suffixes after the root for warrants, rights and units (Alpaca's AAC.WS and BCAT.RT, our AAC-WS, BCAT-RT).
-SUFFIXES = frozenset({"WS", "RT", "U"})
+#: Suffixes after the root for warrants, rights and units (Alpaca's AAC.WS and BCAT.RT, our AAC-WS,
+#: BCAT-RT): WS and a series of it (NE-WSA, Noble's tranche 2 warrants), RT and RTWI (when issued), U, UN.
+SUFFIX_RE = re.compile(r"^(?:WS[A-Z]?|RT(?:WI)?|UN?)$")
+#: Asset names that say warrant, right or unit without doubt: "Warrant(s)", "Rights", "Units, each
+#: consisting of ...". A partnership's "Common Units", "Corporate Units" and a name like "Right On" do not.
+NAME_RE = re.compile(r"\bwarrants?\b|\brights\b|\bunits?,?\s+each\b", re.IGNORECASE)
+#: How long Alpaca's active US equity names are kept for that screen.
+NAMES_TTL = timedelta(hours=24)
+_names: dict[tuple[str, str | None], tuple[datetime, dict[str, str]]] = {}
 
 
 class BarsIn(Inputs):
     tickers: EquityTickers
     timeframe: TimeframeIn = Field("1d", description=TIMEFRAME_DOC)
     start: Instant | None = Field(None, description=START_DOC)
-    end: Instant | None = Field(None, description=END_DOC)
+    end: Instant | None = Field(None, description=END_DOC_NY)
     lookback: Duration | None = Field(
-        None, description=LOOKBACK_DOC + " Default P5D intraday, P1Y daily or longer."
+        None, description=LOOKBACK_DOC + BARS_LOOKBACK_DOC + " Default P5D intraday, P1Y daily or longer."
     )
     adjustment: Literal["raw", "split", "dividend", "all"] = Field(
         "all",
@@ -74,7 +100,7 @@ class BarsIn(Inputs):
 class TicksIn(Inputs):
     tickers: EquityTickers
     start: Instant | None = Field(None, description=START_DOC)
-    end: Instant | None = Field(None, description=END_DOC)
+    end: Instant | None = Field(None, description=END_DOC_NY)
     lookback: Duration | None = Field(None, description=LOOKBACK_DOC + " Default PT20M.")
     sort: Literal["asc", "desc"] = Field("asc", description=SORT_DOC)
     page_token: str | None = Field(None, max_length=2000, description=CONTINUE_DOC)
@@ -87,6 +113,12 @@ class LatestIn(Inputs):
 class MostActiveIn(Inputs):
     by: Literal["volume", "trades"] = Field("volume", description="Rank by share volume or by trade count.")
     top: int = Field(10, ge=1, le=100, description="How many tickers (1-100).")
+    min_price: float | None = Field(
+        None,
+        ge=0,
+        description="Drop stocks whose latest trade is below this (USD), e.g. 5 to leave out penny stocks; "
+        "Alpaca's top 100 are screened instead, ranked from 1 among the kept and cut to top.",
+    )
 
 
 class MoversIn(Inputs):
@@ -95,19 +127,38 @@ class MoversIn(Inputs):
     min_price: float | None = Field(
         None,
         ge=0,
-        description="Drop movers priced below this (USD), e.g. 1 to leave out sub-dollar listings.",
+        description="Drop movers priced below this (USD; for crypto, the pair's quote currency), e.g. 1 to "
+        "leave out sub-dollar listings.",
+    )
+    quote_currency: str | None = Field(
+        None,
+        description="Crypto only: keep the pairs quoted in this currency (USD, USDT, USDC, BTC, ETH or EUR), "
+        "e.g. USD to leave out BTC/USDT and ETH/BTC beside BTC/USD.",
     )
     exclude_warrants_rights_units: bool = Field(
         False,
-        description="Stocks only: drop warrants, rights and units, judged by symbol alone: five letters ending "
-        "in W, R or U (Nasdaq's fifth letter: NRSNW, CHARR, CCAQU) or a WS, RT or U suffix (AAC-WS, AAC-WS-A, "
-        "BCAT-RT, XYZ-U).",
+        description="Stocks only: drop warrants, rights and units. By symbol: five letters ending in W, R or U "
+        "(Nasdaq's fifth letter: NRSNW, CHARR, CCAQU), or a suffix WS or a WS series, RT, RTWI, U or UN (AAC-WS, "
+        "NE-WSA, BCAT-RT, XYZ-U). By name: Alpaca's asset name says Warrant(s), Rights or Units, each ... "
+        "(names are read once and kept a day; a partnership's common units are kept).",
     )
+
+    @field_validator("quote_currency")
+    @classmethod
+    def _quote(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        q = v.strip().upper()
+        if q not in CRYPTO_QUOTE_CURRENCIES:
+            raise ValueError(f"'{v}' is not a quote currency ({', '.join(sorted(CRYPTO_QUOTE_CURRENCIES))})")
+        return q
 
     @model_validator(mode="after")
     def _stocks_only(self) -> MoversIn:
         if self.exclude_warrants_rights_units and self.market_type != "stocks":
             raise ValueError("exclude_warrants_rights_units applies to stocks only")
+        if self.quote_currency and self.market_type != "crypto":
+            raise ValueError("quote_currency applies to crypto only")
         return self
 
 
@@ -125,6 +176,9 @@ async def market_bars(ctx: ToolContext, args: BarsIn) -> ToolOutput:
             args.lookback,
             "P5D" if _intraday(args.timeframe) else "P1Y",
             timeframe=args.timeframe,
+            day_zone=NEW_YORK,
+            lag=stock_lag(api.settings.stock_feed),
+            lagging=DELAYED_SIP,
         )
         skips = Skips(Bar.schema_name)
 
@@ -164,8 +218,9 @@ async def market_bars(ctx: ToolContext, args: BarsIn) -> ToolOutput:
         request=request_of(args, **win.fields(), feed=feed),
         feed=feed,
         delay=delay,
-        as_of=win.end or ctx.now(),
+        as_of=win.as_of,
         page=page,
+        notes=[*win.notes, *missing_in_window_note(args.tickers, page, args.page_token)],
         skips=skips,
     )
 
@@ -174,7 +229,16 @@ async def _ticks(ctx: ToolContext, args: TicksIn, kind: Literal["quotes", "trade
     model = Quote if kind == "quotes" else Trade
     async with AlpacaClient(ctx) as api:
         feed, delay = stock_feed(api.settings.stock_feed, historical=True)
-        win = window(ctx, args.start, args.end, args.lookback, "PT20M")
+        win = window(
+            ctx,
+            args.start,
+            args.end,
+            args.lookback,
+            "PT20M",
+            day_zone=NEW_YORK,
+            lag=stock_lag(api.settings.stock_feed),
+            lagging=DELAYED_SIP,
+        )
         skips = Skips(model.schema_name)
         dropped = 0
 
@@ -210,9 +274,10 @@ async def _ticks(ctx: ToolContext, args: TicksIn, kind: Literal["quotes", "trade
             mapper=rows,
             start_token=args.page_token,
         )
-    notes = [LOT_NOTE] if kind == "quotes" else []
+    notes = [*win.notes, LOT_NOTE] if kind == "quotes" else list(win.notes)
     if dropped:
         notes.append(f"Dropped {dropped} trade(s) Alpaca marks canceled or incorrect.")
+    notes += missing_in_window_note(args.tickers, page, args.page_token)
     absent = {} if kind == "quotes" else {"taker_side": absence("not_applicable", NO_TAKER)}
     return output(
         ctx,
@@ -223,7 +288,7 @@ async def _ticks(ctx: ToolContext, args: TicksIn, kind: Literal["quotes", "trade
         request=request_of(args, **win.fields(), feed=feed),
         feed=feed,
         delay=delay,
-        as_of=win.end or ctx.now(),
+        as_of=win.as_of,
         page=page,
         absent=absent,
         notes=notes,
@@ -268,6 +333,9 @@ async def _latest(ctx: ToolContext, args: LatestIn, kind: Literal["bars", "quote
 
         page = await fetch_once(ctx, fetch)
     absent = {"taker_side": absence("not_applicable", NO_TAKER)} if kind == "trades" else {}
+    notes = missing_note(args.tickers, page.rows) + stale_rows_note(page.rows)
+    if kind == "trades":
+        notes += not_a_trade_note([r.ticker for r in page.rows if NOT_TRADES & set(r.conditions or ())])
     return output(
         ctx,
         model,
@@ -279,10 +347,22 @@ async def _latest(ctx: ToolContext, args: LatestIn, kind: Literal["bars", "quote
         delay=delay,
         as_of=latest_t(page.rows),
         page=page,
-        notes=missing_note(args.tickers, page.rows),
+        notes=notes,
         absent=absent,
         skips=skips,
     )
+
+
+def not_a_trade_note(tickers: list[str]) -> list[str]:
+    """Name the tickers whose latest record is an official open or close
+    message (condition M, Q or 9), not a trade."""
+    if not tickers:
+        return []
+    return [
+        f"The latest record of {named(tickers)} is a market center's official close or open message (SIP "
+        "condition M, Q or 9), not a trade: its price is that venue's official price and its size is not one "
+        "trade's size; market_trades with sort desc shows the trades before it."
+    ]
 
 
 async def market_latest_bars(ctx: ToolContext, args: LatestIn) -> ToolOutput:
@@ -299,6 +379,7 @@ async def market_latest_trades(ctx: ToolContext, args: LatestIn) -> ToolOutput:
 
 async def market_snapshots(ctx: ToolContext, args: LatestIn) -> ToolOutput:
     skips = Skips(Snapshot.schema_name)
+    official: list[str] = []
     async with AlpacaClient(ctx) as api:
         feed, delay = stock_feed(api.settings.stock_feed, historical=False)
 
@@ -311,6 +392,8 @@ async def market_snapshots(ctx: ToolContext, args: LatestIn) -> ToolOutput:
             out = []
             for symbol, rec in data.items():
                 tk = to_ticker(symbol, EQ)
+                if NOT_TRADES & set(((rec or {}).get("latestTrade") or {}).get("c") or ()):
+                    official.append(tk)
                 out.extend(
                     collect(
                         skips,
@@ -333,29 +416,72 @@ async def market_snapshots(ctx: ToolContext, args: LatestIn) -> ToolOutput:
         delay=delay,
         as_of=latest_t(page.rows),
         page=page,
-        notes=missing_note(args.tickers, page.rows),
+        notes=missing_note(args.tickers, page.rows)
+        + stale_rows_note(page.rows)
+        + day_close_basis_note(page.rows, AFTER_SESSION)
+        + not_a_trade_note(official),
         skips=skips,
     )
+
+
+async def snapshots_of(api: AlpacaClient, symbols: list[str], feed: str) -> dict[str, Snapshot]:
+    """Snapshots by ticker for Alpaca symbols (one request); a symbol whose
+    snapshot does not fit the model is left out."""
+    if not symbols:
+        return {}
+    data = await api.get("data", "/v2/stocks/snapshots", {"symbols": symbols, "feed": feed})
+    out: dict[str, Snapshot] = {}
+    for symbol, rec in (data or {}).items():
+        tk = to_ticker(symbol, EQ)
+        rows = collect(
+            Skips(Snapshot.schema_name),
+            [rec],
+            lambda r, tk=tk: mappers.snapshot(r, ticker=tk, asset_class=EQ),
+            str,
+        )
+        if rows:
+            out[tk] = rows[0]
+    return out
 
 
 async def market_most_active(ctx: ToolContext, args: MostActiveIn) -> ToolOutput:
     skips = Skips(MostActive.schema_name)
     as_of = None
+    notes: list[str] = []
     async with AlpacaClient(ctx) as api:
+        feed, _ = stock_feed(api.settings.stock_feed, historical=False)
 
         async def fetch() -> list:
             nonlocal as_of
-            data = await api.get(
-                "data", "/v1beta1/screener/stocks/most-actives", {"by": args.by, "top": args.top}
-            )
+            top = MOST_ACTIVE_MAX if args.min_price is not None else args.top
+            data = await api.get("data", "/v1beta1/screener/stocks/most-actives", {"by": args.by, "top": top})
             as_of = parse_ts(data.get("last_updated"))
             ranked = list(enumerate(data.get("most_actives") or [], 1))
-            return collect(
+            symbols = [str(p[1].get("symbol")) for p in ranked if p[1].get("symbol")]
+            try:
+                snaps = await snapshots_of(api, symbols, feed)
+            except ToolError as e:
+                if args.min_price is not None:
+                    raise
+                snaps = {}
+                notes.append(
+                    f"Prices could not be read from the snapshots ({e.code}): price and change are null."
+                )
+            rows = collect(
                 skips,
                 ranked,
-                lambda p: mappers.most_active(p[1], rank=p[0], ranked_by=args.by, as_of=as_of),
+                lambda p: mappers.most_active(
+                    p[1],
+                    rank=p[0],
+                    ranked_by=args.by,
+                    as_of=as_of,
+                    snap=snaps.get(to_ticker(str(p[1].get("symbol")), EQ)),
+                ),
                 lambda p: str(p[1].get("symbol")),
             )
+            if args.min_price is None:
+                return rows
+            return _min_price_screen(rows, args, len(ranked), notes)
 
         page = await fetch_once(ctx, fetch)
     return output(
@@ -364,34 +490,90 @@ async def market_most_active(ctx: ToolContext, args: MostActiveIn) -> ToolOutput
         page.rows,
         route="GET /v1beta1/screener/stocks/most-actives",
         operation="MostActives",
-        request=request_of(args),
+        request=request_of(args, feed=feed),
         delay=Delay.UNKNOWN,
         as_of=as_of,
         page=page,
+        notes=notes + day_close_basis_note(page.rows, AFTER_SESSION),
         skips=skips,
     )
 
 
+def _min_price_screen(
+    rows: list[MostActive], args: MostActiveIn, ranked: int, notes: list[str]
+) -> list[MostActive]:
+    """Keep the rows whose price is min_price or more, ranked from 1 among the
+    kept and cut to top; note what was dropped and any shortfall."""
+    kept: list[MostActive] = []
+    below = unpriced = 0
+    for row in rows:
+        if row.price is None:
+            unpriced += 1
+        elif row.price < args.min_price:  # type: ignore[operator]
+            below += 1
+        else:
+            kept.append(row.model_copy(update={"rank": len(kept) + 1}))
+    why = []
+    if below:
+        why.append(f"{below} priced below min_price {args.min_price:g}")
+    if unpriced:
+        why.append(f"{unpriced} without a snapshot price")
+    if why:
+        notes.append(
+            f"min_price dropped {below + unpriced} of the {ranked} most active Alpaca ranked: {', '.join(why)}."
+        )
+    if why and len(kept) < args.top <= len(kept) + below + unpriced:
+        notes.append(f"Only {len(kept)} of the {args.top} asked for passed min_price.")
+    if ranked < args.top:
+        notes.append(f"Alpaca ranked {ranked}, fewer than the {args.top} asked for.")
+    return kept[: args.top]
+
+
 def warrant_right_or_unit(ticker: str) -> bool:
     """By symbol alone: a five-letter symbol whose fifth letter is W, R or U, or
-    a root followed by a WS, RT or U suffix. Four-letter symbols and other fifth
-    letters (Z, miscellaneous) are kept."""
+    a root followed by a WS (or WS series such as WSA), RT, RTWI, U or UN
+    suffix. Four-letter symbols and other fifth letters (Z, miscellaneous) are
+    kept."""
     root, _, suffix = ticker.partition("-")
     if suffix:
-        return suffix.split("-")[0] in SUFFIXES
+        return bool(SUFFIX_RE.match(suffix.split("-")[0]))
     return len(root) == 5 and root.isalpha() and root[-1] in FIFTH_LETTERS
 
 
-def _screen(rows: list[Mover], args: MoversIn, reasons: Counter[tuple[str, str]]) -> list[Mover]:
+async def asset_names(ctx: ToolContext, api: AlpacaClient) -> dict[str, str]:
+    """Alpaca's active US equity names by ticker, read once (one request) and
+    kept NAMES_TTL per account environment and trading URL."""
+    key = (api.environment.value, api.settings.trading_url)
+    now = ctx.now()
+    hit = _names.get(key)
+    if hit is not None and now - hit[0] < NAMES_TTL:
+        return hit[1]
+    data = await api.get("trading", "/v2/assets", {"status": "active", "asset_class": EQ})
+    names = {
+        to_ticker(str(a["symbol"]), EQ): str(a.get("name") or "")
+        for a in data or []
+        if isinstance(a, dict) and a.get("symbol")
+    }
+    _names[key] = (now, names)
+    return names
+
+
+def _screen(
+    rows: list[Mover], args: MoversIn, reasons: Counter[tuple[str, str]], names: dict[str, str] | None = None
+) -> list[Mover]:
     """The movers that pass the filters, in Alpaca's order and ranked from 1
     among themselves; each dropped one is counted under its first reason, as
     (one, many)."""
     kept: list[Mover] = []
     for row in rows:
-        if args.min_price is not None and row.price < args.min_price:
+        if args.quote_currency and row.ticker.partition("/")[2] != args.quote_currency:
+            reasons[(f"not quoted in {args.quote_currency}",) * 2] += 1
+        elif args.min_price is not None and row.price < args.min_price:
             reasons[(f"priced below min_price {args.min_price:g}",) * 2] += 1
         elif args.exclude_warrants_rights_units and warrant_right_or_unit(row.ticker):
             reasons[("warrant, right or unit by symbol", "warrants, rights or units by symbol")] += 1
+        elif args.exclude_warrants_rights_units and names and NAME_RE.search(names.get(row.ticker, "")):
+            reasons[("warrant, right or unit by asset name", "warrants, rights or units by asset name")] += 1
         else:
             kept.append(row.model_copy(update={"rank": len(kept) + 1}))
     return kept
@@ -436,10 +618,20 @@ def _screen_notes(
 async def market_movers(ctx: ToolContext, args: MoversIn) -> ToolOutput:
     skips = Skips(Mover.schema_name)
     as_of = None
-    screened = args.min_price is not None or args.exclude_warrants_rights_units
+    screened = args.min_price is not None or args.exclude_warrants_rights_units or bool(args.quote_currency)
     counts: dict[str, tuple[int, int, int]] = {}
     reasons: Counter[tuple[str, str]] = Counter()
+    notes: list[str] = []
     async with AlpacaClient(ctx) as api:
+        names = None
+        if args.exclude_warrants_rights_units:
+            try:
+                names = await asset_names(ctx, api)
+            except ToolError as e:
+                notes.append(
+                    f"Alpaca's asset names could not be read ({e.code}), so warrants, rights and units were "
+                    "judged by symbol alone."
+                )
 
         async def fetch() -> list:
             nonlocal as_of
@@ -458,9 +650,11 @@ async def market_movers(ctx: ToolContext, args: MoversIn) -> ToolOutput:
                     lambda p: str(p[1].get("symbol")),
                 )
                 if screened:
-                    kept = _screen(rows, args, reasons)
+                    kept = _screen(rows, args, reasons, names)
                     counts[direction] = (len(ranked), len(rows) - len(kept), len(kept))
                     rows = kept[: args.top]
+                else:
+                    counts[direction] = (len(ranked), 0, len(rows))
                 out += rows
             return out
 
@@ -475,7 +669,7 @@ async def market_movers(ctx: ToolContext, args: MoversIn) -> ToolOutput:
         delay=Delay.UNKNOWN,
         as_of=as_of,
         page=page,
-        notes=_screen_notes(args.top, counts, reasons),
+        notes=_screen_notes(args.top, counts, reasons) + notes,
         skips=skips,
     )
 
@@ -564,7 +758,9 @@ SPECS = (
         name="market_latest_trades",
         capability="market",
         title="Latest stock trades",
-        description="The latest trade for each stock ticker (price USD, size shares).",
+        description="The latest trade for each stock ticker (price USD, size shares). When Alpaca's latest "
+        "record is a market center's official close or open message (SIP condition M, Q or 9) rather than a "
+        "trade, notes say so; a ticker whose row is more than a day older than the newest is named in notes.",
         readme="Latest trade per ticker",
         input_model=LatestIn,
         output_model=Trade,
@@ -578,9 +774,11 @@ SPECS = (
         name="market_snapshots",
         capability="market",
         title="Stock snapshots",
-        description="Latest state per stock ticker: last trade, best bid/ask, latest minute close, today's "
-        "OHLCV and VWAP, previous close, and change / change_pct (fraction) derived from the last trade and "
-        "the previous close. Tickers Alpaca has nothing for are listed in notes.",
+        description="Latest state per stock ticker: last trade, best bid/ask, latest minute close, the latest "
+        "session's OHLCV and VWAP, previous close, and change / change_pct (fraction) against the previous close: "
+        "from the last trade while it falls in the session's regular hours, else from the session's close "
+        "(after hours, before the open, or for a ticker that stopped trading), as change_basis says, with a note. "
+        "Tickers Alpaca has nothing for are listed in notes.",
         readme="Last trade, quote, day bar, change",
         input_model=LatestIn,
         output_model=Snapshot,
@@ -595,7 +793,9 @@ SPECS = (
         capability="market",
         title="Most active stocks",
         description="Today's most active US stocks ranked by share volume or trade count (cumulative for "
-        "the current trading day); as_of is the screener's last update.",
+        "the current trading day), with each one's latest price and change against the previous close from its "
+        "snapshot (as market_snapshots, on the configured stock_feed); as_of is the screener's last update. "
+        "min_price screens Alpaca's top 100 and ranks the kept.",
         readme="Most active stocks today",
         input_model=MostActiveIn,
         output_model=MostActive,
@@ -611,9 +811,9 @@ SPECS = (
         title="Top movers",
         description="Today's top gainers and losers for stocks or crypto: price, change (USD) and "
         "percent_change as a fraction (0.05 = 5 %), ranked within each direction. Alpaca's lists include "
-        "warrants, rights, units and sub-penny listings: min_price and exclude_warrants_rights_units (stocks, "
-        "by symbol) screen Alpaca's top 50 instead, rank counts the movers kept, and notes say how many were "
-        "dropped and why.",
+        "warrants, rights, units and sub-penny listings: min_price, exclude_warrants_rights_units (stocks, by "
+        "symbol and asset name) and quote_currency (crypto) screen Alpaca's top 50 instead, rank counts the "
+        "movers kept, and notes say how many were dropped and why, and when a direction has fewer than top.",
         readme="Top gainers and losers",
         input_model=MoversIn,
         output_model=Mover,

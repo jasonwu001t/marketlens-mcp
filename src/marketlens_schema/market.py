@@ -337,7 +337,9 @@ class Trade(CanonicalModel):
 
 class Snapshot(CanonicalModel):
     """The latest state of one stock or crypto pair. ``change`` and
-    ``change_pct`` are derived by the adapter from last_price and prev_close."""
+    ``change_pct`` are derived by the adapter against prev_close, from the
+    price ``change_basis`` names: the last trade while it falls in the latest
+    session, else that session's day_close."""
 
     schema_name: ClassVar[str] = "marketlens.Snapshot"
     time_column: ClassVar[str | None] = "t"
@@ -347,26 +349,48 @@ class Snapshot(CanonicalModel):
     ticker: Ticker
     asset_class: AssetClass
     t: UtcDatetime = unit("UTC", description="The newest timestamp among the snapshot's parts")
-    last_price: float | None = unit("price", default=None)
+    last_price: float | None = unit(
+        "price",
+        default=None,
+        description="The latest trade's price (may be an extended-hours or an old trade)",
+    )
     last_size: float | None = unit("by_asset_class", default=None)
-    last_t: UtcDatetime | None = unit("UTC", default=None)
+    last_t: UtcDatetime | None = unit("UTC", default=None, description="When the latest trade happened")
     bid_price: float | None = unit("price", default=None)
     bid_size: float | None = unit("by_asset_class", default=None)
     ask_price: float | None = unit("price", default=None)
     ask_size: float | None = unit("by_asset_class", default=None)
     quote_t: UtcDatetime | None = unit("UTC", default=None)
-    minute_close: float | None = unit("price", default=None)
+    minute_close: float | None = unit("price", default=None, description="The latest minute bar's close")
     minute_t: UtcDatetime | None = unit("UTC", default=None)
-    day_open: float | None = unit("price", default=None)
+    day_open: float | None = unit(
+        "price",
+        default=None,
+        description="The latest session's daily bar (today's, in progress while it trades)",
+    )
     day_high: float | None = unit("price", default=None)
     day_low: float | None = unit("price", default=None)
-    day_close: float | None = unit("price", default=None)
+    day_close: float | None = unit(
+        "price", default=None, description="The latest session's daily bar close (stocks: regular hours)"
+    )
     day_volume: float | None = unit("by_asset_class", default=None)
     day_vwap: float | None = unit("price", default=None)
-    prev_close: float | None = unit("price", default=None)
+    prev_close: float | None = unit(
+        "price", default=None, description="The close of the session before day_*"
+    )
     prev_volume: float | None = unit("by_asset_class", default=None)
-    change: float | None = unit("price", default=None)
-    change_pct: float | None = unit("fraction", default=None)
+    change: float | None = unit(
+        "price", default=None, description="The change_basis price minus prev_close, in the row's currency"
+    )
+    change_pct: float | None = unit(
+        "fraction", default=None, description="change / prev_close as a fraction (0.05 = 5 %)"
+    )
+    change_basis: Literal["last_trade", "day_close"] | None = Field(
+        default=None,
+        description="The price change is measured from: last_trade while the last trade falls in the latest "
+        "session (stocks: the day bar's regular hours, 09:30-16:00 New York; crypto: since the day bar began), "
+        "else day_close, the session's change (after an extended-hours or a stale last trade)",
+    )
     currency: str = "USD"
 
 
@@ -399,6 +423,20 @@ class MostActive(CanonicalModel):
     volume: float = unit("shares")
     trade_count: int = unit("count")
     as_of: UtcDatetime = unit("UTC", description="The screener's last update")
+    price: float | None = unit(
+        "price",
+        default=None,
+        description="The latest trade, from the ticker's snapshot (market_snapshots' last_price)",
+    )
+    change: float | None = unit(
+        "price", default=None, description="Against the previous close, as market_snapshots computes it"
+    )
+    change_pct: float | None = unit(
+        "fraction", default=None, description="change / previous close (0.05 = 5 %)"
+    )
+    change_basis: Literal["last_trade", "day_close"] | None = Field(
+        default=None, description="As market_snapshots' change_basis: the price change is measured from"
+    )
 
 
 class Mover(CanonicalModel):

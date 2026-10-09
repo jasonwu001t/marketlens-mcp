@@ -95,6 +95,16 @@ def _no_sleep(monkeypatch):
     yield slept
 
 
+@pytest.fixture(autouse=True)
+def _fresh_caches():
+    """Process-level caches start empty in every test."""
+    from marketlens_mcp.providers.alpaca.tools import stocks
+
+    stocks._names.clear()
+    yield
+    stocks._names.clear()
+
+
 # --- a fake ToolContext ----------------------------------------------------------------------
 
 

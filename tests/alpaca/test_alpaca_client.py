@@ -236,6 +236,34 @@ def test_subscription_errors_are_not_entitled(alpaca):
     err = refused(FakeContext(), "data", "/v2/stocks/bars")
     assert err.code == "alpaca_not_entitled"
     assert "subscription does not permit querying recent SIP data" in err.message
+    # The plan has SIP, only not the last 15 minutes of it: not "set stock_feed: iex (or delayed_sip)".
+    assert err.hint == (
+        "Your Alpaca plan serves SIP history only 15 minutes after the fact: end the window at least 15 minutes "
+        "ago, or set providers.alpaca.stock_feed: delayed_sip in the marketlens config so windows are cut there "
+        "for you (iex serves real-time IEX data instead)."
+    )
+
+
+def test_recent_sip_data_on_the_delayed_sip_feed_does_not_say_to_set_it(alpaca):
+    alpaca.add(
+        "/v2/stocks/trades",
+        httpx.Response(403, json={"message": "subscription does not permit querying recent SIP data"}),
+    )
+    err = refused(FakeContext(settings={"stock_feed": "delayed_sip"}), "data", "/v2/stocks/trades")
+    assert err.code == "alpaca_not_entitled"
+    assert err.hint == (
+        "Your Alpaca plan serves SIP history only 15 minutes after the fact, and stock_feed is already "
+        "delayed_sip: end the window, and start it, at least 15 minutes ago."
+    )
+
+
+def test_a_stock_feed_the_plan_lacks_names_the_feeds(alpaca):
+    alpaca.add(
+        "/v2/stocks/quotes/latest",
+        httpx.Response(403, json={"message": "subscription does not permit querying SIP data"}),
+    )
+    err = refused(FakeContext(), "data", "/v2/stocks/quotes/latest")
+    assert err.code == "alpaca_not_entitled"
     assert "stock_feed: iex" in err.hint and "delayed_sip" in err.hint
 
 
