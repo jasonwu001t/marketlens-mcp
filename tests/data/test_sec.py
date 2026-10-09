@@ -6,12 +6,46 @@ sec_fund_holdings against a synthetic EDGAR: the fictional company TESTCO
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from zoneinfo import ZoneInfo
 
 import httpx
 import pytest
-from data_harness import KEYS, call, check_golden, context, fixture_text, refused
+from data_harness import KEYS, call, check_golden, context, fixture_json, fixture_text, refused
 
 ARCH = r"www\.sec\.gov/Archives/edgar/data"
+#: The submissions feed of each synthetic EDGAR company, by CIK.
+FEEDS = {
+    9999901: "sec.submissions__TESTCO.json",
+    9999950: "sec.submissions__13F.json",
+    9999951: "sec.submissions__13F_amends.json",
+    9999970: "sec.submissions__FUND.json",
+}
+
+
+def edgar_browse(request: httpx.Request):
+    """EDGAR's browse-edgar Atom feeds. A series id (S...) is the fund series' N-PORT
+    feed; a company CIK is the company filing feed marketlens-data reads for the
+    acceptance times of the filings EDGAR added since it last rewrote the submissions
+    feed. Synthetic feeds are rewritten: every filing of the recent block with an
+    acceptance time, at that instant in New York with its offset (the block is true
+    UTC), so each is stamped as the block reads it."""
+    cik = request.url.params.get("CIK", "")
+    if cik.upper().startswith("S"):
+        return fixture_text("sec.nport_feed__S000099991.xml")
+    recent = fixture_json(FEEDS[int(cik)])["filings"]["recent"]
+    new_york = ZoneInfo("America/New_York")
+    entries = []
+    for accn, at in zip(recent["accessionNumber"], recent["acceptanceDateTime"], strict=True):
+        if at:
+            local = datetime.fromisoformat(at.replace("Z", "+00:00")).astimezone(new_york)
+            entries.append(
+                f'<entry><content type="text/xml"><accession-number>{accn}</accession-number>'
+                f"</content><updated>{local.isoformat()}</updated></entry>"
+            )
+    return (
+        '<?xml version="1.0" encoding="ISO-8859-1" ?>'
+        f'<feed xmlns="http://www.w3.org/2005/Atom">{"".join(entries)}</feed>'
+    )
 
 
 def sec_routes(upstream):
@@ -35,8 +69,8 @@ def sec_routes(upstream):
         j(rf"{folder}/index\.json", f"sec.13f_index__{acc}.json")
         t(rf"{folder}/infotable\.xml", f"sec.13f_table__{acc}.xml")
         t(rf"{folder}/primary_doc\.xml", f"sec.13f_cover__{acc}.xml")
-    # N-PORT
-    t(r"www\.sec\.gov/cgi-bin/browse-edgar", "sec.nport_feed__S000099991.xml")
+    # N-PORT (a series feed) and the companies' filing feeds
+    upstream.add(r"www\.sec\.gov/cgi-bin/browse-edgar", edgar_browse)
     for acc in ("26-000005", "26-000002"):
         t(rf"{ARCH}/9999970/0009999970{acc.replace('-', '')}/primary_doc\.xml", f"sec.nport_doc__{acc}.xml")
 
@@ -63,6 +97,16 @@ def test_sec_filings_golden(tmp_path, edgar):
     assert agents and all(KEYS["SEC_CONTACT_EMAIL"] in a for a in agents)
     eight_k = call("sec_filings", context(tmp_path), ticker="TESTCO", forms=["8-k"], start="2026-01-01")
     assert [r.accession_number for r in eight_k.rows] == ["0009999901-26-000009", "0009999901-26-000001"]
+
+
+def test_an_unreadable_edgar_atom_feed_fails_the_answer_rather_than_stamp_early(tmp_path, edgar):
+    """Without EDGAR's Atom feed the filings EDGAR just added would read four or five
+    hours early (omni review of 2026-10-09): the refresh fails as retryable, and
+    nothing is stored to answer from."""
+    edgar.add(r"www\.sec\.gov/cgi-bin/browse-edgar", httpx.Response(503, text="busy"))
+    err = refused("sec_filings", context(tmp_path), ticker="TESTCO")
+    assert err.code == "data_unavailable" and err.retryable
+    assert "sec_atom_unreadable" in err.message
 
 
 #: What every SEC answer in mode auto says while SEC_CONTACT_EMAIL is not set (never a value).
@@ -290,9 +334,9 @@ def amending_manager_routes(upstream):
     """Manager 9999951's report for 2026-03-31: the original (May 10), a new-holdings
     amendment (May 15), a restatement (May 20), then a new-holdings amendment (Jun 1)."""
     upstream.json_file(r"data\.sec\.gov/submissions/CIK0009999951\.json", "sec.submissions__13F_amends.json")
-    # No EDGAR Atom feed for this manager (marketlens-data reads one for the filings
-    # added since EDGAR last rewrote a feed): its filings are read on the feed's clock.
-    upstream.add(r"www\.sec\.gov/cgi-bin/browse-edgar", httpx.Response(404))
+    # The manager's EDGAR Atom feed (marketlens-data reads it for the filings added
+    # since EDGAR last rewrote a feed; a fetch without it fails).
+    upstream.add(r"www\.sec\.gov/cgi-bin/browse-edgar", edgar_browse)
     documents = {
         "26-000001": ("sec.13f_cover__26-000002.xml", "sec.13f_table__26-000002.xml"),
         "26-000002": ("sec.13f_cover__new_holdings.xml", "sec.13f_table__9999951-26-000002.xml"),
