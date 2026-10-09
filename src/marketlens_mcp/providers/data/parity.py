@@ -81,6 +81,7 @@ PARITY: dict[str, Mapped | Excluded] = {
     "cme.fed_funds_futures": Excluded("second_wave", _LATER),
     "sec_ownership.stakes": Excluded("second_wave", _LATER),
     "sec13f.covers": Excluded("second_wave", _LATER),
+    "sec.fails_to_deliver": Excluded("second_wave", _LATER),
     "cboe.put_call_ratio": Excluded(
         "not_planned",
         "the CSV archive ends in 2019; later sessions come only from scraping a fragile HTML page",
