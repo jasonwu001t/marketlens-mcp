@@ -42,6 +42,7 @@ from .common import (
     output,
     request_of,
     spec,
+    stale_rows_note,
     window,
 )
 from .marketdata import fetch_grouped, fetch_once
@@ -265,7 +266,9 @@ async def _latest(ctx: ToolContext, args: LatestIn, kind: Literal["bars", "quote
         as_of=latest_t(page.rows),
         page=page,
         absent=_absent(kind),
-        notes=missing_note(args.tickers, page.rows) + (no_trades_note(page.rows) if kind == "bars" else []),
+        notes=missing_note(args.tickers, page.rows)
+        + stale_rows_note(page.rows)
+        + (no_trades_note(page.rows) if kind == "bars" else []),
         skips=skips,
     )
 
@@ -318,7 +321,9 @@ async def crypto_snapshots(ctx: ToolContext, args: LatestIn) -> ToolOutput:
         delay=Delay.REALTIME,
         as_of=latest_t(page.rows),
         page=page,
-        notes=missing_note(args.tickers, page.rows) + day_close_basis_note(page.rows, STALE_TRADE),
+        notes=missing_note(args.tickers, page.rows)
+        + stale_rows_note(page.rows)
+        + day_close_basis_note(page.rows, STALE_TRADE),
         skips=skips,
     )
 

@@ -339,6 +339,85 @@ def test_market_latest_names_tickers_alpaca_returned_nothing_for(specs, ctx, alp
     assert "No data from Alpaca for: QQQQX." in out.notes
 
 
+STALE_QRVO = (
+    "QRVO (2026-09-25T21:53:31.828953Z) is more than a day older than the newest row (2026-10-02T00:00:00.015000Z), "
+    "which provenance.as_of shows: stopped trading (delisted, halted), or seldom traded; each row's t says when."
+)
+OFFICIAL_SPY = (
+    "The latest record of SPY is a market center's official close or open message (SIP condition M, Q or 9), "
+    "not a trade: its price is that venue's official price and its size is not one trade's size; market_trades "
+    "with sort desc shows the trades before it."
+)
+
+
+def test_market_latest_trades_label_an_official_close_and_name_a_stale_ticker(specs, ctx, alpaca):
+    alpaca.add(
+        "/v2/stocks/trades/latest",
+        {
+            "trades": {
+                # NYSE Arca's official close at 20:00 New York: a message, not a trade of 1,174,832 shares.
+                "SPY": {
+                    "t": "2026-10-02T00:00:00.015Z",
+                    "p": 773.93,
+                    "s": 1174832,
+                    "x": "P",
+                    "c": [" ", "M"],
+                    "i": 1,
+                    "z": "B",
+                },
+                "QRVO": {
+                    "t": "2026-09-25T21:53:31.828953Z",
+                    "p": 115.0,
+                    "s": 152,
+                    "x": "D",
+                    "c": ["@", "T"],
+                    "i": 2,
+                    "z": "C",
+                },
+            }
+        },
+    )
+    out = call(specs["market_latest_trades"], ctx, tickers=["SPY", "QRVO"])
+    assert {r.ticker for r in out.rows} == {"SPY", "QRVO"}  # labelled, not dropped
+    assert out.provenance.as_of == datetime(2026, 10, 2, 0, 0, 0, 15000, tzinfo=UTC)
+    assert out.notes == [STALE_QRVO, OFFICIAL_SPY]
+
+
+def test_market_latest_quotes_name_a_stale_ticker(specs, ctx, alpaca):
+    quote = {"bp": 1.0, "bs": 1, "bx": "V", "ap": 1.1, "as": 1, "ax": "V", "c": ["R"], "z": "C"}
+    alpaca.add(
+        "/v2/stocks/quotes/latest",
+        {"quotes": {"QRVO": {**quote, "t": "2026-09-25T23:33:48Z"}}},
+        match={"symbols": "QRVO"},
+    )
+    alpaca.add(
+        "/v2/stocks/quotes/latest",
+        {
+            "quotes": {
+                "AAPL": {**quote, "t": "2026-10-02T19:59:58Z"},
+                "QRVO": {**quote, "t": "2026-09-25T23:33:48Z"},
+            }
+        },
+    )
+    out = call(specs["market_latest_quotes"], ctx, tickers=["AAPL", "QRVO"])
+    assert out.notes == [
+        "QRVO (2026-09-25T23:33:48Z) is more than a day older than the newest row (2026-10-02T19:59:58Z), which "
+        "provenance.as_of shows: stopped trading (delisted, halted), or seldom traded; each row's t says when."
+    ]
+    one = call(specs["market_latest_quotes"], ctx, tickers=["QRVO"])
+    assert not any("older than the newest row" in n for n in one.notes)
+
+
+def test_market_snapshots_label_an_official_close_as_the_last_trade(specs, ctx, alpaca):
+    alpaca.add(
+        "/v2/stocks/snapshots",
+        {"SPY": _snap("2026-10-02T00:00:00.015Z", 773.93, [" ", "M"], "2026-10-01T04:00:00Z", 773.5, 770.0)},
+    )
+    out = call(specs["market_snapshots"], ctx, tickers=["SPY"])
+    assert out.rows[0].change_basis == "day_close"  # 20:00 New York is after the session
+    assert out.notes[-1] == OFFICIAL_SPY
+
+
 def test_market_snapshots_golden(specs, ctx, alpaca):
     alpaca.fixture("/v2/stocks/snapshots", "StockSnapshots")
     out = call(specs["market_snapshots"], ctx, tickers=["AAPL", "BRK-B", "ZZZZ"])

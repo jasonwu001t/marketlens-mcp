@@ -36,9 +36,11 @@ from .common import (
     latest_t,
     missing_in_window_note,
     missing_note,
+    named,
     output,
     request_of,
     spec,
+    stale_rows_note,
     stock_feed,
     stock_lag,
     window,
@@ -55,6 +57,10 @@ AFTER_SESSION = (
 LOT_NOTE = (
     "Quote sizes are shares; Alpaca reported round lots before 2025-11-03, which are converted at 100 shares."
 )
+#: SIP trade conditions of messages that are not trades: a market center's
+#: official close (M) or open (Q), and a corrected consolidated close (9), on
+#: both the CTA (tapes A, B) and the UTP (tape C) plans.
+NOT_TRADES = frozenset({"M", "Q", "9"})
 #: Alpaca's movers screener ranks at most this many gainers and losers.
 MOVERS_MAX = 50
 #: Nasdaq's fifth letter of a five-letter symbol for warrants, rights and units (NRSNW, CHARR, CCAQU).
@@ -291,6 +297,9 @@ async def _latest(ctx: ToolContext, args: LatestIn, kind: Literal["bars", "quote
 
         page = await fetch_once(ctx, fetch)
     absent = {"taker_side": absence("not_applicable", NO_TAKER)} if kind == "trades" else {}
+    notes = missing_note(args.tickers, page.rows) + stale_rows_note(page.rows)
+    if kind == "trades":
+        notes += not_a_trade_note([r.ticker for r in page.rows if NOT_TRADES & set(r.conditions or ())])
     return output(
         ctx,
         model,
@@ -302,10 +311,22 @@ async def _latest(ctx: ToolContext, args: LatestIn, kind: Literal["bars", "quote
         delay=delay,
         as_of=latest_t(page.rows),
         page=page,
-        notes=missing_note(args.tickers, page.rows),
+        notes=notes,
         absent=absent,
         skips=skips,
     )
+
+
+def not_a_trade_note(tickers: list[str]) -> list[str]:
+    """Name the tickers whose latest record is an official open or close
+    message (condition M, Q or 9), not a trade."""
+    if not tickers:
+        return []
+    return [
+        f"The latest record of {named(tickers)} is a market center's official close or open message (SIP "
+        "condition M, Q or 9), not a trade: its price is that venue's official price and its size is not one "
+        "trade's size; market_trades with sort desc shows the trades before it."
+    ]
 
 
 async def market_latest_bars(ctx: ToolContext, args: LatestIn) -> ToolOutput:
@@ -322,6 +343,7 @@ async def market_latest_trades(ctx: ToolContext, args: LatestIn) -> ToolOutput:
 
 async def market_snapshots(ctx: ToolContext, args: LatestIn) -> ToolOutput:
     skips = Skips(Snapshot.schema_name)
+    official: list[str] = []
     async with AlpacaClient(ctx) as api:
         feed, delay = stock_feed(api.settings.stock_feed, historical=False)
 
@@ -334,6 +356,8 @@ async def market_snapshots(ctx: ToolContext, args: LatestIn) -> ToolOutput:
             out = []
             for symbol, rec in data.items():
                 tk = to_ticker(symbol, EQ)
+                if NOT_TRADES & set(((rec or {}).get("latestTrade") or {}).get("c") or ()):
+                    official.append(tk)
                 out.extend(
                     collect(
                         skips,
@@ -356,7 +380,10 @@ async def market_snapshots(ctx: ToolContext, args: LatestIn) -> ToolOutput:
         delay=delay,
         as_of=latest_t(page.rows),
         page=page,
-        notes=missing_note(args.tickers, page.rows) + day_close_basis_note(page.rows, AFTER_SESSION),
+        notes=missing_note(args.tickers, page.rows)
+        + stale_rows_note(page.rows)
+        + day_close_basis_note(page.rows, AFTER_SESSION)
+        + not_a_trade_note(official),
         skips=skips,
     )
 
@@ -587,7 +614,9 @@ SPECS = (
         name="market_latest_trades",
         capability="market",
         title="Latest stock trades",
-        description="The latest trade for each stock ticker (price USD, size shares).",
+        description="The latest trade for each stock ticker (price USD, size shares). When Alpaca's latest "
+        "record is a market center's official close or open message (SIP condition M, Q or 9) rather than a "
+        "trade, notes say so; a ticker whose row is more than a day older than the newest is named in notes.",
         readme="Latest trade per ticker",
         input_model=LatestIn,
         output_model=Trade,

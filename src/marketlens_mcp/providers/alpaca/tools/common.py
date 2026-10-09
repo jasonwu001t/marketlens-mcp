@@ -395,6 +395,28 @@ def named(items: list[str], what: str = "") -> str:
     return out
 
 
+#: A row this much older than the newest row of a multi-instrument answer is named.
+STALE_AFTER = timedelta(days=1)
+
+
+def stale_rows_note(rows: Iterable[Any], attr: str = "t", key: str = "ticker") -> list[str]:
+    """provenance.as_of is the newest row's time: name the rows more than a day
+    older, so a ticker that stopped trading does not hide behind the others."""
+    rows = [r for r in rows if getattr(r, attr, None) is not None]
+    if len(rows) < 2:
+        return []
+    newest = max(getattr(r, attr) for r in rows)
+    old = sorted((getattr(r, attr), getattr(r, key)) for r in rows if newest - getattr(r, attr) > STALE_AFTER)
+    if not old:
+        return []
+    items = [f"{k} ({convert.iso_z(t)})" for t, k in old]
+    return [
+        f"{named(items)} {'is' if len(items) == 1 else 'are'} more than a day older than the newest row "
+        f"({convert.iso_z(newest)}), which provenance.as_of shows: stopped trading (delisted, halted), or "
+        "seldom traded; each row's t says when."
+    ]
+
+
 def day_close_basis_note(rows: Iterable[Any], why: str) -> list[str]:
     """Name the snapshots whose change comes from day_close, not last_price."""
     tickers = [r.ticker for r in rows if getattr(r, "change_basis", None) == "day_close"]

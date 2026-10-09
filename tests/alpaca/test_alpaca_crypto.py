@@ -213,6 +213,30 @@ def test_no_trades_note_names_five_pairs_at_most():
     assert no_trades_note([]) == []
 
 
+def test_crypto_latest_trades_name_a_pair_whose_trade_is_weeks_old(specs, ctx, alpaca):
+    alpaca.add(
+        "/v1beta3/crypto/us/latest/trades",
+        {
+            "trades": {
+                "BTC/USD": {"t": "2026-10-02T19:59:59Z", "p": 62150.75, "s": 0.002, "i": 1, "tks": "B"},
+                "ETH/BTC": {
+                    "t": "2026-09-23T12:00:47.257776Z",
+                    "p": 0.0317449,
+                    "s": 0.04,
+                    "i": 2,
+                    "tks": "S",
+                },
+            }
+        },
+    )
+    out = call(specs["crypto_latest_trades"], ctx, tickers=["BTC/USD", "ETH/BTC"])
+    assert out.notes == [
+        "ETH/BTC (2026-09-23T12:00:47.257776Z) is more than a day older than the newest row "
+        "(2026-10-02T19:59:59Z), which provenance.as_of shows: stopped trading (delisted, halted), or seldom "
+        "traded; each row's t says when."
+    ]
+
+
 def test_crypto_latest_quotes_golden(specs, ctx, alpaca):
     alpaca.fixture("/v1beta3/crypto/us/latest/quotes", "CryptoLatestQuotes")
     check_golden(call(specs["crypto_latest_quotes"], ctx, tickers=["BTC/USD"]), "crypto_latest_quotes")

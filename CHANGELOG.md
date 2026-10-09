@@ -45,6 +45,8 @@ All notable changes to this project are documented here. The format follows [Kee
 - `market_bars`, `market_quotes`, `market_trades`, `crypto_bars`, `crypto_quotes`, `crypto_trades`, `options_bars` and `options_trades` name the requested instruments Alpaca returned nothing for ("No data from Alpaca for: ZZZZQ in this window."), as the latest and snapshot tools do, instead of an empty answer with no word; a fetch that was cut or continued from a page token says nothing of the kind, since Alpaca pages through the instruments in turn.
 - `crypto_bars` says when its newest bar is still forming (crypto trades around the clock, so the current day's or hour's bar holds the trades up to now only), naming the bar's start and its pairs. The rows are unchanged.
 - `crypto_orderbooks` names a book that had fewer levels per side than the `depth` asked for ("Alpaca's book had fewer levels than the depth of 1000 asked for: BTC/USD 86 bid and 100 ask level(s).") instead of cutting it silently.
+- `market_latest_trades` (and `market_snapshots` for its last trade) says when Alpaca's latest record is a market center's official close or open message (SIP condition M, Q or 9; SPY's 20:00 New York close message of 1,174,832 shares) rather than a trade. The row stays: its price is that venue's official price.
+- The latest and snapshot tools of stocks and crypto name a row more than a day older than the newest one, since `provenance.as_of` is the newest row's time: `market_latest_trades` for SPY and QRVO (delisted, last trade a week earlier) showed SPY's time with no word on QRVO.
 
 ## [0.1.0] - Unreleased
 
