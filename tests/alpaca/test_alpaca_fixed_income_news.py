@@ -161,6 +161,10 @@ def test_news_keeps_a_root_article_tagged_with_another_requested_ticker(specs, c
     ]
 
 
+def test_news_description_says_a_root_article_with_another_requested_ticker_is_kept(specs):
+    assert "only those tagged BRK-B or another requested ticker are kept" in specs["news_search"].description
+
+
 def test_news_with_the_root_asked_for_keeps_all_its_articles(specs, ctx, alpaca):
     alpaca.add("/v1beta1/news", _news_index(_article(1, ["BRK", "BRK/B"]), _article(2, ["BRK"])))
     out = call(specs["news_search"], ctx, tickers=["BRK", "BRK-B"], lookback="P30D")
