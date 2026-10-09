@@ -509,8 +509,8 @@ def test_parity_list_shape():
     kinds = [v.kind for v in excluded.values()]
     assert {k: kinds.count(k) for k in set(kinds)} == {
         "covered": 7,
-        "second_wave": 16,
-        "not_planned": 7,
+        "second_wave": 15,
+        "not_planned": 8,
         "internal": 2,
     }
     specs = {s.name for s in tools.all_specs()}
@@ -535,6 +535,12 @@ def test_parity_list_shape():
         assert parity.PARITY[dataset_id] == parity.Excluded(
             "second_wave", "official source planned for a later release"
         ), dataset_id
+    # Retired in marketlens-data (2026-10-09): its prices were a vendor's, so no
+    # official source is planned for it.
+    assert parity.PARITY["cme.fed_funds_futures"] == parity.Excluded(
+        "not_planned",
+        "retired: Yahoo Finance quotes, not CME's settlements, which may not be fetched automatically",
+    )
     # The CSV archive ends in 2019, but marketlens-data reads every later session from Cboe's daily page.
     assert parity.PARITY["cboe.put_call_ratio"] == parity.Excluded(
         "not_planned",

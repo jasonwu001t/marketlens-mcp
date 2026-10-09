@@ -78,12 +78,15 @@ PARITY: dict[str, Mapped | Excluded] = {
     "imf.series": Excluded("second_wave", _LATER),
     "oecd.series": Excluded("second_wave", _LATER),
     "worldbank.indicator": Excluded("second_wave", _LATER),
-    "cme.fed_funds_futures": Excluded("second_wave", _LATER),
     "sec_ownership.stakes": Excluded("second_wave", _LATER),
     "sec13f.covers": Excluded("second_wave", _LATER),
     "cboe.put_call_ratio": Excluded(
         "not_planned",
         "the CSV archive ends in 2019; later sessions come only from scraping a fragile HTML page",
+    ),
+    "cme.fed_funds_futures": Excluded(
+        "not_planned",
+        "retired: Yahoo Finance quotes, not CME's settlements, which may not be fetched automatically",
     ),
     "cnn.fear_greed": Excluded("not_planned", "unofficial third-party endpoint"),
     "gdelt.news": Excluded("not_planned", "third-party news metadata; accrues only by polling"),
