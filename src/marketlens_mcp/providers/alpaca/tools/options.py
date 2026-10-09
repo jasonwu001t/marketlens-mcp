@@ -9,7 +9,7 @@ from __future__ import annotations
 from datetime import date, datetime, timedelta
 from typing import Literal
 
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from marketlens_mcp.plugin_api import ToolContext, ToolError, ToolOutput
 from marketlens_schema.base import Delay
@@ -34,6 +34,7 @@ from .common import (
     Skips,
     TimeframeIn,
     Window,
+    check_option_filters,
     collect,
     latest_t,
     missing_note,
@@ -104,6 +105,11 @@ class ChainIn(Inputs):
     expiration_to: date | None = Field(None, description="Latest expiration date, inclusive.")
     root_symbol: str | None = Field(None, max_length=10, description="OCC root, for adjusted contracts.")
     page_token: str | None = Field(None, max_length=2000, description=CONTINUE_DOC)
+
+    @model_validator(mode="after")
+    def _ranges(self) -> ChainIn:
+        check_option_filters(self.strike_min, self.strike_max, self.expiration_from, self.expiration_to)
+        return self
 
 
 def history_window(
@@ -268,6 +274,15 @@ async def options_latest_quotes(ctx: ToolContext, args: LatestIn) -> ToolOutput:
     return await _latest(ctx, args, "quotes")
 
 
+def _no_chain_note(args: ChainIn, rows: list, skips: Skips) -> list[str]:
+    if rows or skips.labels:
+        return []
+    return [
+        f"No data from Alpaca for: {args.underlying} (no listed contract matches the underlying and filters; "
+        "check the ticker and the filters)."
+    ]
+
+
 def stale_day_bar_note(rows: list[OptionSnapshot]) -> list[str]:
     """A note counting the rows whose daily bar is from an earlier session than
     the newest one in the answer (summing their day_volume mixes sessions)."""
@@ -380,7 +395,7 @@ async def options_chain(ctx: ToolContext, args: ChainIn) -> ToolOutput:
         delay=delay,
         as_of=latest_t(page.rows),
         page=page,
-        notes=[GREEKS_NOTE, *stale_day_bar_note(page.rows)],
+        notes=[GREEKS_NOTE, *_no_chain_note(args, page.rows, skips), *stale_day_bar_note(page.rows)],
         skips=skips,
     )
 

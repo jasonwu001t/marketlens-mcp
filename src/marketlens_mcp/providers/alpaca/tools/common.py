@@ -65,6 +65,18 @@ def _one_occ(v: str) -> str:
     return convert.occ_symbols([v])[0]
 
 
+def check_option_filters(
+    strike_min: float | None, strike_max: float | None, expiration_from: Any, expiration_to: Any
+) -> None:
+    """Refuse an inverted strike or expiration range, which no contract can match."""
+    if strike_min is not None and strike_max is not None and strike_min > strike_max:
+        raise ValueError(f"strike_min ({strike_min:g}) must not be above strike_max ({strike_max:g})")
+    if expiration_from is not None and expiration_to is not None and expiration_from > expiration_to:
+        raise ValueError(
+            f"expiration_from ({expiration_from}) must not be after expiration_to ({expiration_to})"
+        )
+
+
 #: One stock ticker, normalised (brk.b -> BRK-B).
 EquityTicker = Annotated[str, Field(max_length=20), AfterValidator(_one_equity)]
 #: One stock ticker or crypto pair.

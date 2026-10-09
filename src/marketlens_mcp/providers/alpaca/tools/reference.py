@@ -34,6 +34,7 @@ from .common import (
     Skips,
     TickerOrPair,
     absence,
+    check_option_filters,
     collect,
     output,
     request_of,
@@ -91,6 +92,11 @@ class ContractsIn(Inputs):
     root_symbol: str | None = Field(None, max_length=10, description="OCC root, for adjusted contracts.")
     show_deliverables: bool = Field(False, description="Include each contract's deliverables.")
     page_token: str | None = Field(None, max_length=2000, description=CONTINUE_DOC)
+
+    @model_validator(mode="after")
+    def _ranges(self) -> ContractsIn:
+        check_option_filters(self.strike_min, self.strike_max, self.expiration_from, self.expiration_to)
+        return self
 
 
 class ContractIn(Inputs):

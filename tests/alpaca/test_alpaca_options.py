@@ -3,6 +3,8 @@ options_latest_quotes, options_snapshots, options_chain."""
 
 from __future__ import annotations
 
+import re
+
 import pytest
 from alpaca_harness import FakeContext, call, check_golden
 from pydantic import ValidationError
@@ -173,3 +175,27 @@ def test_snapshot_day_bars_are_dated_and_a_stale_one_is_noted(specs, ctx, alpaca
     assert note in out.notes
     for tool in ("options_snapshots", "options_chain"):
         assert "today's bar" not in specs[tool].description and "day_t" in specs[tool].description
+
+
+def test_options_chain_with_nothing_listed_says_so(specs, ctx, alpaca):
+    alpaca.add("/v1beta1/options/snapshots/ZZZZQ", {"snapshots": {}, "next_page_token": None})
+    out = call(specs["options_chain"], ctx, underlying="zzzzq")
+    assert out.rows == []
+    assert any(n.startswith("No data from Alpaca for: ZZZZQ (no listed contract matches") for n in out.notes)
+
+
+@pytest.mark.parametrize("tool", ["options_chain", "reference_option_contracts"])
+@pytest.mark.parametrize(
+    ("args", "says"),
+    [
+        ({"strike_min": 400, "strike_max": 300}, "strike_min (400) must not be above strike_max (300)"),
+        (
+            {"expiration_from": "2026-12-01", "expiration_to": "2026-11-01"},
+            "expiration_from (2026-12-01) must not be after expiration_to (2026-11-01)",
+        ),
+    ],
+)
+def test_option_filters_refuse_an_inverted_range(specs, ctx, tool, args, says):
+    first = {"underlying": "AAPL"} if tool == "options_chain" else {"underlyings": ["AAPL"]}
+    with pytest.raises(ValidationError, match=re.escape(says)):
+        call(specs[tool], ctx, **first, **args)
