@@ -78,6 +78,11 @@ RECENT_SIP_HINT = (
     "ago, or set providers.alpaca.stock_feed: delayed_sip in the marketlens config so windows are cut there "
     "for you (iex serves real-time IEX data instead)."
 )
+#: The same 403 when stock_feed is already delayed_sip (its windows are cut 16 minutes back).
+RECENT_SIP_DELAYED_HINT = (
+    "Your Alpaca plan serves SIP history only 15 minutes after the fact, and stock_feed is already "
+    "delayed_sip: end the window, and start it, at least 15 minutes ago."
+)
 
 Api = Literal["data", "trading"]
 
@@ -259,7 +264,7 @@ class AlpacaClient:
             return ToolError(
                 "alpaca_not_entitled",
                 f"Alpaca refused the data (HTTP {status}): {message}",
-                hint=not_entitled_hint(path, lowered),
+                hint=not_entitled_hint(path, lowered, self.settings.stock_feed),
             )
         if status in (401, 403):
             return ToolError(
@@ -275,9 +280,9 @@ class AlpacaClient:
         return message[:MESSAGE_MAX]
 
 
-def not_entitled_hint(path: str, message: str = "") -> str:
+def not_entitled_hint(path: str, message: str = "", stock_feed: str = "") -> str:
     if RECENT_SIP in message.lower():
-        return RECENT_SIP_HINT
+        return RECENT_SIP_DELAYED_HINT if stock_feed == "delayed_sip" else RECENT_SIP_HINT
     return next((hint for prefix, hint in NOT_ENTITLED_HINTS if path.startswith(prefix)), NOT_ENTITLED_OTHER)
 
 

@@ -180,8 +180,9 @@ def window(
     microsecond of the day in ``day_zone`` (New York for stocks and options,
     whose daily bars are stamped at midnight New York; UTC for crypto and news).
     An end later than the newest data the feed serves (now, or ``lag`` before
-    now for a delayed feed, named by ``lagging``) is cut to it. Each adjustment
-    is said in a note."""
+    now for a delayed feed, named by ``lagging``) is cut to it, and a lookback
+    without an end reaches back from it. Each adjustment is said in a note; a
+    start not before it is refused by name."""
     now = ctx.now()
     latest = now - lag
     notes: list[str] = []
@@ -196,7 +197,7 @@ def window(
                 f"end {end.strip()} is a date: the window includes that whole day, to midnight "
                 f"{_zone_name(day_zone)} ({convert.iso_z(end_dt)})."
             )
-    source = f"the {lagging}" if lagging else "Alpaca"
+    source = f"the {lagging}" if lag and lagging else "Alpaca"
     if end and end_dt is not None and end_dt > latest:
         if lag:
             notes.append(
@@ -213,15 +214,15 @@ def window(
     else:
         lb = lookback or default
         try:
-            start_dt = (end_dt or now) - convert.parse_duration(lb)
+            start_dt = (end_dt or latest) - convert.parse_duration(lb)
         except OverflowError:
             raise ToolError(
                 "invalid_arguments", f"lookback {lb} reaches back before the year 1; pass a shorter lookback."
             ) from None
         if timeframe is not None and timeframe.endswith(("d", "w", "mo")):
             start_dt = start_dt.astimezone(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
-    if end_dt is not None and start_dt >= end_dt:
-        if end_dt == latest:
+    if start_dt >= (end_dt or latest):
+        if end_dt is None or end_dt == latest:
             raise ToolError(
                 "invalid_arguments",
                 f"start ({convert.iso_z(start_dt)}) is not before the newest data {source} serves "

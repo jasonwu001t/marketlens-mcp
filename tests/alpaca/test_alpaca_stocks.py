@@ -230,6 +230,41 @@ def test_a_start_past_the_delayed_sip_feeds_reach_is_refused(specs, alpaca):
     assert alpaca.requests == []
 
 
+@pytest.mark.parametrize(
+    ("tool", "start"),
+    [("market_trades", "2026-10-02T19:55:00Z"), ("market_quotes", "2026-10-02T19:44:00Z")],
+)
+def test_a_start_past_the_delayed_sip_feeds_reach_without_an_end_is_refused(specs, alpaca, tool, start):
+    # Live: start now-5min, no end -> Alpaca 403 "recent SIP data"; start now-30min, no end -> served.
+    ctx = FakeContext(settings={"stock_feed": "delayed_sip"})
+    with pytest.raises(ToolError) as e:
+        call(specs[tool], ctx, tickers=["AAPL"], start=start)
+    assert e.value.code == "invalid_arguments"
+    assert e.value.message == (
+        f"start ({start}) is not before the newest data the delayed SIP feed serves (2026-10-02T19:44:00Z); "
+        "pass an earlier start."
+    )
+    assert alpaca.requests == []
+
+
+def test_a_lookback_without_an_end_reaches_back_from_the_delayed_sip_feeds_newest_data(specs, alpaca):
+    alpaca.fixture("/v2/stocks/trades", "StockTrades")
+    ctx = FakeContext(settings={"stock_feed": "delayed_sip"})
+    out = call(specs["market_trades"], ctx, tickers=["AAPL"], lookback="PT5M")
+    assert alpaca.params()["start"] == "2026-10-02T19:39:00Z" and "end" not in alpaca.params()
+    assert out.provenance.as_of == datetime(2026, 10, 2, 19, 44, tzinfo=UTC)
+
+
+def test_a_future_start_without_an_end_is_refused(specs, ctx, alpaca):
+    with pytest.raises(ToolError) as e:
+        call(specs["market_bars"], ctx, tickers=["AAPL"], start="2026-10-03")
+    assert e.value.message == (
+        "start (2026-10-03T00:00:00Z) is not before the newest data Alpaca serves (2026-10-02T20:00:00Z); "
+        "pass an earlier start."
+    )
+    assert alpaca.requests == []
+
+
 def test_start_and_lookback_together_are_refused(specs, ctx, alpaca):
     with pytest.raises(ToolError) as e:
         call(specs["market_bars"], ctx, tickers=["AAPL"], start="2026-01-02", lookback="P5D")

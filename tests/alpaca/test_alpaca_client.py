@@ -235,6 +235,19 @@ def test_subscription_errors_are_not_entitled(alpaca):
     )
 
 
+def test_recent_sip_data_on_the_delayed_sip_feed_does_not_say_to_set_it(alpaca):
+    alpaca.add(
+        "/v2/stocks/trades",
+        httpx.Response(403, json={"message": "subscription does not permit querying recent SIP data"}),
+    )
+    err = refused(FakeContext(settings={"stock_feed": "delayed_sip"}), "data", "/v2/stocks/trades")
+    assert err.code == "alpaca_not_entitled"
+    assert err.hint == (
+        "Your Alpaca plan serves SIP history only 15 minutes after the fact, and stock_feed is already "
+        "delayed_sip: end the window, and start it, at least 15 minutes ago."
+    )
+
+
 def test_a_stock_feed_the_plan_lacks_names_the_feeds(alpaca):
     alpaca.add(
         "/v2/stocks/quotes/latest",
