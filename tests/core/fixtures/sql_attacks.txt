@@ -34,7 +34,10 @@ sql_not_select	SUMMARIZE {A}
 sql_not_select	BEGIN TRANSACTION
 sql_not_select	CHECKPOINT
 sql_not_select	VALUES (1)
-sql_not_select	PIVOT {A} ON ticker USING sum(close)
+sql_forbidden	PIVOT {A} ON ticker USING sum(close)
+sql_forbidden	SELECT * FROM (PIVOT {A} ON ticker USING last(close) GROUP BY t) LIMIT 2
+sql_forbidden	SELECT * FROM {A} PIVOT (sum(close) FOR ticker IN ('AAPL', 'MSFT'))
+sql_forbidden	UNPIVOT {A} ON open, close INTO NAME k VALUE v
 sql_function	SELECT * FROM read_csv('/etc/passwd')
 sql_function	SELECT * FROM read_csv_auto('/etc/passwd')
 sql_function	SELECT * FROM read_parquet('/tmp/x.parquet')

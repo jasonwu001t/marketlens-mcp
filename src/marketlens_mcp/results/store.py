@@ -102,6 +102,20 @@ class QueryOutcome:
     risk: OutputRisk
 
 
+def _whole_numbers(table: pa.Table) -> pa.Table:
+    """Whole-number decimal columns as BIGINT when every value fits: DuckDB's
+    HUGEINT, the type of sum() over integers, reaches Arrow as decimal(38, 0)
+    and would be answered as a string next to a count's number."""
+    for i, field in enumerate(table.schema):
+        if pa.types.is_decimal(field.type) and field.type.scale == 0:
+            try:
+                column = table.column(i).cast(pa.int64())
+            except (pa.ArrowInvalid, OverflowError):
+                continue
+            table = table.set_column(i, field.with_type(pa.int64()), column)
+    return table
+
+
 def _utcnow() -> datetime:
     return datetime.now(UTC)
 
@@ -397,14 +411,14 @@ class FileResultStore:
 
     def query(self, sql: str, *, max_rows: int, store: bool = False) -> QueryOutcome:
         """Guard, force the limit, run in a locked-down connection (5.4)."""
-        checked = guard.check(sql, live_ids=self.live_ids())
+        checked = guard.check(sql, live_ids=self.live_ids(), gone=self._gone)
         cap = self.limits.fetch_max_rows if store else max_rows
         executed = guard.render(guard.force_limit(checked.ast, cap))
         with self.open(checked.result_ids) as session:
             table = session.query(executed)
             risks = {session.info(rid).risk for rid in checked.result_ids}
         truncated = table.num_rows > cap
-        table = table.slice(0, cap)
+        table = _whole_numbers(table.slice(0, cap))
         return QueryOutcome(
             table=table,
             row_count=table.num_rows,
@@ -415,6 +429,16 @@ class FileResultStore:
         )
 
     # -- internals ---------------------------------------------------------------------------
+
+    def _gone(self, result_id: str) -> None:
+        """ResultNotFound for a result of this session that was dropped,
+        expired or evicted (a query names it as it does describe); an id the
+        session never had stays an unknown table."""
+        try:
+            self.info(result_id)
+        except ResultNotFound as exc:
+            if exc.reason != "unknown":
+                raise
 
     @property
     def _dir(self) -> pathlib.Path:

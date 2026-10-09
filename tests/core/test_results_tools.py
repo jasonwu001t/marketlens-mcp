@@ -104,10 +104,18 @@ def test_query_default_limit_and_truncation_note(setup):
 
 
 def test_query_max_rows_bounds(setup):
-    ctx, *_ = setup
+    """max_rows above results.query_max_rows was refused although the
+    description said a larger LIMIT is lowered: it is lowered too, with a note."""
+    ctx, _, bars, *_ = setup
     with pytest.raises(ToolError) as info:
-        call(ctx, "results_query", sql="SELECT 1", max_rows=201)
+        call(ctx, "results_query", sql="SELECT 1", max_rows=0)
     assert info.value.code == "invalid_arguments"
+    out = call(ctx, "results_query", sql=f"SELECT ticker FROM {bars.result_id}", max_rows=500)
+    assert isinstance(out, InlineResult) and out.row_count == 200
+    assert any(
+        "max_rows 500 is above results.query_max_rows (200), so it was lowered" in n for n in out.notes
+    )
+    assert any(n.startswith("Truncated: yes; more than 200 rows") for n in out.notes)
 
 
 def test_query_byte_cap_offloads_its_own_result(setup):
@@ -347,3 +355,66 @@ def test_export_without_a_folder(store):
     with pytest.raises(ToolError) as e:
         call(make_context(store=store), "results_export", result_id=info.result_id, format="csv")
     assert e.value.code == "export_dir_missing"
+
+
+def test_query_answers_whole_number_sums_as_numbers(setup):
+    """sum() over integers is a HUGEINT, which came back as the string '1008'
+    next to count(*)'s 1008; exact decimals stay strings."""
+    ctx, _, bars, *_ = setup
+    sql = (
+        f"SELECT sum(CASE WHEN close > 0 THEN 1 ELSE 0 END) AS s, count(*) AS c, "
+        f"CAST(1.25 AS DECIMAL(10, 2)) AS d, CAST(9223372036854775808 AS HUGEINT) AS huge "
+        f"FROM {bars.result_id}"
+    )
+    out = call(ctx, "results_query", sql=sql)
+    # Beyond BIGINT a whole number stays an exact string.
+    assert out.rows == [{"s": 1200, "c": 1200, "d": "1.25", "huge": "9223372036854775808"}]
+    assert [c.type for c in out.columns] == ["BIGINT", "BIGINT", "DECIMAL(10,2)", "DECIMAL(38,0)"]
+    stored = call(ctx, "results_query", sql=sql, store=True)
+    assert [c.type for c in stored.columns][:2] == ["BIGINT", "BIGINT"]
+
+
+def test_query_of_a_dropped_result_says_it_was_dropped(setup):
+    """results_query of a dropped result gave sql_table (not one of this
+    session's results) where results_describe gave result_dropped."""
+    ctx, _, bars, small, *_ = setup
+    call(ctx, "results_drop", result_id=small.result_id)
+    for name in ("results_query", "results_describe"):
+        arguments = {"sql": f"SELECT count(*) FROM {small.result_id}"} if name == "results_query" else {}
+        with pytest.raises(ToolError) as info:
+            call(ctx, name, **(arguments or {"result_id": small.result_id}))
+        assert info.value.code == "result_dropped", name
+        assert small.result_id in info.value.message
+    with pytest.raises(ToolError) as info:
+        call(ctx, "results_query", sql="SELECT * FROM r_00000000ff")
+    assert info.value.code == "sql_table" and bars.result_id in info.value.message
+
+
+def test_query_refuses_pivot_with_the_way_round_it(setup):
+    ctx, _, bars, *_ = setup
+    for sql in (
+        f"PIVOT {bars.result_id} ON ticker USING last(close) GROUP BY t",
+        f"SELECT * FROM (PIVOT {bars.result_id} ON ticker USING last(close) GROUP BY t) LIMIT 2",
+    ):
+        with pytest.raises(ToolError) as info:
+            call(ctx, "results_query", sql=sql)
+        assert info.value.code == "sql_forbidden"
+        assert (
+            "PIVOT and UNPIVOT are not allowed" in info.value.message
+            and "FILTER (WHERE" in info.value.message
+        )
+
+
+def test_query_stored_for_size_says_which_limit_and_the_description_names_the_limits(setup):
+    ctx, _, bars, *_ = setup
+    out = call(ctx, "results_query", sql=f"SELECT * FROM {bars.result_id}", max_rows=200)
+    assert isinstance(out, ResultMarker)
+    assert any("bytes as JSON) is larger than results.query_max_bytes (24,000 bytes)" in n for n in out.notes)
+    text = SPECS["results_query"].description
+    for words in (
+        "PIVOT and UNPIVOT are not",
+        "at most 8 results",
+        "24,000 bytes",
+        "decimals come back as strings",
+    ):
+        assert words in text
