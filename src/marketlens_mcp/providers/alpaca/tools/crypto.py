@@ -158,13 +158,10 @@ def forming_bar_note(rows: list[Bar], timeframe: str, now: datetime) -> list[str
     if not forming:
         return []
     pairs = sorted({r.ticker for r in forming})
-    named = ", ".join(pairs[:SKIP_SAMPLE]) + (
-        f" and {len(pairs) - SKIP_SAMPLE} more pair(s)" if len(pairs) > SKIP_SAMPLE else ""
-    )
     start = min(r.t for r in forming)
     return [
-        f"The {timeframe} bar from {iso_z(start)} ({named}) is still forming: it holds trades up to now "
-        f"({iso_z(now)}) only, not a whole {timeframe}."
+        f"The {timeframe} bar from {iso_z(start)} ({named(pairs, ' pair(s)')}) is still forming: it holds "
+        f"trades up to now ({iso_z(now)}) only, not a whole {timeframe}."
     ]
 
 
