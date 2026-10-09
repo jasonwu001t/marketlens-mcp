@@ -227,7 +227,19 @@ def test_corporate_action_ids_exclude_other_filters(specs, ctx):
 def test_reference_option_exchanges_golden(specs, ctx, alpaca):
     alpaca.fixture("/v1beta1/options/meta/exchanges", "OptionMetaExchanges")
     doc = check_golden(call(specs["reference_option_exchanges"], ctx), "reference_option_exchanges")
-    assert [r["code"] for r in doc["rows"]] == ["A", "Q"]
+    assert [r["code"] for r in doc["rows"]] == ["A", "Q", "G", "V"]
+    assert doc["rows"][2]["name"] == "MX2 - MX2 Options" and doc["rows"][3]["name"] == "IEX - IEX Options LLC"
+    assert doc["notes"] == [
+        "Not in Alpaca's list, so added from OPRA's participant codes (OPRA Binary Data Recipient Interface "
+        "Specification 6.4b, section 4.01.1): G (MX2 - MX2 Options), V (IEX - IEX Options LLC)."
+    ]
+
+
+def test_option_exchanges_add_only_the_codes_alpaca_lacks(specs, ctx, alpaca):
+    alpaca.add("/v1beta1/options/meta/exchanges", {"A": "AMEX - NYSE American", "G": "MX2 - MX2 Options"})
+    out = call(specs["reference_option_exchanges"], ctx)
+    assert [r.code for r in out.rows] == ["A", "G", "V"]
+    assert out.notes[0].endswith("section 4.01.1): V (IEX - IEX Options LLC).")
 
 
 def test_reference_option_contracts_keep_adjusted_contracts(specs, ctx, alpaca):

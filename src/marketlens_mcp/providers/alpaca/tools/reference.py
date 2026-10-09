@@ -51,6 +51,11 @@ OI_LAG = (
     "open_interest_date is usually one trading day before close_price_date (OCC publishes open interest "
     "the next morning)."
 )
+#: OPRA participant codes Alpaca's option exchange list lacks, named as Alpaca
+#: names the rest ("ABBREVIATION - name"). Source: OPRA Binary Data Recipient
+#: Interface Specification 6.4b (2026-08-25), section 4.01.1 Participant ID; OPRA
+#: added both in 6.3a (2026-02-20).
+OPRA_PARTICIPANTS = {"G": "MX2 - MX2 Options", "V": "IEX - IEX Options LLC"}
 ActionType = Literal[
     "cash_dividend", "stock_dividend", "forward_split", "reverse_split", "unit_split", "spin_off", "cash_merger",
     "stock_merger", "stock_and_cash_merger", "redemption", "name_change", "worthless_removal",
@@ -462,14 +467,25 @@ async def reference_option_exchanges(ctx: ToolContext, args: NoArgs) -> ToolOutp
             )
 
         page = await fetch_once(ctx, fetch)
+    listed = {r.code for r in page.rows}
+    added = {code: name for code, name in OPRA_PARTICIPANTS.items() if code not in listed}
+    notes = (
+        [
+            "Not in Alpaca's list, so added from OPRA's participant codes (OPRA Binary Data Recipient Interface "
+            "Specification 6.4b, section 4.01.1): " + ", ".join(f"{c} ({n})" for c, n in added.items()) + "."
+        ]
+        if added
+        else []
+    )
     return output(
         ctx,
         OptionExchange,
-        page.rows,
+        [*page.rows, *(m.option_exchange(code, name) for code, name in added.items())],
         route="GET /v1beta1/options/meta/exchanges",
         operation="OptionMetaExchanges",
         request={},
         page=page,
+        notes=notes,
         skips=skips,
     )
 
@@ -623,7 +639,9 @@ SPECS = (
         name="reference_option_exchanges",
         capability="reference",
         title="Option exchanges",
-        description="Option exchange codes and names (to read the exchange columns of option quotes and trades).",
+        description="Option exchange codes and names (to read the exchange columns of option quotes and trades). "
+        "OPRA participants Alpaca's list lacks (G: MX2 Options, V: IEX Options) are added from OPRA's own "
+        "specification, with a note.",
         readme="Option exchange codes",
         input_model=NoArgs,
         output_model=OptionExchange,
