@@ -33,6 +33,7 @@ from ..common import (
     result_id_field,
     rows,
     scalar,
+    store_field,
     tf_interval,
     tf_nests,
     tf_seconds,
@@ -72,6 +73,7 @@ class ResampleArgs(BaseModel):
     series_column: str | None = Field(
         None, description="Column naming each series. Default: the result's group column."
     )
+    store: bool = store_field()
 
 
 def _check_target(inp: Input, source: str, target: str) -> None:
@@ -304,7 +306,7 @@ async def handler(ctx: ToolContext, args: ResampleArgs) -> ToolOutput:
     prov = provenance(ctx, TOOL, [inp.info], args)
     cls = BUILTIN_MODELS.get(inp.model)
     if cls is not None:
-        return model_output(table, cls, prov, notes=notes, absent=absent, inputs=[inp.info])
+        return model_output(table, cls, prov, notes=notes, absent=absent, inputs=[inp.info], store=args.store)
     return dynamic_output(
         ctx,
         TOOL,
@@ -317,6 +319,7 @@ async def handler(ctx: ToolContext, args: ResampleArgs) -> ToolOutput:
         absent=absent,
         inputs=[inp.info],
         units=inp.units(),
+        store=args.store,
     )
 
 

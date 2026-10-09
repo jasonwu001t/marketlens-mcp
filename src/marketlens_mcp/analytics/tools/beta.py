@@ -33,6 +33,7 @@ from ..common import (
     rows,
     series_counts,
     skipped_notes,
+    store_field,
     tf_interval,
     tf_seconds,
 )
@@ -70,6 +71,7 @@ class BetaArgs(BaseModel):
     series_column: str | None = Field(
         None, description="Asset column naming each series. Default: its group column."
     )
+    store: bool = store_field()
 
 
 def _sampled(points: str, period: str | None) -> str:
@@ -221,7 +223,13 @@ async def handler(ctx: ToolContext, args: BetaArgs) -> ToolOutput:
             notes.append(note)
     prov = provenance(ctx, TOOL, [a.info, b.info], args)
     return model_output(
-        table, model, prov, notes=notes, absent=no_period(args.period), inputs=[a.info, b.info]
+        table,
+        model,
+        prov,
+        notes=notes,
+        absent=no_period(args.period),
+        inputs=[a.info, b.info],
+        store=args.store,
     )
 
 

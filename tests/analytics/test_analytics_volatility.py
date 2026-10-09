@@ -296,3 +296,79 @@ def test_without_a_timeframe_the_refusal_says_how_far_apart_the_observations_are
     with pytest.raises(ToolError) as e:
         run(SPEC, ctx, result_id=rid, window=2, price_column="px")
     assert e.value.code == "periods_per_year_required" and "a median 7 days apart" in e.value.message
+
+
+def test_window_all_is_the_full_sample_volatility_of_each_series(store, ctx):
+    """252 bars and window=250 gave two rows a series and no full-sample mode:
+    window=all gives one row a series over all its returns."""
+    msft = [10, 11, 12]
+    rid = store.put_rows(bars("AAPL", CLOSES) + bars("MSFT", msft) + bars("NVDA", [5, 6]))
+    out = run(SPEC, ctx, result_id=rid, window="all", return_kind="simple")
+    rows = output_rows(out, VolatilityPoint)
+    assert [(r.series, r.window, r.t) for r in rows] == [
+        ("AAPL", 5, utc(2026, 1, 5, 21) + 5 * DAY),
+        ("MSFT", 2, utc(2026, 1, 5, 21) + 2 * DAY),
+    ]
+    assert rows[0].volatility == pytest.approx(statistics.stdev(simple(CLOSES)) * math.sqrt(252), rel=1e-12)
+    assert rows[1].volatility == pytest.approx(statistics.stdev(simple(msft)) * math.sqrt(252), rel=1e-12)
+    assert any("window=all" in n and "all simple returns" in n for n in out.notes)
+    assert any("fewer than 2 returns are omitted: NVDA" in n for n in out.notes)
+    single = store.put_rows(bars("AAPL", [100, 101]))
+    with pytest.raises(ToolError) as e:
+        run(SPEC, ctx, result_id=single, window="all")
+    assert e.value.code == "too_few_points" and "window=all" in e.value.message
+
+
+def test_store_keeps_a_small_output(store, ctx):
+    rid = store.put_rows(bars("AAPL", CLOSES))
+    assert run(SPEC, ctx, result_id=rid, window=3).offload == "auto"
+    assert run(SPEC, ctx, result_id=rid, window=3, store=True).offload == "always"
+
+
+def query_returns(store, rets, units=None):
+    t0 = utc(2026, 3, 2)
+    table = pa.table(
+        {
+            "t": pa.array([t0 + i * DAY for i in range(len(rets))], pa.timestamp("us", tz="UTC")),
+            "series": ["PORT"] * len(rets),
+            "ret": rets,
+        }
+    )
+    return store.put(
+        table,
+        tool="results_query",
+        model="marketlens.QueryRow",
+        provenance=source_provenance(route="duckdb:results_query"),
+        time_column="t",
+        group_column="series",
+        column_units=units,
+    ).result_id
+
+
+RETS = [0.01, -0.02, 0.015, -0.005, 0.02]
+
+
+def test_a_column_of_returns_is_used_as_it_is(store, ctx):
+    """A portfolio's returns from results_query had no way in: read as prices,
+    the negative ones were skipped and the rest turned into returns of returns.
+    input_kind=returns takes them as they are; a column in fraction units is
+    taken as returns by default."""
+    plain = query_returns(store, RETS)
+    out = run(SPEC, ctx, result_id=plain, window="all", input_kind="returns", periods_per_year=252)
+    (row,) = output_rows(out, VolatilityPoint)
+    assert row.volatility == pytest.approx(statistics.stdev(RETS) * math.sqrt(252), rel=1e-12)
+    assert row.window == 5
+    assert any("input_kind=returns" in n and "taken as returns as they are" in n for n in out.notes)
+    as_prices = run(SPEC, ctx, result_id=plain, window=2, periods_per_year=252, price_column="ret")
+    assert any("<= 0" in n and "pass input_kind=returns" in n for n in as_prices.notes)
+    labelled = query_returns(store, RETS, units={"ret": "fraction"})
+    out = run(SPEC, ctx, result_id=labelled, window="all", periods_per_year=252, price_column="ret")
+    assert output_rows(out, VolatilityPoint)[0].volatility == pytest.approx(row.volatility, rel=1e-12)
+    assert any("ret is in fraction units" in n for n in out.notes)
+
+
+def test_a_volatility_column_is_not_a_price(store, ctx):
+    rid = query_returns(store, [0.2, 0.21, 0.19, 0.2, 0.22], units={"ret": "fraction_per_year"})
+    with pytest.raises(ToolError) as e:
+        run(SPEC, ctx, result_id=rid, window=2, periods_per_year=252, price_column="ret")
+    assert e.value.code == "not_prices" and "input_kind=returns" in e.value.message

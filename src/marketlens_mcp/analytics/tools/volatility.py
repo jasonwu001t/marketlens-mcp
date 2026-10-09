@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -13,6 +13,7 @@ from marketlens_schema.analytics import VolatilityPoint
 from ..common import (
     CAPABILITY,
     PROVIDER,
+    RATIO_UNITS,
     RETURNS_MODEL,
     Input,
     adjustment_note,
@@ -24,7 +25,6 @@ from ..common import (
     out_time,
     plural,
     points_sql,
-    price_column,
     provenance,
     ql,
     refuse,
@@ -35,6 +35,7 @@ from ..common import (
     scalar,
     series_counts,
     skipped_notes,
+    store_field,
     tf_interval,
     tf_parts,
     tf_seconds,
@@ -47,8 +48,14 @@ TOOL = "analytics_volatility"
 class VolatilityArgs(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    result_id: str = result_id_field("A stored result of prices, or of returns from analytics_returns.")
-    window: int = Field(21, ge=2, le=2520, description="Returns per rolling window (2-2520).")
+    result_id: str = result_id_field(
+        "A stored result of prices, or of returns (from analytics_returns, or your own, e.g. a portfolio's)."
+    )
+    window: Annotated[int, Field(ge=2, le=2520)] | Literal["all"] = Field(
+        21,
+        description="Returns per rolling window (2-2520), or all: one row per series, the volatility of all its "
+        "returns (full sample).",
+    )
     return_kind: Literal["log", "simple"] = Field(
         "log",
         description="Returns computed from prices (ignored for a returns result, which keeps its kind).",
@@ -63,11 +70,20 @@ class VolatilityArgs(BaseModel):
         "the timeframe (a weekly sample of daily bars) use their own number per year. Required without a timeframe.",
     )
     price_column: str | None = Field(
-        None, description="Numeric column of prices (or returns). Default: the model's first value column."
+        None,
+        description="Numeric column of prices (or returns). Default: the model's first value column (ret for "
+        "returns).",
+    )
+    input_kind: Literal["prices", "returns"] | None = Field(
+        None,
+        description="What price_column holds: prices (returns are computed from them) or returns (used as they "
+        "are, e.g. a portfolio's daily returns). Default: returns for a returns result or a column in fraction "
+        "units, else prices.",
     )
     series_column: str | None = Field(
         None, description="Column naming each series. Default: the result's group column."
     )
+    store: bool = store_field()
 
 
 _NEW_YORK = "America/New_York"
@@ -222,25 +238,61 @@ def _annualisation(ctx: ToolContext, session: ResultSession, inp: Input, rets: s
     )
 
 
+def _as_returns(inp: Input, args: VolatilityArgs) -> tuple[str, bool]:
+    """The column and whether it holds returns: input_kind, else a returns
+    result or a column in fraction units. A ratio column is not prices."""
+    given = args.price_column
+    if given is None and (inp.model == RETURNS_MODEL or args.input_kind == "returns") and inp.column("ret"):
+        given = "ret"
+    col = value_column(TOOL, inp, given, param="price_column")
+    unit = inp.column(col).unit
+    if args.input_kind is not None:
+        as_returns = args.input_kind == "returns"
+    else:
+        as_returns = inp.model == RETURNS_MODEL or unit == "fraction"
+    if not as_returns and unit in RATIO_UNITS:
+        raise refuse(
+            "not_prices",
+            f"{TOOL}: '{col}' of {inp.label} is a ratio (unit {unit}), not a price. Pass input_kind=returns if it "
+            "holds returns, or a price column.",
+        )
+    return col, as_returns
+
+
 async def handler(ctx: ToolContext, args: VolatilityArgs) -> ToolOutput:
     inp = resolve(ctx, TOOL, args.result_id, series_column=args.series_column)
     notes = list(inp.notes)
     w = args.window
     with ctx.results.open([inp.rid]) as session:
-        if inp.model == RETURNS_MODEL:
-            col = value_column(TOOL, inp, args.price_column or "ret", param="price_column")
-            kinds = [r["k"] for r in rows(session, f"SELECT DISTINCT kind AS k FROM {inp.table} ORDER BY 1")]
+        col, as_returns = _as_returns(inp, args)
+        if as_returns:
+            has_kind = inp.column("kind") is not None and inp.column("kind").type == "VARCHAR"
+            kinds = (
+                [r["k"] for r in rows(session, f"SELECT DISTINCT kind AS k FROM {inp.table} ORDER BY 1")]
+                if has_kind
+                else []
+            )
             kind = kinds[0] if len(kinds) == 1 else args.return_kind
-            if "return_kind" in args.model_fields_set and args.return_kind != kind:
+            if kinds and "return_kind" in args.model_fields_set and args.return_kind != kind:
                 notes.append(f"return_kind ignored: {inp.rid} already holds {kind} returns.")
+            if inp.model != RETURNS_MODEL:
+                why = "input_kind=returns" if args.input_kind else f"{col} is in fraction units"
+                notes.append(
+                    f"{why}, so the values of {col} were taken as returns as they are"
+                    + ("." if kinds else f"; return_kind={kind} only labels them.")
+                )
             notes += skipped_notes(session, inp, col, positive=False)
             points = points_sql(inp, col, positive=False)
             check_unique_times(session, TOOL, inp, points)
             rets = f"SELECT s, ts, v AS r FROM ({points})"
         else:
-            col = price_column(TOOL, inp, args.price_column, param="price_column")
             kind = args.return_kind
-            notes += skipped_notes(session, inp, col, positive=True)
+            hint = (
+                f"If {col} holds returns, pass input_kind=returns."
+                if inp.column(col).unit is None and args.input_kind is None
+                else None
+            )
+            notes += skipped_notes(session, inp, col, positive=True, hint=hint)
             points = points_sql(inp, col, positive=True)
             check_unique_times(session, TOOL, inp, points)
             rets = returns_sql(points, kind=kind)
@@ -250,33 +302,45 @@ async def handler(ctx: ToolContext, args: VolatilityArgs) -> ToolOutput:
             ppy, note = args.periods_per_year, f"periods_per_year = {args.periods_per_year:g} as given."
         notes.append(note)
         counts = series_counts(session, rets)
+        need = 2 if w == "all" else w
+        if w == "all":
+            # One window per series: all of its returns.
+            stats = f"SELECT s, max(ts) AS ts, stddev_samp(r) AS sd, count(r) AS n, count(r) AS w FROM ({rets}) GROUP BY s"
+        else:
+            stats = (
+                f"SELECT s, ts, stddev_samp(r) OVER win AS sd, count(r) OVER win AS n, {w} AS w FROM ({rets}) "
+                f"WINDOW win AS (PARTITION BY s ORDER BY ts ROWS BETWEEN {w - 1} PRECEDING AND CURRENT ROW)"
+            )
         table = session.query(
             f"SELECT s AS series, {out_time('ts')} AS t, sd * sqrt(CAST(? AS DOUBLE)) AS volatility, "
-            f'CAST({w} AS BIGINT) AS "window", CAST(? AS DOUBLE) AS periods_per_year, {ql(kind)} AS return_kind, '
-            "NULL::MAP(VARCHAR, VARCHAR) AS absent "
-            f"FROM (SELECT s, ts, stddev_samp(r) OVER win AS sd, count(r) OVER win AS n FROM ({rets}) "
-            f"WINDOW win AS (PARTITION BY s ORDER BY ts ROWS BETWEEN {w - 1} PRECEDING AND CURRENT ROW)) "
-            f"WHERE n = {w} ORDER BY series, t",
+            f'CAST(w AS BIGINT) AS "window", CAST(? AS DOUBLE) AS periods_per_year, {ql(kind)} AS return_kind, '
+            f"NULL::MAP(VARCHAR, VARCHAR) AS absent FROM ({stats}) WHERE n >= {need} AND n = w ORDER BY series, t",
             [ppy, ppy],
         )
     if table.num_rows == 0:
         raise refuse(
             "too_few_points",
-            f"{TOOL} needs at least {w} returns in one series (window={w}); the longest series of {inp.label} "
+            f"{TOOL} needs at least {need} returns in one series (window={w}); the longest series of {inp.label} "
             f"has {plural(max(counts.values(), default=0), 'return')}. Use a smaller window or more data.",
         )
-    short = [s for s, n in counts.items() if n < w]
+    short = [s for s, n in counts.items() if n < need]
     if short:
-        notes.append(f"Series with fewer than {w} returns are omitted: {names(short)}.")
-    notes.append(
-        f"volatility_t = stddev_samp of the last {w} {kind} returns x sqrt({ppy:g}), at the window's last "
-        "observation; rows before the window fills are omitted."
-    )
+        notes.append(f"Series with fewer than {need} returns are omitted: {names(short)}.")
+    if w == "all":
+        notes.append(
+            f"window=all: volatility = stddev_samp of all {kind} returns of each series x sqrt({ppy:g}), at its last "
+            "observation; window is the number of returns."
+        )
+    else:
+        notes.append(
+            f"volatility_t = stddev_samp of the last {w} {kind} returns x sqrt({ppy:g}), at the window's last "
+            "observation; rows before the window fills are omitted."
+        )
     note = adjustment_note(inp)
     if note:
         notes.append(note)
     prov = provenance(ctx, TOOL, [inp.info], args)
-    return model_output(table, VolatilityPoint, prov, notes=notes, inputs=[inp.info])
+    return model_output(table, VolatilityPoint, prov, notes=notes, inputs=[inp.info], store=args.store)
 
 
 SPEC = ToolSpec(
@@ -284,10 +348,11 @@ SPEC = ToolSpec(
     capability=CAPABILITY,
     title="Rolling volatility",
     description=(
-        "Rolling annualised volatility of each series in a stored result of prices (or of returns from "
-        "analytics_returns), computed locally in DuckDB: vol_t = stddev_samp(returns over the last `window` "
-        "rows) x sqrt(periods_per_year), reported at the window's last observation; rows before the window "
-        "fills are omitted. return_kind log (default) or simple for prices. periods_per_year defaults from the "
+        "Rolling annualised volatility of each series in a stored result of prices (or of returns: from "
+        "analytics_returns, a column in fraction units, or any column with input_kind=returns), computed locally in "
+        "DuckDB: vol_t = stddev_samp(returns over the last `window` rows) x sqrt(periods_per_year), reported at "
+        "the window's last observation; rows before the window fills are omitted; window=all gives one row per "
+        "series over all its returns. return_kind log (default) or simple for prices. periods_per_year defaults from the "
         "bar timeframe and market (US equity 1d 252, 1w 52, 1mo 12, 1h 1638, Nmin 98280/N, more when the bars "
         "include extended hours; crypto 1d 365, Nmin 525600/N), or from the data when its observations are much "
         "further apart than the timeframe; the notes say which. Volatility is a fraction per year (0.2 = 20 %). "

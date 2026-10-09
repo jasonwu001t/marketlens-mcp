@@ -193,3 +193,27 @@ def test_aligned_and_resampled_columns_keep_their_units(real):
     resampled = call(RESAMPLE, ctx, result_id=kept.result_id, timeframe="5min")
     assert isinstance(resampled, InlineResult)
     assert {c.name: c.unit for c in resampled.columns}["close"] == "price"
+
+
+def test_store_true_keeps_a_small_output_of_every_analytics_tool(real):
+    """analytics_drawdown mode=max came back inline with no result_id and no way
+    to keep it: every analytics tool takes store=true."""
+    store, ctx = real
+    closes = [100 * (1 + 0.01 * ((i * 7) % 5 - 2)) for i in range(25)]
+    both = put_bars(store, bars("AAPL", closes) + bars("SPY", [c * 4 + i for i, c in enumerate(closes)]))
+    spy = put_bars(store, bars("SPY", [c * 4 + i for i, c in enumerate(closes)]))
+    calls = {
+        DRAWDOWN: {"result_id": both},
+        RETURNS: {"result_id": both},
+        VOLATILITY: {"result_id": both, "window": "all"},
+        CORRELATION: {"result_id": both},
+        BETA: {"asset_result_id": both, "benchmark_result_id": spy},
+        RESAMPLE: {"result_id": both, "timeframe": "1w"},
+        ALIGN: {"left_result_id": both, "right_result_id": spy, "right_columns": ["close"]},
+    }
+    assert {spec.name for spec in calls} == {spec.name for spec in all_specs()}
+    for spec, arguments in calls.items():
+        assert isinstance(call(spec, ctx, **arguments), InlineResult), spec.name
+        marker = call(spec, ctx, **arguments, store=True)
+        assert isinstance(marker, ResultMarker), spec.name
+        assert store.info(marker.result_id).parents[0] == both

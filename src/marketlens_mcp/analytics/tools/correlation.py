@@ -29,6 +29,7 @@ from ..common import (
     result_id_field,
     scalar,
     skipped_notes,
+    store_field,
     value_column,
 )
 
@@ -60,6 +61,7 @@ class CorrelationArgs(BaseModel):
         20, ge=2, le=10000, description="Fewest shared observations for a value; below it the cell is None."
     )
     method: Literal["pearson"] = Field("pearson", description="Pearson correlation.")
+    store: bool = store_field()
 
 
 async def handler(ctx: ToolContext, args: CorrelationArgs) -> ToolOutput:
@@ -171,7 +173,7 @@ async def handler(ctx: ToolContext, args: CorrelationArgs) -> ToolOutput:
         "diagonal are listed."
     )
     prov = provenance(ctx, TOOL, [inp.info], args)
-    return model_output(table, CorrelationCell, prov, notes=notes, inputs=[inp.info])
+    return model_output(table, CorrelationCell, prov, notes=notes, inputs=[inp.info], store=args.store)
 
 
 SPEC = ToolSpec(

@@ -31,6 +31,7 @@ from ..common import (
     returns_sql,
     series_counts,
     skipped_notes,
+    store_field,
     tf_seconds,
 )
 
@@ -58,6 +59,7 @@ class ReturnsArgs(BaseModel):
     series_column: str | None = Field(
         None, description="Column naming each series. Default: the result's group column."
     )
+    store: bool = store_field()
 
 
 async def handler(ctx: ToolContext, args: ReturnsArgs) -> ToolOutput:
@@ -105,7 +107,13 @@ async def handler(ctx: ToolContext, args: ReturnsArgs) -> ToolOutput:
         notes.append(note)
     prov = provenance(ctx, TOOL, [inp.info], args)
     return model_output(
-        table, ReturnPoint, prov, notes=notes, absent=no_period(args.period), inputs=[inp.info]
+        table,
+        ReturnPoint,
+        prov,
+        notes=notes,
+        absent=no_period(args.period),
+        inputs=[inp.info],
+        store=args.store,
     )
 
 

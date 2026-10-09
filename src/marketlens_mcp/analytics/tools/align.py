@@ -23,6 +23,7 @@ from ..common import (
     resolve,
     result_id_field,
     scalar,
+    store_field,
 )
 
 TOOL = "analytics_align"
@@ -61,6 +62,7 @@ class AlignArgs(BaseModel):
     suffix: str = Field(
         "_right", pattern=r"^_?[A-Za-z0-9_]{1,20}$", description="Added to right column names that collide."
     )
+    store: bool = store_field()
 
 
 def _same(bl: str | None, br: str | None) -> str:
@@ -199,6 +201,7 @@ async def handler(ctx: ToolContext, args: AlignArgs) -> ToolOutput:
         absent=absent,
         inputs=[left.info, right.info],
         units=units,
+        store=args.store,
     )
 
 

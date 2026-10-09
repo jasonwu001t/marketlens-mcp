@@ -81,6 +81,14 @@ def result_id_field(description: str) -> Any:
     return Field(pattern=RESULT_ID_RE.pattern, description=description)
 
 
+def store_field() -> Any:
+    return Field(
+        False,
+        description="Keep the output as a stored result even when it is small, and get its result_id (for "
+        "results_query or another analytics tool); larger outputs are always stored.",
+    )
+
+
 def refuse(code: str, message: str, hint: str | None = None) -> ToolError:
     return ToolError(code, message, hint=hint)
 
@@ -456,8 +464,11 @@ def points_sql(inp: Input, value: str, *, positive: bool) -> str:
     )
 
 
-def skipped_notes(session: ResultSession, inp: Input, value: str, *, positive: bool) -> list[str]:
-    """Notes counting the rows ``points_sql`` leaves out."""
+def skipped_notes(
+    session: ResultSession, inp: Input, value: str, *, positive: bool, hint: str | None = None
+) -> list[str]:
+    """Notes counting the rows ``points_sql`` leaves out; ``hint`` follows the
+    count of non-positive values."""
     t, v = qi(inp.time), qi(value)
     parts = [
         f"count(*) FILTER (WHERE {t} IS NULL)",
@@ -490,6 +501,7 @@ def skipped_notes(session: ResultSession, inp: Input, value: str, *, positive: b
     if nonpositive:
         notes.append(
             f"Skipped {plural(nonpositive, 'row')} with {value} <= 0 (returns and drawdowns need positive values)."
+            + (f" {hint}" if hint else "")
         )
     return notes
 
@@ -637,8 +649,10 @@ def model_output(
     notes: Sequence[str] = (),
     absent: dict[str, AbsenceReason] | None = None,
     inputs: Sequence[ResultInfo] = (),
+    store: bool = False,
 ) -> ToolOutput:
-    """A canonical-model output; the server's offload decides inline or stored."""
+    """A canonical-model output; the server's offload decides inline or
+    stored (always stored with ``store``)."""
     return ToolOutput(
         model=model,
         provenance=prov,
@@ -646,6 +660,7 @@ def model_output(
         notes=list(notes),
         absent=dict(absent or {}),
         risk=risk(inputs),
+        offload="always" if store else "auto",
     )
 
 
@@ -695,15 +710,17 @@ def dynamic_output(
     absent: dict[str, AbsenceReason] | None = None,
     inputs: Sequence[ResultInfo] = (),
     units: Mapping[str, str] | None = None,
+    store: bool = False,
 ) -> ToolOutput:
-    """A dynamic-schema output. Small: the table (inline). Large: stored here
-    with its time and series columns, which the offload cannot know for a
-    dynamic schema, so the stored result chains into other analytics tools.
-    ``units`` labels columns (a price stays a price for the next tool)."""
+    """A dynamic-schema output. Small (and not ``store``): the table (inline).
+    Large: stored here with its time and series columns, which the offload
+    cannot know for a dynamic schema, so the stored result chains into other
+    analytics tools. ``units`` labels columns (a price stays a price for the
+    next tool)."""
     out_risk = risk(inputs)
     units = {k: v for k, v in (units or {}).items() if v}
     table = with_units(utc_times(table), units)
-    if _small(table):
+    if not store and _small(table):
         return ToolOutput(
             model=model,
             provenance=prov,
