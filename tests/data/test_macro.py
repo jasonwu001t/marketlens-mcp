@@ -222,8 +222,26 @@ def test_macro_bls_series_golden_in_decade_blocks(tmp_path, upstream, keys):
         ("2026-08-01", "M08", None),
         ("2026-09-01", "M09", 4.3),
     ]
-    # the Employment Situation that released it, 08:30 EDT (was the month + 35 days: 2016-11-05)
-    assert doc["rows"][0]["knowledge_time"] == "2016-11-04T12:30:00Z"
+    # fetched after the 10-02 jobs report: that report, 08:30 EDT (was its own: 2016-11-04)
+    assert doc["rows"][0]["knowledge_time"] == "2026-10-02T12:30:00Z"
+
+
+def test_macro_bls_series_history_from_the_first_sync_is_at_its_latest_release(tmp_path, upstream, keys):
+    # The first sync (20:00Z on 2026-10-02) came after that morning's jobs report, and BLS serves
+    # each month's latest revision only, which that report or any before it may have published:
+    # every row dates from 08:30 EDT that day, so an earlier as_of returns none (omni A5, B2).
+    from marketlens_mcp.providers.data.tools.common import parse_instant
+    from marketlens_mcp.providers.data.tools.macro import SPECS
+
+    bls_routes(upstream)
+    out = call("macro_bls_series", context(tmp_path), series_ids=["LNS14000000"])
+    assert {r.knowledge_time for r in out.rows} == {parse_instant("2026-10-02T12:30:00Z")}
+    before = call(
+        "macro_bls_series", context(tmp_path), series_ids=["LNS14000000"], as_of="2026-10-02T12:29:00Z"
+    )
+    assert before.rows == []
+    description = next(s for s in SPECS if s.name == "macro_bls_series").description
+    assert "history older than the first sync takes that sync's latest release" in description
 
 
 def test_macro_bls_series_without_a_key_sends_none(tmp_path, upstream):

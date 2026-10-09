@@ -503,11 +503,11 @@ SPECS: tuple[ToolSpec, ...] = (
             "Bureau of Labor Statistics monthly series (CPI-U CUUR0000SA0, core CPI CUUR0000SA0L1E, the "
             "unemployment rate LNS14000000, payrolls CES0000000001, JOLTS openings JTS000000000000000JOL), "
             "fetched in decade blocks. value is as BLS publishes it; BLS serves only the latest revision and "
-            "no release date, so knowledge_time is the month's release in BLS's own archive (08:30 ET; JOLTS "
-            "10:00 ET; real earnings with the CPI), else the fetch (a release not listed yet, a state's "
-            "JOLTS); a revision seen later is a new vintage at its release. The archive starts in 1994 "
-            "(JOLTS 2004), so an as_of before then returns no rows. BLS_API_KEY is optional (raises BLS's "
-            "daily limit).",
+            "no release date, so knowledge_time is the latest release in BLS's archive at the value's first "
+            "fetch (08:30 ET; JOLTS 10:00 ET; real earnings with the CPI), else that fetch (a release not "
+            "listed yet, a state's JOLTS): history older than the first sync takes that sync's latest "
+            "release, so an earlier as_of returns none (first prints: macro_series). A later "
+            "revision is a new vintage at its release. BLS_API_KEY is optional (raises BLS's daily limit).",
             "lagged",
         ),
         readme="BLS monthly series (CPI, unemployment, payrolls, JOLTS)",
