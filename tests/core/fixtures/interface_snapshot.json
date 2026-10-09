@@ -4015,7 +4015,7 @@
      "required": false
     },
     "occ_symbol": {
-     "annotation": "typing.Optional[typing.Annotated[str, StringConstraints(strip_whitespace=None, to_upper=None, to_lower=None, strict=None, min_length=None, max_length=None, pattern='^(?P<root>[A-Z]{1,6})(?P<yymmdd>\\\\d{6})(?P<cp>[CP])(?P<strike>\\\\d{8})$', ascii_only=None)]]",
+     "annotation": "typing.Optional[typing.Annotated[str, StringConstraints(strip_whitespace=None, to_upper=None, to_lower=None, strict=None, min_length=None, max_length=None, pattern='^(?P<root>[A-Z][A-Z0-9]{0,5})(?P<yymmdd>\\\\d{6})(?P<cp>[CP])(?P<strike>\\\\d{8})$', ascii_only=None)]]",
      "default": "None",
      "required": false
     },
@@ -4345,7 +4345,7 @@
      "required": false
     },
     "occ_symbol": {
-     "annotation": "typing.Optional[typing.Annotated[str, StringConstraints(strip_whitespace=None, to_upper=None, to_lower=None, strict=None, min_length=None, max_length=None, pattern='^(?P<root>[A-Z]{1,6})(?P<yymmdd>\\\\d{6})(?P<cp>[CP])(?P<strike>\\\\d{8})$', ascii_only=None)]]",
+     "annotation": "typing.Optional[typing.Annotated[str, StringConstraints(strip_whitespace=None, to_upper=None, to_lower=None, strict=None, min_length=None, max_length=None, pattern='^(?P<root>[A-Z][A-Z0-9]{0,5})(?P<yymmdd>\\\\d{6})(?P<cp>[CP])(?P<strike>\\\\d{8})$', ascii_only=None)]]",
      "default": "None",
      "required": false
     },
@@ -4490,7 +4490,7 @@
      "required": false
     },
     "occ_symbol": {
-     "annotation": "typing.Optional[typing.Annotated[str, StringConstraints(strip_whitespace=None, to_upper=None, to_lower=None, strict=None, min_length=None, max_length=None, pattern='^(?P<root>[A-Z]{1,6})(?P<yymmdd>\\\\d{6})(?P<cp>[CP])(?P<strike>\\\\d{8})$', ascii_only=None)]]",
+     "annotation": "typing.Optional[typing.Annotated[str, StringConstraints(strip_whitespace=None, to_upper=None, to_lower=None, strict=None, min_length=None, max_length=None, pattern='^(?P<root>[A-Z][A-Z0-9]{0,5})(?P<yymmdd>\\\\d{6})(?P<cp>[CP])(?P<strike>\\\\d{8})$', ascii_only=None)]]",
      "default": "None",
      "required": false
     },
@@ -4669,7 +4669,7 @@
      "required": false
     },
     "occ_symbol": {
-     "annotation": "typing.Optional[typing.Annotated[str, StringConstraints(strip_whitespace=None, to_upper=None, to_lower=None, strict=None, min_length=None, max_length=None, pattern='^(?P<root>[A-Z]{1,6})(?P<yymmdd>\\\\d{6})(?P<cp>[CP])(?P<strike>\\\\d{8})$', ascii_only=None)]]",
+     "annotation": "typing.Optional[typing.Annotated[str, StringConstraints(strip_whitespace=None, to_upper=None, to_lower=None, strict=None, min_length=None, max_length=None, pattern='^(?P<root>[A-Z][A-Z0-9]{0,5})(?P<yymmdd>\\\\d{6})(?P<cp>[CP])(?P<strike>\\\\d{8})$', ascii_only=None)]]",
      "default": "None",
      "required": false
     },

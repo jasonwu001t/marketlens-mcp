@@ -101,3 +101,14 @@ def test_options_chain_maps_share_classes_into_the_path(specs, ctx, alpaca):
     alpaca.add("/v1beta1/options/snapshots/BRK.B", {"snapshots": {}, "next_page_token": None})
     out = call(specs["options_chain"], ctx, underlying="BRK-B", option_type="put")
     assert out.rows == [] and alpaca.params()["type"] == "put"
+
+
+ADJ = "ETHA1261009C00005000"  # an adjusted contract: its root carries a digit
+
+
+def test_adjusted_contracts_are_option_symbols_with_their_underlying(specs, ctx, alpaca):
+    bar = {"t": "2026-10-01T04:00:00Z", "o": 1.0, "h": 1.2, "l": 0.9, "c": 1.1, "v": 3, "n": 2, "vw": 1.05}
+    alpaca.add("/v1beta1/options/bars", {"bars": {ADJ: [bar]}, "next_page_token": None})
+    out = call(specs["options_bars"], ctx, occ_symbols=[ADJ.lower()])
+    assert alpaca.params()["symbols"] == ADJ
+    assert [(r.occ_symbol, r.underlying) for r in out.rows] == [(ADJ, "ETHA")]

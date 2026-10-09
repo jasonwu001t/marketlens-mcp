@@ -85,7 +85,10 @@ CryptoPairs = Annotated[
 OccSymbols = Annotated[
     list[str],
     Field(
-        min_length=1, max_length=100, description='OCC option symbols, e.g. ["AAPL250117C00150000"] (1-100).'
+        min_length=1,
+        max_length=100,
+        description='OCC option symbols, e.g. ["AAPL250117C00150000"] (1-100); an adjusted contract\'s root '
+        'carries a digit ("ETHA1261009C00005000").',
     ),
     AfterValidator(convert.occ_symbols),
 ]

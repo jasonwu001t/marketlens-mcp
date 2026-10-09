@@ -11,7 +11,9 @@ CONVENTIONS (schema 1.x)
                      Alpaca adapter translates both ways). Crypto pairs are
                      tickers too, spelled ``BASE/QUOTE``: ``BTC/USD``.
     - ``occ_symbol`` options, compact OCC form: root, YYMMDD, C or P, strike
-                     x 1000 in eight digits: ``AAPL250117C00150000``.
+                     x 1000 in eight digits: ``AAPL250117C00150000``. The root
+                     is a letter and up to five letters or digits: an adjusted
+                     contract's root carries a digit (``ETHA1261009C00005000``).
     - ``isin``       fixed income.
 * Timestamps are timezone-aware and normalised to UTC; JSON spells them
   ISO-8601 with a ``Z`` suffix. A naive datetime is refused, never assumed.
@@ -125,7 +127,7 @@ DecimalStr = Annotated[
 EQUITY_TICKER_PATTERN = r"[A-Z][A-Z0-9]{0,9}(?:-[A-Z0-9]{1,5})?"
 CRYPTO_PAIR_PATTERN = r"[A-Z0-9]{2,10}/[A-Z0-9]{2,10}"
 TICKER_RE = re.compile(rf"^(?:{EQUITY_TICKER_PATTERN}|{CRYPTO_PAIR_PATTERN})$")
-OCC_RE = re.compile(r"^(?P<root>[A-Z]{1,6})(?P<yymmdd>\d{6})(?P<cp>[CP])(?P<strike>\d{8})$")
+OCC_RE = re.compile(r"^(?P<root>[A-Z][A-Z0-9]{0,5})(?P<yymmdd>\d{6})(?P<cp>[CP])(?P<strike>\d{8})$")
 ISIN_RE = re.compile(r"^[A-Z]{2}[A-Z0-9]{9}\d$")
 #: Canonical bar size: minutes 1-59 ("5min"), hours 1-23 ("1h"), "1d", "1w",
 #: months 1, 2, 3, 4, 6 or 12 ("3mo"). Adapters translate to the vendor's names.

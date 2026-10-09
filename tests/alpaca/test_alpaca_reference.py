@@ -226,3 +226,24 @@ def test_reference_option_exchanges_golden(specs, ctx, alpaca):
     alpaca.fixture("/v1beta1/options/meta/exchanges", "OptionMetaExchanges")
     doc = check_golden(call(specs["reference_option_exchanges"], ctx), "reference_option_exchanges")
     assert [r["code"] for r in doc["rows"]] == ["A", "Q"]
+
+
+def test_reference_option_contracts_keep_adjusted_contracts(specs, ctx, alpaca):
+    adjusted = {
+        **load_fixture("OptionContracts__page1")["option_contracts"][0],
+        "symbol": "ETHA1261009C00005000",
+        "name": "ETHA1 Oct 09 2026 5 Call",
+        "root_symbol": "ETHA1",
+        "underlying_symbol": "ETHA",
+        "strike_price": "5",
+        "expiration_date": "2026-10-09",
+    }
+    alpaca.add("/v2/options/contracts", {"option_contracts": [adjusted], "next_page_token": None})
+    out = call(specs["reference_option_contracts"], ctx, underlyings=["ETHA"], expiration="2026-10-09")
+    assert [(r.occ_symbol, r.root_symbol, r.underlying) for r in out.rows] == [
+        ("ETHA1261009C00005000", "ETHA1", "ETHA")
+    ]
+    assert not any("Skipped" in n for n in out.notes)
+    alpaca.add("/v2/options/contracts/ETHA1261009C00005000", adjusted)
+    one = call(specs["reference_option_contract"], ctx, occ_symbol="etha1261009c00005000")
+    assert one.rows[0].occ_symbol == "ETHA1261009C00005000"
