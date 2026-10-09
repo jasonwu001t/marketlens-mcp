@@ -31,7 +31,7 @@ from marketlens_schema.market import (
     Trade,
 )
 
-from .convert import build_row, integer, num, parse_occ, parse_ts, text, to_ticker
+from .convert import NEW_YORK, build_row, et_to_utc, integer, num, parse_occ, parse_ts, text, to_ticker
 
 NO_DATA = AbsenceCode.NO_DATA
 NOT_PROVIDED = AbsenceCode.NOT_PROVIDED_BY_SOURCE
@@ -44,6 +44,9 @@ QUOTE_LOT_CUTOFF = datetime(2025, 11, 3, 5, 0, tzinfo=UTC)
 ROUND_LOT = 100
 #: Trades Alpaca marks as no longer valid.
 INVALID_TRADE_UPDATES = frozenset({"canceled", "incorrect"})
+#: SIP trade conditions of extended-hours trades: T (Form T, extended hours)
+#: and U (extended hours, sold out of sequence).
+EXTENDED_HOURS = frozenset({"T", "U"})
 
 Raw = Mapping[str, Any]
 
@@ -169,14 +172,46 @@ def snapshot(raw: Raw | None, *, ticker: str, asset_class: str, currency: str = 
             values, side_codes = _side(lq, prefix, lots=lots)
             data.update({k: v for k, v in values.items() if not k.endswith("_exchange")})
             codes.update({k: v for k, v in side_codes.items() if not k.endswith("_exchange")})
-    last, prev = data["last_price"], data["prev_close"]
-    if last is not None and prev is not None:
-        data["change"] = last - prev
+    basis = change_basis(
+        asset_class,
+        data["last_t"],
+        parse_ts(db.get("t")),
+        lt.get("c") or [],
+        has_day_close=data["day_close"] is not None,
+    )
+    base, prev = data["day_close" if basis == "day_close" else "last_price"], data["prev_close"]
+    if base is not None and prev is not None:
+        data["change"] = base - prev
+        data["change_basis"] = basis
         if prev:
-            data["change_pct"] = (last - prev) / prev
+            data["change_pct"] = (base - prev) / prev
         else:
             codes["change_pct"] = INSUFFICIENT
     return build_row(Snapshot, data, codes)
+
+
+def change_basis(
+    asset_class: str,
+    last_t: datetime | None,
+    day_t: datetime | None,
+    conditions: Iterable[str],
+    *,
+    has_day_close: bool,
+) -> str:
+    """A snapshot's change is the session's: from the last trade while it falls
+    in the latest session (the day bar's), else from the day bar's close. For
+    a stock the session is the day bar's regular hours (09:30-16:00 New York;
+    an extended-hours condition T or U also counts as outside); for a crypto
+    pair it began at the day bar's start. Without a day close, the last trade."""
+    if not has_day_close or day_t is None:
+        return "last_trade"
+    if last_t is None:
+        return "day_close"
+    if asset_class == "crypto":
+        return "last_trade" if last_t >= day_t else "day_close"
+    day = day_t.astimezone(NEW_YORK).date()
+    regular = et_to_utc(day, "09:30") <= last_t < et_to_utc(day, "16:00")  # type: ignore[operator]
+    return "last_trade" if regular and not EXTENDED_HOURS & set(conditions) else "day_close"
 
 
 def most_active(raw: Raw, *, rank: int, ranked_by: str, as_of: datetime) -> MostActive:

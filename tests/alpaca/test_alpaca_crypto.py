@@ -235,6 +235,48 @@ def test_crypto_snapshots_golden(specs, ctx, alpaca):
     assert any("ETH/USD" in n for n in doc["notes"])
 
 
+def test_crypto_snapshots_with_a_stale_last_trade_give_the_day_bars_change(specs, ctx, alpaca):
+    # ETH/BTC last traded on 2026-09-23; its day bar (from quotes) closes at 0.03022585 against 0.0302646.
+    bar = {"o": 0.0302, "h": 0.0304, "l": 0.0301, "v": 0, "n": 0, "vw": 0.0302}
+    alpaca.add(
+        "/v1beta3/crypto/us/snapshots",
+        {
+            "snapshots": {
+                "ETH/BTC": {
+                    "latestTrade": {
+                        "t": "2026-09-23T12:00:47.257776Z",
+                        "p": 0.0317449,
+                        "s": 0.04,
+                        "i": 1,
+                        "tks": "B",
+                    },
+                    "dailyBar": {**bar, "t": "2026-10-02T00:00:00Z", "c": 0.03022585},
+                    "prevDailyBar": {**bar, "t": "2026-10-01T00:00:00Z", "c": 0.0302646},
+                }
+            }
+        },
+    )
+    out = call(specs["crypto_snapshots"], ctx, tickers=["ETH/BTC"])
+    (row,) = out.rows
+    assert row.change_basis == "day_close" and row.last_price == 0.0317449
+    assert row.change_pct == pytest.approx((0.03022585 - 0.0302646) / 0.0302646)  # -0.13 %, not +4.9 %
+    assert out.notes == [
+        "change and change_pct of ETH/BTC compare day_close with prev_close (change_basis day_close), not "
+        "last_price: their last trade is older than the current day bar, so last_price is stale and the change "
+        "is the day bar's close against the previous one."
+    ]
+
+
+def test_crypto_orderbooks_name_a_book_shallower_than_the_depth(specs, ctx, alpaca):
+    alpaca.fixture("/v1beta3/crypto/us/latest/orderbooks", "CryptoLatestOrderbooks")
+    out = call(specs["crypto_orderbooks"], ctx, tickers=["BTC/USD"], depth=1000)
+    assert out.notes[-1] == (
+        "Alpaca's book had fewer levels than the depth of 1000 asked for: BTC/USD 3 bid and 2 ask level(s)."
+    )
+    full = call(specs["crypto_orderbooks"], ctx, tickers=["BTC/USD"], depth=2)
+    assert not any("fewer levels" in n for n in full.notes)
+
+
 def test_crypto_orderbooks_golden_sorted_levels_and_depth(specs, ctx, alpaca):
     alpaca.fixture("/v1beta3/crypto/us/latest/orderbooks", "CryptoLatestOrderbooks")
     out = call(specs["crypto_orderbooks"], ctx, tickers=["BTC/USD"], depth=2)

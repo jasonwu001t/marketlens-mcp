@@ -387,6 +387,25 @@ def missing_note(requested: Iterable[str], rows: Iterable[Any], attr: str = "tic
     return [f"No data from Alpaca for: {', '.join(missing)}."] if missing else []
 
 
+def named(items: list[str], what: str = "") -> str:
+    """At most SKIP_SAMPLE names, then how many more."""
+    out = ", ".join(items[:SKIP_SAMPLE])
+    if len(items) > SKIP_SAMPLE:
+        out += f" and {len(items) - SKIP_SAMPLE} more{what}"
+    return out
+
+
+def day_close_basis_note(rows: Iterable[Any], why: str) -> list[str]:
+    """Name the snapshots whose change comes from day_close, not last_price."""
+    tickers = [r.ticker for r in rows if getattr(r, "change_basis", None) == "day_close"]
+    if not tickers:
+        return []
+    return [
+        f"change and change_pct of {named(tickers)} compare day_close with prev_close (change_basis day_close), "
+        f"not last_price: {why}."
+    ]
+
+
 def missing_in_window_note(
     requested: Iterable[str], page: PageResult, start_token: str | None, attr: str = "ticker"
 ) -> list[str]:

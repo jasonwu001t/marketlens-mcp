@@ -350,6 +350,82 @@ def test_market_snapshots_golden(specs, ctx, alpaca):
     assert any("ZZZZ" in n for n in doc["notes"])
 
 
+def _snap(last_t: str, last: float, conditions: list[str], day_t: str, day_close: float, prev: float) -> dict:
+    bar = {"o": day_close, "h": day_close, "l": day_close, "v": 1000, "n": 10, "vw": day_close}
+    return {
+        "latestTrade": {"t": last_t, "p": last, "s": 100, "x": "P", "c": conditions, "z": "C", "i": 1},
+        "dailyBar": {**bar, "t": day_t, "c": day_close},
+        "prevDailyBar": {**bar, "t": "2026-10-01T04:00:00Z", "c": prev},
+    }
+
+
+AFTER = (
+    "not last_price: their last trade falls outside the latest session's regular hours (an extended-hours "
+    "trade, or none since the session), so the change is that session's close against the one before."
+)
+
+
+def test_market_snapshots_after_the_close_give_the_sessions_change(specs, ctx, alpaca):
+    # NVDA traded at 230.7446 after hours (18:00 New York); the session closed at 230.48 against 237.47.
+    alpaca.add(
+        "/v2/stocks/snapshots",
+        {
+            "NVDA": _snap(
+                "2026-10-02T22:00:00Z", 230.7446, ["@", "T"], "2026-10-02T04:00:00Z", 230.48, 237.47
+            ),
+            "AAPL": _snap("2026-10-02T19:59:59Z", 255.8, ["@"], "2026-10-02T04:00:00Z", 255.7, 250.0),
+        },
+    )
+    out = call(specs["market_snapshots"], ctx, tickers=["NVDA", "AAPL"])
+    nvda, aapl = sorted(out.rows, key=lambda r: r.ticker != "NVDA")
+    assert nvda.change_basis == "day_close" and nvda.last_price == 230.7446
+    assert nvda.change == pytest.approx(230.48 - 237.47)
+    assert nvda.change_pct == pytest.approx(
+        (230.48 - 237.47) / 237.47
+    )  # -2.94 %, not the -2.83 % of the trade
+    assert aapl.change_basis == "last_trade" and aapl.change == pytest.approx(5.8)
+    assert out.notes == [
+        f"change and change_pct of NVDA compare day_close with prev_close (change_basis day_close), {AFTER}"
+    ]
+
+
+@pytest.mark.parametrize(
+    ("last_t", "conditions", "day_t", "basis"),
+    [
+        ("2026-10-02T13:30:00Z", ["@"], "2026-10-02T04:00:00Z", "last_trade"),  # 09:30 New York, the open
+        ("2026-10-02T19:59:59Z", ["@"], "2026-10-02T04:00:00Z", "last_trade"),
+        ("2026-10-02T20:00:00.2Z", ["@", "6"], "2026-10-02T04:00:00Z", "day_close"),  # 16:00 closing print
+        ("2026-10-02T13:29:59Z", ["@", "T"], "2026-10-02T04:00:00Z", "day_close"),  # pre-market
+        ("2026-10-02T18:00:00Z", ["@", "T"], "2026-10-02T04:00:00Z", "day_close"),  # early close: Form T
+        ("2026-10-03T12:00:00Z", ["@", "T"], "2026-10-02T04:00:00Z", "day_close"),  # next morning
+        ("2026-09-25T19:00:00Z", ["@"], "2026-10-02T04:00:00Z", "day_close"),  # stopped trading
+        ("2026-01-05T15:00:00Z", ["@"], "2026-01-05T05:00:00Z", "last_trade"),  # winter: 10:00 New York
+        ("2026-01-05T21:00:00Z", ["@"], "2026-01-05T05:00:00Z", "day_close"),  # winter: 16:00 New York
+    ],
+)
+def test_stock_change_basis_is_the_day_bars_regular_session(last_t, conditions, day_t, basis):
+    from marketlens_mcp.providers.alpaca.convert import parse_ts
+    from marketlens_mcp.providers.alpaca.mappers import change_basis
+
+    got = change_basis("us_equity", parse_ts(last_t), parse_ts(day_t), conditions, has_day_close=True)
+    assert got == basis
+
+
+def test_change_basis_without_a_day_close_is_the_last_trade():
+    from marketlens_mcp.providers.alpaca.convert import parse_ts
+    from marketlens_mcp.providers.alpaca.mappers import change_basis
+
+    t = parse_ts("2026-10-02T22:00:00Z")
+    assert change_basis("us_equity", t, None, ["T"], has_day_close=False) == "last_trade"
+
+
+def test_snapshot_columns_say_what_change_is():
+    from marketlens_schema.market import Snapshot
+
+    for name in ("change", "change_pct", "change_basis", "day_close", "prev_close", "last_price"):
+        assert Snapshot.model_fields[name].description, name
+
+
 def test_market_most_active_golden(specs, ctx, alpaca):
     alpaca.fixture("/v1beta1/screener/stocks/most-actives", "MostActives")
     out = call(specs["market_most_active"], ctx, by="trades", top=2)

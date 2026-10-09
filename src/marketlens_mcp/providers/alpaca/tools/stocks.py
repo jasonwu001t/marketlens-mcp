@@ -32,6 +32,7 @@ from .common import (
     TimeframeIn,
     absence,
     collect,
+    day_close_basis_note,
     latest_t,
     missing_in_window_note,
     missing_note,
@@ -47,6 +48,10 @@ from .marketdata import fetch_grouped, fetch_once
 GOLDEN = "tests/alpaca/test_alpaca_stocks.py"
 EQ = "us_equity"
 NO_TAKER = "Stock trades carry no aggressor side."
+AFTER_SESSION = (
+    "their last trade falls outside the latest session's regular hours (an extended-hours trade, or none since "
+    "the session), so the change is that session's close against the one before"
+)
 LOT_NOTE = (
     "Quote sizes are shares; Alpaca reported round lots before 2025-11-03, which are converted at 100 shares."
 )
@@ -351,7 +356,7 @@ async def market_snapshots(ctx: ToolContext, args: LatestIn) -> ToolOutput:
         delay=delay,
         as_of=latest_t(page.rows),
         page=page,
-        notes=missing_note(args.tickers, page.rows),
+        notes=missing_note(args.tickers, page.rows) + day_close_basis_note(page.rows, AFTER_SESSION),
         skips=skips,
     )
 
@@ -596,9 +601,11 @@ SPECS = (
         name="market_snapshots",
         capability="market",
         title="Stock snapshots",
-        description="Latest state per stock ticker: last trade, best bid/ask, latest minute close, today's "
-        "OHLCV and VWAP, previous close, and change / change_pct (fraction) derived from the last trade and "
-        "the previous close. Tickers Alpaca has nothing for are listed in notes.",
+        description="Latest state per stock ticker: last trade, best bid/ask, latest minute close, the latest "
+        "session's OHLCV and VWAP, previous close, and change / change_pct (fraction) against the previous close: "
+        "from the last trade while it falls in the session's regular hours, else from the session's close "
+        "(after hours, before the open, or for a ticker that stopped trading), as change_basis says, with a note. "
+        "Tickers Alpaca has nothing for are listed in notes.",
         readme="Last trade, quote, day bar, change",
         input_model=LatestIn,
         output_model=Snapshot,

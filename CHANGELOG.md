@@ -24,6 +24,7 @@ All notable changes to this project are documented here. The format follows [Kee
 - Linux and macOS are the tested platforms: the classifiers name them instead of "OS Independent", and Windows left the CI matrix (not yet supported). Text I/O still names its encoding everywhere.
 - A fetch cut at `fetch.max_rows` or `fetch.max_pages` without a page token no longer carries the R16 "call again with page_token" note: the tool's own truncation note stands, and a tool that gave none gets "The data is incomplete; narrow the request." (the answer is still flagged `truncated`).
 - The name `data` is reserved for the built-in provider; a plugin may not take it.
+- `market_snapshots` and `crypto_snapshots` give the session's change: `change` and `change_pct` come from the last trade only while it falls in the latest session (a stock's day bar's regular hours, 09:30-16:00 New York, without an extended-hours condition T or U; a crypto pair's current UTC day bar), and otherwise from `day_close` against `prev_close`, with a note naming the tickers. Before, an after-hours print (NVDA: -2.83 % instead of the session's -2.94 %) or a weeks-old crypto trade (ETH/BTC: +4.9 % on a day it moved -0.13 %) made the change. The new optional column `change_basis` (`last_trade` or `day_close`) says which, and the `Snapshot` columns `last_price`, `day_*`, `prev_close`, `change` and `change_pct` have descriptions (schema 1.1.0, unreleased, gains the column).
 
 ### Fixed
 
@@ -43,6 +44,7 @@ All notable changes to this project are documented here. The format follows [Kee
 - Error texts keep an echoed one-segment input such as `/USD` as typed ("'/USD' is not a crypto pair") instead of scrubbing it to `<path>`: only a Windows path or an absolute path of two or more segments is scrubbed. A refusal whose validator text already ends in a period no longer ends in "..", and a datetime with an impossible UTC offset (`+25:00`) or date (`2026-02-30`) is refused by name ("has a UTC offset out of range; offsets run from -23:59 to +23:59") instead of with Python's `timedelta` text.
 - `market_bars`, `market_quotes`, `market_trades`, `crypto_bars`, `crypto_quotes`, `crypto_trades`, `options_bars` and `options_trades` name the requested instruments Alpaca returned nothing for ("No data from Alpaca for: ZZZZQ in this window."), as the latest and snapshot tools do, instead of an empty answer with no word; a fetch that was cut or continued from a page token says nothing of the kind, since Alpaca pages through the instruments in turn.
 - `crypto_bars` says when its newest bar is still forming (crypto trades around the clock, so the current day's or hour's bar holds the trades up to now only), naming the bar's start and its pairs. The rows are unchanged.
+- `crypto_orderbooks` names a book that had fewer levels per side than the `depth` asked for ("Alpaca's book had fewer levels than the depth of 1000 asked for: BTC/USD 86 bid and 100 ask level(s).") instead of cutting it silently.
 
 ## [0.1.0] - Unreleased
 

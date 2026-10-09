@@ -34,9 +34,11 @@ from .common import (
     TimeframeIn,
     absence,
     collect,
+    day_close_basis_note,
     latest_t,
     missing_in_window_note,
     missing_note,
+    named,
     output,
     request_of,
     spec,
@@ -50,6 +52,10 @@ BASE = "/v1beta3/crypto/{loc}"
 QUOTE_SKIP = ("bid_exchange", "ask_exchange", "conditions", "tape")
 TRADE_SKIP = ("exchange", "conditions", "tape")
 NO_VENUE = "Alpaca crypto {what} carry no exchange, conditions or tape."
+STALE_TRADE = (
+    "their last trade is older than the current day bar, so last_price is stale and the change is the day "
+    "bar's close against the previous one"
+)
 NO_TRADES_DOC = (
     "A bar with trade_count 0 had no trades: Alpaca fills it from quotes, and notes name the pairs."
 )
@@ -312,7 +318,7 @@ async def crypto_snapshots(ctx: ToolContext, args: LatestIn) -> ToolOutput:
         delay=Delay.REALTIME,
         as_of=latest_t(page.rows),
         page=page,
-        notes=missing_note(args.tickers, page.rows),
+        notes=missing_note(args.tickers, page.rows) + day_close_basis_note(page.rows, STALE_TRADE),
         skips=skips,
     )
 
@@ -339,6 +345,16 @@ async def crypto_orderbooks(ctx: ToolContext, args: OrderbooksIn) -> ToolOutput:
     notes = missing_note(args.tickers, page.rows)
     if empty:
         notes.append(f"Dropped {empty} price level(s) of size 0 (no liquidity).")
+    sides = Counter((r.ticker, r.side) for r in page.rows)
+    short = [
+        f"{t} {sides[(t, 'bid')]} bid and {sides[(t, 'ask')]} ask"
+        for t in dict.fromkeys(r.ticker for r in page.rows)
+        if min(sides[(t, "bid")], sides[(t, "ask")]) < args.depth
+    ]
+    if short:
+        notes.append(
+            f"Alpaca's book had fewer levels than the depth of {args.depth} asked for: {named(short)} level(s)."
+        )
     return output(
         ctx,
         OrderBookLevel,
@@ -451,7 +467,9 @@ SPECS = (
         capability="market",
         title="Crypto snapshots",
         description="Latest state per crypto pair: last trade, best bid/ask, latest minute close, today's "
-        "OHLCV and VWAP, previous close, and change / change_pct (fraction) derived from them.",
+        "OHLCV and VWAP (UTC day), previous close, and change / change_pct (fraction) against the previous close: "
+        "from the last trade while it is from today, else from today's bar close (a pair whose last trade is "
+        "older), as change_basis says, with a note.",
         readme="Last trade, quote, day bar, change",
         input_model=LatestIn,
         output_model=Snapshot,
@@ -467,7 +485,7 @@ SPECS = (
         title="Crypto order books",
         description="The latest order book per crypto pair as one row per price level and side (level 0 is "
         "the best price; size in base units), up to depth levels per side (default 20). Empty levels are "
-        "dropped and counted in notes.",
+        "dropped and counted in notes, and a book with fewer levels than depth is named in notes.",
         readme="Order book levels per pair",
         input_model=OrderbooksIn,
         output_model=OrderBookLevel,
