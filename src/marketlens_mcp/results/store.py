@@ -316,10 +316,13 @@ class FileResultStore:
         time_column: str | None = None,
         group_column: str | None = None,
         column_units: dict[str, str] | None = None,
+        column_sources: dict[str, str] | None = None,
     ) -> ResultInfo:
+        """``column_sources``: the source_model of carried columns (a query
+        answer's), as ``column_units`` gives their units."""
         absent = dict(absent or {})
         cls = self.models.get(model)
-        table, columns = self._columns(table, cls, column_units or {})
+        table, columns = self._columns(table, cls, column_units or {}, column_sources or {})
         if cls is not None:
             time_column = time_column or cls.time_column
             group_column = group_column or cls.group_column
@@ -497,7 +500,11 @@ class FileResultStore:
             timer.cancel()
 
     def _columns(
-        self, table: pa.Table, cls: type[CanonicalModel] | None, units: Mapping[str, str]
+        self,
+        table: pa.Table,
+        cls: type[CanonicalModel] | None,
+        units: Mapping[str, str],
+        sources: Mapping[str, str],
     ) -> tuple[pa.Table, list[ColumnInfo]]:
         if cls is not None:
             from .arrow import arrow_schema
@@ -511,8 +518,8 @@ class FileResultStore:
                     return table, [
                         c.model_copy(update={"unit": units[c.name]}) if c.name in units else c for c in infos
                     ]
-            return table, column_infos_for(table.schema, cls, units)
-        return table, column_infos_from_schema(table.schema, units)
+            return table, column_infos_for(table.schema, cls, units, sources)
+        return table, column_infos_from_schema(table.schema, units, sources)
 
     def _summarise(
         self, table: pa.Table, columns: list[ColumnInfo], time_column: str | None, group_column: str | None

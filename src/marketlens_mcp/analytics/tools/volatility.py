@@ -81,8 +81,9 @@ class VolatilityArgs(BaseModel):
     input_kind: Literal["prices", "returns"] | None = Field(
         None,
         description="What price_column holds: prices (returns are computed from them) or returns (used as they "
-        "are, e.g. a portfolio's daily returns). Default: returns for a returns result, or for a column in "
-        "fraction units of a query answer or aligned result; else prices.",
+        "are, e.g. a portfolio's daily returns). Default: returns for a returns result, or for a column of a query "
+        "answer or aligned result whose source_model is one; else prices. Another ratio column (a drawdown, a "
+        "beta), or one in fraction units whose source_model is not recorded, is refused without it.",
     )
     series_column: str | None = Field(
         None, description="Column naming each series. Default: the result's group column."
@@ -300,54 +301,31 @@ def _annualisation(ctx: ToolContext, session: ResultSession, inp: Input, rets: s
     )
 
 
-def _source_model(ctx: ToolContext, info: ResultInfo, col: str) -> str:
-    """The model of the result that computed column ``col``: followed back
-    through a query answer over one result that kept the column, and through
-    an aligned result to its left input, or its right one (a renamed right
-    column without its suffix); else ``info``'s own."""
-    while info.model in _DYNAMIC:
-        if info.model == QUERY_ROW_SCHEMA_NAME:
-            sources = [(info.parents[0], col)] if len(info.parents) == 1 else []
-        else:
-            request = info.provenance.request
-            left, right = request.get("left_result_id"), request.get("right_result_id")
-            suffix = request.get("suffix") or "_right"
-            sources = [(left, col), (right, col)]
-            if col.endswith(suffix):
-                sources.append((right, col[: -len(suffix)]))
-        for rid, name in sources:
-            try:
-                parent = ctx.results.info(rid) if isinstance(rid, str) else None
-            except ResultNotFound:
-                parent = None
-            if parent is not None and any(c.name == name for c in parent.columns):
-                info, col = parent, name
-                break
-        else:
-            break
-    return info.model
-
-
-def _as_returns(ctx: ToolContext, inp: Input, args: VolatilityArgs) -> tuple[str, bool]:
-    """The column and whether it holds returns: input_kind, else a returns
-    result, or a column in fraction units of a query answer or aligned result
-    (a drawdown or beta column carried into those is a ratio, not a return).
-    A ratio column is not prices."""
+def _as_returns(inp: Input, args: VolatilityArgs) -> tuple[str, bool]:
+    """The column and whether it holds returns: input_kind, else whether a
+    returns result computed it (its source_model, recorded when a query answer
+    or aligned result was created, so a drawdown or beta column carried into
+    those stays a ratio after its result is gone). A ratio column is not
+    prices, nor is a column in fraction units whose source was not recorded."""
     given = args.price_column
     if given is None and (inp.model == RETURNS_MODEL or args.input_kind == "returns") and inp.column("ret"):
         given = "ret"
     col = value_column(TOOL, inp, given, param="price_column")
     unit = inp.column(col).unit
-    if args.input_kind is not None:
-        as_returns = args.input_kind == "returns"
-    else:
-        model = _source_model(ctx, inp.info, col)
-        as_returns = model == RETURNS_MODEL or (unit == "fraction" and model in _DYNAMIC)
+    source = inp.column(col).source_model or inp.model
+    as_returns = args.input_kind == "returns" if args.input_kind is not None else source == RETURNS_MODEL
     if not as_returns and unit in RATIO_UNITS:
+        if source in _DYNAMIC:
+            what = (
+                f"is in {unit} units, but which result computed it is not recorded: it may be a ratio such as a "
+                "drawdown rather than returns"
+            )
+        else:
+            by = f", computed by a {source} result" if source != inp.model else ""
+            what = f"is a ratio (unit {unit}{by}), not a price"
         raise refuse(
             "not_prices",
-            f"{TOOL}: '{col}' of {inp.label} is a ratio (unit {unit}), not a price. Pass input_kind=returns if it "
-            "holds returns, or a price column.",
+            f"{TOOL}: '{col}' of {inp.label} {what}. Pass input_kind=returns if it holds returns, or a price column.",
         )
     return col, as_returns
 
@@ -357,7 +335,7 @@ async def handler(ctx: ToolContext, args: VolatilityArgs) -> ToolOutput:
     notes = list(inp.notes)
     w = args.window
     with ctx.results.open([inp.rid]) as session:
-        col, as_returns = _as_returns(ctx, inp, args)
+        col, as_returns = _as_returns(inp, args)
         if as_returns:
             has_kind = inp.column("kind") is not None and inp.column("kind").type == "VARCHAR"
             kinds = (
@@ -369,7 +347,11 @@ async def handler(ctx: ToolContext, args: VolatilityArgs) -> ToolOutput:
             if kinds and "return_kind" in args.model_fields_set and args.return_kind != kind:
                 notes.append(f"return_kind ignored: {inp.rid} already holds {kind} returns.")
             if inp.model != RETURNS_MODEL:
-                why = "input_kind=returns" if args.input_kind else f"{col} is in fraction units"
+                why = (
+                    "input_kind=returns"
+                    if args.input_kind
+                    else f"{col} was computed by a {RETURNS_MODEL} result"
+                )
                 notes.append(
                     f"{why}, so the values of {col} were taken as returns as they are"
                     + ("." if kinds else f"; return_kind={kind} only labels them.")
@@ -442,7 +424,8 @@ SPEC = ToolSpec(
     title="Rolling volatility",
     description=(
         "Rolling annualised volatility of each series in a stored result of prices (or of returns: from "
-        "analytics_returns, a column in fraction units, or any column with input_kind=returns), computed locally in "
+        "analytics_returns, a column carried from them (its source_model), or any column with input_kind=returns), "
+        "computed locally in "
         "DuckDB: vol_t = stddev_samp(returns over the last `window` rows) x sqrt(periods_per_year), reported at "
         "the window's last observation; rows before the window fills are omitted; window=all gives one row per "
         "series over all its returns. return_kind log (default) or simple for prices. periods_per_year defaults from the "

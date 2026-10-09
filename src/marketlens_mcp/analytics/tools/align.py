@@ -183,12 +183,17 @@ async def handler(ctx: ToolContext, args: AlignArgs) -> ToolOutput:
     prov = provenance(ctx, TOOL, [left.info, right.info], args)
     group = left.group if left.group in left_cols else None
     # Every column keeps its unit (a renamed right column its source's), so a
-    # price stays a price for the next tool (correlation turns it into returns).
-    right_units = right.units()
+    # price stays a price for the next tool (correlation turns it into returns),
+    # and the model that computed it, so a drawdown is not taken for returns
+    # once its result is gone.
+    right_units, right_sources = right.units(), right.sources()
     units = left.units() | {
         n: right_units[c] for c, n in zip(chosen, out_names, strict=False) if c in right_units
     }
     units[out_names[-1]] = "UTC"
+    sources = left.sources() | {
+        n: right_sources[c] for c, n in zip(chosen, out_names, strict=False) if c in right_sources
+    }
     return dynamic_output(
         ctx,
         TOOL,
@@ -201,6 +206,7 @@ async def handler(ctx: ToolContext, args: AlignArgs) -> ToolOutput:
         absent=absent,
         inputs=[left.info, right.info],
         units=units,
+        sources=sources,
         store=args.store,
     )
 

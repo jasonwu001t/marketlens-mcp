@@ -319,6 +319,7 @@ async def handler(ctx: ToolContext, args: ResampleArgs) -> ToolOutput:
         absent=absent,
         inputs=[inp.info],
         units=inp.units(),
+        sources=inp.sources(),
         store=args.store,
     )
 

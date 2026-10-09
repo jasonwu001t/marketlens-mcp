@@ -340,6 +340,11 @@ class Input:
         """The unit of each column that has one."""
         return {c.name: c.unit for c in self.info.columns if c.unit}
 
+    def sources(self) -> dict[str, str]:
+        """The model that computed each column that has a unit: the one it
+        recorded (a carried column), else this result's."""
+        return {c.name: c.source_model or self.model for c in self.info.columns if c.unit}
+
 
 def _parent_value(ctx: ToolContext, info: ResultInfo) -> str | None:
     """A stored query answer over one parent whose time column it kept: the
@@ -681,16 +686,22 @@ def utc_times(table: pa.Table) -> pa.Table:
     return table.cast(pa.schema(fields))
 
 
-def with_units(table: pa.Table, units: Mapping[str, str]) -> pa.Table:
+def with_units(
+    table: pa.Table, units: Mapping[str, str], sources: Mapping[str, str] | None = None
+) -> pa.Table:
     """``table`` with each named column's unit in its Arrow field metadata
-    (``{b"unit": ...}``): how a dynamic table labels its columns' units, which
-    the inline answer and the store both read."""
-    fields = [
-        f.with_metadata({**(f.metadata or {}), b"unit": units[f.name].encode("utf-8")})
-        if units.get(f.name)
-        else f
-        for f in table.schema
-    ]
+    (``{b"unit": ...}``), and with ``sources`` the model that computed it
+    (``{b"source_model": ...}``): how a dynamic table labels its columns' units,
+    which the inline answer and the store both read."""
+    sources = sources or {}
+    fields = []
+    for f in table.schema:
+        meta = {
+            k: v.encode("utf-8")
+            for k, v in ((b"unit", units.get(f.name)), (b"source_model", sources.get(f.name)))
+            if v
+        }
+        fields.append(f.with_metadata({**(f.metadata or {}), **meta}) if meta else f)
     return table.cast(pa.schema(fields))
 
 
@@ -714,16 +725,18 @@ def dynamic_output(
     absent: dict[str, AbsenceReason] | None = None,
     inputs: Sequence[ResultInfo] = (),
     units: Mapping[str, str] | None = None,
+    sources: Mapping[str, str] | None = None,
     store: bool = False,
 ) -> ToolOutput:
     """A dynamic-schema output. Small (and not ``store``): the table (inline).
     Large: stored here with its time and series columns, which the offload
     cannot know for a dynamic schema, so the stored result chains into other
     analytics tools. ``units`` labels columns (a price stays a price for the
-    next tool)."""
+    next tool), and ``sources`` the model each carried column was computed by
+    (a drawdown stays a drawdown after its result is gone)."""
     out_risk = risk(inputs)
     units = {k: v for k, v in (units or {}).items() if v}
-    table = with_units(utc_times(table), units)
+    table = with_units(utc_times(table), units, sources)
     if not store and _small(table):
         return ToolOutput(
             model=model,

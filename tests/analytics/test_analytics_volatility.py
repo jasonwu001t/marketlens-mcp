@@ -441,7 +441,7 @@ def test_store_keeps_a_small_output(store, ctx):
     assert run(SPEC, ctx, result_id=rid, window=3, store=True).offload == "always"
 
 
-def query_returns(store, rets, units=None, times=None, parents=(), series="PORT"):
+def query_returns(store, rets, units=None, times=None, parents=(), series="PORT", sources=None):
     t0 = utc(2026, 3, 2)
     table = pa.table(
         {
@@ -458,18 +458,22 @@ def query_returns(store, rets, units=None, times=None, parents=(), series="PORT"
         time_column="t",
         group_column="series",
         column_units=units,
+        column_sources=sources,
         parents=parents,
     ).result_id
 
 
 RETS = [0.01, -0.02, 0.015, -0.005, 0.02]
+#: What results_query records for a ret column it kept from a returns result.
+FROM_RETURNS = {"ret": "marketlens.ReturnPoint"}
 
 
 def test_a_column_of_returns_is_used_as_it_is(store, ctx):
     """A portfolio's returns from results_query had no way in: read as prices,
     the negative ones were skipped and the rest turned into returns of returns.
-    input_kind=returns takes them as they are; a column in fraction units is
-    taken as returns by default."""
+    input_kind=returns takes them as they are; a column a returns result
+    computed (its source_model) is taken as returns by default, and one in
+    fraction units whose source is not recorded needs input_kind."""
     plain = query_returns(store, RETS)
     out = run(SPEC, ctx, result_id=plain, window="all", input_kind="returns", periods_per_year=252)
     (row,) = output_rows(out, VolatilityPoint)
@@ -478,10 +482,23 @@ def test_a_column_of_returns_is_used_as_it_is(store, ctx):
     assert any("input_kind=returns" in n and "taken as returns as they are" in n for n in out.notes)
     as_prices = run(SPEC, ctx, result_id=plain, window=2, periods_per_year=252, price_column="ret")
     assert any("<= 0" in n and "pass input_kind=returns" in n for n in as_prices.notes)
-    labelled = query_returns(store, RETS, units={"ret": "fraction"})
+    labelled = query_returns(store, RETS, units={"ret": "fraction"}, sources=FROM_RETURNS)
     out = run(SPEC, ctx, result_id=labelled, window="all", periods_per_year=252, price_column="ret")
     assert output_rows(out, VolatilityPoint)[0].volatility == pytest.approx(row.volatility, rel=1e-12)
-    assert any("ret is in fraction units" in n for n in out.notes)
+    assert any(
+        "ret was computed by a marketlens.ReturnPoint result" in n and "taken as returns" in n
+        for n in out.notes
+    )
+    unknown = query_returns(store, RETS, units={"ret": "fraction"})
+    with pytest.raises(ToolError) as e:
+        run(SPEC, ctx, result_id=unknown, window="all", periods_per_year=252, price_column="ret")
+    assert e.value.code == "not_prices"
+    assert (
+        "which result computed it is not recorded" in e.value.message
+        and "input_kind=returns" in e.value.message
+    )
+    out = run(SPEC, ctx, result_id=unknown, window="all", periods_per_year=252, input_kind="returns")
+    assert output_rows(out, VolatilityPoint)[0].volatility == pytest.approx(row.volatility, rel=1e-12)
 
 
 def test_a_volatility_column_is_not_a_price(store, ctx):
@@ -508,20 +525,22 @@ def test_a_drawdown_column_is_not_taken_as_returns(store, ctx):
         time_column="t",
         group_column="series",
         column_units={"drawdown": "fraction"},
+        column_sources={"drawdown": "marketlens.DrawdownPoint"},
         parents=[dd],
     ).result_id
     with pytest.raises(ToolError) as e:
         run(SPEC, ctx, result_id=kept, window=2, periods_per_year=252, price_column="drawdown")
-    assert e.value.code == "not_prices"
+    assert e.value.code == "not_prices" and "computed by a marketlens.DrawdownPoint result" in e.value.message
     out = run(SPEC, ctx, result_id=dd, window=2, periods_per_year=252, input_kind="returns")
     assert any("input_kind=returns" in n and "taken as returns" in n for n in out.notes)
 
 
 def test_a_drawdown_column_through_align_or_a_query_of_a_query_is_not_taken_as_returns(store, ctx):
     """A drawdown column keeps its fraction unit through analytics_align and
-    through a query of a query, and was read as returns there: a column is
-    followed back to the result that computed it (an aligned result's right
-    column without its suffix)."""
+    through a query of a query, and was read as returns there; then, followed
+    back to the result that computed it, again once that result was dropped
+    (or had expired). Each carried column records the model that computed it
+    (source_model) when its result is created, so it outlives that result."""
     aapl, spy = store.put_rows(bars("AAPL", CLOSES)), store.put_rows(bars("SPY", CLOSES[::-1]))
     dd, spy_dd = (
         store.keep(run(DRAWDOWN, ctx, result_id=p, mode="series"), "analytics_drawdown") for p in (aapl, spy)
@@ -533,6 +552,9 @@ def test_a_drawdown_column_through_align_or_a_query_of_a_query_is_not_taken_as_r
         ).stored
 
     def query(parent):
+        # As results_query keeps a column with its unit: with the model the parent recorded for it, or its own.
+        info = store.info(parent)
+        (col,) = (c for c in info.columns if c.name == "drawdown")
         return store.put(
             store.tables[dd].select(["t", "series", "drawdown"]),
             tool="results_query",
@@ -541,23 +563,35 @@ def test_a_drawdown_column_through_align_or_a_query_of_a_query_is_not_taken_as_r
             time_column="t",
             group_column="series",
             column_units={"drawdown": "fraction"},
+            column_sources={"drawdown": col.source_model or info.model},
             parents=[parent],
         ).result_id
 
-    for rid, col in (
+    middle = query(dd)
+    cases = (
         (aligned(spy, dd).result_id, "drawdown"),
         (aligned(dd, spy_dd).result_id, "drawdown_right"),
-        (query(query(dd)), "drawdown"),
-    ):
+        (query(middle), "drawdown"),
+    )
+    for rid in (dd, spy_dd, middle):
+        store.drop(rid)
+    for rid, col in cases:
+        assert {c.name: c.source_model for c in store.info(rid).columns}[col] == "marketlens.DrawdownPoint"
         with pytest.raises(ToolError) as e:
             run(SPEC, ctx, result_id=rid, window=2, periods_per_year=252, price_column=col)
         assert e.value.code == "not_prices" and "input_kind=returns" in e.value.message, col
-    # Returns stay returns: a right column renamed ret_right is its returns result's ret.
+        assert "computed by a marketlens.DrawdownPoint result" in e.value.message, col
+    # Returns stay returns: a right column renamed ret_right is its returns result's ret, gone or not.
     rets, spy_rets = (store.keep(run(RETURNS, ctx, result_id=p), "analytics_returns") for p in (aapl, spy))
     both = aligned(rets, spy_rets)
+    for rid in (rets, spy_rets):
+        store.drop(rid)
     assert {c.name: c.unit for c in both.columns}["ret_right"] == "fraction"
     out = run(SPEC, ctx, result_id=both.result_id, window=2, periods_per_year=252, price_column="ret_right")
-    assert any("ret_right is in fraction units" in n and "taken as returns" in n for n in out.notes)
+    assert any(
+        "ret_right was computed by a marketlens.ReturnPoint result" in n and "taken as returns" in n
+        for n in out.notes
+    )
 
 
 #: Weekdays of four weeks from Monday 2 March 2026, at the close.
@@ -607,6 +641,7 @@ def test_a_query_answer_takes_the_timeframe_it_was_computed_from(store, ctx):
         [0.01 * ((i * 7) % 5 - 2) for i in range(20)],
         times=WEEKDAYS[1:] + [WEEKDAYS[-1] + 3 * DAY],
         units={"ret": "fraction"},
+        sources=FROM_RETURNS,
         parents=[rets],
     )
     out = run(SPEC, ctx, result_id=port, window="all")
@@ -617,6 +652,10 @@ def test_a_query_answer_takes_the_timeframe_it_was_computed_from(store, ctx):
     crypto = store.put_rows(bars("BTC/USD", CLOSES, asset_class="crypto"))
     crets = store.keep(run(RETURNS, ctx, result_id=crypto), "analytics_returns")
     cport = query_returns(
-        store, [0.01, -0.02, 0.015, -0.005, 0.02], units={"ret": "fraction"}, parents=[crets]
+        store,
+        [0.01, -0.02, 0.015, -0.005, 0.02],
+        units={"ret": "fraction"},
+        sources=FROM_RETURNS,
+        parents=[crets],
     )
     assert ppy_of(run(SPEC, ctx, result_id=cport, window="all")) == {365.0}

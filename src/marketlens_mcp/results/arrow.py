@@ -251,12 +251,15 @@ def column_infos(model: type[CanonicalModel]) -> list[ColumnInfo]:
 
 
 def column_infos_for(
-    schema: pa.Schema, model: type[CanonicalModel] | None, units: Mapping[str, str] | None = None
+    schema: pa.Schema,
+    model: type[CanonicalModel] | None,
+    units: Mapping[str, str] | None = None,
+    sources: Mapping[str, str] | None = None,
 ) -> list[ColumnInfo]:
     """ColumnInfo for a table's actual columns: types from the table, units
     and descriptions from ``model`` where a column of the same name and type
     exists there (``units`` overrides)."""
-    infos = column_infos_from_schema(schema, units)
+    infos = column_infos_from_schema(schema, units, sources)
     if model is None:
         return infos
     known = {c.name: c for c in column_infos(model)}
@@ -271,25 +274,30 @@ def column_infos_for(
     return out
 
 
-def column_infos_from_schema(schema: pa.Schema, units: Mapping[str, str] | None = None) -> list[ColumnInfo]:
+def column_infos_from_schema(
+    schema: pa.Schema, units: Mapping[str, str] | None = None, sources: Mapping[str, str] | None = None
+) -> list[ColumnInfo]:
     """ColumnInfo for a dynamic result (types from the Arrow schema). A column's
     unit is ``units``' entry, else the one its Arrow field carries in metadata
     (``{b"unit": b"percent"}``): how a handler labels a dynamic table, which has
-    no model to state ``x-unit``."""
-    units = units or {}
+    no model to state ``x-unit``. Its source_model, likewise, is ``sources``'
+    entry, else its field's ``b"source_model"``: the model of the result a
+    carried column was computed by."""
+    units, sources = units or {}, sources or {}
     return [
         ColumnInfo(
             name=f.name,
             type=duckdb_type(f.type),
-            unit=units.get(f.name) or _field_unit(f),
+            unit=units.get(f.name) or _field_meta(f, b"unit"),
             nullable=f.nullable,
+            source_model=sources.get(f.name) or _field_meta(f, b"source_model"),
         )
         for f in schema
     ]
 
 
-def _field_unit(field: pa.Field) -> str | None:
-    raw = (field.metadata or {}).get(b"unit")
+def _field_meta(field: pa.Field, key: bytes) -> str | None:
+    raw = (field.metadata or {}).get(key)
     return raw.decode("utf-8") if raw else None
 
 

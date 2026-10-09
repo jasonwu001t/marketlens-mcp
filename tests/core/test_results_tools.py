@@ -170,6 +170,25 @@ def test_query_store_true_keeps_the_parents_time_series_columns_and_units(setup)
         assert all(c.unit is None for c in kept.columns), sql
 
 
+def test_a_stored_answer_records_the_model_its_columns_came_from(setup):
+    """A column a stored answer keeps with its unit records the model of the
+    result that computed it (source_model), through a query of a query, so it
+    is known after that result is gone (analytics_volatility tells a drawdown
+    from returns by it); other columns' JSON has no source_model."""
+    ctx, store, bars, *_ = setup
+    first = call(ctx, "results_query", sql=f"SELECT ticker, t, close FROM {bars.result_id}", store=True)
+    second = call(ctx, "results_query", sql=f"SELECT * FROM {first.result_id}", store=True)
+    store.drop(first.result_id)
+    third = call(ctx, "results_query", sql=f"SELECT * FROM {second.result_id}", store=True)
+    assert {c.name: c.source_model for c in store.info(third.result_id).columns} == {
+        "ticker": None,
+        "t": "marketlens.Bar",
+        "close": "marketlens.Bar",
+    }
+    shown = {c["name"]: c for c in third.model_dump(mode="json")["columns"]}
+    assert shown["close"]["source_model"] == "marketlens.Bar" and "source_model" not in shown["ticker"]
+
+
 def test_query_over_news_is_external_text(setup):
     ctx, _, _, _, news, _ = setup
     from marketlens_mcp import pipeline

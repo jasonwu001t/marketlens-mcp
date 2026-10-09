@@ -73,9 +73,11 @@ class QueryArgs(BaseModel):
 
 def _inherited(store: FileResultStore, out: QueryOutcome) -> dict:
     """What a stored answer over one parent keeps of it: the parent's time and
-    series columns and its column units, only for columns that are still there
-    with the same name and type, and only when the time column is one of them;
-    so the answer chains into analytics as the parent would."""
+    series columns and its column units, with the model each such column came
+    from (the parent's, or the one the parent recorded for it), only for
+    columns that are still there with the same name and type, and only when
+    the time column is one of them; so the answer chains into analytics as the
+    parent would, after the parent is gone too."""
     if len(out.result_ids) != 1:
         return {}
     parent = store.info(out.result_ids[0])
@@ -87,6 +89,7 @@ def _inherited(store: FileResultStore, out: QueryOutcome) -> dict:
         "time_column": parent.time_column,
         "group_column": parent.group_column if parent.group_column in same else None,
         "column_units": {n: c.unit for n, c in same.items() if c.unit},
+        "column_sources": {n: c.source_model or parent.model for n, c in same.items() if c.unit},
     }
 
 

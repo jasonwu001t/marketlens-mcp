@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import asyncio
+import datetime as dt
 
 import pyarrow as pa
 import pytest
@@ -23,8 +24,9 @@ from marketlens_mcp.analytics.tools.resample import SPEC as RESAMPLE  # noqa: E4
 from marketlens_mcp.analytics.tools.returns import SPEC as RETURNS  # noqa: E402
 from marketlens_mcp.analytics.tools.volatility import SPEC as VOLATILITY  # noqa: E402
 from marketlens_mcp.plugin_api import ToolError  # noqa: E402
+from marketlens_mcp.results.store import StoreLimits, StoreRoot  # noqa: E402
 from marketlens_mcp.results.tools import SPECS as RESULTS_SPECS  # noqa: E402
-from marketlens_mcp.results_api import InlineResult, ResultMarker  # noqa: E402
+from marketlens_mcp.results_api import InlineResult, ResultMarker, ResultNotFound  # noqa: E402
 from marketlens_schema import BUILTIN_MODELS  # noqa: E402
 from marketlens_schema.analytics import ANALYTICS_MODELS  # noqa: E402
 from marketlens_schema.base import Provenance  # noqa: E402
@@ -217,3 +219,47 @@ def test_store_true_keeps_a_small_output_of_every_analytics_tool(real):
         marker = call(spec, ctx, **arguments, store=True)
         assert isinstance(marker, ResultMarker), spec.name
         assert store.info(marker.result_id).parents[0] == both
+
+
+def test_a_carried_columns_source_outlives_the_result_that_computed_it(tmp_path):
+    """A drawdown column in an aligned result, or in a query of a query, was
+    read as returns again once the drawdown result had expired (each result's
+    24 hours run from its creation, so a parent goes first) or a result between
+    them was dropped: analytics_align and results_query record each carried
+    column's source_model when they create the result."""
+    now = [M0]
+    store = StoreRoot(tmp_path, StoreLimits(ttl_hours=24), clock=lambda: now[0]).session("test")
+    ctx = testing.make_context(store=store, capabilities=["analytics", "results"])
+    (query,) = [s for s in RESULTS_SPECS if s.name == "results_query"]
+    closes = [100.0, 102.0, 99.0, 103.0, 101.0, 104.0]
+    aapl, spy = put_bars(store, bars("AAPL", closes)), put_bars(store, bars("SPY", closes[::-1]))
+    dd = call(DRAWDOWN, ctx, result_id=aapl, mode="series", store=True).result_id
+    rets, spy_rets = (call(RETURNS, ctx, result_id=p, store=True).result_id for p in (aapl, spy))
+    now[0] += dt.timedelta(hours=12)
+    aligned = call(ALIGN, ctx, left_result_id=spy, right_result_id=dd, tolerance="PT0S", store=True)
+    middle = call(query, ctx, sql=f"SELECT t, series, drawdown FROM {dd}", store=True).result_id
+    nested = call(query, ctx, sql=f"SELECT * FROM {middle}", store=True).result_id
+    both = call(ALIGN, ctx, left_result_id=rets, right_result_id=spy_rets, tolerance="PT0S", store=True)
+    # Shown with the columns it was recorded for, and only those.
+    columns = {c["name"]: c for c in aligned.model_dump(mode="json")["columns"]}
+    assert columns["drawdown"]["source_model"] == "marketlens.DrawdownPoint"
+    assert "source_model" not in columns["ticker"] and "source_model" not in columns["matched_t"]
+    assert {c.name: c.source_model for c in store.info(nested).columns}[
+        "drawdown"
+    ] == "marketlens.DrawdownPoint"
+    store.drop(middle)
+    now[0] += dt.timedelta(hours=13)
+    with pytest.raises(ResultNotFound) as gone:
+        store.info(dd)
+    assert gone.value.reason == "expired"
+    for rid in (aligned.result_id, nested):
+        with pytest.raises(ToolError) as e:
+            call(VOLATILITY, ctx, result_id=rid, price_column="drawdown", window=2, periods_per_year=252)
+        assert (
+            e.value.code == "not_prices"
+            and "computed by a marketlens.DrawdownPoint result" in e.value.message
+        )
+    out = call(
+        VOLATILITY, ctx, result_id=both.result_id, price_column="ret_right", window=2, periods_per_year=252
+    )
+    assert any("ret_right was computed by a marketlens.ReturnPoint result" in n for n in out.notes)

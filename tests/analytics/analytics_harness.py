@@ -252,9 +252,9 @@ def _unit(model: type[CanonicalModel] | None, name: str) -> str | None:
     return extra.get("x-unit") if isinstance(extra, dict) else None
 
 
-def _field_unit(field: pa.Field) -> str | None:
-    """A dynamic table's column unit, from its Arrow field metadata (as the real store reads it)."""
-    raw = (field.metadata or {}).get(b"unit")
+def _field_meta(field: pa.Field, key: bytes) -> str | None:
+    """A dynamic table's column unit or source_model, from its Arrow field metadata (as the real store reads it)."""
+    raw = (field.metadata or {}).get(key)
     return raw.decode("utf-8") if raw else None
 
 
@@ -324,6 +324,7 @@ class FakeStore:
         time_column: str | None = None,
         group_column: str | None = None,
         column_units: dict[str, str] | None = None,
+        column_sources: dict[str, str] | None = None,
     ) -> ResultInfo:
         cls = BUILTIN_MODELS.get(model)
         if cls is not None:
@@ -347,11 +348,15 @@ class FakeStore:
                 ColumnInfo(
                     name=name,
                     type=typ,
-                    unit=(column_units or {}).get(name) or _field_unit(arrow_field) or _unit(cls, name),
+                    unit=(column_units or {}).get(name)
+                    or _field_meta(arrow_field, b"unit")
+                    or _unit(cls, name),
                     nullable=arrow_field.nullable,
                     nulls=col.null_count,
                     min=lo,
                     max=hi,
+                    source_model=(column_sources or {}).get(name)
+                    or _field_meta(arrow_field, b"source_model"),
                 )
             )
         self._n += 1
