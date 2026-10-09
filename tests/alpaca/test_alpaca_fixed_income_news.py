@@ -120,6 +120,55 @@ def test_news_names_a_share_class_no_article_is_tagged_with(specs, ctx, alpaca):
     ]
 
 
+def test_news_query_keeps_articles_with_every_word_in_headline_or_summary(specs, ctx, alpaca):
+    alpaca.add(
+        "/v1beta1/news",
+        {
+            "news": [
+                _article(1, ["SPY"], "Fed signals a rate cut in December"),
+                _article(2, ["SPY"], "Markets rally", "Traders price in another Rate Cut."),
+                _article(
+                    3, ["SPY"], "Corporate earnings beat", "Rates steady; no cut."
+                ),  # "rate" is not "Rates"
+                _article(4, ["SPY"], "Rate decision ahead"),  # no "cut"
+            ],
+            "next_page_token": None,
+        },
+    )
+    out = call(specs["news_search"], ctx, query="  rate   CUT ", lookback="P2D")
+    assert [r.news_id for r in out.rows] == ["1", "2"]
+    assert "query" not in alpaca.params()  # Alpaca has no text search: filtered here
+    assert out.provenance.request["query"] == "rate CUT"
+    assert out.notes == [
+        "query 'rate CUT': 2 of the 4 article(s) Alpaca returned had every word in their headline or summary "
+        "(filtered by this server; Alpaca has no text search)."
+    ]
+
+
+def test_news_query_pages_on_past_articles_it_filters_out(specs, ctx, alpaca):
+    alpaca.add(
+        "/v1beta1/news",
+        {"news": [_article(3, ["SPY"], "Other news")], "next_page_token": None},
+        match={"page_token": "P2"},
+    )
+    alpaca.add(
+        "/v1beta1/news",
+        {
+            "news": [_article(1, ["SPY"], "Tariff ruling"), _article(2, ["SPY"], "Other")],
+            "next_page_token": "P2",
+        },
+    )
+    out = call(specs["news_search"], ctx, query="tariff", lookback="P2D")
+    assert [r.news_id for r in out.rows] == ["1"] and len(alpaca.requests) == 2
+    assert out.notes[-1].startswith("query 'tariff': 1 of the 3 article(s)")
+
+
+@pytest.mark.parametrize("query", ["", "  ", "!!"])
+def test_news_query_needs_a_word(specs, ctx, query):
+    with pytest.raises(ValidationError):
+        call(specs["news_search"], ctx, query=query)
+
+
 def test_news_search_with_content(specs, ctx, alpaca):
     alpaca.fixture("/v1beta1/news", "News__page2")
     out = call(specs["news_search"], ctx, include_content=True, exclude_contentless=True, lookback="P2D")
