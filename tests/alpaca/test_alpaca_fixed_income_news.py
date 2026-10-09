@@ -21,6 +21,14 @@ def test_fixed_income_latest_quotes_golden(specs, ctx, alpaca):
         assert no_bid[f] is None and no_bid["absent"][f] == "no_data"
 
 
+def test_fixed_income_says_at_registration_which_plans_have_it(specs, alpaca):
+    # Registration does no I/O (FakePluginContext.env refuses), so the description carries the entitlement.
+    spec = specs["fixed_income_latest_quotes"]
+    assert "Needs an Alpaca market data plan that includes fixed income" in spec.description
+    assert "alpaca_not_entitled" in spec.description and "needs a plan with fixed income" in spec.readme
+    assert alpaca.requests == []
+
+
 def test_fixed_income_refuses_a_non_isin(specs, ctx):
     with pytest.raises(ValidationError, match="'912797SX6'"):
         call(specs["fixed_income_latest_quotes"], ctx, isins=["912797SX6"])

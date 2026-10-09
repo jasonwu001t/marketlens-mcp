@@ -11,6 +11,13 @@ from .common import Inputs, Isins, Skips, collect, latest_t, missing_note, outpu
 from .marketdata import fetch_once
 
 GOLDEN = "tests/alpaca/test_alpaca_fixed_income_news.py"
+#: The server does no I/O at registration (no probe of the plan), so the
+#: description says what the tool needs and what a plan without it answers.
+ENTITLEMENT = (
+    "Needs an Alpaca market data plan that includes fixed income, which most plans do not: without it every "
+    "call fails with alpaca_not_entitled (HTTP 403, Subscription does not permit querying fixed income) and no "
+    "marketlens setting changes that. ISINs are checked (shape and check digit) before Alpaca is asked."
+)
 
 
 class LatestIn(Inputs):
@@ -57,8 +64,8 @@ SPECS = (
         title="Latest bond quotes",
         description="The latest best bid and ask per bond by ISIN: prices in percent of par, sizes in USD face "
         "value, yield to maturity and yield to worst as fractions (0.0425 = 4.25 %). A side with no active "
-        "quote is null (no_data).",
-        readme="Latest bond quotes and yields",
+        "quote is null (no_data). " + ENTITLEMENT,
+        readme="Latest bond quotes and yields (needs a plan with fixed income)",
         input_model=LatestIn,
         output_model=FixedIncomeQuote,
         route="GET /v1beta1/fixed_income/latest/quotes (market data API)",
