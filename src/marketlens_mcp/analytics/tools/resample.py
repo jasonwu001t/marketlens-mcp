@@ -285,6 +285,7 @@ async def handler(ctx: ToolContext, args: ResampleArgs) -> ToolOutput:
         notes=notes,
         absent=absent,
         inputs=[inp.info],
+        units=inp.units(),
     )
 
 

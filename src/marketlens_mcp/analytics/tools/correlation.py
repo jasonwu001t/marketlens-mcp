@@ -15,6 +15,7 @@ from ..common import (
     CAPABILITY,
     PRICE_UNITS,
     PROVIDER,
+    RATIO_UNITS,
     adjustment_note,
     check_unique_times,
     model_output,
@@ -46,6 +47,12 @@ class CorrelationArgs(BaseModel):
         description="Numeric column to correlate. Default: the model's first value column (ret for returns, close "
         "for bars; ret for a query result that has one). A column in price units is turned into simple returns first.",
     )
+    transform: Literal["auto", "returns", "levels"] = Field(
+        "auto",
+        description="auto: a column in price units (price, USD, percent_of_par) is turned into simple returns per "
+        "pair, any other column (no unit, or a ratio) is correlated as it is (levels) and a note says so; returns or "
+        "levels to choose.",
+    )
     series_column: str | None = Field(
         None, description="Column naming each series. Default: the result's group column."
     )
@@ -67,7 +74,7 @@ async def handler(ctx: ToolContext, args: CorrelationArgs) -> ToolOutput:
         given = "ret"
     col = value_column(TOOL, inp, given, param="value_column")
     unit = inp.column(col).unit
-    as_returns = unit in PRICE_UNITS
+    as_returns = unit in PRICE_UNITS if args.transform == "auto" else args.transform == "returns"
     notes = list(inp.notes)
     m = args.min_overlap
     with ctx.results.open([inp.rid]) as session:
@@ -135,13 +142,29 @@ async def handler(ctx: ToolContext, args: CorrelationArgs) -> ToolOutput:
             "undefined there (None, not_applicable)."
         )
     if as_returns:
+        why = f"{col} is in {unit} units" if args.transform == "auto" else "transform=returns"
         notes.append(
-            f"{col} is in {unit} units, so each pair was turned into simple returns over the timestamps both series "
-            "share (both returns of a pair cover the same interval) before correlating."
+            f"{why}, so each pair was turned into simple returns over the timestamps both series share (both returns "
+            "of a pair cover the same interval) before correlating."
         )
         note = adjustment_note(inp)
         if note:
             notes.append(note)
+    elif args.transform == "levels":
+        notes.append(
+            f"transform=levels: the values of {col} were correlated as they are, not turned into returns."
+        )
+    elif unit in RATIO_UNITS:
+        notes.append(
+            f"{col} is in {unit} units (a return or a ratio), so its values were correlated as they are."
+        )
+    else:
+        notes.append(
+            f"The values of {col} were correlated as they are (levels), not turned into returns: "
+            + ("it has no unit" if unit is None else f"its unit {unit} is not a price")
+            + ", and only a column in price units (price, USD, percent_of_par) becomes returns. If it holds prices, "
+            "pass transform=returns: price levels trend, and their correlation overstates how they move together."
+        )
     notes.append(
         f"Pearson correlation of each pair over the timestamps where both series have a value (inner join on "
         f"time); None with insufficient_data when fewer than {m} shared observations. Both orders and the "
@@ -160,7 +183,8 @@ SPEC = ToolSpec(
         "returns), computed locally in DuckDB, in long form: one row per pair (a, b), both orders and the "
         "diagonal included. Each pair uses the timestamps where both series have a value. value_column "
         "defaults to the model's first value column; a column in price units (close) is turned into simple "
-        "returns per pair first. A pair with fewer than min_overlap (20) shared observations gets None "
+        "returns per pair first, any other is correlated as it is (transform chooses; the notes say which). "
+        "A pair with fewer than min_overlap (20) shared observations gets None "
         "(insufficient_data). At most 50 series. Large outputs are stored and you get a result_id."
     ),
     readme="Pairwise Pearson correlation (long form) over shared timestamps; prices become returns first.",

@@ -11,6 +11,7 @@ import pytest
 from analytics_harness import MINUTE, bars, run, unexplained_dynamic, utc
 
 from marketlens_mcp.analytics.tools.align import SPEC
+from marketlens_mcp.analytics.tools.correlation import SPEC as CORRELATION
 from marketlens_mcp.analytics.tools.returns import SPEC as RETURNS
 from marketlens_mcp.plugin_api import ToolError
 from marketlens_schema.market import Quote
@@ -286,3 +287,53 @@ def test_a_tolerance_too_large_for_a_duration_is_refused_readably(store, ctx, hu
     with pytest.raises(ToolError) as e:
         run(SPEC, ctx, left_result_id=left, right_result_id=right, tolerance=huge)
     assert e.value.code == "invalid_tolerance"
+
+
+def _units(table: pa.Table) -> dict[str, str | None]:
+    return {f.name: ((f.metadata or {}).get(b"unit") or b"").decode() or None for f in table.schema}
+
+
+def test_columns_keep_their_units_so_correlation_reads_prices_as_prices(store, ctx):
+    """Every aligned column had no unit, so analytics_correlation on the aligned
+    closes correlated price levels (AAPL-TLT -0.77 on returns of 0.11) with no
+    word: each column keeps its source's unit, a renamed right column too."""
+    t0 = utc(2026, 1, 5, 21)
+    aapl = [100, 102, 101, 105, 104, 108, 107, 111]
+    tlt = [90, 89, 90.5, 89.2, 90.1, 88.7, 89.9, 88.1]
+    left = store.put_rows(bars("AAPL", aapl, start=t0) + bars("TLT", tlt, start=t0))
+    right = store.put_rows(bars("SPY", [600 + i for i in range(8)], start=t0))
+    out = run(SPEC, ctx, left_result_id=left, right_result_id=right, right_columns=["close"], suffix="_spy")
+    units = _units(out.table)
+    assert (units["close"], units["close_spy"], units["t"], units["matched_t"]) == (
+        "price",
+        "price",
+        "UTC",
+        "UTC",
+    )
+    assert units["ticker"] is None and units["volume"] == "by_asset_class"
+    aligned = store.keep(out, "analytics_align")
+    assert {c.name: c.unit for c in store.info(aligned).columns}["close_spy"] == "price"
+    on_aligned = run(
+        CORRELATION, ctx, result_id=aligned, value_column="close", series_column="ticker", min_overlap=2
+    )
+    on_bars = run(CORRELATION, ctx, result_id=left, min_overlap=2)
+    assert any("simple returns" in n for n in on_aligned.notes)
+    assert on_aligned.table.column("correlation").to_pylist() == pytest.approx(
+        on_bars.table.column("correlation").to_pylist(), rel=1e-12
+    )
+
+
+def test_a_stored_aligned_result_keeps_the_units(store, ctx):
+    left = store.put_rows(
+        bars("AAPL", [float(i + 1) for i in range(300)], start=M0, step=MINUTE, timeframe="1min")
+    )
+    right = store.put_rows(bars("SPY", [1.0, 2.0], start=M0, step=60 * MINUTE, timeframe="1h"))
+    out = run(SPEC, ctx, left_result_id=left, right_result_id=right, right_columns=["close", "vwap"])
+    assert out.stored is not None
+    units = {c.name: c.unit for c in out.stored.columns}
+    assert (units["close"], units["close_right"], units["vwap_right"], units["matched_t"]) == (
+        "price",
+        "price",
+        "price",
+        "UTC",
+    )

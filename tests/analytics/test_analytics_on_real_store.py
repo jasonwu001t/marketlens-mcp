@@ -170,3 +170,26 @@ def test_the_analytics_act_on_the_units_a_dynamic_tables_fields_name(real):
         call(RETURNS, ctx, result_id=labelled, price_column="implied_vol")
     assert e.value.code == "not_prices" and "fraction" in e.value.message
     assert isinstance(call(RETURNS, ctx, result_id=plain, price_column="implied_vol"), InlineResult)
+
+
+def test_aligned_and_resampled_columns_keep_their_units(real):
+    """The aligned answer (inline or stored) and a resampled query answer keep
+    each column's unit, so the next tool still knows a price is a price."""
+    store, ctx = real
+    (query,) = [s for s in RESULTS_SPECS if s.name == "results_query"]
+    left = put_bars(store, bars("AAPL", [1.0, 2.0, 3.0], start=M0, step=MINUTE, timeframe="1min"))
+    right = put_bars(store, bars("SPY", [5.0, 6.0], start=M0, step=MINUTE, timeframe="1min"))
+    inline = call(ALIGN, ctx, left_result_id=left, right_result_id=right, right_columns=["close"])
+    assert isinstance(inline, InlineResult)
+    units = {c.name: c.unit for c in inline.columns}
+    assert (units["close"], units["close_right"], units["matched_t"]) == ("price", "price", "UTC")
+    big = put_bars(
+        store, bars("AAPL", [float(i + 1) for i in range(300)], start=M0, step=MINUTE, timeframe="1min")
+    )
+    stored = call(ALIGN, ctx, left_result_id=big, right_result_id=right, right_columns=["close"])
+    assert isinstance(stored, ResultMarker)
+    assert {c.name: c.unit for c in store.info(stored.result_id).columns}["close_right"] == "price"
+    kept = call(query, ctx, sql=f"SELECT t, ticker, close FROM {big}", store=True)
+    resampled = call(RESAMPLE, ctx, result_id=kept.result_id, timeframe="5min")
+    assert isinstance(resampled, InlineResult)
+    assert {c.name: c.unit for c in resampled.columns}["close"] == "price"

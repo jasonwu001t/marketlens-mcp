@@ -252,6 +252,12 @@ def _unit(model: type[CanonicalModel] | None, name: str) -> str | None:
     return extra.get("x-unit") if isinstance(extra, dict) else None
 
 
+def _field_unit(field: pa.Field) -> str | None:
+    """A dynamic table's column unit, from its Arrow field metadata (as the real store reads it)."""
+    raw = (field.metadata or {}).get(b"unit")
+    return raw.decode("utf-8") if raw else None
+
+
 class FakeSession:
     """ResultSession over some of the fake store's tables."""
 
@@ -341,7 +347,7 @@ class FakeStore:
                 ColumnInfo(
                     name=name,
                     type=typ,
-                    unit=(column_units or {}).get(name) or _unit(cls, name),
+                    unit=(column_units or {}).get(name) or _field_unit(arrow_field) or _unit(cls, name),
                     nullable=arrow_field.nullable,
                     nulls=col.null_count,
                     min=lo,

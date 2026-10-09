@@ -12,6 +12,7 @@ import pytest
 from analytics_harness import DAY, bars, output_rows, run, source_provenance, utc
 
 from marketlens_mcp.analytics.tools.correlation import SPEC
+from marketlens_mcp.analytics.tools.returns import SPEC as RETURNS
 from marketlens_mcp.plugin_api import ToolError
 from marketlens_schema.analytics import CorrelationCell
 
@@ -161,3 +162,42 @@ def test_raw_bars_carry_the_split_note(store, ctx):
     rid = store.put_rows(bars("A", [100, 102, 51, 52]) + bars("B", [10, 10.2, 10.3, 10.4]), provenance=prov)
     out = run(SPEC, ctx, result_id=rid, min_overlap=2)
     assert any("not split-adjusted" in n for n in out.notes)
+
+
+def test_levels_are_named_and_transform_chooses(store, ctx):
+    """A column with no unit is correlated as it is, and the notes now say so
+    (it was silent); transform=returns turns it into returns as a price
+    column would be, transform=levels keeps a price column's levels."""
+    pa_ = [100, 102, 101, 105, 104, 108]
+    pb = [50, 50.5, 50.2, 51.5, 51.0, 52.6]
+    rid = store.put_dynamic(long_table({"A": pa_, "B": pb}), group_column="s")
+    levels = run(SPEC, ctx, result_id=rid, value_column="x", min_overlap=2)
+    assert cell(output_rows(levels, CorrelationCell), "A", "B").correlation == pytest.approx(
+        statistics.correlation(pa_, pb), rel=1e-12
+    )
+    assert any(
+        "correlated as they are (levels)" in n and "no unit" in n and "transform=returns" in n
+        for n in levels.notes
+    )
+    returns = run(SPEC, ctx, result_id=rid, value_column="x", min_overlap=2, transform="returns")
+    assert cell(output_rows(returns, CorrelationCell), "A", "B").correlation == pytest.approx(
+        statistics.correlation(simple(pa_), simple(pb)), rel=1e-12
+    )
+    assert any(
+        n.startswith("transform=returns, so each pair was turned into simple returns") for n in returns.notes
+    )
+    bars_id = store.put_rows(bars("A", pa_) + bars("B", pb))
+    kept = run(SPEC, ctx, result_id=bars_id, min_overlap=2, transform="levels")
+    assert cell(output_rows(kept, CorrelationCell), "A", "B").correlation == pytest.approx(
+        statistics.correlation(pa_, pb), rel=1e-12
+    )
+    assert any(n.startswith("transform=levels") for n in kept.notes)
+    assert not any("simple returns" in n for n in kept.notes)
+
+
+def test_a_ratio_column_is_correlated_as_it_is_with_a_note(store, ctx):
+    prices = store.put_rows(bars("A", [100, 101, 103, 102, 104]) + bars("B", [10, 10.2, 10.5, 10.3, 10.4]))
+    rets = store.keep(run(RETURNS, ctx, result_id=prices), "analytics_returns")
+    out = run(SPEC, ctx, result_id=rets, min_overlap=2)
+    assert any("ret is in fraction units (a return or a ratio)" in n for n in out.notes)
+    assert not any("simple returns" in n for n in out.notes)

@@ -24,7 +24,7 @@ import math
 import re
 import types
 import typing
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from decimal import Decimal
 from typing import Any
@@ -311,6 +311,10 @@ class Input:
 
     def numeric_columns(self) -> list[str]:
         return [c.name for c in self.info.columns if is_numeric(c)]
+
+    def units(self) -> dict[str, str]:
+        """The unit of each column that has one."""
+        return {c.name: c.unit for c in self.info.columns if c.unit}
 
 
 def _parent_value(ctx: ToolContext, info: ResultInfo) -> str | None:
@@ -635,10 +639,24 @@ def model_output(
 
 def utc_times(table: pa.Table) -> pa.Table:
     """Every zoned timestamp column labelled UTC (DuckDB labels them with the
-    connection's zone; the instants are unchanged)."""
+    connection's zone; the instants are unchanged). Field metadata (a
+    column's unit) is kept."""
     fields = [
-        pa.field(f.name, pa.timestamp(f.type.unit, tz="UTC"), f.nullable)
+        f.with_type(pa.timestamp(f.type.unit, tz="UTC"))
         if pa.types.is_timestamp(f.type) and f.type.tz is not None
+        else f
+        for f in table.schema
+    ]
+    return table.cast(pa.schema(fields))
+
+
+def with_units(table: pa.Table, units: Mapping[str, str]) -> pa.Table:
+    """``table`` with each named column's unit in its Arrow field metadata
+    (``{b"unit": ...}``): how a dynamic table labels its columns' units, which
+    the inline answer and the store both read."""
+    fields = [
+        f.with_metadata({**(f.metadata or {}), b"unit": units[f.name].encode("utf-8")})
+        if units.get(f.name)
         else f
         for f in table.schema
     ]
@@ -664,12 +682,15 @@ def dynamic_output(
     notes: Sequence[str] = (),
     absent: dict[str, AbsenceReason] | None = None,
     inputs: Sequence[ResultInfo] = (),
+    units: Mapping[str, str] | None = None,
 ) -> ToolOutput:
     """A dynamic-schema output. Small: the table (inline). Large: stored here
     with its time and series columns, which the offload cannot know for a
-    dynamic schema, so the stored result chains into other analytics tools."""
+    dynamic schema, so the stored result chains into other analytics tools.
+    ``units`` labels columns (a price stays a price for the next tool)."""
     out_risk = risk(inputs)
-    table = utc_times(table)
+    units = {k: v for k, v in (units or {}).items() if v}
+    table = with_units(utc_times(table), units)
     if _small(table):
         return ToolOutput(
             model=model,
@@ -689,6 +710,7 @@ def dynamic_output(
         parents=list(prov.derived_from),
         time_column=time_column,
         group_column=group_column,
+        column_units=units or None,
     )
     return ToolOutput(
         model=model, provenance=prov, stored=info, notes=list(notes), absent=dict(absent or {}), risk=out_risk
