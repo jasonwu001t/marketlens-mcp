@@ -59,6 +59,11 @@ OI_LAG = (
 #: Interface Specification 6.4b (2026-08-25), section 4.01.1 Participant ID; OPRA
 #: added both in 6.3a (2026-02-20).
 OPRA_PARTICIPANTS = {"G": "MX2 - MX2 Options", "V": "IEX - IEX Options LLC"}
+DECLARATION_NOTE = (
+    "Alpaca applied the window to a declaration date it returns for dividends only: split, merger and spin-off "
+    "rows carry no declaration_date (null), so their place in the window cannot be checked here. Filter them by "
+    "ex_date, record_date or payable_date to check."
+)
 ActionType = Literal[
     "cash_dividend", "stock_dividend", "forward_split", "reverse_split", "unit_split", "spin_off", "cash_merger",
     "stock_merger", "stock_and_cash_merger", "redemption", "name_change", "worthless_removal",
@@ -129,7 +134,9 @@ class AnnouncementsIn(Inputs):
     ticker: EquityTicker | None = Field(None, description="Only announcements initiated by this ticker.")
     cusip: str | None = Field(None, max_length=12, description="Only announcements initiated by this CUSIP.")
     date_type: Literal["declaration_date", "ex_date", "record_date", "payable_date"] | None = Field(
-        None, description="Which date since/until filter on."
+        None,
+        description="Which date since/until filter on. Alpaca returns declaration_date for dividends only, so a "
+        "declaration_date window over splits, mergers or spin-offs cannot be checked against the rows.",
     )
 
     @model_validator(mode="after")
@@ -406,6 +413,9 @@ async def reference_corporate_action_announcements(ctx: ToolContext, args: Annou
         operation="get-v2-corporate_actions-announcements",
         request=request_of(args),
         page=page,
+        notes=[DECLARATION_NOTE]
+        if args.date_type == "declaration_date" and set(args.ca_types) - {"dividend"}
+        else [],
         skips=skips,
     )
 
@@ -697,7 +707,7 @@ SPECS = (
         title="Corporate action announcements",
         description="Announced corporate actions (dividends, mergers, spin-offs, splits) in a window of at most "
         "90 days by declaration, ex, record or payable date, optionally for one ticker or CUSIP: dates, cash per "
-        "share (USD) and old/new rates.",
+        "share (USD) and old/new ratio legs (shares). Alpaca returns a declaration date for dividends only.",
         readme="Announced dividends, splits, mergers",
         input_model=AnnouncementsIn,
         output_model=CorporateActionAnnouncement,

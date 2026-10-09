@@ -211,8 +211,18 @@ class CorporateAction(CanonicalModel):
         "distributions, redemptions, partial calls, cash mergers, and the cash leg of stock-and-cash mergers "
         "and reorganizations",
     )
-    old_rate: float | None = unit("fraction", default=None, description="Split/merger ratio leg (old)")
-    new_rate: float | None = unit("fraction", default=None, description="Split/merger ratio leg (new)")
+    old_rate: float | None = unit(
+        "shares",
+        default=None,
+        description="Ratio leg: shares of the old, acquiree or source security; new_rate new shares are "
+        "delivered for every old_rate old shares (a 1-for-10 reverse split: old_rate 10, new_rate 1)",
+    )
+    new_rate: float | None = unit(
+        "shares",
+        default=None,
+        description="Ratio leg: shares of the new, acquirer or spun-off security for every old_rate old shares; "
+        "for a stock dividend or a rights distribution, new shares or rights per share held",
+    )
     new_ticker: Ticker | None = None
     old_ticker: Ticker | None = None
     acquirer_ticker: Ticker | None = None
@@ -244,8 +254,17 @@ class CorporateActionAnnouncement(CanonicalModel):
     payable_date: Date | None = None
     effective_date: Date | None = None
     cash: DecimalStr | None = unit("USD", default=None, description="Cash per share")
-    old_rate: DecimalStr | None = unit("fraction", default=None)
-    new_rate: DecimalStr | None = unit("fraction", default=None)
+    old_rate: DecimalStr | None = unit(
+        "shares",
+        default=None,
+        description="Ratio leg: shares of the old or target security; old_rate old shares become new_rate new "
+        "shares (a 1-for-10 reverse split: old_rate 10, new_rate 1; 1 and 1 for a cash dividend)",
+    )
+    new_rate: DecimalStr | None = unit(
+        "shares",
+        default=None,
+        description="Ratio leg: shares of the new or initiating security for every old_rate old shares",
+    )
 
 
 # --- stocks and crypto ------------------------------------------------------------------------

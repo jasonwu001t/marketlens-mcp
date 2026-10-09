@@ -416,3 +416,33 @@ def test_corporate_actions_name_every_skipped_record_with_its_type_and_reason(sp
     assert all(f"cash_dividends:bad-{i}" in note for i in range(6))
     assert "future_actions:new-1 (an action type this tool does not map)" in note
     assert "cash_dividends:bad-5 (ValueError: could not convert string to float: 'n/a')" in note
+
+
+def test_a_declaration_date_window_over_splits_says_alpaca_returns_no_such_date(specs, ctx, alpaca):
+    alpaca.fixture("/v2/corporate_actions/announcements", "Announcements")
+    args = {"since": "2026-08-10", "until": "2026-10-08", "date_type": "declaration_date"}
+    out = call(specs["reference_corporate_action_announcements"], ctx, ca_types=["split", "merger"], **args)
+    assert alpaca.params()["date_type"] == "declaration_date"
+    assert any(
+        n.startswith("Alpaca applied the window to a declaration date it returns for dividends")
+        for n in out.notes
+    )
+    dividends = call(specs["reference_corporate_action_announcements"], ctx, ca_types=["dividend"], **args)
+    assert dividends.notes == []
+    by_ex = call(
+        specs["reference_corporate_action_announcements"],
+        ctx,
+        ca_types=["split"],
+        **{**args, "date_type": "ex_date"},
+    )
+    assert by_ex.notes == []
+
+
+def test_ratio_legs_are_shares_not_fractions():
+    from marketlens_schema.market import CorporateAction, CorporateActionAnnouncement
+
+    for model in (CorporateAction, CorporateActionAnnouncement):
+        props = model.model_json_schema()["properties"]
+        for leg in ("old_rate", "new_rate"):
+            assert props[leg]["x-unit"] == "shares", (model.__name__, leg)
+            assert props[leg]["description"].startswith("Ratio leg: shares of the")

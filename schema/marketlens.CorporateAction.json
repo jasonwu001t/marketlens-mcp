@@ -215,9 +215,9 @@
         }
       ],
       "default": null,
-      "description": "Split/merger ratio leg (new)",
+      "description": "Ratio leg: shares of the new, acquirer or spun-off security for every old_rate old shares; for a stock dividend or a rights distribution, new shares or rights per share held",
       "title": "New Rate",
-      "x-unit": "fraction"
+      "x-unit": "shares"
     },
     "new_ticker": {
       "anyOf": [
@@ -242,9 +242,9 @@
         }
       ],
       "default": null,
-      "description": "Split/merger ratio leg (old)",
+      "description": "Ratio leg: shares of the old, acquiree or source security; new_rate new shares are delivered for every old_rate old shares (a 1-for-10 reverse split: old_rate 10, new_rate 1)",
       "title": "Old Rate",
-      "x-unit": "fraction"
+      "x-unit": "shares"
     },
     "old_ticker": {
       "anyOf": [
