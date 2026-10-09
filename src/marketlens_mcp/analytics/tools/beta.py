@@ -154,7 +154,7 @@ def _inputs(ctx: ToolContext, args: BetaArgs) -> tuple[Input, Input]:
     return a, b
 
 
-def _benchmark_points(session: ResultSession, a: Input, b: Input, pb: str, name: str | None) -> str:
+def _benchmark_points(session: ResultSession, b: Input, pb: str, name: str | None) -> str:
     """The benchmark's points: the one series named ``name`` when given (refused when absent)."""
     if name is None:
         return pb
@@ -216,7 +216,7 @@ async def handler(ctx: ToolContext, args: BetaArgs) -> ToolOutput:
         pb = points_sql(b, cb, positive=True)
         check_unique_times(session, TOOL, a, pa_)
         check_unique_times(session, TOOL, b, pb)
-        pb = _benchmark_points(session, a, b, pb, args.benchmark_series)
+        pb = _benchmark_points(session, b, pb, args.benchmark_series)
         if args.benchmark_series is not None and b.rid == a.rid:
             pa_ = f"SELECT * FROM ({pa_}) WHERE s <> {ql(args.benchmark_series)}"
         bench_series = series_counts(session, pb)
