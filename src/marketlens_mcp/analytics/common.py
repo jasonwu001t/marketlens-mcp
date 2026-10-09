@@ -167,13 +167,25 @@ def tf_nests(source: str, target: str) -> bool:
     return False
 
 
-def default_periods_per_year(tf: str) -> float | None:
-    """Contract 6.2: 1d 252, 1w 52, 1mo 12, 1h 1638 (252 x 6.5), Nmin 98280 / N
-    (252 x 390 / N); other timeframes have no default."""
+def default_periods_per_year(tf: str, *, crypto: bool = False, extended: bool = False) -> float | None:
+    """Contract 6.2, by market. US equity sessions: 1d 252, 1w 52, 1mo 12,
+    1h 1638 (252 x 6.5), Nmin 98280 / N (252 x 390 / N); with extended hours
+    (04:00-20:00 New York, 16 hours) 1h 4032 and Nmin 241920 / N. Crypto,
+    every day around the clock: 1d 365, 1w 52, 1mo 12, Nh 8760 / N, Nmin
+    525600 / N. Other timeframes have no default."""
     n, u = tf_parts(tf)
+    if crypto:
+        if u == "min":
+            return 525600 / n
+        if u == "h":
+            return 8760 / n
+        return {"1d": 365.0, "1w": 52.0, "1mo": 12.0}.get(tf)
+    minutes = 960 if extended else 390
     if u == "min":
-        return 98280 / n
-    return {"1d": 252.0, "1w": 52.0, "1mo": 12.0, "1h": 1638.0}.get(tf)
+        return 252 * minutes / n
+    if tf == "1h":
+        return 252 * minutes / 60
+    return {"1d": 252.0, "1w": 52.0, "1mo": 12.0}.get(tf)
 
 
 _DURATION = re.compile(r"^P(?:(\d+)W)?(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+(?:\.\d+)?)S)?)?$")

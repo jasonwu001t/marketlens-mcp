@@ -59,8 +59,12 @@ def test_default_is_log_returns_and_window_21(store, ctx):
     assert {r.return_kind for r in rows} == {"log"}
 
 
+#: 09:30 New York (EST) on a Monday: intraday fixtures inside the regular session.
+OPEN_BELL = utc(2026, 1, 5, 14, 30)
+
+
 def test_on_a_returns_result_uses_its_kind_and_the_parent_timeframe(store, ctx):
-    prices = store.put_rows(bars("AAPL", CLOSES, timeframe="1h", step=60 * MINUTE))
+    prices = store.put_rows(bars("AAPL", CLOSES, timeframe="1h", start=OPEN_BELL, step=60 * MINUTE))
     rets = store.keep(run(RETURNS, ctx, result_id=prices, kind="log"), "analytics_returns")
     rows = output_rows(run(SPEC, ctx, result_id=rets, window=3), VolatilityPoint)
     assert [r.volatility for r in rows] == pytest.approx(rolling(logr(CLOSES), 3, 1638), rel=1e-12)
@@ -86,7 +90,7 @@ def test_return_kind_of_a_returns_result_cannot_be_overridden(store, ctx):
     ],
 )
 def test_periods_per_year_defaults_from_the_bar_timeframe(store, ctx, timeframe, step, ppy):
-    rid = store.put_rows(bars("AAPL", CLOSES, timeframe=timeframe, step=step))
+    rid = store.put_rows(bars("AAPL", CLOSES, timeframe=timeframe, start=OPEN_BELL, step=step))
     rows = output_rows(run(SPEC, ctx, result_id=rid, window=2), VolatilityPoint)
     assert {r.periods_per_year for r in rows} == {float(ppy)}
 
@@ -183,3 +187,112 @@ def test_periods_per_year_must_be_finite(ppy):
     the input model refuses it before the tool runs."""
     with pytest.raises(pydantic.ValidationError):
         SPEC.input_model.model_validate({"result_id": "r_0123456789", "window": 2, "periods_per_year": ppy})
+
+
+def ppy_of(out):
+    return {r.periods_per_year for r in output_rows(out, VolatilityPoint)}
+
+
+@pytest.mark.parametrize(
+    ("timeframe", "step", "ppy"),
+    [("1d", DAY, 365), ("1h", 60 * MINUTE, 8760), ("15min", 15 * MINUTE, 35040), ("1w", 7 * DAY, 52)],
+)
+def test_crypto_trades_every_day(store, ctx, timeframe, step, ppy):
+    """Daily crypto bars were annualised with 252 (ETH/USD 0.376 where 365 gives
+    0.453) and only a note said so: a crypto result defaults to 365 days, 24 hours each."""
+    rid = store.put_rows(bars("ETH/USD", CLOSES, timeframe=timeframe, step=step, asset_class="crypto"))
+    out = run(SPEC, ctx, result_id=rid, window=2)
+    assert ppy_of(out) == {float(ppy)}
+    if timeframe != "1w":
+        assert any(f"periods_per_year = {ppy}" in n and "crypto trades every day" in n for n in out.notes)
+
+
+def test_crypto_returns_and_query_answers_are_crypto_too(store, ctx):
+    prices = store.put_rows(bars("BTC/USD", CLOSES, asset_class="crypto"))
+    rets = store.keep(run(RETURNS, ctx, result_id=prices), "analytics_returns")
+    assert ppy_of(run(SPEC, ctx, result_id=rets, window=2)) == {365.0}
+    # A query answer with no asset_class column: series named BASE/QUOTE are pairs.
+    t0 = utc(2026, 3, 2)
+    table = pa.table(
+        {
+            "t": pa.array([t0 + i * DAY for i in range(6)], pa.timestamp("us", tz="UTC")),
+            "ticker": ["SOL/USD"] * 6,
+            "timeframe": ["1d"] * 6,
+            "close": [float(c) for c in CLOSES],
+        }
+    )
+    rid = store.put_dynamic(table, time_column="t", group_column="ticker")
+    assert ppy_of(run(SPEC, ctx, result_id=rid, window=2, price_column="close")) == {365.0}
+
+
+def test_crypto_mixed_with_stocks_needs_periods_per_year(store, ctx):
+    rid = store.put_rows(bars("AAPL", CLOSES) + bars("ETH/USD", CLOSES, asset_class="crypto"))
+    with pytest.raises(ToolError) as e:
+        run(SPEC, ctx, result_id=rid, window=2)
+    assert e.value.code == "periods_per_year_required" and "mixes crypto" in e.value.message
+    assert ppy_of(run(SPEC, ctx, result_id=rid, window=2, periods_per_year=300)) == {300.0}
+
+
+def test_extended_hours_bars_count_sixteen_hours_a_session(store, ctx):
+    """SPY 15min bars from 04:00 to 20:00 New York were annualised as 26 bars a
+    session (98280/15), understating the volatility about 1.56 times: bars that
+    include extended hours count 64 a session."""
+    pre_market = utc(2026, 1, 5, 9)  # 04:00 New York (EST)
+    rid = store.put_rows(bars("SPY", CLOSES, timeframe="15min", start=pre_market, step=15 * MINUTE))
+    out = run(SPEC, ctx, result_id=rid, window=2)
+    assert ppy_of(out) == {252 * 64.0}
+    assert any("periods_per_year = 16128" in n and "extended hours" in n for n in out.notes)
+    regular = store.put_rows(bars("SPY", CLOSES, timeframe="15min", start=OPEN_BELL, step=15 * MINUTE))
+    out = run(SPEC, ctx, result_id=regular, window=2)
+    assert ppy_of(out) == {252 * 26.0}
+    assert any("6.5 hours, 09:30-16:00 New York" in n for n in out.notes)
+    # An hourly bar that starts at 09:00 overlaps the session: not extended.
+    nine = store.put_rows(
+        bars("SPY", CLOSES, timeframe="1h", start=OPEN_BELL - 30 * MINUTE, step=60 * MINUTE)
+    )
+    assert ppy_of(run(SPEC, ctx, result_id=nine, window=2)) == {1638.0}
+
+
+def test_a_weekly_sample_of_daily_bars_is_annualised_weekly(store, ctx):
+    """A results_query of Fridays from daily bars keeps timeframe 1d, so
+    periods_per_year was 252 for weekly returns: observations much further
+    apart than the timeframe are counted per year instead, with a note."""
+    friday = utc(2026, 1, 9, 21)
+    closes = [100 * (1 + 0.01 * ((i * 7) % 5 - 2)) ** i for i in range(30)]
+    rid = store.put_rows(bars("AAPL", closes, start=friday, step=7 * DAY))
+    out = run(SPEC, ctx, result_id=rid, window=4)
+    assert ppy_of(out) == {52.0}
+    assert [r.volatility for r in output_rows(out, VolatilityPoint)] == pytest.approx(
+        rolling(logr(closes), 4, 52), rel=1e-12
+    )
+    assert any("labelled 1d" in n and "a median 7 days apart" in n and "52" in n for n in out.notes)
+
+
+def test_sparse_intraday_bars_count_their_observations_a_day(store, ctx):
+    times = [OPEN_BELL + d * DAY + i * 5 * MINUTE for d in range(3) for i in range(10)]
+    closes = [100 + (i % 4) for i in range(30)]
+    rid = store.put_rows(bars("AAPL", closes, times=times, timeframe="1min"))
+    out = run(SPEC, ctx, result_id=rid, window=5)
+    # 30 bars, 10 a day: 29 returns, 10 on the median New York day (9 on the first).
+    assert ppy_of(out) == {2520.0}
+    assert any("labelled 1min" in n and "5 minutes apart" in n and "252 sessions" in n for n in out.notes)
+
+
+def test_a_short_daily_sample_over_a_weekend_stays_daily(store, ctx):
+    times = [utc(2026, 1, 8, 21), utc(2026, 1, 9, 21), utc(2026, 1, 12, 21)]
+    rid = store.put_rows(bars("AAPL", [100, 101, 99], times=times))
+    assert ppy_of(run(SPEC, ctx, result_id=rid, window=2)) == {252.0}
+
+
+def test_without_a_timeframe_the_refusal_says_how_far_apart_the_observations_are(store, ctx):
+    t0 = utc(2026, 3, 2)
+    table = pa.table(
+        {
+            "t": pa.array([t0 + i * 7 * DAY for i in range(4)], pa.timestamp("us", tz="UTC")),
+            "px": [1.0, 1.1, 1.0, 1.2],
+        }
+    )
+    rid = store.put_dynamic(table)
+    with pytest.raises(ToolError) as e:
+        run(SPEC, ctx, result_id=rid, window=2, price_column="px")
+    assert e.value.code == "periods_per_year_required" and "a median 7 days apart" in e.value.message
