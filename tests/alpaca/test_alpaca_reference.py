@@ -37,8 +37,22 @@ def test_reference_assets_golden(specs, ctx, alpaca):
 
 def test_reference_assets_use_the_live_base_in_live_mode(specs, alpaca):
     alpaca.fixture("/v2/assets", "Assets")
-    call(specs["reference_assets"], FakeContext(portfolio_environment=Environment.LIVE))
+    out = call(specs["reference_assets"], FakeContext(portfolio_environment=Environment.LIVE))
     assert alpaca.requests[0].url.host == "api.alpaca.markets"
+    assert out.provenance.environment == Environment.LIVE
+
+
+def test_trading_api_reference_reads_name_the_account_environment(specs, ctx, alpaca):
+    alpaca.fixture("/v2/assets/NVDA", "Asset__brk")
+    alpaca.fixture("/v2/clock", "Clock")
+    alpaca.fixture("/v1beta1/options/meta/exchanges", "OptionMetaExchanges")
+    assert call(specs["reference_asset"], ctx, ticker="NVDA").provenance.environment == Environment.PAPER
+    assert call(specs["reference_clock"], ctx).provenance.environment == Environment.PAPER
+    # the market data API has no account behind it
+    assert call(specs["reference_option_exchanges"], ctx).provenance.environment is None
+    for name in ("reference_assets", "reference_asset"):
+        assert "paper or live account's view" in specs[name].description
+        assert "cusip is null (not_provided_by_source) whenever Alpaca omits it" in specs[name].description
 
 
 def test_reference_asset_golden(specs, ctx, alpaca):

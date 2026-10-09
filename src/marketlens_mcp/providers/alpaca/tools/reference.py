@@ -59,6 +59,11 @@ OI_LAG = (
 #: Interface Specification 6.4b (2026-08-25), section 4.01.1 Participant ID; OPRA
 #: added both in 6.3a (2026-02-20).
 OPRA_PARTICIPANTS = {"G": "MX2 - MX2 Options", "V": "IEX - IEX Options LLC"}
+ASSET_DOC = (
+    "The answer is the paper or live account's view (provenance environment: shortable, easy to borrow and "
+    "margin requirements can differ). cusip is null (not_provided_by_source) whenever Alpaca omits it, as it "
+    "currently does for every asset although its specification lists the field."
+)
 DECLARATION_NOTE = (
     "Alpaca applied the window to a declaration date it returns for dividends only: split, merger and spin-off "
     "rows carry no declaration_date (null), so their place in the window cannot be checked here. Filter them by "
@@ -211,6 +216,7 @@ async def reference_assets(ctx: ToolContext, args: AssetsIn) -> ToolOutput:
         Asset,
         page.rows,
         route="GET /v2/assets",
+        environment=ctx.portfolio_environment,
         operation="get-v2-assets",
         request=request_of(args),
         page=page,
@@ -232,6 +238,7 @@ async def reference_asset(ctx: ToolContext, args: AssetIn) -> ToolOutput:
         Asset,
         page.rows,
         route="GET /v2/assets/{symbol_or_asset_id}",
+        environment=ctx.portfolio_environment,
         operation="get-v2-assets-symbol_or_asset_id",
         request=request_of(args),
         page=page,
@@ -304,6 +311,7 @@ async def reference_option_contracts(ctx: ToolContext, args: ContractsIn) -> Too
         OptionContract,
         page.rows,
         route="GET /v2/options/contracts",
+        environment=ctx.portfolio_environment,
         operation="get-options-contracts",
         request=request_of(args, expiration_from=default_from.isoformat() if default_from else None),
         page=page,
@@ -332,6 +340,7 @@ async def reference_option_contract(ctx: ToolContext, args: ContractIn) -> ToolO
         OptionContract,
         page.rows,
         route="GET /v2/options/contracts/{symbol_or_id}",
+        environment=ctx.portfolio_environment,
         operation="get-option-contract-symbol_or_id",
         request=request_of(args),
         page=page,
@@ -358,6 +367,7 @@ async def reference_calendar(ctx: ToolContext, args: CalendarIn) -> ToolOutput:
         MarketCalendarDay,
         page.rows,
         route="GET /v2/calendar",
+        environment=ctx.portfolio_environment,
         operation="LegacyCalendar",
         request=request_of(args, start=start.isoformat(), end=end.isoformat()),
         page=page,
@@ -380,6 +390,7 @@ async def reference_clock(ctx: ToolContext, args: NoArgs) -> ToolOutput:
         MarketClock,
         page.rows,
         route="GET /v2/clock",
+        environment=ctx.portfolio_environment,
         operation="LegacyClock",
         request={},
         as_of=as_of,
@@ -410,6 +421,7 @@ async def reference_corporate_action_announcements(ctx: ToolContext, args: Annou
         CorporateActionAnnouncement,
         page.rows,
         route="GET /v2/corporate_actions/announcements",
+        environment=ctx.portfolio_environment,
         operation="get-v2-corporate_actions-announcements",
         request=request_of(args),
         page=page,
@@ -434,6 +446,7 @@ async def reference_corporate_action_announcement(ctx: ToolContext, args: Announ
         CorporateActionAnnouncement,
         page.rows,
         route="GET /v2/corporate_actions/announcements/{id}",
+        environment=ctx.portfolio_environment,
         operation="get-v2-corporate_actions-announcements-id",
         request=request_of(args),
         page=page,
@@ -613,7 +626,10 @@ SPECS = (
         title="Assets",
         description="Tradable assets with their attributes: ticker, class, venue, status, tradable, marginable, "
         "shortable, easy to borrow, fractionable, margin requirements (fractions), crypto order increments. "
-        "Filter by status, class, exchange or attributes; the full list is large. " + STORED_NOTE,
+        "Filter by status, class, exchange or attributes; the full list is large. "
+        + ASSET_DOC
+        + " "
+        + STORED_NOTE,
         readme="Asset list with trading attributes",
         input_model=AssetsIn,
         output_model=Asset,
@@ -627,7 +643,8 @@ SPECS = (
         name="reference_asset",
         capability="reference",
         title="Asset",
-        description="One asset by stock ticker (BRK-B) or crypto pair (BTC/USD), with its trading attributes.",
+        description="One asset by stock ticker (BRK-B) or crypto pair (BTC/USD), with its trading attributes. "
+        + ASSET_DOC,
         readme="One asset's attributes",
         input_model=AssetIn,
         output_model=Asset,

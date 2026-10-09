@@ -23,7 +23,7 @@
   "dataset": null,
   "delay": "unknown",
   "derived_from": [],
-  "environment": null,
+  "environment": "paper",
   "feed": null,
   "knowledge_time": null,
   "lag_days": null,

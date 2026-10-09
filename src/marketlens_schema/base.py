@@ -314,7 +314,9 @@ class Provenance(BaseModel):
     )
     delay: Delay = Delay.UNKNOWN
     environment: Environment | None = Field(
-        default=None, description="paper or live, on brokerage reads only"
+        default=None,
+        description="paper or live: the brokerage account a portfolio read, or a reference read from the "
+        "provider's trading API, went through",
     )
     request: dict[str, RequestValue] = Field(
         default_factory=dict, description="The normalised request parameters; never a secret"
