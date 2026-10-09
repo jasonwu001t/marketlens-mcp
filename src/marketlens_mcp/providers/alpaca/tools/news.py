@@ -55,7 +55,8 @@ class NewsIn(Inputs):
         description="Only articles whose headline or summary has every word of this, as whole words in any case "
         '(e.g. "rate cut"). Alpaca\'s news API has no text search, so this server filters the articles Alpaca '
         "returns for the window and tickers: the fetch still reads them all (fetch limits apply before the "
-        "filter) and a note says how many matched.",
+        "filter) and a note says how many matched. Without tickers Alpaca has several hundred articles a day "
+        "and a fetch reads at most fetch.max_pages pages of 50, so give tickers or a window of a day or less.",
     )
     sort: Literal["asc", "desc"] = Field("desc", description="Order by update time; desc = newest first.")
     page_token: str | None = Field(None, max_length=2000, description=CONTINUE_DOC)
@@ -166,9 +167,15 @@ async def news_search(ctx: ToolContext, args: NewsIn) -> ToolOutput:
     notes += class_note(args.tickers, tagged, page, args.page_token)
     notes += root_note(roots, args.tickers or [], left_out)
     if match is not None:
+        cut = page.row_cap_hit or page.page_cap_hit
         notes.append(
             f"query {args.query!r}: {len(page.rows)} of the {read} article(s) read had every word in their headline "
             "or summary (filtered by this server; Alpaca has no text search)."
+            + (
+                " The fetch stopped before the end of the window: narrow it with tickers or a shorter window."
+                if cut
+                else ""
+            )
         )
     return output(
         ctx,

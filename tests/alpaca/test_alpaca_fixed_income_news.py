@@ -225,6 +225,27 @@ def test_news_query_pages_on_past_articles_it_filters_out(specs, ctx, alpaca):
     assert out.notes[-1].startswith("query 'tariff': 1 of the 3 article(s)")
 
 
+def test_news_query_says_a_cut_fetch_did_not_reach_the_end_of_the_window(specs, alpaca):
+    # Without tickers a day holds several hundred articles: fetch.max_pages pages of 50 can end early.
+    alpaca.add(
+        "/v1beta1/news",
+        {"news": [_article(1, ["SPY"], "Other"), _article(2, ["SPY"], "Rate cut")], "next_page_token": "P2"},
+    )
+    ctx = FakeContext(limits=FetchLimits(max_rows=50_000, max_pages=1))
+    out = call(specs["news_search"], ctx, query="tariff", lookback="P2D")
+    assert out.rows == [] and out.pagination.next_page_token == "P2"
+    assert out.notes[-1] == (
+        "query 'tariff': 0 of the 2 article(s) read had every word in their headline or summary (filtered by this "
+        "server; Alpaca has no text search). The fetch stopped before the end of the window: narrow it with "
+        "tickers or a shorter window."
+    )
+
+
+def test_news_query_says_to_give_tickers_or_a_short_window(specs):
+    doc = specs["news_search"].input_model.model_fields["query"].description
+    assert "give tickers or a window of a day or less" in doc
+
+
 @pytest.mark.parametrize(
     ("query", "found"), [("Wednesday's", True), ("S&P 500", True), ("39", False), ("amp", False)]
 )
