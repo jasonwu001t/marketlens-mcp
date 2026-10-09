@@ -290,6 +290,9 @@ def amending_manager_routes(upstream):
     """Manager 9999951's report for 2026-03-31: the original (May 10), a new-holdings
     amendment (May 15), a restatement (May 20), then a new-holdings amendment (Jun 1)."""
     upstream.json_file(r"data\.sec\.gov/submissions/CIK0009999951\.json", "sec.submissions__13F_amends.json")
+    # No EDGAR Atom feed for this manager (marketlens-data reads one for the filings
+    # added since EDGAR last rewrote a feed): its filings are read on the feed's clock.
+    upstream.add(r"www\.sec\.gov/cgi-bin/browse-edgar", httpx.Response(404))
     documents = {
         "26-000001": ("sec.13f_cover__26-000002.xml", "sec.13f_table__26-000002.xml"),
         "26-000002": ("sec.13f_cover__new_holdings.xml", "sec.13f_table__9999951-26-000002.xml"),
