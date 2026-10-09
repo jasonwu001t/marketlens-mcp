@@ -17,6 +17,7 @@ from marketlens_mcp.analytics.tools.returns import SPEC as RETURNS
 from marketlens_mcp.analytics.tools.volatility import SPEC
 from marketlens_mcp.plugin_api import ToolError
 from marketlens_schema.analytics import VolatilityPoint
+from marketlens_schema.market import OptionBar
 
 CLOSES = [100, 102, 99, 103, 101, 104]
 
@@ -233,15 +234,33 @@ def test_crypto_mixed_with_stocks_needs_periods_per_year(store, ctx):
     assert ppy_of(run(SPEC, ctx, result_id=rid, window=2, periods_per_year=300)) == {300.0}
 
 
-def test_extended_hours_bars_count_sixteen_hours_a_session(store, ctx):
+#: 04:00 New York (EST) on a Monday: the start of the pre-market session.
+PRE_MARKET = utc(2026, 1, 5, 9)
+
+
+def day_times(per_day, *, start, step=15 * MINUTE, days=3, skip=()):
+    """``per_day`` consecutive bar times a day from ``start``, on ``days`` days, but the ``skip`` ones."""
+    return [start + d * DAY + i * step for d in range(days) for i in range(per_day) if i not in skip]
+
+
+def day_bars(ticker, per_day, *, start, step=15 * MINUTE, timeframe="15min", skip=()):
+    times = day_times(per_day, start=start, step=step, skip=skip)
+    return bars(ticker, [100.0 + (i * 7) % 5 for i in range(len(times))], times=times, timeframe=timeframe)
+
+
+def test_extended_hours_bars_count_the_bars_of_a_session(store, ctx):
     """SPY 15min bars from 04:00 to 20:00 New York were annualised as 26 bars a
     session (98280/15), understating the volatility about 1.56 times: bars that
-    include extended hours count 64 a session."""
-    pre_market = utc(2026, 1, 5, 9)  # 04:00 New York (EST)
-    rid = store.put_rows(bars("SPY", CLOSES, timeframe="15min", start=pre_market, step=15 * MINUTE))
+    include extended hours count the bars of the median New York day, here 64."""
+    rid = store.put_rows(day_bars("SPY", 64, start=PRE_MARKET))
     out = run(SPEC, ctx, result_id=rid, window=2)
     assert ppy_of(out) == {252 * 64.0}
-    assert any("periods_per_year = 16128" in n and "extended hours" in n for n in out.notes)
+    assert any(
+        "periods_per_year = 16128" in n
+        and "extended-hours bars" in n
+        and "median 64 bars a New York day" in n
+        for n in out.notes
+    )
     regular = store.put_rows(bars("SPY", CLOSES, timeframe="15min", start=OPEN_BELL, step=15 * MINUTE))
     out = run(SPEC, ctx, result_id=regular, window=2)
     assert ppy_of(out) == {252 * 26.0}
@@ -251,6 +270,60 @@ def test_extended_hours_bars_count_sixteen_hours_a_session(store, ctx):
         bars("SPY", CLOSES, timeframe="1h", start=OPEN_BELL - 30 * MINUTE, step=60 * MINUTE)
     )
     assert ppy_of(run(SPEC, ctx, result_id=nine, window=2)) == {1638.0}
+
+
+@pytest.mark.parametrize(("per_day", "ppy"), [(30, 7560.0), (27, 6804.0)])
+def test_a_few_after_hours_bars_are_not_a_sixteen_hour_session(store, ctx, per_day, ppy):
+    """One bar at or after 16:00 New York made every session 16 hours: CROX
+    15min bars, 26 regular and a few after hours a day, were annualised with
+    16128 instead of about 252 x 30, overstating volatility about 1.46 times,
+    and a single 16:00 bar a day (27) did the same."""
+    rid = store.put_rows(day_bars("CROX", per_day, start=OPEN_BELL))
+    out = run(SPEC, ctx, result_id=rid, window=2)
+    assert ppy_of(out) == {ppy}
+    assert any(f"median {per_day} bars a New York day" in n for n in out.notes)
+
+
+def test_option_bars_to_16_15_count_their_bars(store, ctx):
+    """SPY options trade until 16:15 New York: their 16:00 bar is real trading,
+    counted as the 27th of the session, not a sign of 16-hour sessions."""
+    occ = "SPY260116C00600000"
+    rows = [
+        OptionBar(
+            occ_symbol=occ,
+            underlying="SPY",
+            timeframe="15min",
+            t=t,
+            open=c,
+            high=c,
+            low=c,
+            close=c,
+            volume=1.0,
+            trade_count=1,
+            vwap=c,
+        )
+        for t, c in zip(
+            day_times(27, start=OPEN_BELL), [5.0 + (i * 3) % 4 / 10 for i in range(81)], strict=True
+        )
+    ]
+    rid = store.put_rows(rows, tool="options_bars")
+    assert ppy_of(run(SPEC, ctx, result_id=rid, window=2)) == {252 * 27.0}
+
+
+def test_counted_sessions_are_never_shorter_than_the_regular_one(store, ctx):
+    """Counting cannot fall below 6.5-hour sessions: 1min bars with regular
+    minutes missing (295 bars a day, 3 of them after hours) keep 98280/1, as
+    without the after-hours bars; and six pre-market bars of one morning, too
+    few to count a session, keep the regular 98280/15."""
+    sparse = day_bars("CROX", 393, start=OPEN_BELL, step=MINUTE, timeframe="1min", skip=set(range(0, 390, 4)))
+    rid = store.put_rows(sparse)
+    assert ppy_of(run(SPEC, ctx, result_id=rid, window=2)) == {98280.0}
+    morning = store.put_rows(bars("SPY", CLOSES, timeframe="15min", start=PRE_MARKET, step=15 * MINUTE))
+    out = run(SPEC, ctx, result_id=morning, window=2)
+    assert ppy_of(out) == {6552.0}
+    assert any(
+        "at least the 6552 of 6.5-hour sessions and at most the 16128 of 16 hours" in n for n in out.notes
+    )
 
 
 def test_a_weekly_sample_of_daily_bars_is_annualised_weekly(store, ctx):
@@ -296,6 +369,7 @@ def test_without_a_timeframe_the_refusal_says_how_far_apart_the_observations_are
     with pytest.raises(ToolError) as e:
         run(SPEC, ctx, result_id=rid, window=2, price_column="px")
     assert e.value.code == "periods_per_year_required" and "a median 7 days apart" in e.value.message
+    assert "too few to count per year (2 intervals between them, at least 5)" in e.value.message
 
 
 def test_window_all_is_the_full_sample_volatility_of_each_series(store, ctx):
@@ -325,11 +399,11 @@ def test_store_keeps_a_small_output(store, ctx):
     assert run(SPEC, ctx, result_id=rid, window=3, store=True).offload == "always"
 
 
-def query_returns(store, rets, units=None):
+def query_returns(store, rets, units=None, times=None, parents=()):
     t0 = utc(2026, 3, 2)
     table = pa.table(
         {
-            "t": pa.array([t0 + i * DAY for i in range(len(rets))], pa.timestamp("us", tz="UTC")),
+            "t": pa.array(times or [t0 + i * DAY for i in range(len(rets))], pa.timestamp("us", tz="UTC")),
             "series": ["PORT"] * len(rets),
             "ret": rets,
         }
@@ -342,6 +416,7 @@ def query_returns(store, rets, units=None):
         time_column="t",
         group_column="series",
         column_units=units,
+        parents=parents,
     ).result_id
 
 
@@ -372,3 +447,54 @@ def test_a_volatility_column_is_not_a_price(store, ctx):
     with pytest.raises(ToolError) as e:
         run(SPEC, ctx, result_id=rid, window=2, periods_per_year=252, price_column="ret")
     assert e.value.code == "not_prices" and "input_kind=returns" in e.value.message
+
+
+#: Weekdays of four weeks from Monday 2 March 2026, at the close.
+WEEKDAYS = [utc(2026, 3, 2, 21) + d * DAY for d in range(26) if d % 7 < 5]
+
+
+def test_without_a_timeframe_the_observations_are_counted(store, ctx):
+    """A portfolio's daily returns from results_query had no timeframe, so
+    periods_per_year was required: with at least 5 returns, their number per
+    year over the time they span is used, and the note says so."""
+    rets = [0.01 * ((i * 7) % 5 - 2) for i in range(len(WEEKDAYS))]
+    rid = query_returns(store, rets, times=WEEKDAYS)
+    out = run(SPEC, ctx, result_id=rid, window="all", input_kind="returns")
+    ppy = round(19 / 25 * 365.25)  # 20 observations, 19 intervals over 25 days
+    (row,) = output_rows(out, VolatilityPoint)
+    assert row.periods_per_year == ppy
+    assert row.volatility == pytest.approx(statistics.stdev(rets) * math.sqrt(ppy), rel=1e-12)
+    assert any(
+        f"periods_per_year = {ppy}: {rid} has no bar timeframe, and its observations are a median 1 day apart"
+        in n
+        and "their number per year over the time they span" in n
+        for n in out.notes
+    )
+
+
+def test_a_query_answer_takes_the_timeframe_it_was_computed_from(store, ctx):
+    """A query answer over a returns result (a portfolio, or a filter) has no
+    timeframe column: it takes the 1d of the bars the returns came from, and
+    their asset class."""
+    prices = store.put_rows(
+        bars("AAPL", [100.0 + (i * 7) % 5 for i in range(21)], times=[*WEEKDAYS, WEEKDAYS[-1] + 3 * DAY])
+    )
+    rets = store.keep(run(RETURNS, ctx, result_id=prices), "analytics_returns")
+    port = query_returns(
+        store,
+        [0.01 * ((i * 7) % 5 - 2) for i in range(20)],
+        times=WEEKDAYS[1:] + [WEEKDAYS[-1] + 3 * DAY],
+        units={"ret": "fraction"},
+        parents=[rets],
+    )
+    out = run(SPEC, ctx, result_id=port, window="all")
+    assert ppy_of(out) == {252.0}
+    assert any(
+        f"from the 1d timeframe of the results {port} was computed from (US equity" in n for n in out.notes
+    )
+    crypto = store.put_rows(bars("BTC/USD", CLOSES, asset_class="crypto"))
+    crets = store.keep(run(RETURNS, ctx, result_id=crypto), "analytics_returns")
+    cport = query_returns(
+        store, [0.01, -0.02, 0.015, -0.005, 0.02], units={"ret": "fraction"}, parents=[crets]
+    )
+    assert ppy_of(run(SPEC, ctx, result_id=cport, window="all")) == {365.0}

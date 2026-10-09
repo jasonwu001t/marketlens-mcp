@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from marketlens_mcp.plugin_api import ToolContext, ToolOutput, ToolSpec
-from marketlens_mcp.results_api import ResultNotFound, ResultSession
-from marketlens_schema.analytics import VolatilityPoint
+from marketlens_mcp.results_api import ResultInfo, ResultNotFound, ResultSession
+from marketlens_schema.analytics import ALIGNED_SCHEMA_NAME, QUERY_ROW_SCHEMA_NAME, VolatilityPoint
+from marketlens_schema.base import TIMEFRAME_RE
 
 from ..common import (
     CAPABILITY,
@@ -65,9 +67,11 @@ class VolatilityArgs(BaseModel):
         gt=0,
         allow_inf_nan=False,
         description="Annualisation factor. Default from the bar timeframe and market: US equity 1d 252, 1w 52, "
-        "1mo 12, 1h 1638 and Nmin 98280/N (6.5-hour sessions; 16 hours, 1h 4032 and Nmin 241920/N, when the bars "
-        "include extended hours); crypto 1d 365, Nh 8760/N, Nmin 525600/N. Observations much further apart than "
-        "the timeframe (a weekly sample of daily bars) use their own number per year. Required without a timeframe.",
+        "1mo 12, 1h 1638 and Nmin 98280/N (6.5-hour sessions; when the bars include extended hours, 252 x the "
+        "median bars a New York day, up to 16 hours: 1h 4032, Nmin 241920/N); crypto 1d 365, Nh 8760/N, Nmin "
+        "525600/N. A query answer takes the timeframe of the results it was computed from. Observations much "
+        "further apart than the timeframe (a weekly sample of daily bars), or with no timeframe at all, use their "
+        "own number per year; required when there are fewer than 6 of them.",
     )
     price_column: str | None = Field(
         None,
@@ -88,8 +92,10 @@ class VolatilityArgs(BaseModel):
 
 _NEW_YORK = "America/New_York"
 _YEAR_SECONDS = 365.25 * 86400
-#: Fewest gaps between observations for their median spacing to overrule the timeframe.
+#: Fewest gaps between observations for their median spacing to overrule (or stand in for) the timeframe.
 _MIN_GAPS = 5
+#: Results computed by results_query or analytics_align: their columns come from the results they were computed from.
+_DYNAMIC = (QUERY_ROW_SCHEMA_NAME, ALIGNED_SCHEMA_NAME)
 
 
 def _span(seconds: float) -> str:
@@ -111,9 +117,37 @@ def _spacing(session: ResultSession, rets: str) -> tuple[float | None, int]:
     return row["m"], row["n"]
 
 
+def _lineage(
+    ctx: ToolContext, info: ResultInfo, find: Callable[[ResultInfo], set[str] | None], depth: int = 3
+) -> set[str] | None:
+    """What ``find`` reads from the results ``info`` was computed from, looking
+    further back through returns results, query answers and aligned results;
+    None when a parent is gone or tells nothing."""
+    found: set[str] = set()
+    for parent in info.parents:
+        try:
+            p = ctx.results.info(parent)
+        except ResultNotFound:
+            return None
+        got = find(p)
+        if got is None and depth > 1 and (p.model == RETURNS_MODEL or p.model in _DYNAMIC):
+            got = _lineage(ctx, p, find, depth - 1)
+        if got is None:
+            return None
+        found |= got
+    return found or None
+
+
+def _column_values(info: ResultInfo, name: str) -> set[str] | None:
+    """The values a stored text column spans (its min and max)."""
+    c = next((c for c in info.columns if c.name == name), None)
+    return {c.min, c.max} if c is not None and isinstance(c.min, str) and isinstance(c.max, str) else None
+
+
 def _asset_classes(ctx: ToolContext, session: ResultSession, inp: Input) -> set[str]:
     """The input's asset classes: its asset_class column, else the one of the
-    result it came from (a returns result's prices)."""
+    results it was computed from (a returns result's prices, a query answer's
+    source)."""
     col = inp.column("asset_class")
     if col is not None and col.type == "VARCHAR":
         return {
@@ -122,15 +156,7 @@ def _asset_classes(ctx: ToolContext, session: ResultSession, inp: Input) -> set[
                 session, f"SELECT DISTINCT asset_class AS a FROM {inp.table} WHERE asset_class IS NOT NULL"
             )
         }
-    for parent in inp.info.parents:
-        try:
-            pinfo = ctx.results.info(parent)
-        except ResultNotFound:
-            continue
-        c = next((c for c in pinfo.columns if c.name == "asset_class"), None)
-        if c is not None and isinstance(c.min, str) and isinstance(c.max, str):
-            return {c.min, c.max}
-    return set()
+    return _lineage(ctx, inp.info, lambda p: _column_values(p, "asset_class")) or set()
 
 
 def _every_day(ctx: ToolContext, session: ResultSession, inp: Input, rets: str) -> bool:
@@ -161,56 +187,80 @@ def _extended_hours(session: ResultSession, rets: str, tf: str) -> bool:
     )
 
 
+def _per_day(session: ResultSession, rets: str, *, crypto: bool) -> float:
+    """The median number of returns a series has in a day: a UTC day for
+    crypto, else a New York day (a session with its extended hours)."""
+    day = "CAST(ts AS DATE)" if crypto else f"CAST(timezone('{_NEW_YORK}', timezone('UTC', ts)) AS DATE)"
+    return scalar(
+        session, f"SELECT median(n) FROM (SELECT s, {day} AS d, count(*) AS n FROM ({rets}) GROUP BY s, d)"
+    )
+
+
+def _observed(session: ResultSession, rets: str, *, intraday: bool, crypto: bool) -> tuple[float, str]:
+    """periods_per_year counted from the observations themselves, and how."""
+    if intraday:
+        per_day = _per_day(session, rets, crypto=crypto)
+        days = 365 if crypto else 252
+        return days * per_day, (
+            f"{days} {'days' if crypto else 'sessions'} a year x the median {per_day:g} observations a "
+            f"{'UTC' if crypto else 'New York'} day"
+        )
+    (row,) = rows(
+        session,
+        "SELECT CAST(sum(n - 1) AS DOUBLE) AS k, sum(span) AS span FROM (SELECT count(*) AS n, "
+        f"epoch(max(ts)) - epoch(min(ts)) AS span FROM ({rets}) GROUP BY s HAVING count(*) >= 2)",
+    )
+    return float(
+        max(1, round(row["k"] / row["span"] * _YEAR_SECONDS))
+    ), "their number per year over the time they span"
+
+
+def _timeframe(info: ResultInfo) -> set[str] | None:
+    """A stored result's single bar timeframe: its timeframe column, or a returns result's period."""
+    found = _column_values(info, "period" if info.model == RETURNS_MODEL else "timeframe")
+    return found if found is not None and len(found) == 1 and TIMEFRAME_RE.match(next(iter(found))) else None
+
+
 def _annualisation(ctx: ToolContext, session: ResultSession, inp: Input, rets: str) -> tuple[float, str]:
     """The default periods_per_year and the note that says where it came from:
-    the bar timeframe by market (crypto every day; US equity sessions, with
-    extended hours when the bars have them), or, when the observations are
-    much further apart than the timeframe says (a weekly sample of daily
-    bars kept as 1d), their own number per year."""
+    the bar timeframe by market (crypto every day; US equity sessions, counted
+    up to 16 hours when the bars include extended hours), or, when the
+    observations are much further apart than the timeframe says (a weekly
+    sample of daily bars kept as 1d) or there is no timeframe, their own
+    number per year."""
     tf = bar_timeframe(ctx, session, TOOL, inp)
+    source = inp.rid
+    labelled = f"{inp.rid} is labelled {tf}"
+    if tf is None and inp.model in _DYNAMIC:
+        inherited = _lineage(ctx, inp.info, _timeframe)
+        if inherited is not None and len(inherited) == 1:
+            (tf,) = inherited
+            source = f"the results {inp.rid} was computed from"
+            labelled = f"{inp.rid} was computed from {tf} results"
     spacing, gaps = _spacing(session, rets)
-    if tf is None:
+    counted = spacing is not None and gaps >= _MIN_GAPS
+    if tf is None and not counted:
         apart = f" (its observations are a median {_span(spacing)} apart)" if spacing else ""
         raise refuse(
             "periods_per_year_required",
-            f"{TOOL} cannot annualise: {inp.label} has no single bar timeframe{apart}; pass periods_per_year "
-            "(252 for daily equity bars, 365 for daily crypto bars, 52 for weekly).",
+            f"{TOOL} cannot annualise: {inp.label} has no single bar timeframe{apart}, and its returns are too "
+            f"few to count per year ({plural(gaps, 'interval')} between them, at least {_MIN_GAPS}); pass "
+            "periods_per_year (252 for daily equity bars, 365 for daily crypto bars, 52 for weekly).",
         )
+    if tf is None or (counted and spacing >= 2 * tf_seconds(tf)):
+        intraday = spacing < 86400 if tf is None else tf_parts(tf)[1] in ("min", "h")
+        crypto = intraday and _every_day(ctx, session, inp, rets)
+        ppy, how = _observed(session, rets, intraday=intraday, crypto=crypto)
+        why = (
+            f"{inp.rid} has no bar timeframe, and its observations are a median {_span(spacing)} apart"
+            if tf is None
+            else f"{labelled}, but its observations are a median {_span(spacing)} apart (sampled, or with missing bars)"
+        )
+        return ppy, f"periods_per_year = {ppy:g}: {why}, so it is {how}; pass periods_per_year to set it."
     _, unit = tf_parts(tf)
     intraday = unit in ("min", "h")
     crypto = unit in ("min", "h", "d") and _every_day(ctx, session, inp, rets)
-    if spacing is not None and gaps >= _MIN_GAPS and spacing >= 2 * tf_seconds(tf):
-        if intraday:
-            day = (
-                "CAST(ts AS DATE)"
-                if crypto
-                else f"CAST(timezone('{_NEW_YORK}', timezone('UTC', ts)) AS DATE)"
-            )
-            per_day = scalar(
-                session,
-                f"SELECT median(n) FROM (SELECT s, {day} AS d, count(*) AS n FROM ({rets}) GROUP BY s, d)",
-            )
-            days = 365 if crypto else 252
-            ppy = days * per_day
-            how = (
-                f"{days} {'days' if crypto else 'sessions'} a year x the median {per_day:g} observations a "
-                f"{'UTC' if crypto else 'New York'} day"
-            )
-        else:
-            (row,) = rows(
-                session,
-                "SELECT CAST(sum(n - 1) AS DOUBLE) AS k, sum(span) AS span FROM (SELECT count(*) AS n, "
-                f"epoch(max(ts)) - epoch(min(ts)) AS span FROM ({rets}) GROUP BY s HAVING count(*) >= 2)",
-            )
-            ppy = float(max(1, round(row["k"] / row["span"] * _YEAR_SECONDS)))
-            how = "their number per year over the time they span"
-        return ppy, (
-            f"periods_per_year = {ppy:g}: {inp.rid} is labelled {tf}, but its observations are a median "
-            f"{_span(spacing)} apart (sampled, or with missing bars), so it is {how}; pass periods_per_year to "
-            "set it."
-        )
-    extended = intraday and not crypto and _extended_hours(session, rets, tf)
-    ppy = default_periods_per_year(tf, crypto=crypto, extended=extended)
+    ppy = default_periods_per_year(tf, crypto=crypto)
     if ppy is None:
         raise refuse(
             "periods_per_year_required",
@@ -221,10 +271,15 @@ def _annualisation(ctx: ToolContext, session: ResultSession, inp: Input, rets: s
         basis = ""
     elif crypto:
         basis = "crypto trades every day: 365 days a year" + (" of 24 hours" if intraday else "") + "; "
-    elif extended:
+    elif intraday and _extended_hours(session, rets, tf):
+        # Counted, not assumed: a few after-hours bars a day are not 16 hours of trading.
+        regular, most = ppy, default_periods_per_year(tf, extended=True)
+        per_day = _per_day(session, rets, crypto=False)
+        ppy = min(max(252 * per_day, regular), most)
         basis = (
-            "US equity: 252 sessions a year of 16 hours, 04:00-20:00 New York, since its bars include extended "
-            "hours; "
+            f"US equity with extended-hours bars: 252 sessions a year x the median {per_day:g} bars a New York "
+            f"day, at least the {regular:g} of 6.5-hour sessions and at most the {most:g} of 16 hours, "
+            "04:00-20:00; "
         )
     else:
         basis = (
@@ -234,7 +289,7 @@ def _annualisation(ctx: ToolContext, session: ResultSession, inp: Input, rets: s
         )
     return (
         ppy,
-        f"periods_per_year = {ppy:g} from the {tf} timeframe of {inp.rid} ({basis}pass periods_per_year to set it).",
+        f"periods_per_year = {ppy:g} from the {tf} timeframe of {source} ({basis}pass periods_per_year to set it).",
     )
 
 
@@ -353,9 +408,10 @@ SPEC = ToolSpec(
         "DuckDB: vol_t = stddev_samp(returns over the last `window` rows) x sqrt(periods_per_year), reported at "
         "the window's last observation; rows before the window fills are omitted; window=all gives one row per "
         "series over all its returns. return_kind log (default) or simple for prices. periods_per_year defaults from the "
-        "bar timeframe and market (US equity 1d 252, 1w 52, 1mo 12, 1h 1638, Nmin 98280/N, more when the bars "
-        "include extended hours; crypto 1d 365, Nmin 525600/N), or from the data when its observations are much "
-        "further apart than the timeframe; the notes say which. Volatility is a fraction per year (0.2 = 20 %). "
+        "bar timeframe and market (US equity 1d 252, 1w 52, 1mo 12, 1h 1638, Nmin 98280/N, with extended-hours bars "
+        "252 x the bars a day up to 16 hours; crypto 1d 365, Nmin 525600/N), or from the data when its observations "
+        "are much further apart than the timeframe or it has none; the notes say which. Volatility is a fraction "
+        "per year (0.2 = 20 %). "
         "Large outputs are stored and you get a result_id."
     ),
     readme="Rolling annualised volatility; window and periods per year stated on every row.",
