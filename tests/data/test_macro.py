@@ -253,6 +253,25 @@ def test_macro_bea_table_golden(tmp_path, upstream, keys):
     assert {r.line_number for r in only.rows} == {2}
 
 
+def test_macro_bea_table_history_from_the_first_sync_is_at_its_last_revision_not_the_sync(
+    tmp_path, upstream, keys
+):
+    # The first sync's payload says "LastRevised: July 30, 2026": all it holds is knowable from
+    # 08:30 ET that day, before the sync, so an as_of between the two returns rows (review).
+    from marketlens_mcp.providers.data.tools.common import parse_instant
+    from marketlens_mcp.providers.data.tools.macro import SPECS
+
+    upstream.json_file(BEA, "bea.nipa__T10101.json")
+    out = call("macro_bea_table", context(tmp_path), table_name="T10101")
+    assert {r.knowledge_time for r in out.rows} == {parse_instant("2026-07-30T12:30:00Z")}
+    between = call("macro_bea_table", context(tmp_path), table_name="T10101", as_of="2026-08-01")
+    assert len(between.rows) == len(out.rows)
+    before = call("macro_bea_table", context(tmp_path), table_name="T10101", as_of="2026-07-30T12:29:00Z")
+    assert before.rows == []
+    description = next(s for s in SPECS if s.name == "macro_bea_table").description
+    assert "history older than the first sync takes that sync's last revision date" in description
+
+
 BEA_LEVEL_NOTE = (
     "BEA states each value's multiplier (UNIT_MULT) separately and it is not stored, so a value whose units "
     "is 'Level' is not in ones: NIPA dollar levels are usually in millions of dollars. Check the table's "

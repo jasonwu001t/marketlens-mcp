@@ -530,8 +530,8 @@ SPECS: tuple[ToolSpec, ...] = (
             "units of 'Level' is not in ones (NIPA dollar levels are usually millions of dollars; check the "
             "table's header). BEA serves the latest revision only, so knowledge_time is the table's last "
             "revision date, never before the period's first release; history older than the first sync "
-            "takes that sync's date, so an earlier as_of returns none of it (GDP vintages: macro_series). "
-            "A revision seen later is a new vintage. Needs BEA_API_KEY (free).",
+            "takes that sync's last revision date, so an earlier as_of returns none of it (GDP vintages: "
+            "macro_series). A revision seen later is a new vintage. Needs BEA_API_KEY (free).",
             "lagged",
         ),
         readme="BEA NIPA tables (GDP, PCE, income, profits)",
