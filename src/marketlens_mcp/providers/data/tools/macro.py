@@ -464,7 +464,7 @@ SPECS: tuple[ToolSpec, ...] = (
             "is null with reason no_data. knowledge_time is 17:00 St. Louis time (22:00 UTC, 23:00 in winter) "
             "of the day FRED posted the release a value first appeared in (a revision: the release that revised "
             "it): its ALFRED date, or later for a series FRED posts late (e.g. ICE BofA spreads, VIXCLS: a "
-            "business day; UMCSENT: 43 days), so an as_of on that day sees it only from then. "
+            "business day; UMCSENT: weeks), so an as_of on that day sees it only from then. "
             "include_vintages=true returns every stored revision. "
             "Needs FRED_API_KEY (free).",
             "vintage",
