@@ -8,7 +8,7 @@ from collections.abc import Mapping
 from datetime import date
 from typing import Any
 
-from marketlens_schema.base import AbsenceCode
+from marketlens_schema.base import TICKER_RE, AbsenceCode
 from marketlens_schema.market import (
     Asset,
     ConditionCode,
@@ -25,6 +25,7 @@ from marketlens_schema.market import (
 from .convert import build_row, dec, et_to_utc, integer, num, parse_date, parse_ts, percent, text, to_ticker
 
 NA = AbsenceCode.NOT_APPLICABLE
+UNPARSEABLE = AbsenceCode.UNPARSEABLE
 US_EQUITIES = "US equities"
 Raw = Mapping[str, Any]
 
@@ -205,6 +206,7 @@ _ACQ = {
     "acquirer_ticker": "acquirer_symbol",
     "cusip": "acquiree_cusip",
     "isin": "acquiree_isin",
+    "acquirer_cusip": "acquirer_cusip",
 }
 _SRC = {
     "ticker": "source_symbol",
@@ -212,6 +214,7 @@ _SRC = {
     "new_ticker": "new_symbol",
     "cusip": "source_cusip",
     "isin": "source_isin",
+    "new_cusip": "new_cusip",
 }
 _OLD = {
     "ticker": "old_symbol",
@@ -219,7 +222,19 @@ _OLD = {
     "new_ticker": "new_symbol",
     "cusip": "old_cusip",
     "isin": "old_isin",
+    "new_cusip": "new_cusip",
 }
+#: Every CUSIP field of an Alpaca corporate action: a symbol equal to one of
+#: them names the instrument by CUSIP only.
+_CUSIPS = (
+    "cusip",
+    "old_cusip",
+    "new_cusip",
+    "acquiree_cusip",
+    "acquirer_cusip",
+    "source_cusip",
+    "alternate_cusip",
+)
 
 #: action_type -> (canonical field -> Alpaca field, dates that apply). Fields not
 #: listed are not applicable to the type (None with not_applicable).
@@ -233,6 +248,7 @@ CA_FIELDS: dict[str, tuple[dict[str, str], tuple[str, ...]]] = {
             "cusip": "old_cusip",
             "isin": "old_isin",
             "new_ticker": "new_symbol",
+            "new_cusip": "new_cusip",
             "old_rate": "old_rate",
             "new_rate": "new_rate",
         },
@@ -267,6 +283,16 @@ _TICKER_FIELDS = {"ticker", "new_ticker", "old_ticker", "acquirer_ticker", "acqu
 _NUMBER_FIELDS = {"rate", "cash_rate", "old_rate", "new_rate"}
 
 
+def cusip_only(raw: Raw, source: str) -> bool:
+    """Alpaca names the instrument in ``source`` by a CUSIP, not a ticker (a CVR,
+    an escrow or another right with no ticker: "046CVR015")."""
+    v = text(raw.get(source))
+    if v is None:
+        return False
+    cusips = {str(raw[c]).strip().upper() for c in _CUSIPS if text(raw.get(c))}
+    return v.strip().upper() in cusips or not TICKER_RE.match(to_ticker(v, "us_equity"))
+
+
 def _value(raw: Raw, canonical: str, source: str) -> Any:
     if "+" in source:  # a total of several Alpaca fields (capital gains: long + short term)
         parts = [num(raw.get(s)) for s in source.split("+")]
@@ -274,7 +300,7 @@ def _value(raw: Raw, canonical: str, source: str) -> Any:
         return sum(present) if present else None
     v = raw.get(source)
     if canonical in _TICKER_FIELDS:
-        return to_ticker(v, "us_equity") if text(v) else None
+        return to_ticker(v, "us_equity") if text(v) and not cusip_only(raw, source) else None
     if canonical in _NUMBER_FIELDS:
         return num(v)
     if canonical in ("special", "foreign"):
@@ -295,6 +321,9 @@ def corporate_action(raw: Raw, action_type: str) -> CorporateAction:
         data[d] = parse_date(raw.get(d))
     applicable = {"action_id", "action_type", "currency", *fields, *dates}
     codes = {f: NA for f in CorporateAction.model_fields if f not in applicable}
+    codes.update(
+        {f: UNPARSEABLE for f, src in fields.items() if f in _TICKER_FIELDS and cusip_only(raw, src)}
+    )
     return build_row(CorporateAction, data, codes)
 
 

@@ -328,3 +328,88 @@ def test_option_condition_codes_have_no_tape(specs, ctx, alpaca):
     assert out.provenance.route == "GET /v1beta1/options/meta/conditions/{ticktype}"
     with pytest.raises(ValidationError, match="tape applies to stock condition codes only"):
         call(specs["reference_condition_codes"], ctx, asset_class="us_option", tape="A")
+
+
+def test_corporate_actions_keep_instruments_named_by_cusip_only(specs, ctx, alpaca):
+    # Synthetic records in the shape Alpaca sends for a CVR, an escrow and a CUSIP-only reverse split.
+    cvr_cash = {
+        "id": "0b6f2c1e-1111-4a5e-9c55-000000000001",
+        "acquiree_symbol": "021CVR014",
+        "acquiree_cusip": "021CVR014",
+        "rate": 0.9936,
+        "process_date": "2026-10-02",
+        "payable_date": "2026-10-02",
+        "effective_date": "2026-10-02",
+    }
+    escrow_acquirer = {
+        "id": "0b6f2c1e-1111-4a5e-9c55-000000000002",
+        "acquiree_symbol": "ATAI",
+        "acquiree_cusip": "04650F101",
+        "acquiree_rate": 1,
+        "acquirer_symbol": "G88CVR017",  # letter first: shaped like a ticker, but it is the acquirer's CUSIP
+        "acquirer_cusip": "G88CVR017",
+        "acquirer_rate": 1,
+        "cash_rate": 6.75,
+        "process_date": "2026-09-14",
+        "payable_date": "2026-09-14",
+        "effective_date": "2026-09-11",
+    }
+    cusip_split = {
+        "id": "0b6f2c1e-1111-4a5e-9c55-000000000003",
+        "symbol": "09175M606",
+        "old_cusip": "09175M606",
+        "new_symbol": "09175M861",
+        "new_cusip": "09175M861",
+        "old_rate": 5,
+        "new_rate": 1,
+        "process_date": "2026-08-26",
+        "ex_date": "2026-08-26",
+    }
+    body = {
+        "corporate_actions": {
+            "cash_mergers": [cvr_cash],
+            "stock_and_cash_mergers": [escrow_acquirer],
+            "reverse_splits": [cusip_split],
+        },
+        "next_page_token": None,
+    }
+    alpaca.add("/v1/corporate-actions", body)
+    out = call(specs["reference_corporate_actions"], ctx, start="2026-08-01", end="2026-10-08")
+    by = {r.action_type: r for r in out.rows}
+    assert len(out.rows) == 3 and not any(n.startswith("Skipped") for n in out.notes)
+    cash = by["cash_merger"]
+    assert (cash.ticker, cash.cusip, cash.rate, cash.absent["ticker"]) == (
+        None,
+        "021CVR014",
+        0.9936,
+        "unparseable",
+    )
+    merger = by["stock_and_cash_merger"]
+    assert (merger.ticker, merger.acquirer_ticker, merger.acquirer_cusip) == ("ATAI", None, "G88CVR017")
+    assert merger.absent["acquirer_ticker"] == "unparseable"
+    split = by["reverse_split"]
+    assert (split.ticker, split.new_ticker, split.cusip, split.new_cusip) == (
+        None,
+        None,
+        "09175M606",
+        "09175M861",
+    )
+    assert "3 action(s) name an instrument by CUSIP only" in " ".join(out.notes)
+
+
+def test_corporate_actions_name_every_skipped_record_with_its_type_and_reason(specs, ctx, alpaca):
+    bad = [{"id": f"bad-{i}", "symbol": "FCF", "cusip": "319829107", "rate": "n/a"} for i in range(6)]
+    body = {
+        "corporate_actions": {"cash_dividends": bad, "future_actions": [{"id": "new-1"}]},
+        "next_page_token": None,
+    }
+    alpaca.add("/v1/corporate-actions", body)
+    out = call(specs["reference_corporate_actions"], ctx, start="2026-08-01", end="2026-10-08")
+    (note,) = [n for n in out.notes if n.startswith("Skipped")]
+    assert note.startswith(
+        "Skipped 7 upstream record(s) that do not fit marketlens.CorporateAction (cash_dividends 6, "
+        "future_actions 1): cash_dividends:bad-0 ("
+    )
+    assert all(f"cash_dividends:bad-{i}" in note for i in range(6))
+    assert "future_actions:new-1 (an action type this tool does not map)" in note
+    assert "cash_dividends:bad-5 (ValueError: could not convert string to float: 'n/a')" in note

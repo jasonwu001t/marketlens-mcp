@@ -432,7 +432,7 @@ async def reference_corporate_action_announcement(ctx: ToolContext, args: Announ
 
 
 async def reference_corporate_actions(ctx: ToolContext, args: CorporateActionsIn) -> ToolOutput:
-    skips = Skips(CorporateAction.schema_name)
+    skips = Skips(CorporateAction.schema_name, detailed=True)
     async with AlpacaClient(ctx) as api:
         params = {
             "symbols": [alpaca_symbol(t) for t in args.tickers] if args.tickers else None,
@@ -453,7 +453,8 @@ async def reference_corporate_actions(ctx: ToolContext, args: CorporateActionsIn
             for key, records in (data.get("corporate_actions") or {}).items():
                 action_type = m.CA_ARRAYS.get(key)
                 if action_type is None:
-                    skips.labels.extend(f"{key}:{r.get('id')}" for r in records or [])
+                    for r in records or []:
+                        skips.add(f"{key}:{r.get('id')}", "an action type this tool does not map")
                     continue
                 rows += collect(
                     skips,
@@ -472,8 +473,19 @@ async def reference_corporate_actions(ctx: ToolContext, args: CorporateActionsIn
         operation="CorporateActions",
         request=request_of(args),
         page=page,
+        notes=_cusip_only_note(page.rows),
         skips=skips,
     )
+
+
+def _cusip_only_note(rows: list[CorporateAction]) -> list[str]:
+    n = sum(1 for r in rows if "unparseable" in (r.absent or {}).values())
+    if not n:
+        return []
+    return [
+        f"{n} action(s) name an instrument by CUSIP only (a CVR, an escrow or another right with no ticker): "
+        "that ticker column is null (unparseable) and the instrument is in cusip, acquirer_cusip or new_cusip."
+    ]
 
 
 async def reference_option_exchanges(ctx: ToolContext, args: NoArgs) -> ToolOutput:

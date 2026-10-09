@@ -159,7 +159,10 @@ class ConditionCode(CanonicalModel):
 
 class CorporateAction(CanonicalModel):
     """One processed corporate action. Columns that do not apply to the
-    action's type are None with code not_applicable (response-level)."""
+    action's type are None with code not_applicable (response-level). An
+    instrument the provider names by CUSIP only (a CVR, an escrow or another
+    right with no ticker) has a None ticker column with code unparseable; its
+    CUSIP is in cusip, acquirer_cusip or new_cusip."""
 
     schema_name: ClassVar[str] = "marketlens.CorporateAction"
     time_column: ClassVar[str | None] = None
@@ -208,6 +211,10 @@ class CorporateAction(CanonicalModel):
     source_ticker: Ticker | None = None
     special: bool | None = None
     foreign: bool | None = None
+    acquirer_cusip: str | None = Field(default=None, description="CUSIP of the acquirer's security (mergers)")
+    new_cusip: str | None = Field(
+        default=None, description="CUSIP of the new security (splits, name changes, spin-offs, rights)"
+    )
 
 
 class CorporateActionAnnouncement(CanonicalModel):
