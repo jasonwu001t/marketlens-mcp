@@ -65,6 +65,8 @@ LOT_NOTE = (
 NOT_TRADES = frozenset({"M", "Q", "9"})
 #: Alpaca's movers screener ranks at most this many gainers and losers.
 MOVERS_MAX = 50
+#: Alpaca's most-actives screener ranks at most this many.
+MOST_ACTIVE_MAX = 100
 #: Nasdaq's fifth letter of a five-letter symbol for warrants, rights and units (NRSNW, CHARR, CCAQU).
 FIFTH_LETTERS = frozenset("WRU")
 #: Suffixes after the root for warrants, rights and units (Alpaca's AAC.WS and BCAT.RT, our AAC-WS,
@@ -111,6 +113,12 @@ class LatestIn(Inputs):
 class MostActiveIn(Inputs):
     by: Literal["volume", "trades"] = Field("volume", description="Rank by share volume or by trade count.")
     top: int = Field(10, ge=1, le=100, description="How many tickers (1-100).")
+    min_price: float | None = Field(
+        None,
+        ge=0,
+        description="Drop stocks whose latest trade is below this (USD), e.g. 5 to leave out penny stocks; "
+        "Alpaca's top 100 are screened instead, ranked from 1 among the kept and cut to top.",
+    )
 
 
 class MoversIn(Inputs):
@@ -398,24 +406,64 @@ async def market_snapshots(ctx: ToolContext, args: LatestIn) -> ToolOutput:
     )
 
 
+async def snapshots_of(api: AlpacaClient, symbols: list[str], feed: str) -> dict[str, Snapshot]:
+    """Snapshots by ticker for Alpaca symbols (one request); a symbol whose
+    snapshot does not fit the model is left out."""
+    if not symbols:
+        return {}
+    data = await api.get("data", "/v2/stocks/snapshots", {"symbols": symbols, "feed": feed})
+    out: dict[str, Snapshot] = {}
+    for symbol, rec in (data or {}).items():
+        tk = to_ticker(symbol, EQ)
+        rows = collect(
+            Skips(Snapshot.schema_name),
+            [rec],
+            lambda r, tk=tk: mappers.snapshot(r, ticker=tk, asset_class=EQ),
+            str,
+        )
+        if rows:
+            out[tk] = rows[0]
+    return out
+
+
 async def market_most_active(ctx: ToolContext, args: MostActiveIn) -> ToolOutput:
     skips = Skips(MostActive.schema_name)
     as_of = None
+    notes: list[str] = []
     async with AlpacaClient(ctx) as api:
+        feed, _ = stock_feed(api.settings.stock_feed, historical=False)
 
         async def fetch() -> list:
             nonlocal as_of
-            data = await api.get(
-                "data", "/v1beta1/screener/stocks/most-actives", {"by": args.by, "top": args.top}
-            )
+            top = MOST_ACTIVE_MAX if args.min_price is not None else args.top
+            data = await api.get("data", "/v1beta1/screener/stocks/most-actives", {"by": args.by, "top": top})
             as_of = parse_ts(data.get("last_updated"))
             ranked = list(enumerate(data.get("most_actives") or [], 1))
-            return collect(
+            symbols = [str(p[1].get("symbol")) for p in ranked if p[1].get("symbol")]
+            try:
+                snaps = await snapshots_of(api, symbols, feed)
+            except ToolError as e:
+                if args.min_price is not None:
+                    raise
+                snaps = {}
+                notes.append(
+                    f"Prices could not be read from the snapshots ({e.code}): price and change are null."
+                )
+            rows = collect(
                 skips,
                 ranked,
-                lambda p: mappers.most_active(p[1], rank=p[0], ranked_by=args.by, as_of=as_of),
+                lambda p: mappers.most_active(
+                    p[1],
+                    rank=p[0],
+                    ranked_by=args.by,
+                    as_of=as_of,
+                    snap=snaps.get(to_ticker(str(p[1].get("symbol")), EQ)),
+                ),
                 lambda p: str(p[1].get("symbol")),
             )
+            if args.min_price is None:
+                return rows
+            return _min_price_screen(rows, args, len(ranked), notes)
 
         page = await fetch_once(ctx, fetch)
     return output(
@@ -424,12 +472,41 @@ async def market_most_active(ctx: ToolContext, args: MostActiveIn) -> ToolOutput
         page.rows,
         route="GET /v1beta1/screener/stocks/most-actives",
         operation="MostActives",
-        request=request_of(args),
+        request=request_of(args, feed=feed),
         delay=Delay.UNKNOWN,
         as_of=as_of,
         page=page,
+        notes=notes + day_close_basis_note(page.rows, AFTER_SESSION),
         skips=skips,
     )
+
+
+def _min_price_screen(
+    rows: list[MostActive], args: MostActiveIn, ranked: int, notes: list[str]
+) -> list[MostActive]:
+    """Keep the rows whose price is min_price or more, ranked from 1 among the
+    kept and cut to top; note what was dropped and any shortfall."""
+    kept: list[MostActive] = []
+    below = unpriced = 0
+    for row in rows:
+        if row.price is None:
+            unpriced += 1
+        elif row.price < args.min_price:  # type: ignore[operator]
+            below += 1
+        else:
+            kept.append(row.model_copy(update={"rank": len(kept) + 1}))
+    why = []
+    if below:
+        why.append(f"{below} priced below min_price {args.min_price:g}")
+    if unpriced:
+        why.append(f"{unpriced} without a snapshot price")
+    if why:
+        notes.append(
+            f"min_price dropped {below + unpriced} of the {ranked} most active Alpaca ranked: {', '.join(why)}."
+        )
+    if len(kept) < args.top:
+        notes.append(f"Only {len(kept)} of the {args.top} asked for passed min_price.")
+    return kept[: args.top]
 
 
 def warrant_right_or_unit(ticker: str) -> bool:
@@ -692,7 +769,9 @@ SPECS = (
         capability="market",
         title="Most active stocks",
         description="Today's most active US stocks ranked by share volume or trade count (cumulative for "
-        "the current trading day); as_of is the screener's last update.",
+        "the current trading day), with each one's latest price and change against the previous close from its "
+        "snapshot (as market_snapshots, on the configured stock_feed); as_of is the screener's last update. "
+        "min_price screens Alpaca's top 100 and ranks the kept.",
         readme="Most active stocks today",
         input_model=MostActiveIn,
         output_model=MostActive,

@@ -523,10 +523,63 @@ def test_snapshot_columns_say_what_change_is():
 
 def test_market_most_active_golden(specs, ctx, alpaca):
     alpaca.fixture("/v1beta1/screener/stocks/most-actives", "MostActives")
+    alpaca.fixture("/v2/stocks/snapshots", "StockSnapshots__most_actives")
     out = call(specs["market_most_active"], ctx, by="trades", top=2)
     doc = check_golden(out, "market_most_active")
-    assert alpaca.params() == {"by": "trades", "top": "2"}
+    assert alpaca.params(0) == {"by": "trades", "top": "2"}
+    assert alpaca.params(1) == {"symbols": "NVDA,BRK.B", "feed": "iex"}  # one snapshot request for the list
     assert [(r["rank"], r["ticker"]) for r in doc["rows"]] == [(1, "NVDA"), (2, "BRK-B")]
+    nvda, brk = doc["rows"]
+    assert (nvda["price"], nvda["change_basis"]) == (187.6, "last_trade")
+    assert nvda["change"] == pytest.approx(2.6) and nvda["change_pct"] == pytest.approx(2.6 / 185.0)
+    # BRK-B last traded after hours: its change is the session's, as market_snapshots gives it.
+    assert (brk["price"], brk["change_basis"]) == (503.4, "day_close")
+    assert brk["change"] == pytest.approx(2.8)
+    assert doc["notes"][-1].startswith("change and change_pct of BRK-B compare day_close with prev_close")
+
+
+def _actives(*symbols: str) -> dict:
+    return {
+        "most_actives": [
+            {"symbol": s, "volume": 1000 - i, "trade_count": 100 - i} for i, s in enumerate(symbols)
+        ],
+        "last_updated": "2026-10-02T19:55:01Z",
+    }
+
+
+def _price(p: float) -> dict:
+    return {
+        "latestTrade": {"t": "2026-10-02T19:54:59Z", "p": p, "s": 1, "x": "Q", "c": ["@"], "z": "C", "i": 1}
+    }
+
+
+def test_market_most_active_min_price_screens_the_top_100(specs, ctx, alpaca):
+    alpaca.add("/v1beta1/screener/stocks/most-actives", _actives("SNDL", "NVDA", "PENY", "AAPL", "GONE"))
+    alpaca.add(
+        "/v2/stocks/snapshots",
+        {"SNDL": _price(1.9), "NVDA": _price(187.6), "PENY": _price(0.4), "AAPL": _price(255.8)},
+    )
+    out = call(specs["market_most_active"], ctx, top=3, min_price=5)
+    assert alpaca.params(0) == {"by": "volume", "top": "100"}
+    assert [(r.rank, r.ticker, r.price) for r in out.rows] == [(1, "NVDA", 187.6), (2, "AAPL", 255.8)]
+    assert out.notes == [
+        "min_price dropped 3 of the 5 most active Alpaca ranked: 2 priced below min_price 5, 1 without a snapshot "
+        "price.",
+        "Only 2 of the 3 asked for passed min_price.",
+    ]
+
+
+def test_market_most_active_without_snapshots_still_ranks(specs, ctx, alpaca):
+    alpaca.fixture("/v1beta1/screener/stocks/most-actives", "MostActives")
+    alpaca.add(
+        "/v2/stocks/snapshots", {"message": "subscription does not permit querying SIP data"}, status=403
+    )
+    out = call(specs["market_most_active"], ctx, by="trades", top=2)
+    assert [r.ticker for r in out.rows] == ["NVDA", "BRK-B"]
+    assert out.rows[0].price is None and out.rows[0].absent["price"] == "no_data"
+    assert out.notes == [
+        "Prices could not be read from the snapshots (alpaca_not_entitled): price and change are null."
+    ]
 
 
 def test_market_movers_golden(specs, ctx, alpaca):

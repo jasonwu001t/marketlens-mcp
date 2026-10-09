@@ -362,6 +362,20 @@ class MostActive(CanonicalModel):
     volume: float = unit("shares")
     trade_count: int = unit("count")
     as_of: UtcDatetime = unit("UTC", description="The screener's last update")
+    price: float | None = unit(
+        "price",
+        default=None,
+        description="The latest trade, from the ticker's snapshot (market_snapshots' last_price)",
+    )
+    change: float | None = unit(
+        "price", default=None, description="Against the previous close, as market_snapshots computes it"
+    )
+    change_pct: float | None = unit(
+        "fraction", default=None, description="change / previous close (0.05 = 5 %)"
+    )
+    change_basis: Literal["last_trade", "day_close"] | None = Field(
+        default=None, description="As market_snapshots' change_basis: the price change is measured from"
+    )
 
 
 class Mover(CanonicalModel):

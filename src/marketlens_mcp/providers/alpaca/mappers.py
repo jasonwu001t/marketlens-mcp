@@ -214,18 +214,34 @@ def change_basis(
     return "last_trade" if regular and not EXTENDED_HOURS & set(conditions) else "day_close"
 
 
-def most_active(raw: Raw, *, rank: int, ranked_by: str, as_of: datetime) -> MostActive:
-    return build_row(
-        MostActive,
-        {
-            "ticker": to_ticker(raw["symbol"], "us_equity"),
-            "rank": rank,
-            "ranked_by": ranked_by,
-            "volume": num(raw["volume"]),
-            "trade_count": integer(raw["trade_count"]),
-            "as_of": as_of,
-        },
-    )
+#: MostActive columns taken from the ticker's snapshot, and their Snapshot names.
+FROM_SNAPSHOT = {
+    "price": "last_price",
+    "change": "change",
+    "change_pct": "change_pct",
+    "change_basis": "change_basis",
+}
+
+
+def most_active(
+    raw: Raw, *, rank: int, ranked_by: str, as_of: datetime, snap: Snapshot | None = None
+) -> MostActive:
+    """A screener row joined with its snapshot's price and change; without a
+    snapshot those are None with no_data."""
+    data: dict[str, Any] = {
+        "ticker": to_ticker(raw["symbol"], "us_equity"),
+        "rank": rank,
+        "ranked_by": ranked_by,
+        "volume": num(raw["volume"]),
+        "trade_count": integer(raw["trade_count"]),
+        "as_of": as_of,
+    }
+    if snap is None:
+        return build_row(MostActive, data, dict.fromkeys(FROM_SNAPSHOT, NO_DATA))
+    data.update({k: getattr(snap, src) for k, src in FROM_SNAPSHOT.items()})
+    absent = snap.absent or {}
+    codes = {k: absent[src] for k, src in FROM_SNAPSHOT.items() if src in absent}
+    return build_row(MostActive, data, codes)
 
 
 def mover(raw: Raw, *, rank: int, market_type: str, direction: str, as_of: datetime) -> Mover:

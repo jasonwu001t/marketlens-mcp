@@ -83,7 +83,10 @@ HTTP_CASES: dict[str, Case] = {
         "market_snapshots",
     ),
     "market_most_active": Case(
-        (r("/v1beta1/screener/stocks/most-actives", "MostActives"),),
+        (
+            r("/v1beta1/screener/stocks/most-actives", "MostActives"),
+            r("/v2/stocks/snapshots", "StockSnapshots__most_actives"),
+        ),
         {"by": "trades", "top": 2},
         "market_most_active",
     ),

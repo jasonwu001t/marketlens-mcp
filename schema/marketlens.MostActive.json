@@ -44,6 +44,65 @@
       "type": "string",
       "x-unit": "UTC"
     },
+    "change": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Against the previous close, as market_snapshots computes it",
+      "title": "Change",
+      "x-unit": "price"
+    },
+    "change_basis": {
+      "anyOf": [
+        {
+          "enum": [
+            "last_trade",
+            "day_close"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "As market_snapshots' change_basis: the price change is measured from",
+      "title": "Change Basis"
+    },
+    "change_pct": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "change / previous close (0.05 = 5 %)",
+      "title": "Change Pct",
+      "x-unit": "fraction"
+    },
+    "price": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The latest trade, from the ticker's snapshot (market_snapshots' last_price)",
+      "title": "Price",
+      "x-unit": "price"
+    },
     "rank": {
       "minimum": 1,
       "title": "Rank",

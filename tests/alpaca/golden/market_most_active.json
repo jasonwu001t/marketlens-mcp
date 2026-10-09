@@ -1,7 +1,9 @@
 {
  "absent": {},
  "model": "marketlens.MostActive",
- "notes": [],
+ "notes": [
+  "change and change_pct of BRK-B compare day_close with prev_close (change_basis day_close), not last_price: their last trade falls outside the latest session's regular hours (an extended-hours trade, or none since the session), so the change is that session's close against the one before."
+ ],
  "offload": "auto",
  "pagination": {
   "complete": true,
@@ -27,6 +29,7 @@
   "provider": "alpaca",
   "request": {
    "by": "trades",
+   "feed": "iex",
    "top": 2
   },
   "route": "GET /v1beta1/screener/stocks/most-actives",
@@ -41,6 +44,10 @@
   {
    "absent": null,
    "as_of": "2026-10-02T19:55:01.123456Z",
+   "change": 2.5999999999999943,
+   "change_basis": "last_trade",
+   "change_pct": 0.014054054054054023,
+   "price": 187.6,
    "rank": 1,
    "ranked_by": "trades",
    "ticker": "NVDA",
@@ -50,6 +57,10 @@
   {
    "absent": null,
    "as_of": "2026-10-02T19:55:01.123456Z",
+   "change": 2.8000000000000114,
+   "change_basis": "day_close",
+   "change_pct": 0.0056000000000000225,
+   "price": 503.4,
    "rank": 2,
    "ranked_by": "trades",
    "ticker": "BRK-B",
