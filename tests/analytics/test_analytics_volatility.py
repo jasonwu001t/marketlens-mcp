@@ -13,6 +13,7 @@ import pydantic
 import pytest
 from analytics_harness import DAY, MINUTE, bars, output_rows, run, source_provenance, utc
 
+from marketlens_mcp.analytics.tools.drawdown import SPEC as DRAWDOWN
 from marketlens_mcp.analytics.tools.returns import SPEC as RETURNS
 from marketlens_mcp.analytics.tools.volatility import SPEC
 from marketlens_mcp.plugin_api import ToolError
@@ -447,6 +448,32 @@ def test_a_volatility_column_is_not_a_price(store, ctx):
     with pytest.raises(ToolError) as e:
         run(SPEC, ctx, result_id=rid, window=2, periods_per_year=252, price_column="ret")
     assert e.value.code == "not_prices" and "input_kind=returns" in e.value.message
+
+
+def test_a_drawdown_column_is_not_taken_as_returns(store, ctx):
+    """A stored drawdown series (unit fraction) was read as returns with only a
+    note: a ratio column of a model other than returns, or a query answer's
+    copy of it, is refused unless input_kind=returns says it holds returns."""
+    prices = store.put_rows(bars("AAPL", CLOSES))
+    dd = store.keep(run(DRAWDOWN, ctx, result_id=prices, mode="series"), "analytics_drawdown")
+    with pytest.raises(ToolError) as e:
+        run(SPEC, ctx, result_id=dd, window=2, periods_per_year=252)
+    assert e.value.code == "not_prices" and "input_kind=returns" in e.value.message
+    kept = store.put(
+        store.tables[dd].select(["t", "series", "drawdown"]),
+        tool="results_query",
+        model="marketlens.QueryRow",
+        provenance=source_provenance(route="duckdb:results_query"),
+        time_column="t",
+        group_column="series",
+        column_units={"drawdown": "fraction"},
+        parents=[dd],
+    ).result_id
+    with pytest.raises(ToolError) as e:
+        run(SPEC, ctx, result_id=kept, window=2, periods_per_year=252, price_column="drawdown")
+    assert e.value.code == "not_prices"
+    out = run(SPEC, ctx, result_id=dd, window=2, periods_per_year=252, input_kind="returns")
+    assert any("input_kind=returns" in n and "taken as returns" in n for n in out.notes)
 
 
 #: Weekdays of four weeks from Monday 2 March 2026, at the close.

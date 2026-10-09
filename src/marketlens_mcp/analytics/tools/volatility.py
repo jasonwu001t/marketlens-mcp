@@ -81,8 +81,8 @@ class VolatilityArgs(BaseModel):
     input_kind: Literal["prices", "returns"] | None = Field(
         None,
         description="What price_column holds: prices (returns are computed from them) or returns (used as they "
-        "are, e.g. a portfolio's daily returns). Default: returns for a returns result or a column in fraction "
-        "units, else prices.",
+        "are, e.g. a portfolio's daily returns). Default: returns for a returns result, or for a column in "
+        "fraction units of a query answer or aligned result; else prices.",
     )
     series_column: str | None = Field(
         None, description="Column naming each series. Default: the result's group column."
@@ -293,9 +293,24 @@ def _annualisation(ctx: ToolContext, session: ResultSession, inp: Input, rets: s
     )
 
 
-def _as_returns(inp: Input, args: VolatilityArgs) -> tuple[str, bool]:
+def _source_model(ctx: ToolContext, inp: Input, col: str) -> str:
+    """The model whose column ``col`` is: the parent's, when a query answer
+    over one result kept that column; else the input's own."""
+    if inp.model == QUERY_ROW_SCHEMA_NAME and len(inp.info.parents) == 1:
+        try:
+            parent = ctx.results.info(inp.info.parents[0])
+        except ResultNotFound:
+            return inp.model
+        if any(c.name == col for c in parent.columns):
+            return parent.model
+    return inp.model
+
+
+def _as_returns(ctx: ToolContext, inp: Input, args: VolatilityArgs) -> tuple[str, bool]:
     """The column and whether it holds returns: input_kind, else a returns
-    result or a column in fraction units. A ratio column is not prices."""
+    result, or a column in fraction units of a query answer or aligned result
+    (a drawdown or beta column of those models is a ratio, not a return). A
+    ratio column is not prices."""
     given = args.price_column
     if given is None and (inp.model == RETURNS_MODEL or args.input_kind == "returns") and inp.column("ret"):
         given = "ret"
@@ -304,7 +319,8 @@ def _as_returns(inp: Input, args: VolatilityArgs) -> tuple[str, bool]:
     if args.input_kind is not None:
         as_returns = args.input_kind == "returns"
     else:
-        as_returns = inp.model == RETURNS_MODEL or unit == "fraction"
+        model = _source_model(ctx, inp, col)
+        as_returns = model == RETURNS_MODEL or (unit == "fraction" and model in _DYNAMIC)
     if not as_returns and unit in RATIO_UNITS:
         raise refuse(
             "not_prices",
@@ -319,7 +335,7 @@ async def handler(ctx: ToolContext, args: VolatilityArgs) -> ToolOutput:
     notes = list(inp.notes)
     w = args.window
     with ctx.results.open([inp.rid]) as session:
-        col, as_returns = _as_returns(inp, args)
+        col, as_returns = _as_returns(ctx, inp, args)
         if as_returns:
             has_kind = inp.column("kind") is not None and inp.column("kind").type == "VARCHAR"
             kinds = (
