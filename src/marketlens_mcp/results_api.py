@@ -17,7 +17,7 @@ from contextlib import AbstractContextManager
 from datetime import datetime
 from typing import TYPE_CHECKING, Any, Literal, Protocol, runtime_checkable
 
-from pydantic import BaseModel, ConfigDict, Field, SerializerFunctionWrapHandler, model_serializer
+from pydantic import BaseModel, ConfigDict, Field
 
 from marketlens_schema.base import AbsenceReason, PaginationState, Provenance, UtcDatetime
 
@@ -53,18 +53,12 @@ class ColumnInfo(BaseModel):
     description: str | None = None
     source_model: str | None = Field(
         None,
+        # Only carried columns have one: every other column's JSON stays as it was.
+        exclude_if=lambda v: v is None,
         description="A column a query answer or aligned result carried, with its unit, from another result: the "
         "model of the result that computed it (e.g. marketlens.DrawdownPoint), recorded when this result was "
         "created, so it outlives that result. Left out when None.",
     )
-
-    @model_serializer(mode="wrap")
-    def _omit_no_source(self, handler: SerializerFunctionWrapHandler) -> dict[str, Any]:
-        # Only carried columns have one: every other column's JSON stays as it was.
-        data = handler(self)
-        if self.source_model is None:
-            data.pop("source_model", None)
-        return data
 
 
 class ResultInfo(BaseModel):

@@ -27,6 +27,7 @@ All notable changes to this project are documented here. The format follows [Kee
 - A fetch cut at `fetch.max_rows` or `fetch.max_pages` without a page token no longer carries the R16 "call again with page_token" note: the tool's own truncation note stands, and a tool that gave none gets "The data is incomplete; narrow the request." (the answer is still flagged `truncated`).
 - The name `data` is reserved for the built-in provider; a plugin may not take it.
 - `results_query` lowers a `max_rows` above `results.query_max_rows` (200 by default) to it, with a note, as it lowers a larger `LIMIT`, instead of refusing it as invalid arguments; the description and README name the limits: no `PIVOT` or `UNPIVOT` (now `sql_forbidden` with a conditional-aggregation example wherever it appears; a top-level `PIVOT` was `sql_not_select` and a nested one `sql_forbidden` with no way round), at most 8 results a query, and an answer over 24,000 bytes of JSON (`results.query_max_bytes`) or about 6,000 tokens is stored, with a note that says which limit, the answer's size and how to see it inline.
+- pydantic 2.12 or later is required (was 2.11): `ColumnInfo` leaves out an unset `source_model` with the field's `exclude_if`, so a column's JSON Schema still lists its fields in serialization mode.
 
 ### Fixed
 

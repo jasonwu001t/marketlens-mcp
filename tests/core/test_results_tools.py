@@ -17,7 +17,7 @@ from marketlens_mcp.plugin_api import ToolError
 from marketlens_mcp.results import tools as rt
 from marketlens_mcp.results.arrow import rows_to_table
 from marketlens_mcp.results.store import StoreLimits, StoreRoot
-from marketlens_mcp.results_api import InlineResult, ResultMarker
+from marketlens_mcp.results_api import ColumnInfo, InlineResult, ResultInfo, ResultMarker
 from marketlens_mcp.testing import call_tool, make_context
 from marketlens_schema.market import Bar, NewsItem
 
@@ -205,6 +205,20 @@ def test_a_stored_answer_records_the_model_its_columns_came_from(setup):
         "t": ("UTC", None),
         "close": ("price", None),
     }
+
+
+def test_a_columns_json_schema_describes_its_fields_where_source_model_is_left_out():
+    """source_model is left out of a column's JSON when None, and the JSON
+    Schema of a column, alone or in a result, still lists every field in
+    serialization mode as in validation mode (not an opaque object)."""
+    assert "source_model" not in ColumnInfo(name="x", type="DOUBLE").model_dump(mode="json")
+    kept = ColumnInfo(name="x", type="DOUBLE", source_model="marketlens.Bar").model_dump(mode="json")
+    assert kept["source_model"] == "marketlens.Bar"
+    for model in (ColumnInfo, ResultInfo, ResultMarker, InlineResult):
+        for mode in ("validation", "serialization"):
+            schema = model.model_json_schema(mode=mode)
+            column = schema if model is ColumnInfo else schema["$defs"]["ColumnInfo"]
+            assert set(column.get("properties", {})) == set(ColumnInfo.model_fields), (model.__name__, mode)
 
 
 def test_query_over_news_is_external_text(setup):
