@@ -67,9 +67,13 @@ NOT_ENTITLED_HINTS = (
     (
         "/v1beta1/options",
         "Your Alpaca plan may not include this options feed: set providers.alpaca.options_feed: indicative "
-        "in the marketlens config.",
+        "in the marketlens config, and ask for data older than 15 minutes (recent OPRA data needs an OPRA "
+        "subscription and Alpaca's OPRA agreement).",
     ),
 )
+#: Words of an Alpaca 401/403 message that refuse the data, not the keys (an
+#: options window reaching recent OPRA data: "OPRA agreement is not signed").
+NOT_ENTITLED_WORDS = ("subscription", "permit", "entitle", "feed", "opra", "agreement")
 NOT_ENTITLED_OTHER = "Your Alpaca plan does not include this data set; no marketlens setting will enable it."
 
 Api = Literal["data", "trading"]
@@ -248,7 +252,7 @@ class AlpacaClient:
                 retryable=True,
             )
         lowered = message.lower()
-        if status in (401, 403) and any(w in lowered for w in ("subscription", "permit", "entitle", "feed")):
+        if status in (401, 403) and any(w in lowered for w in NOT_ENTITLED_WORDS):
             return ToolError(
                 "alpaca_not_entitled",
                 f"Alpaca refused the data (HTTP {status}): {message}",
@@ -257,8 +261,8 @@ class AlpacaClient:
         if status in (401, 403):
             return ToolError(
                 "alpaca_auth",
-                f"Alpaca refused the API keys (HTTP {status}). Check ALPACA_API_KEY and ALPACA_SECRET_KEY, "
-                f"and that they belong to the {self.environment.value} account.",
+                f"Alpaca refused the API keys (HTTP {status}: {message.rstrip('.')}). Check ALPACA_API_KEY and "
+                f"ALPACA_SECRET_KEY, and that they belong to the {self.environment.value} account.",
             )
         return ToolError("alpaca_rejected", f"Alpaca rejected the request (HTTP {status}): {message}")
 

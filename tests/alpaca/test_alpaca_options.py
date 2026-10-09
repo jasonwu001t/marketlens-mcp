@@ -7,6 +7,8 @@ import pytest
 from alpaca_harness import FakeContext, call, check_golden
 from pydantic import ValidationError
 
+from marketlens_mcp.plugin_api import ToolError
+
 C1, C2, P1 = "AAPL261016C00250000", "AAPL261016C00260000", "AAPL261016P00240000"
 CHAIN_CURSOR = "Q0hBSU58Mg=="  # synthetic next-page cursor in OptionChain__page1
 
@@ -23,6 +25,8 @@ def test_options_bars_golden(specs, ctx, alpaca):
         "limit": "10000",
     }
     assert {(r["occ_symbol"], r["underlying"]) for r in doc["rows"]} == {(C1, "AAPL")}
+    prov = doc["provenance"]
+    assert (prov["feed"], prov["delay"], prov["as_of"]) == ("opra", "delayed", "2026-10-02T19:45:00Z")
 
 
 def test_options_refuse_a_non_occ_symbol(specs, ctx):
@@ -112,3 +116,36 @@ def test_adjusted_contracts_are_option_symbols_with_their_underlying(specs, ctx,
     out = call(specs["options_bars"], ctx, occ_symbols=[ADJ.lower()])
     assert alpaca.params()["symbols"] == ADJ
     assert [(r.occ_symbol, r.underlying) for r in out.rows] == [(ADJ, "ETHA")]
+
+
+@pytest.mark.parametrize(("tool", "path", "fixture"), [
+    ("options_bars", "/v1beta1/options/bars", "OptionBars"),
+    ("options_trades", "/v1beta1/options/trades", "OptionTrades"),
+])  # fmt: skip
+def test_option_history_ends_15_minutes_ago_without_realtime_opra(specs, ctx, alpaca, tool, path, fixture):
+    alpaca.fixture(path, fixture)
+    out = call(specs[tool], ctx, occ_symbols=[C1], start="2026-10-01", end="2026-10-03")
+    assert alpaca.params()["end"] == "2026-10-02T19:45:00Z"  # now (20:00Z) minus 15 minutes
+    assert out.provenance.request["end"] == "2026-10-02T19:45:00Z"
+    assert (out.provenance.feed, out.provenance.delay, out.provenance.as_of.isoformat()) == (
+        "opra",
+        "delayed",
+        "2026-10-02T19:45:00+00:00",
+    )
+    assert any(n.startswith("end 2026-10-03T00:00:00Z is later than Alpaca serves") for n in out.notes)
+    assert "15 minutes" in specs[tool].description
+
+
+def test_option_history_with_realtime_opra_keeps_the_end(specs, alpaca):
+    alpaca.fixture("/v1beta1/options/trades", "OptionTrades")
+    opra = FakeContext(settings={"options_feed": "opra"})
+    out = call(specs["options_trades"], opra, occ_symbols=[C1], start="2026-10-01", end="2026-10-03")
+    assert alpaca.params()["end"] == "2026-10-03T00:00:00Z" and out.notes == []
+    assert (out.provenance.feed, out.provenance.delay) == ("opra", "realtime")
+
+
+def test_option_history_inside_the_last_15_minutes_is_refused_without_realtime_opra(specs, ctx, alpaca):
+    with pytest.raises(ToolError) as e:
+        call(specs["options_trades"], ctx, occ_symbols=[C1], start="2026-10-02T19:50:00Z")
+    assert e.value.code == "invalid_arguments" and "within the last 15 minutes" in e.value.message
+    assert alpaca.requests == []

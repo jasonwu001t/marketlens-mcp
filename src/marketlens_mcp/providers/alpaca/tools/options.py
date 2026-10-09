@@ -1,16 +1,18 @@
 """Option market data (capability ``market``): contracts by OCC symbol, chains
 by underlying. The feed of the latest/snapshot endpoints is
 ``providers.alpaca.options_feed`` (indicative by default: delayed; opra needs a
-subscription)."""
+subscription). The historical bars and trades are OPRA's, with no feed choice:
+without real-time OPRA access Alpaca serves them up to 15 minutes ago."""
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime, timedelta
 from typing import Literal
 
 from pydantic import Field
 
-from marketlens_mcp.plugin_api import ToolContext, ToolOutput
+from marketlens_mcp.plugin_api import ToolContext, ToolError, ToolOutput
+from marketlens_schema.base import Delay
 from marketlens_schema.market import OptionBar, OptionQuote, OptionSnapshot, OptionTrade
 
 from .. import mappers
@@ -31,6 +33,7 @@ from .common import (
     OccSymbols,
     Skips,
     TimeframeIn,
+    Window,
     collect,
     latest_t,
     missing_note,
@@ -44,6 +47,15 @@ from .marketdata import fetch_grouped, fetch_once
 
 GOLDEN = "tests/alpaca/test_alpaca_options.py"
 SNAPSHOT_PAGE_MAX = 1000
+#: Alpaca's historical option bars and trades are OPRA's. Without real-time
+#: OPRA access their default end is 15 minutes ago, and a later end is refused
+#: with a 403 ("OPRA agreement is not signed").
+HISTORY_FEED = "opra"
+OPRA_DELAY = timedelta(minutes=15)
+HISTORY_DOC = (
+    " The data is OPRA's; without real-time OPRA access (options_feed other than opra) Alpaca serves it up "
+    "to 15 minutes ago, so a later end is moved back to then, with a note."
+)
 GREEKS_NOTE = (
     "Greeks and implied volatility are Alpaca's Black-Scholes values per share (implied_volatility as an "
     "annualised fraction); they are null when Alpaca does not compute them for a contract."
@@ -90,9 +102,42 @@ class ChainIn(Inputs):
     page_token: str | None = Field(None, max_length=2000, description=CONTINUE_DOC)
 
 
+def history_window(
+    ctx: ToolContext,
+    api: AlpacaClient,
+    args: BarsIn | TradesIn,
+    default: str,
+    *,
+    timeframe: str | None = None,
+) -> tuple[Window, Delay, datetime, list[str]]:
+    """The window of options_bars and options_trades, the delay of their OPRA
+    data, the instant it reflects and a note. With options_feed other than
+    opra, an end later than 15 minutes ago is moved back to then (Alpaca
+    refuses it), and a window that starts after then is refused here."""
+    win = window(ctx, args.start, args.end, args.lookback, default, timeframe=timeframe)
+    if option_feed(api.settings.options_feed)[1] is Delay.REALTIME:
+        return win, Delay.REALTIME, win.end or ctx.now(), []
+    latest = ctx.now() - OPRA_DELAY
+    if win.start >= latest:
+        raise ToolError(
+            "invalid_arguments",
+            f"The window starts at {iso_z(win.start)}, within the last 15 minutes, which Alpaca serves only "
+            "with real-time OPRA access; ask for an earlier window.",
+            hint="Set providers.alpaca.options_feed: opra in the marketlens config if your plan includes OPRA.",
+        )
+    if win.end is None or win.end <= latest:
+        return win, Delay.DELAYED, win.end or latest, []
+    note = (
+        f"end {iso_z(win.end)} is later than Alpaca serves without real-time OPRA access (options_feed: "
+        f"{api.settings.options_feed}), so the window ends 15 minutes ago, at {iso_z(latest)}. Set "
+        "providers.alpaca.options_feed: opra if your plan includes OPRA."
+    )
+    return Window(win.start, latest, win.lookback), Delay.DELAYED, latest, [note]
+
+
 async def options_bars(ctx: ToolContext, args: BarsIn) -> ToolOutput:
     async with AlpacaClient(ctx) as api:
-        win = window(ctx, args.start, args.end, args.lookback, "P30D", timeframe=args.timeframe)
+        win, delay, as_of, notes = history_window(ctx, api, args, "P30D", timeframe=args.timeframe)
         skips = Skips(OptionBar.schema_name)
 
         def rows(symbol: str, records: list) -> list:
@@ -126,15 +171,18 @@ async def options_bars(ctx: ToolContext, args: BarsIn) -> ToolOutput:
         route="GET /v1beta1/options/bars",
         operation="optionBars",
         request=request_of(args, **win.fields()),
-        as_of=win.end or ctx.now(),
+        feed=HISTORY_FEED,
+        delay=delay,
+        as_of=as_of,
         page=page,
+        notes=notes,
         skips=skips,
     )
 
 
 async def options_trades(ctx: ToolContext, args: TradesIn) -> ToolOutput:
     async with AlpacaClient(ctx) as api:
-        win = window(ctx, args.start, args.end, args.lookback, "P1D")
+        win, delay, as_of, notes = history_window(ctx, api, args, "P1D")
         skips = Skips(OptionTrade.schema_name)
 
         def rows(symbol: str, records: list) -> list:
@@ -162,8 +210,11 @@ async def options_trades(ctx: ToolContext, args: TradesIn) -> ToolOutput:
         route="GET /v1beta1/options/trades",
         operation="OptionTrades",
         request=request_of(args, **win.fields()),
-        as_of=win.end or ctx.now(),
+        feed=HISTORY_FEED,
+        delay=delay,
+        as_of=as_of,
         page=page,
+        notes=notes,
         skips=skips,
     )
 
@@ -317,7 +368,9 @@ SPECS = (
         capability="market",
         title="Option bars",
         description="Historical OHLCV bars for option contracts by OCC symbol (premium per share in USD, volume "
-        "in contracts). timeframe default 1d; window by start/end or lookback (default P30D)." + _SIZE,
+        "in contracts). timeframe default 1d; window by start/end or lookback (default P30D)."
+        + HISTORY_DOC
+        + _SIZE,
         readme="OHLCV bars for option contracts",
         input_model=BarsIn,
         output_model=OptionBar,
@@ -332,7 +385,7 @@ SPECS = (
         capability="market",
         title="Option trades",
         description="Historical trades for option contracts by OCC symbol (premium per share in USD, size in "
-        "contracts). Window by start/end or lookback (default P1D)." + _SIZE,
+        "contracts). Window by start/end or lookback (default P1D)." + HISTORY_DOC + _SIZE,
         readme="Historical option trades",
         input_model=TradesIn,
         output_model=OptionTrade,

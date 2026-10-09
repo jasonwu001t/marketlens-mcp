@@ -214,9 +214,18 @@ def test_auth_errors(alpaca, status, env):
     err = refused(FakeContext(portfolio_environment=env), "trading", "/v2/account")
     assert err.code == "alpaca_auth"
     assert err.message == (
-        f"Alpaca refused the API keys (HTTP {status}). Check ALPACA_API_KEY and ALPACA_SECRET_KEY, "
+        f"Alpaca refused the API keys (HTTP {status}: forbidden). Check ALPACA_API_KEY and ALPACA_SECRET_KEY, "
         f"and that they belong to the {env.value} account."
     )
+
+
+@pytest.mark.parametrize("message", ["OPRA agreement is not signed", "opra data requires an agreement"])
+def test_an_opra_refusal_is_not_entitled_with_alpacas_words(alpaca, message):
+    alpaca.add("/v1beta1/options/bars", httpx.Response(403, json={"message": message}))
+    err = refused(FakeContext(), "data", "/v1beta1/options/bars")
+    assert err.code == "alpaca_not_entitled"
+    assert err.message == f"Alpaca refused the data (HTTP 403): {message}"
+    assert "older than 15 minutes" in err.hint and "OPRA" in err.hint
 
 
 def test_subscription_errors_are_not_entitled(alpaca):
