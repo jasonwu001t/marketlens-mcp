@@ -300,24 +300,39 @@ def _annualisation(ctx: ToolContext, session: ResultSession, inp: Input, rets: s
     )
 
 
-def _source_model(ctx: ToolContext, inp: Input, col: str) -> str:
-    """The model whose column ``col`` is: the parent's, when a query answer
-    over one result kept that column; else the input's own."""
-    if inp.model == QUERY_ROW_SCHEMA_NAME and len(inp.info.parents) == 1:
-        try:
-            parent = ctx.results.info(inp.info.parents[0])
-        except ResultNotFound:
-            return inp.model
-        if any(c.name == col for c in parent.columns):
-            return parent.model
-    return inp.model
+def _source_model(ctx: ToolContext, info: ResultInfo, col: str) -> str:
+    """The model of the result that computed column ``col``: followed back
+    through a query answer over one result that kept the column, and through
+    an aligned result to its left input, or its right one (a renamed right
+    column without its suffix); else ``info``'s own."""
+    while info.model in _DYNAMIC:
+        if info.model == QUERY_ROW_SCHEMA_NAME:
+            sources = [(info.parents[0], col)] if len(info.parents) == 1 else []
+        else:
+            request = info.provenance.request
+            left, right = request.get("left_result_id"), request.get("right_result_id")
+            suffix = request.get("suffix") or "_right"
+            sources = [(left, col), (right, col)]
+            if col.endswith(suffix):
+                sources.append((right, col[: -len(suffix)]))
+        for rid, name in sources:
+            try:
+                parent = ctx.results.info(rid) if isinstance(rid, str) else None
+            except ResultNotFound:
+                parent = None
+            if parent is not None and any(c.name == name for c in parent.columns):
+                info, col = parent, name
+                break
+        else:
+            break
+    return info.model
 
 
 def _as_returns(ctx: ToolContext, inp: Input, args: VolatilityArgs) -> tuple[str, bool]:
     """The column and whether it holds returns: input_kind, else a returns
     result, or a column in fraction units of a query answer or aligned result
-    (a drawdown or beta column of those models is a ratio, not a return). A
-    ratio column is not prices."""
+    (a drawdown or beta column carried into those is a ratio, not a return).
+    A ratio column is not prices."""
     given = args.price_column
     if given is None and (inp.model == RETURNS_MODEL or args.input_kind == "returns") and inp.column("ret"):
         given = "ret"
@@ -326,7 +341,7 @@ def _as_returns(ctx: ToolContext, inp: Input, args: VolatilityArgs) -> tuple[str
     if args.input_kind is not None:
         as_returns = args.input_kind == "returns"
     else:
-        model = _source_model(ctx, inp, col)
+        model = _source_model(ctx, inp.info, col)
         as_returns = model == RETURNS_MODEL or (unit == "fraction" and model in _DYNAMIC)
     if not as_returns and unit in RATIO_UNITS:
         raise refuse(

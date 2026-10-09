@@ -13,6 +13,7 @@ import pydantic
 import pytest
 from analytics_harness import DAY, MINUTE, bars, output_rows, run, source_provenance, utc
 
+from marketlens_mcp.analytics.tools.align import SPEC as ALIGN
 from marketlens_mcp.analytics.tools.drawdown import SPEC as DRAWDOWN
 from marketlens_mcp.analytics.tools.returns import SPEC as RETURNS
 from marketlens_mcp.analytics.tools.volatility import SPEC
@@ -514,6 +515,49 @@ def test_a_drawdown_column_is_not_taken_as_returns(store, ctx):
     assert e.value.code == "not_prices"
     out = run(SPEC, ctx, result_id=dd, window=2, periods_per_year=252, input_kind="returns")
     assert any("input_kind=returns" in n and "taken as returns" in n for n in out.notes)
+
+
+def test_a_drawdown_column_through_align_or_a_query_of_a_query_is_not_taken_as_returns(store, ctx):
+    """A drawdown column keeps its fraction unit through analytics_align and
+    through a query of a query, and was read as returns there: a column is
+    followed back to the result that computed it (an aligned result's right
+    column without its suffix)."""
+    aapl, spy = store.put_rows(bars("AAPL", CLOSES)), store.put_rows(bars("SPY", CLOSES[::-1]))
+    dd, spy_dd = (
+        store.keep(run(DRAWDOWN, ctx, result_id=p, mode="series"), "analytics_drawdown") for p in (aapl, spy)
+    )
+
+    def aligned(left, right):
+        return run(
+            ALIGN, ctx, left_result_id=left, right_result_id=right, tolerance="PT0S", store=True
+        ).stored
+
+    def query(parent):
+        return store.put(
+            store.tables[dd].select(["t", "series", "drawdown"]),
+            tool="results_query",
+            model="marketlens.QueryRow",
+            provenance=source_provenance(route="duckdb:results_query"),
+            time_column="t",
+            group_column="series",
+            column_units={"drawdown": "fraction"},
+            parents=[parent],
+        ).result_id
+
+    for rid, col in (
+        (aligned(spy, dd).result_id, "drawdown"),
+        (aligned(dd, spy_dd).result_id, "drawdown_right"),
+        (query(query(dd)), "drawdown"),
+    ):
+        with pytest.raises(ToolError) as e:
+            run(SPEC, ctx, result_id=rid, window=2, periods_per_year=252, price_column=col)
+        assert e.value.code == "not_prices" and "input_kind=returns" in e.value.message, col
+    # Returns stay returns: a right column renamed ret_right is its returns result's ret.
+    rets, spy_rets = (store.keep(run(RETURNS, ctx, result_id=p), "analytics_returns") for p in (aapl, spy))
+    both = aligned(rets, spy_rets)
+    assert {c.name: c.unit for c in both.columns}["ret_right"] == "fraction"
+    out = run(SPEC, ctx, result_id=both.result_id, window=2, periods_per_year=252, price_column="ret_right")
+    assert any("ret_right is in fraction units" in n and "taken as returns" in n for n in out.notes)
 
 
 #: Weekdays of four weeks from Monday 2 March 2026, at the close.
