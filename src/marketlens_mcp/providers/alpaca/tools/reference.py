@@ -1,5 +1,6 @@
 """Reference data (capability ``reference``): assets, option contracts and
-exchanges, the market calendar and clock, corporate actions. The asset,
+exchanges, stock exchanges, condition codes, the market calendar and clock,
+corporate actions. The asset,
 contract, calendar, clock and announcement endpoints live on the trading API
 (paper or live base by portfolio.environment); the rest on the data API."""
 
@@ -13,12 +14,14 @@ from pydantic import Field, model_validator
 from marketlens_mcp.plugin_api import ToolContext, ToolOutput
 from marketlens_schema.market import (
     Asset,
+    ConditionCode,
     CorporateAction,
     CorporateActionAnnouncement,
     MarketCalendarDay,
     MarketClock,
     OptionContract,
     OptionExchange,
+    StockExchange,
 )
 
 from .. import mappers_reference as m
@@ -135,6 +138,26 @@ class AnnouncementsIn(Inputs):
             raise ValueError("until must not be before since")
         if (self.until - self.since).days > ANNOUNCEMENT_MAX_DAYS:
             raise ValueError("since and until may be at most 90 days apart (an Alpaca limit)")
+        return self
+
+
+class ConditionsIn(Inputs):
+    asset_class: Literal["us_equity", "us_option"] = Field(
+        description="Stock (us_equity) or option (us_option) condition codes."
+    )
+    tick_type: Literal["trade", "quote"] = Field(
+        "trade", description="Trade or quote conditions (default trade)."
+    )
+    tape: Literal["A", "B", "C"] | None = Field(
+        None,
+        description="Stocks only: tape A (NYSE-listed), B (NYSE American, NYSE Arca, regional) or C "
+        "(Nasdaq-listed); omit for all three.",
+    )
+
+    @model_validator(mode="after")
+    def _tape_for_stocks(self) -> ConditionsIn:
+        if self.tape and self.asset_class == "us_option":
+            raise ValueError("tape applies to stock condition codes only")
         return self
 
 
@@ -490,6 +513,75 @@ async def reference_option_exchanges(ctx: ToolContext, args: NoArgs) -> ToolOutp
     )
 
 
+async def reference_stock_exchanges(ctx: ToolContext, args: NoArgs) -> ToolOutput:
+    skips = Skips(StockExchange.schema_name)
+    async with AlpacaClient(ctx) as api:
+
+        async def fetch() -> list:
+            data = await api.get("data", "/v2/stocks/meta/exchanges")
+            return collect(
+                skips,
+                list((data or {}).items()),
+                lambda kv: m.stock_exchange(kv[0], kv[1]),
+                lambda kv: str(kv[0]),
+            )
+
+        page = await fetch_once(ctx, fetch)
+    return output(
+        ctx,
+        StockExchange,
+        page.rows,
+        route="GET /v2/stocks/meta/exchanges",
+        operation="StockMetaExchanges",
+        request={},
+        page=page,
+        skips=skips,
+    )
+
+
+async def reference_condition_codes(ctx: ToolContext, args: ConditionsIn) -> ToolOutput:
+    skips = Skips(ConditionCode.schema_name)
+    option = args.asset_class == "us_option"
+    route = (
+        "GET /v1beta1/options/meta/conditions/{ticktype}"
+        if option
+        else "GET /v2/stocks/meta/conditions/{ticktype}"
+    )
+    path = route.removeprefix("GET ").replace("{ticktype}", args.tick_type)
+    async with AlpacaClient(ctx) as api:
+
+        def rows(data: dict, tape: str | None) -> list:
+            return collect(
+                skips,
+                list((data or {}).items()),
+                lambda kv: m.condition_code(
+                    kv[0], kv[1], asset_class=args.asset_class, tick_type=args.tick_type, tape=tape
+                ),
+                lambda kv: f"{tape}:{kv[0]}" if tape else str(kv[0]),
+            )
+
+        async def fetch() -> list:
+            if option:
+                return rows(await api.get("data", path), None)
+            out: list = []
+            for tape in [args.tape] if args.tape else ["A", "B", "C"]:
+                out += rows(await api.get("data", path, {"tape": tape}), tape)
+            return out
+
+        page = await fetch_once(ctx, fetch)
+    return output(
+        ctx,
+        ConditionCode,
+        page.rows,
+        route=route,
+        operation="OptionMetaConditions" if option else "StockMetaConditions",
+        request=request_of(args),
+        page=page,
+        absent={"tape": absence("not_applicable", "Option condition codes have no tape.")} if option else {},
+        skips=skips,
+    )
+
+
 _T = " (trading API)"
 _M = " (market data API)"
 SPECS = (
@@ -650,5 +742,36 @@ SPECS = (
         golden_test=GOLDEN,
         operations=("OptionMetaExchanges",),
         parity=("get_option_exchange_codes",),
+    ),
+    spec(
+        name="reference_stock_exchanges",
+        capability="reference",
+        title="Stock exchanges",
+        description="Stock exchange codes and names, to read the exchange columns of stock quotes and trades "
+        "(market_quotes, market_trades, market_latest_*).",
+        readme="Stock exchange codes",
+        input_model=NoArgs,
+        output_model=StockExchange,
+        route=f"GET /v2/stocks/meta/exchanges{_M}",
+        handler=reference_stock_exchanges,
+        golden_test=GOLDEN,
+        operations=("StockMetaExchanges",),
+        parity=(),
+    ),
+    spec(
+        name="reference_condition_codes",
+        capability="reference",
+        title="Condition codes",
+        description="Trade or quote condition codes and their names, to read the conditions columns of stock "
+        "and option trades and quotes: stocks per tape (A NYSE-listed, B NYSE American, NYSE Arca and regional, "
+        "C Nasdaq-listed; all three by default), options without a tape.",
+        readme="Trade and quote condition codes",
+        input_model=ConditionsIn,
+        output_model=ConditionCode,
+        route=f"GET /v2/stocks/meta/conditions/{{ticktype}}, GET /v1beta1/options/meta/conditions/{{ticktype}}{_M}",
+        handler=reference_condition_codes,
+        golden_test=GOLDEN,
+        operations=("StockMetaConditions", "OptionMetaConditions"),
+        parity=(),
     ),
 )

@@ -131,6 +131,32 @@ class OptionExchange(CanonicalModel):
     name: str
 
 
+class StockExchange(CanonicalModel):
+    """A stock exchange code as the exchange columns of stock quotes and trades carry it."""
+
+    schema_name: ClassVar[str] = "marketlens.StockExchange"
+
+    code: str
+    name: str
+
+
+class ConditionCode(CanonicalModel):
+    """A trade or quote condition code and its name, as the conditions columns of
+    stock and option quotes and trades carry it."""
+
+    schema_name: ClassVar[str] = "marketlens.ConditionCode"
+
+    asset_class: Literal["us_equity", "us_option"]
+    tick_type: Literal["trade", "quote"]
+    tape: Literal["A", "B", "C"] | None = Field(
+        default=None,
+        description="The stock tape the code is published for: A (NYSE-listed), B (NYSE American, NYSE Arca and "
+        "regional listings), C (Nasdaq-listed); null for options",
+    )
+    code: str
+    name: str
+
+
 class CorporateAction(CanonicalModel):
     """One processed corporate action. Columns that do not apply to the
     action's type are None with code not_applicable (response-level)."""
@@ -549,6 +575,8 @@ MARKET_MODELS: tuple[type[CanonicalModel], ...] = (
     OptionDeliverable,
     OptionContract,
     OptionExchange,
+    StockExchange,
+    ConditionCode,
     CorporateAction,
     CorporateActionAnnouncement,
     Bar,

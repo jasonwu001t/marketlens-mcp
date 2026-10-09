@@ -1,6 +1,6 @@
 """Alpaca reference JSON -> canonical rows: assets, option contracts, the market
 calendar and clock, corporate-action announcements and processed corporate
-actions, option exchanges."""
+actions, option and stock exchanges, condition codes."""
 
 from __future__ import annotations
 
@@ -11,6 +11,7 @@ from typing import Any
 from marketlens_schema.base import AbsenceCode
 from marketlens_schema.market import (
     Asset,
+    ConditionCode,
     CorporateAction,
     CorporateActionAnnouncement,
     MarketCalendarDay,
@@ -18,6 +19,7 @@ from marketlens_schema.market import (
     OptionContract,
     OptionDeliverable,
     OptionExchange,
+    StockExchange,
 )
 
 from .convert import build_row, dec, et_to_utc, integer, num, parse_date, parse_ts, percent, text, to_ticker
@@ -298,3 +300,18 @@ def corporate_action(raw: Raw, action_type: str) -> CorporateAction:
 
 def option_exchange(code: str, name: str) -> OptionExchange:
     return build_row(OptionExchange, {"code": code, "name": name})
+
+
+def stock_exchange(code: str, name: str) -> StockExchange:
+    return build_row(StockExchange, {"code": code, "name": name})
+
+
+def condition_code(
+    code: str, name: str, *, asset_class: str, tick_type: str, tape: str | None
+) -> ConditionCode:
+    """A condition; an option's has no tape (the tool explains the null once)."""
+    return build_row(
+        ConditionCode,
+        {"asset_class": asset_class, "tick_type": tick_type, "tape": tape, "code": code, "name": name},
+        skip=("tape",) if tape is None else (),
+    )

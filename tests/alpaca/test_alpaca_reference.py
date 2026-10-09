@@ -1,7 +1,8 @@
 """Reference tools: reference_assets, reference_asset, reference_option_contracts,
 reference_option_contract, reference_calendar, reference_clock,
 reference_corporate_action_announcements, reference_corporate_action_announcement,
-reference_corporate_actions, reference_option_exchanges."""
+reference_corporate_actions, reference_option_exchanges, reference_stock_exchanges,
+reference_condition_codes."""
 
 from __future__ import annotations
 
@@ -293,3 +294,37 @@ def test_inactive_option_contracts_keep_alpacas_window_and_say_so(specs, ctx, al
     out = call(specs["reference_option_contracts"], ctx, underlyings=["AAPL"], status="inactive")
     assert not any(k.startswith("expiration") for k in alpaca.params())
     assert any("Alpaca's default window applies" in n for n in out.notes)
+
+
+def test_reference_stock_exchanges_golden(specs, ctx, alpaca):
+    alpaca.fixture("/v2/stocks/meta/exchanges", "StockMetaExchanges")
+    doc = check_golden(call(specs["reference_stock_exchanges"], ctx), "reference_stock_exchanges")
+    assert [(r["code"], r["name"]) for r in doc["rows"]] == [("N", "New York Stock Exchange"), ("V", "IEX")]
+    assert alpaca.requests[0].url.host == "data.alpaca.markets"
+
+
+def test_reference_condition_codes_golden_stocks_one_tape(specs, ctx, alpaca):
+    alpaca.fixture("/v2/stocks/meta/conditions/trade", "StockMetaConditions__trade_C", match={"tape": "C"})
+    out = call(specs["reference_condition_codes"], ctx, asset_class="us_equity", tape="C")
+    doc = check_golden(out, "reference_condition_codes")
+    assert alpaca.params() == {"tape": "C"}
+    assert {(r["tape"], r["tick_type"]) for r in doc["rows"]} == {("C", "trade")}
+    assert doc["rows"][0]["code"] == "@" and doc["rows"][0]["name"] == "Regular Sale"
+
+
+def test_stock_condition_codes_default_to_all_three_tapes(specs, ctx, alpaca):
+    alpaca.fixture("/v2/stocks/meta/conditions/quote", "StockMetaConditions__trade_C")
+    out = call(specs["reference_condition_codes"], ctx, asset_class="us_equity", tick_type="quote")
+    assert [alpaca.params(i)["tape"] for i in range(3)] == ["A", "B", "C"]
+    assert [r.tape for r in out.rows] == ["A"] * 3 + ["B"] * 3 + ["C"] * 3
+    assert out.provenance.operation == "StockMetaConditions"
+
+
+def test_option_condition_codes_have_no_tape(specs, ctx, alpaca):
+    alpaca.fixture("/v1beta1/options/meta/conditions/trade", "OptionMetaConditions__trade")
+    out = call(specs["reference_condition_codes"], ctx, asset_class="us_option")
+    assert [(r.code, r.tape) for r in out.rows][0] == ("a", None)
+    assert out.absent["tape"].code == "not_applicable" and alpaca.params() == {}
+    assert out.provenance.route == "GET /v1beta1/options/meta/conditions/{ticktype}"
+    with pytest.raises(ValidationError, match="tape applies to stock condition codes only"):
+        call(specs["reference_condition_codes"], ctx, asset_class="us_option", tape="A")

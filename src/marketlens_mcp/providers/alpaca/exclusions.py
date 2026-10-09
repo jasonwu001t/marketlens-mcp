@@ -101,9 +101,6 @@ EXCLUDED_OPERATIONS: dict[str, Exclusion] = {
     "FixedIncomeLatestPrices": Exclusion("candidate", _CANDIDATE + " Latest fixed-income prices."),
     "LatestRates": Exclusion("candidate", _CANDIDATE + " Latest forex rates."),
     "Rates": Exclusion("candidate", _CANDIDATE + " Historical forex rates."),
-    "OptionMetaConditions": Exclusion("candidate", _CANDIDATE + " Option trade and quote condition codes."),
-    "StockMetaConditions": Exclusion("candidate", _CANDIDATE + " Stock trade and quote condition codes."),
-    "StockMetaExchanges": Exclusion("candidate", _CANDIDATE + " Stock exchange codes."),
     "StockAuctions": Exclusion("candidate", _CANDIDATE + " Opening and closing auction prices."),
     "StockAuctionSingle": Exclusion(
         "candidate",

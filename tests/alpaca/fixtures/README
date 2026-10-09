@@ -15,7 +15,7 @@ timestamps, quote sizes in round lots before 2025-11-03, canceled trades,
 multi-leg orders, null entries in portfolio history, rejected locates, movers
 that are warrants, rights, units or sub-dollar listings, crypto bars without
 trades (volume and trade count 0), a chain's contract list with and without
-open interest, and
+open interest, exchange and condition code tables (the spec's examples), and
 documentation-server payloads.
 
 alpaca_mcp_server_tools.json is the list of the 72 tools alpacahq/alpaca-mcp-server

@@ -84,6 +84,13 @@ TABLE = {
         "OptionExchange",
         ("get_option_exchange_codes",),
     ),
+    "reference_stock_exchanges": (R, ("StockMetaExchanges",), "StockExchange", ()),
+    "reference_condition_codes": (
+        R,
+        ("StockMetaConditions", "OptionMetaConditions"),
+        "ConditionCode",
+        (),
+    ),
     "news_search": (N, ("News",), "NewsItem", ("get_news",)),
     "portfolio_account": (P, ("getAccount",), "Account", ("get_account_info",)),
     "portfolio_account_config": (P, ("getAccountConfig",), "AccountConfig", ("get_account_config",)),
@@ -168,6 +175,7 @@ KEY_INPUTS = {
     },
     "reference_corporate_action_announcement": {"announcement_id"},
     "reference_corporate_actions": {"tickers", "cusips", "types", "start", "end", "ids", "page_token"},
+    "reference_condition_codes": {"asset_class", "tick_type", "tape"},
     "news_search": {
         "tickers",
         "start",
@@ -265,7 +273,7 @@ def test_capability_counts(specs):
     counts: dict[str, int] = {}
     for s in specs.values():
         counts[s.capability] = counts.get(s.capability, 0) + 1
-    assert counts == {M: 24, R: 10, N: 1, P: 13, D: 5}
+    assert counts == {M: 24, R: 12, N: 1, P: 13, D: 5}
 
 
 def test_descriptions_say_how_large_results_come_back(specs):
