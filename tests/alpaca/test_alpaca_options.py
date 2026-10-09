@@ -10,7 +10,7 @@ import pytest
 from alpaca_harness import FakeContext, call, check_golden
 from pydantic import ValidationError
 
-from marketlens_mcp.plugin_api import ToolError
+from marketlens_mcp.plugin_api import FetchLimits, ToolError
 
 C1, C2, P1 = "AAPL261016C00250000", "AAPL261016C00260000", "AAPL261016P00240000"
 CHAIN_CURSOR = "Q0hBSU58Mg=="  # synthetic next-page cursor in OptionChain__page1
@@ -227,6 +227,21 @@ def test_options_chain_open_interest_absences(specs, ctx, alpaca):
         "open_interest is null (no_match) for 1 contract(s) Alpaca's contract list did not return."
         in out.notes
     )
+
+
+def test_options_chain_open_interest_cut_at_the_fetch_limit_is_withheld(specs, alpaca):
+    # the contract list spans the rows' strike and expiration box, so it can hold more than the chain
+    alpaca.fixture("/v1beta1/options/snapshots/AAPL", "OptionChain__page2")
+    listed = [{"symbol": s, "open_interest": "7", "open_interest_date": "2026-10-01"} for s in (C1, C2)]
+    alpaca.add("/v2/options/contracts", {"option_contracts": listed, "next_page_token": "bW9yZQ=="})
+    out = call(specs["options_chain"], FakeContext(limits=FetchLimits(max_rows=2)), underlying="AAPL")
+    assert out.rows[0].occ_symbol == P1 and out.rows[0].absent["open_interest"] == "withheld"
+    assert (
+        "open_interest is null (withheld) for 1 contract(s): Alpaca's contract list stopped at the fetch "
+        "limit after 2 contracts, before reaching them; narrow the chain by expiration, strike or "
+        "option_type to fill them." in out.notes
+    )
+    assert not any("did not return" in n for n in out.notes)
 
 
 def test_options_chain_survives_a_failed_open_interest_lookup(specs, ctx, alpaca):

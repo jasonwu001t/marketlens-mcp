@@ -290,7 +290,8 @@ async def _open_interest(
 ) -> tuple[list[OptionSnapshot], list[str]]:
     """Fill open_interest and open_interest_date from GET /v2/options/contracts,
     asked for exactly the underlying, type, root, expirations and strikes the
-    rows span. A contract missing from that list is no_match; a failed lookup
+    rows span. A contract missing from that list is no_match, or withheld when
+    the list stopped at the fetch limit before it was complete; a failed lookup
     leaves the chain as it is, with source_error and a note."""
     if not rows:
         return rows, []
@@ -325,28 +326,33 @@ async def _open_interest(
         return out, data.get("next_page_token") or None
 
     try:
-        found = {occ: (oi, day) for occ, oi, day in (await ctx.paginate(fetch_page)).rows}
+        listed = await ctx.paginate(fetch_page)
     except ToolError as e:
         failed = dict.fromkeys(OI_FIELDS, AbsenceCode.SOURCE_ERROR)
         note = f"open_interest is null: Alpaca's contract list failed ({e.code}: {e.message})"
         return [_with(r, {}, failed) for r in rows], [note]
+    found = {occ: (oi, day) for occ, oi, day in listed.rows}
+    unseen = AbsenceCode.NO_MATCH if listed.complete else AbsenceCode.WITHHELD
     out, unmatched = [], 0
     for r in rows:
         if r.occ_symbol not in found:
             unmatched += 1
-            out.append(_with(r, {}, dict.fromkeys(OI_FIELDS, AbsenceCode.NO_MATCH)))
+            out.append(_with(r, {}, dict.fromkeys(OI_FIELDS, unseen)))
             continue
         values = dict(zip(OI_FIELDS, found[r.occ_symbol], strict=True))
         missing = {k: AbsenceCode.NOT_PROVIDED_BY_SOURCE for k, v in values.items() if v is None}
         out.append(_with(r, values, missing))
-    notes = (
-        [
+    if not unmatched:
+        return out, []
+    if listed.complete:
+        return out, [
             f"open_interest is null (no_match) for {unmatched} contract(s) Alpaca's contract list did not return."
         ]
-        if unmatched
-        else []
-    )
-    return out, notes
+    return out, [
+        f"open_interest is null (withheld) for {unmatched} contract(s): Alpaca's contract list stopped at the "
+        f"fetch limit after {len(listed.rows)} contracts, before reaching them; narrow the chain by expiration, "
+        "strike or option_type to fill them."
+    ]
 
 
 def _with(row: OptionSnapshot, values: dict, codes: dict) -> OptionSnapshot:
