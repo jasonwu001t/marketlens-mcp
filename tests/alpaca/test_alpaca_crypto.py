@@ -5,7 +5,7 @@ plus market_movers for crypto."""
 from __future__ import annotations
 
 import pytest
-from alpaca_harness import FakeContext, call, check_golden
+from alpaca_harness import NOW, FakeContext, call, check_golden
 from pydantic import ValidationError
 
 
@@ -29,6 +29,35 @@ def test_crypto_daily_bars_lookback_starts_at_utc_midnight(specs, ctx, alpaca):
     alpaca.fixture("/v1beta3/crypto/us/bars", "CryptoBars")
     call(specs["crypto_bars"], ctx, tickers=["BTC/USD"], timeframe="1d", lookback="P3D")
     assert alpaca.params()["start"] == "2026-09-29T00:00:00Z"  # three days back from 20:00Z, floored
+
+
+@pytest.mark.parametrize(
+    ("tool", "path", "fixture"),
+    [
+        ("crypto_bars", "/v1beta3/crypto/us/bars", "CryptoBars"),
+        ("crypto_quotes", "/v1beta3/crypto/us/quotes", "CryptoQuotes"),
+        ("crypto_trades", "/v1beta3/crypto/us/trades", "CryptoTrades"),
+    ],
+)
+def test_a_crypto_date_end_includes_that_utc_day(specs, ctx, alpaca, tool, path, fixture):
+    # Crypto daily bars are stamped at 00:00 UTC.
+    alpaca.fixture(path, fixture)
+    out = call(specs[tool], ctx, tickers=["BTC/USD"], start="2026-09-28", end="2026-10-01")
+    assert alpaca.params()["end"] == "2026-10-01T23:59:59.999999Z"
+    assert out.notes[0] == (
+        "end 2026-10-01 is a date: the window includes that whole day, to midnight UTC "
+        "(2026-10-01T23:59:59.999999Z)."
+    )
+
+
+def test_a_future_crypto_end_is_cut_to_now_and_as_of_is_now(specs, ctx, alpaca):
+    alpaca.fixture("/v1beta3/crypto/us/bars", "CryptoBars")
+    out = call(
+        specs["crypto_bars"], ctx, tickers=["BTC/USD"], timeframe="1d", start="2026-09-30", end="2027-01-01"
+    )
+    assert alpaca.params()["end"] == "2026-10-02T20:00:00Z"
+    assert out.provenance.as_of == NOW  # not 2027-01-01
+    assert out.notes[0] == "end 2027-01-01 is in the future: the window ends now, 2026-10-02T20:00:00Z."
 
 
 def test_crypto_location_setting_picks_the_path(specs, alpaca):

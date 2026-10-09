@@ -71,6 +71,13 @@ NOT_ENTITLED_HINTS = (
     ),
 )
 NOT_ENTITLED_OTHER = "Your Alpaca plan does not include this data set; no marketlens setting will enable it."
+#: Alpaca's 403 text when a plan without real-time SIP asks for the last 15 minutes of SIP history.
+RECENT_SIP = "recent sip data"
+RECENT_SIP_HINT = (
+    "Your Alpaca plan serves SIP history only 15 minutes after the fact: end the window at least 15 minutes "
+    "ago, or set providers.alpaca.stock_feed: delayed_sip in the marketlens config so windows are cut there "
+    "for you (iex serves real-time IEX data instead)."
+)
 
 Api = Literal["data", "trading"]
 
@@ -252,7 +259,7 @@ class AlpacaClient:
             return ToolError(
                 "alpaca_not_entitled",
                 f"Alpaca refused the data (HTTP {status}): {message}",
-                hint=not_entitled_hint(path),
+                hint=not_entitled_hint(path, lowered),
             )
         if status in (401, 403):
             return ToolError(
@@ -268,7 +275,9 @@ class AlpacaClient:
         return message[:MESSAGE_MAX]
 
 
-def not_entitled_hint(path: str) -> str:
+def not_entitled_hint(path: str, message: str = "") -> str:
+    if RECENT_SIP in message.lower():
+        return RECENT_SIP_HINT
     return next((hint for prefix, hint in NOT_ENTITLED_HINTS if path.startswith(prefix)), NOT_ENTITLED_OTHER)
 
 

@@ -4,8 +4,10 @@ market_movers (golden outputs + the behaviours behind them)."""
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 import pytest
-from alpaca_harness import FakeContext, call, check_golden
+from alpaca_harness import NOW, FakeContext, call, check_golden
 from pydantic import ValidationError
 
 from marketlens_mcp.plugin_api import FetchLimits, ToolError
@@ -105,18 +107,111 @@ def test_delayed_sip_is_sent_as_sip_on_history_and_marked_delayed(specs, alpaca)
         ("1h", "2025-10-07T08:31:05Z"),
     ],
 )
-def test_a_daily_lookback_starts_at_the_first_days_utc_midnight(specs, ctx, alpaca, timeframe, start):
+def test_a_daily_lookback_starts_at_the_first_days_utc_midnight(specs, alpaca, timeframe, start):
     # The 2025-10-07 daily bar is stamped 04:00Z (midnight New York): a start at 08:31:05Z would drop it.
     alpaca.fixture("/v2/stocks/bars", "StockBars__intraday")
     call(
         specs["market_bars"],
-        ctx,
+        FakeContext(fixed_now=datetime(2026, 10, 8, tzinfo=UTC)),
         tickers=["MSFT"],
         timeframe=timeframe,
         lookback="P1Y",
         end="2026-10-07T04:31:05-04:00",
     )
     assert alpaca.params()["start"] == start
+
+
+@pytest.mark.parametrize(
+    ("tool", "path", "fixture"),
+    [
+        ("market_bars", "/v2/stocks/bars", "StockBars__intraday"),
+        ("market_quotes", "/v2/stocks/quotes", "StockQuotes"),
+        ("market_trades", "/v2/stocks/trades", "StockTrades"),
+    ],
+)
+def test_a_date_end_includes_that_new_york_day(specs, ctx, alpaca, tool, path, fixture):
+    # A daily bar is stamped at midnight New York (04:00Z): 00:00Z of the end date would drop that day's bar.
+    alpaca.fixture(path, fixture)
+    out = call(specs[tool], ctx, tickers=["MSFT"], start="2026-09-28", end="2026-10-01")
+    assert alpaca.params()["end"] == "2026-10-02T03:59:59.999999Z"
+    assert out.provenance.request["end"] == "2026-10-02T03:59:59.999999Z"
+    assert out.provenance.as_of == datetime(2026, 10, 2, 3, 59, 59, 999999, tzinfo=UTC)
+    assert out.notes[0] == (
+        "end 2026-10-01 is a date: the window includes that whole day, to midnight New York time "
+        "(2026-10-02T03:59:59.999999Z)."
+    )
+
+
+def test_a_date_end_alone_with_the_same_start_is_one_day(specs, ctx, alpaca):
+    alpaca.fixture("/v2/stocks/bars", "StockBars__intraday")
+    call(specs["market_bars"], ctx, tickers=["MSFT"], start="2026-10-01", end="2026-10-01")
+    assert (alpaca.params()["start"], alpaca.params()["end"]) == (
+        "2026-10-01T00:00:00Z",
+        "2026-10-02T03:59:59.999999Z",
+    )
+
+
+@pytest.mark.parametrize(
+    ("tool", "path", "fixture"),
+    [
+        ("market_bars", "/v2/stocks/bars", "StockBars__intraday"),
+        ("market_quotes", "/v2/stocks/quotes", "StockQuotes"),
+        ("market_trades", "/v2/stocks/trades", "StockTrades"),
+    ],
+)
+@pytest.mark.parametrize("end", ["2026-10-10", "2026-10-02T19:50:00Z"])
+def test_an_end_past_the_delayed_sip_feeds_reach_is_cut_with_a_note(specs, alpaca, tool, path, fixture, end):
+    # A plan without real-time SIP is refused the last 15 minutes ("recent SIP data", HTTP 403).
+    alpaca.fixture(path, fixture)
+    ctx = FakeContext(settings={"stock_feed": "delayed_sip"})
+    out = call(specs[tool], ctx, tickers=["MSFT"], start="2026-10-02", end=end)
+    assert alpaca.params()["end"] == "2026-10-02T19:44:00Z"  # NOW - 16 minutes
+    assert out.provenance.as_of == datetime(2026, 10, 2, 19, 44, tzinfo=UTC)
+    assert out.notes[0] == (
+        f"end {end} is later than the newest data the delayed SIP feed serves (16 minutes before now): the "
+        "window ends at 2026-10-02T19:44:00Z."
+    )
+
+
+def test_an_end_within_the_delayed_sip_feeds_reach_is_kept(specs, alpaca):
+    alpaca.fixture("/v2/stocks/bars", "StockBars__intraday")
+    ctx = FakeContext(settings={"stock_feed": "delayed_sip"})
+    out = call(specs["market_bars"], ctx, tickers=["MSFT"], timeframe="1h", end="2026-10-02T19:40:00Z")
+    assert alpaca.params()["end"] == "2026-10-02T19:40:00Z" and out.notes == []
+
+
+def test_without_an_end_the_delayed_sip_feed_reaches_back_to_its_lag(specs, alpaca):
+    alpaca.fixture("/v2/stocks/trades", "StockTrades")
+    ctx = FakeContext(settings={"stock_feed": "delayed_sip"})
+    out = call(specs["market_trades"], ctx, tickers=["BRK-B"])
+    assert "end" not in alpaca.params()  # Alpaca's own default end
+    assert out.provenance.as_of == datetime(2026, 10, 2, 19, 44, tzinfo=UTC)
+
+
+def test_a_future_end_on_a_real_time_feed_is_cut_to_now(specs, ctx, alpaca):
+    alpaca.fixture("/v2/stocks/bars", "StockBars__intraday")
+    out = call(specs["market_bars"], ctx, tickers=["MSFT"], start="2026-10-01", end="2026-10-10")
+    assert alpaca.params()["end"] == "2026-10-02T20:00:00Z"
+    assert out.provenance.as_of == NOW
+    assert out.notes[0] == "end 2026-10-10 is in the future: the window ends now, 2026-10-02T20:00:00Z."
+
+
+def test_a_start_past_the_delayed_sip_feeds_reach_is_refused(specs, alpaca):
+    ctx = FakeContext(settings={"stock_feed": "delayed_sip"})
+    with pytest.raises(ToolError) as e:
+        call(
+            specs["market_trades"],
+            ctx,
+            tickers=["MSFT"],
+            start="2026-10-02T19:50:00Z",
+            end="2026-10-02T19:55:00Z",
+        )
+    assert e.value.code == "invalid_arguments"
+    assert e.value.message == (
+        "start (2026-10-02T19:50:00Z) is not before the newest data the delayed SIP feed serves "
+        "(2026-10-02T19:44:00Z); pass an earlier start."
+    )
+    assert alpaca.requests == []
 
 
 def test_start_and_lookback_together_are_refused(specs, ctx, alpaca):

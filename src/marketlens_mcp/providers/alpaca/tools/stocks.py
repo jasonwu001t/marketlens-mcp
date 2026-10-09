@@ -13,10 +13,12 @@ from marketlens_schema.market import Bar, MostActive, Mover, Quote, Snapshot, Tr
 
 from .. import mappers
 from ..client import AlpacaClient
-from ..convert import alpaca_symbol, iso_z, parse_ts, timeframe_to_alpaca, to_ticker
+from ..convert import NEW_YORK, alpaca_symbol, iso_z, parse_ts, timeframe_to_alpaca, to_ticker
 from .common import (
+    BARS_LOOKBACK_DOC,
     CONTINUE_DOC,
-    END_DOC,
+    DELAYED_SIP,
+    END_DOC_NY,
     LOOKBACK_DOC,
     SORT_DOC,
     START_DOC,
@@ -36,6 +38,7 @@ from .common import (
     request_of,
     spec,
     stock_feed,
+    stock_lag,
     window,
 )
 from .marketdata import fetch_grouped, fetch_once
@@ -58,9 +61,9 @@ class BarsIn(Inputs):
     tickers: EquityTickers
     timeframe: TimeframeIn = Field("1d", description=TIMEFRAME_DOC)
     start: Instant | None = Field(None, description=START_DOC)
-    end: Instant | None = Field(None, description=END_DOC)
+    end: Instant | None = Field(None, description=END_DOC_NY)
     lookback: Duration | None = Field(
-        None, description=LOOKBACK_DOC + " Default P5D intraday, P1Y daily or longer."
+        None, description=LOOKBACK_DOC + BARS_LOOKBACK_DOC + " Default P5D intraday, P1Y daily or longer."
     )
     adjustment: Literal["raw", "split", "dividend", "all"] = Field(
         "all",
@@ -74,7 +77,7 @@ class BarsIn(Inputs):
 class TicksIn(Inputs):
     tickers: EquityTickers
     start: Instant | None = Field(None, description=START_DOC)
-    end: Instant | None = Field(None, description=END_DOC)
+    end: Instant | None = Field(None, description=END_DOC_NY)
     lookback: Duration | None = Field(None, description=LOOKBACK_DOC + " Default PT20M.")
     sort: Literal["asc", "desc"] = Field("asc", description=SORT_DOC)
     page_token: str | None = Field(None, max_length=2000, description=CONTINUE_DOC)
@@ -125,6 +128,9 @@ async def market_bars(ctx: ToolContext, args: BarsIn) -> ToolOutput:
             args.lookback,
             "P5D" if _intraday(args.timeframe) else "P1Y",
             timeframe=args.timeframe,
+            day_zone=NEW_YORK,
+            lag=stock_lag(api.settings.stock_feed),
+            lagging=DELAYED_SIP,
         )
         skips = Skips(Bar.schema_name)
 
@@ -164,8 +170,9 @@ async def market_bars(ctx: ToolContext, args: BarsIn) -> ToolOutput:
         request=request_of(args, **win.fields(), feed=feed),
         feed=feed,
         delay=delay,
-        as_of=win.end or ctx.now(),
+        as_of=win.as_of,
         page=page,
+        notes=list(win.notes),
         skips=skips,
     )
 
@@ -174,7 +181,16 @@ async def _ticks(ctx: ToolContext, args: TicksIn, kind: Literal["quotes", "trade
     model = Quote if kind == "quotes" else Trade
     async with AlpacaClient(ctx) as api:
         feed, delay = stock_feed(api.settings.stock_feed, historical=True)
-        win = window(ctx, args.start, args.end, args.lookback, "PT20M")
+        win = window(
+            ctx,
+            args.start,
+            args.end,
+            args.lookback,
+            "PT20M",
+            day_zone=NEW_YORK,
+            lag=stock_lag(api.settings.stock_feed),
+            lagging=DELAYED_SIP,
+        )
         skips = Skips(model.schema_name)
         dropped = 0
 
@@ -210,7 +226,7 @@ async def _ticks(ctx: ToolContext, args: TicksIn, kind: Literal["quotes", "trade
             mapper=rows,
             start_token=args.page_token,
         )
-    notes = [LOT_NOTE] if kind == "quotes" else []
+    notes = [*win.notes, LOT_NOTE] if kind == "quotes" else list(win.notes)
     if dropped:
         notes.append(f"Dropped {dropped} trade(s) Alpaca marks canceled or incorrect.")
     absent = {} if kind == "quotes" else {"taker_side": absence("not_applicable", NO_TAKER)}
@@ -223,7 +239,7 @@ async def _ticks(ctx: ToolContext, args: TicksIn, kind: Literal["quotes", "trade
         request=request_of(args, **win.fields(), feed=feed),
         feed=feed,
         delay=delay,
-        as_of=win.end or ctx.now(),
+        as_of=win.as_of,
         page=page,
         absent=absent,
         notes=notes,

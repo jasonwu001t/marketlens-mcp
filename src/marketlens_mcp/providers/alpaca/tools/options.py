@@ -15,10 +15,11 @@ from marketlens_schema.market import OptionBar, OptionQuote, OptionSnapshot, Opt
 
 from .. import mappers
 from ..client import AlpacaClient
-from ..convert import iso_z, path_symbol, timeframe_to_alpaca
+from ..convert import NEW_YORK, iso_z, path_symbol, timeframe_to_alpaca
 from .common import (
+    BARS_LOOKBACK_DOC,
     CONTINUE_DOC,
-    END_DOC,
+    END_DOC_NY,
     LOOKBACK_DOC,
     SORT_DOC,
     START_DOC,
@@ -54,8 +55,8 @@ class BarsIn(Inputs):
     occ_symbols: OccSymbols
     timeframe: TimeframeIn = Field("1d", description=TIMEFRAME_DOC)
     start: Instant | None = Field(None, description=START_DOC)
-    end: Instant | None = Field(None, description=END_DOC)
-    lookback: Duration | None = Field(None, description=LOOKBACK_DOC + " Default P30D.")
+    end: Instant | None = Field(None, description=END_DOC_NY)
+    lookback: Duration | None = Field(None, description=LOOKBACK_DOC + BARS_LOOKBACK_DOC + " Default P30D.")
     sort: Literal["asc", "desc"] = Field("asc", description=SORT_DOC)
     page_token: str | None = Field(None, max_length=2000, description=CONTINUE_DOC)
 
@@ -63,7 +64,7 @@ class BarsIn(Inputs):
 class TradesIn(Inputs):
     occ_symbols: OccSymbols
     start: Instant | None = Field(None, description=START_DOC)
-    end: Instant | None = Field(None, description=END_DOC)
+    end: Instant | None = Field(None, description=END_DOC_NY)
     lookback: Duration | None = Field(None, description=LOOKBACK_DOC + " Default P1D.")
     sort: Literal["asc", "desc"] = Field("asc", description=SORT_DOC)
     page_token: str | None = Field(None, max_length=2000, description=CONTINUE_DOC)
@@ -92,7 +93,9 @@ class ChainIn(Inputs):
 
 async def options_bars(ctx: ToolContext, args: BarsIn) -> ToolOutput:
     async with AlpacaClient(ctx) as api:
-        win = window(ctx, args.start, args.end, args.lookback, "P30D", timeframe=args.timeframe)
+        win = window(
+            ctx, args.start, args.end, args.lookback, "P30D", timeframe=args.timeframe, day_zone=NEW_YORK
+        )
         skips = Skips(OptionBar.schema_name)
 
         def rows(symbol: str, records: list) -> list:
@@ -126,15 +129,16 @@ async def options_bars(ctx: ToolContext, args: BarsIn) -> ToolOutput:
         route="GET /v1beta1/options/bars",
         operation="optionBars",
         request=request_of(args, **win.fields()),
-        as_of=win.end or ctx.now(),
+        as_of=win.as_of,
         page=page,
+        notes=list(win.notes),
         skips=skips,
     )
 
 
 async def options_trades(ctx: ToolContext, args: TradesIn) -> ToolOutput:
     async with AlpacaClient(ctx) as api:
-        win = window(ctx, args.start, args.end, args.lookback, "P1D")
+        win = window(ctx, args.start, args.end, args.lookback, "P1D", day_zone=NEW_YORK)
         skips = Skips(OptionTrade.schema_name)
 
         def rows(symbol: str, records: list) -> list:
@@ -162,8 +166,9 @@ async def options_trades(ctx: ToolContext, args: TradesIn) -> ToolOutput:
         route="GET /v1beta1/options/trades",
         operation="OptionTrades",
         request=request_of(args, **win.fields()),
-        as_of=win.end or ctx.now(),
+        as_of=win.as_of,
         page=page,
+        notes=list(win.notes),
         skips=skips,
     )
 

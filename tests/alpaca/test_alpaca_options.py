@@ -25,6 +25,23 @@ def test_options_bars_golden(specs, ctx, alpaca):
     assert {(r["occ_symbol"], r["underlying"]) for r in doc["rows"]} == {(C1, "AAPL")}
 
 
+@pytest.mark.parametrize(
+    ("tool", "path", "fixture"),
+    [
+        ("options_bars", "/v1beta1/options/bars", "OptionBars"),
+        ("options_trades", "/v1beta1/options/trades", "OptionTrades"),
+    ],
+)
+def test_an_option_date_end_includes_that_new_york_day(specs, ctx, alpaca, tool, path, fixture):
+    # Option daily bars are stamped at midnight New York (04:00Z), as stock bars are.
+    alpaca.fixture(path, fixture)
+    out = call(specs[tool], ctx, occ_symbols=[C1], start="2026-09-28", end="2026-10-01")
+    assert alpaca.params()["end"] == "2026-10-02T03:59:59.999999Z"
+    assert out.notes[0].startswith(
+        "end 2026-10-01 is a date: the window includes that whole day, to midnight New York"
+    )
+
+
 def test_options_refuse_a_non_occ_symbol(specs, ctx):
     with pytest.raises(ValidationError, match="'AAPL'"):
         call(specs["options_bars"], ctx, occ_symbols=["AAPL"])

@@ -86,7 +86,9 @@ async def news_search(ctx: ToolContext, args: NewsIn) -> ToolOutput:
             )
         }
     )
-    notes = [f"Dropped {dropped} related symbol(s) that are not tickers."] if dropped else []
+    notes = list(win.notes)
+    if dropped:
+        notes.append(f"Dropped {dropped} related symbol(s) that are not tickers.")
     return output(
         ctx,
         NewsItem,
@@ -94,7 +96,7 @@ async def news_search(ctx: ToolContext, args: NewsIn) -> ToolOutput:
         route="GET /v1beta1/news",
         operation="News",
         request=request_of(args, **win.fields()),
-        as_of=win.end or ctx.now(),
+        as_of=win.as_of,
         page=page,
         absent=absent,
         notes=notes,

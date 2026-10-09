@@ -46,6 +46,30 @@ def test_news_search_golden_pages_and_untrusted_text(specs, ctx, alpaca):
     assert specs["news_search"].output_risk == "external_text"
 
 
+def test_news_search_date_end_includes_that_utc_day(specs, ctx, alpaca):
+    alpaca.fixture("/v1beta1/news", "News__page2")
+    out = call(specs["news_search"], ctx, start="2026-09-28", end="2026-10-01")
+    assert alpaca.params()["end"] == "2026-10-01T23:59:59.999999Z"
+    assert out.notes[0].startswith(
+        "end 2026-10-01 is a date: the window includes that whole day, to midnight UTC"
+    )
+
+
+def test_news_lookback_doc_says_nothing_of_bars(specs):
+    for name in (
+        "news_search",
+        "crypto_quotes",
+        "crypto_trades",
+        "market_quotes",
+        "market_trades",
+        "options_trades",
+    ):
+        doc = specs[name].input_model.model_fields["lookback"].description
+        assert "Bars" not in doc, name
+    for name in ("market_bars", "crypto_bars", "options_bars"):
+        assert "Bars of 1d or longer" in specs[name].input_model.model_fields["lookback"].description, name
+
+
 def test_news_search_with_content(specs, ctx, alpaca):
     alpaca.fixture("/v1beta1/news", "News__page2")
     out = call(specs["news_search"], ctx, include_content=True, exclude_contentless=True, lookback="P2D")

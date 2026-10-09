@@ -16,6 +16,7 @@ from .. import mappers
 from ..client import AlpacaClient
 from ..convert import iso_z, timeframe_to_alpaca, to_ticker
 from .common import (
+    BARS_LOOKBACK_DOC,
     CONTINUE_DOC,
     END_DOC,
     LOOKBACK_DOC,
@@ -57,7 +58,7 @@ class BarsIn(Inputs):
     timeframe: TimeframeIn = Field("1h", description=TIMEFRAME_DOC)
     start: Instant | None = Field(None, description=START_DOC)
     end: Instant | None = Field(None, description=END_DOC)
-    lookback: Duration | None = Field(None, description=LOOKBACK_DOC + " Default P1D.")
+    lookback: Duration | None = Field(None, description=LOOKBACK_DOC + BARS_LOOKBACK_DOC + " Default P1D.")
     sort: Literal["asc", "desc"] = Field("asc", description=SORT_DOC)
     page_token: str | None = Field(None, max_length=2000, description=CONTINUE_DOC)
 
@@ -165,10 +166,10 @@ async def _history(
         request=request_of(args, **win.fields(), location=loc),
         feed=loc,
         delay=Delay.REALTIME,
-        as_of=win.end or ctx.now(),
+        as_of=win.as_of,
         page=page,
         absent=_absent(kind),
-        notes=no_trades_note(page.rows) if kind == "bars" else [],
+        notes=[*win.notes, *(no_trades_note(page.rows) if kind == "bars" else [])],
         skips=skips,
     )
 
