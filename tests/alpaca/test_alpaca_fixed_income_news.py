@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import httpx
 import pytest
-from alpaca_harness import call, check_golden
+from alpaca_harness import FakeContext, call, check_golden
 from pydantic import ValidationError
+
+from marketlens_mcp.plugin_api import FetchLimits
 
 NEWS_CURSOR = "TkVXU3wy"  # synthetic next-page cursor in News__page1
 
@@ -57,7 +60,7 @@ def test_news_search_golden_pages_and_untrusted_text(specs, ctx, alpaca):
     out = call(specs["news_search"], ctx, tickers=["aapl", "brk.b"])
     doc = check_golden(out, "news_search")
     assert alpaca.params(0) == {
-        "symbols": "AAPL,BRK.B,BRK/B",  # a share class is tagged both ways
+        "symbols": "AAPL,BRK.B,BRK",  # a share class is found through its root
         "start": "2026-09-25T20:00:00Z",
         "sort": "desc",
         "include_content": "false",
@@ -109,23 +112,74 @@ def _article(i: int, symbols: list[str], headline: str = "Synthetic headline", s
     }
 
 
-def test_news_share_class_tags_are_tickers_both_ways(specs, ctx, alpaca):
+def _news_index(*articles: dict):
+    """Alpaca's news symbols filter as it behaves live (checked 2026-10-09): an
+    article is found by a plain tag it carries (BRK, AAPL), never by a share
+    class's form: symbols=BRK.B, BRK/B or BRK-B find nothing, although articles
+    are tagged BRK/B (and also carry the root BRK)."""
+
+    def answer(request: httpx.Request) -> httpx.Response:
+        asked = set(request.url.params.get("symbols", "").split(","))
+        found = [a for a in articles if any(s in asked and s.isalnum() for s in a["symbols"])]
+        return httpx.Response(200, json={"news": found, "next_page_token": None})
+
+    return answer
+
+
+def test_news_finds_a_share_class_through_its_root(specs, ctx, alpaca):
     alpaca.add(
-        "/v1beta1/news", {"news": [_article(1, ["BRK", "BRK/B", "BRK/A", "BRK.B"])], "next_page_token": None}
+        "/v1beta1/news",
+        _news_index(
+            _article(1, ["BRK", "BRK/A", "BRK/B", "KO"]),
+            _article(2, ["BRK", "SPY", "XLF"]),  # a sector round-up: the company, not the class
+            _article(3, ["BRK", "BRK/A"]),
+            _article(4, ["AAPL"]),
+        ),
     )
     out = call(specs["news_search"], ctx, tickers=["BRK-B"], lookback="P30D")
-    assert alpaca.params()["symbols"] == "BRK.B,BRK/B"
-    assert out.rows[0].tickers == ["BRK", "BRK-B", "BRK-A"]  # BRK/B and BRK.B are one ticker, kept once
-    assert out.notes == []  # nothing dropped as "not a ticker", and BRK-B is tagged
-
-
-def test_news_names_a_share_class_no_article_is_tagged_with(specs, ctx, alpaca):
-    alpaca.add("/v1beta1/news", {"news": [_article(1, ["BRK", "AAPL"])], "next_page_token": None})
-    out = call(specs["news_search"], ctx, tickers=["BRK-B", "AAPL"], lookback="P30D")
+    assert alpaca.params()["symbols"] == "BRK.B,BRK"
+    assert [r.news_id for r in out.rows] == ["1"]
+    assert out.rows[0].tickers == ["BRK", "BRK-A", "BRK-B", "KO"]  # BRK/A and BRK/B are tickers
     assert out.notes == [
-        "No article in the window is tagged BRK-B (as BRK.B or BRK/B); the news may tag the company by its root "
-        "alone: ask for BRK."
+        "Alpaca's news finds a share class only through its root, so BRK was asked for too: 2 article(s) "
+        "tagged BRK but not BRK-B were left out (ask for BRK to see them)."
     ]
+
+
+def test_news_keeps_a_root_article_tagged_with_another_requested_ticker(specs, ctx, alpaca):
+    alpaca.add(
+        "/v1beta1/news",
+        _news_index(_article(1, ["BRK", "AAPL"]), _article(2, ["AAPL"]), _article(3, ["BRK"])),
+    )
+    out = call(specs["news_search"], ctx, tickers=["BRK-B", "AAPL"], lookback="P30D")
+    assert alpaca.params()["symbols"] == "BRK.B,AAPL,BRK"
+    assert [r.news_id for r in out.rows] == ["1", "2"]
+    assert out.notes == [
+        "No article in the window is tagged BRK-B.",
+        "Alpaca's news finds a share class only through its root, so BRK was asked for too: 1 article(s) "
+        "tagged BRK but not BRK-B were left out (ask for BRK to see them).",
+    ]
+
+
+def test_news_with_the_root_asked_for_keeps_all_its_articles(specs, ctx, alpaca):
+    alpaca.add("/v1beta1/news", _news_index(_article(1, ["BRK", "BRK/B"]), _article(2, ["BRK"])))
+    out = call(specs["news_search"], ctx, tickers=["BRK", "BRK-B"], lookback="P30D")
+    assert alpaca.params()["symbols"] == "BRK,BRK.B"
+    assert [r.news_id for r in out.rows] == ["1", "2"] and out.notes == []
+
+
+def test_news_says_nothing_of_a_share_class_when_the_window_was_not_read_to_the_end(specs, alpaca):
+    alpaca.add(
+        "/v1beta1/news",
+        {"news": [_article(1, ["BRK"]), _article(2, ["BRK"])], "next_page_token": "P2"},
+    )
+    out = call(
+        specs["news_search"],
+        FakeContext(limits=FetchLimits(max_rows=50_000, max_pages=1)),
+        tickers=["BRK-B"],
+        lookback="P30D",
+    )
+    assert out.rows == [] and not any("No article" in n for n in out.notes)
 
 
 def test_news_query_keeps_articles_with_every_word_in_headline_or_summary(specs, ctx, alpaca):
@@ -148,7 +202,7 @@ def test_news_query_keeps_articles_with_every_word_in_headline_or_summary(specs,
     assert "query" not in alpaca.params()  # Alpaca has no text search: filtered here
     assert out.provenance.request["query"] == "rate CUT"
     assert out.notes == [
-        "query 'rate CUT': 2 of the 4 article(s) Alpaca returned had every word in their headline or summary "
+        "query 'rate CUT': 2 of the 4 article(s) read had every word in their headline or summary "
         "(filtered by this server; Alpaca has no text search)."
     ]
 
