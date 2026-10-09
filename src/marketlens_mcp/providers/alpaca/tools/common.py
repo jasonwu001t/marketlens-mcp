@@ -221,6 +221,12 @@ def window(
             ) from None
         if timeframe is not None and timeframe.endswith(("d", "w", "mo")):
             start_dt = start_dt.astimezone(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+        if lag and end_dt is None:
+            notes.append(
+                f"{'lookback' if lookback else 'the default lookback'} {lb} reaches back from the newest data "
+                f"{source} serves ({lag.total_seconds() / 60:g} minutes before now): the window starts at "
+                f"{convert.iso_z(start_dt)}."
+            )
     if start_dt >= (end_dt or latest):
         if end_dt is None or end_dt == latest:
             raise ToolError(

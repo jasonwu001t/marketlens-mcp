@@ -202,6 +202,10 @@ def test_without_an_end_the_delayed_sip_feed_reaches_back_to_its_lag(specs, alpa
     out = call(specs["market_trades"], ctx, tickers=["BRK-B"])
     assert "end" not in alpaca.params()  # Alpaca's own default end
     assert out.provenance.as_of == datetime(2026, 10, 2, 19, 44, tzinfo=UTC)
+    assert out.notes[0] == (
+        "the default lookback PT20M reaches back from the newest data the delayed SIP feed serves (16 minutes "
+        "before now): the window starts at 2026-10-02T19:24:00Z."
+    )
 
 
 def test_a_future_end_on_a_real_time_feed_is_cut_to_now(specs, ctx, alpaca):
@@ -253,6 +257,17 @@ def test_a_lookback_without_an_end_reaches_back_from_the_delayed_sip_feeds_newes
     out = call(specs["market_trades"], ctx, tickers=["AAPL"], lookback="PT5M")
     assert alpaca.params()["start"] == "2026-10-02T19:39:00Z" and "end" not in alpaca.params()
     assert out.provenance.as_of == datetime(2026, 10, 2, 19, 44, tzinfo=UTC)
+    assert out.notes[0] == (
+        "lookback PT5M reaches back from the newest data the delayed SIP feed serves (16 minutes before now): "
+        "the window starts at 2026-10-02T19:39:00Z."
+    )
+
+
+def test_a_lookback_without_an_end_on_a_real_time_feed_says_nothing_of_a_lag(specs, ctx, alpaca):
+    alpaca.fixture("/v2/stocks/trades", "StockTrades")
+    out = call(specs["market_trades"], ctx, tickers=["AAPL"], lookback="PT5M")
+    assert alpaca.params()["start"] == "2026-10-02T19:55:00Z"
+    assert not any("reaches back" in n for n in out.notes)
 
 
 def test_a_future_start_without_an_end_is_refused(specs, ctx, alpaca):
