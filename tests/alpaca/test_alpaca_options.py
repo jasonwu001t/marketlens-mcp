@@ -11,6 +11,7 @@ from alpaca_harness import FakeContext, call, check_golden
 from pydantic import ValidationError
 
 from marketlens_mcp.plugin_api import FetchLimits, ToolError
+from marketlens_schema.base import Environment
 
 C1, C2, P1 = "AAPL261016C00250000", "AAPL261016C00260000", "AAPL261016P00240000"
 CHAIN_CURSOR = "Q0hBSU58Mg=="  # synthetic next-page cursor in OptionChain__page1
@@ -242,6 +243,18 @@ def test_options_chain_open_interest_cut_at_the_fetch_limit_is_withheld(specs, a
         "option_type to fill them." in out.notes
     )
     assert not any("did not return" in n for n in out.notes)
+
+
+def test_options_chain_names_the_account_its_open_interest_lookup_went_through(specs, alpaca):
+    alpaca.fixture("/v1beta1/options/snapshots/AAPL", "OptionChain__page2")
+    alpaca.add("/v2/options/contracts", {"option_contracts": [], "next_page_token": None})
+    live = FakeContext(portfolio_environment=Environment.LIVE)
+    out = call(specs["options_chain"], live, underlying="AAPL")
+    assert alpaca.requests[-1].url.host == "api.alpaca.markets"
+    assert out.provenance.environment == Environment.LIVE
+    # an empty chain makes no trading-API call, so it names no account
+    alpaca.add("/v1beta1/options/snapshots/ZZZZQ", {"snapshots": {}, "next_page_token": None})
+    assert call(specs["options_chain"], live, underlying="ZZZZQ").provenance.environment is None
 
 
 def test_options_chain_survives_a_failed_open_interest_lookup(specs, ctx, alpaca):

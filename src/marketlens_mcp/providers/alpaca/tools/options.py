@@ -481,6 +481,8 @@ async def options_chain(ctx: ToolContext, args: ChainIn) -> ToolOutput:
         request=request_of(args, feed=feed),
         feed=feed,
         delay=delay,
+        # the open-interest lookup reads the trading API of this account (none for an empty chain)
+        environment=ctx.portfolio_environment if rows else None,
         as_of=latest_t(rows),
         page=page,
         notes=[GREEKS_NOTE, *_no_chain_note(args, rows, skips), *stale_day_bar_note(rows), *oi_notes],
