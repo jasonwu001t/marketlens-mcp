@@ -17,7 +17,7 @@ from marketlens_schema.market import OptionBar, OptionQuote, OptionSnapshot, Opt
 
 from .. import mappers
 from ..client import AlpacaClient
-from ..convert import iso_z, path_symbol, timeframe_to_alpaca
+from ..convert import NEW_YORK, iso_z, path_symbol, timeframe_to_alpaca
 from .common import (
     CONTINUE_DOC,
     END_DOC,
@@ -55,6 +55,10 @@ OPRA_DELAY = timedelta(minutes=15)
 HISTORY_DOC = (
     " The data is OPRA's; without real-time OPRA access (options_feed other than opra) Alpaca serves it up "
     "to 15 minutes ago, so a later end is moved back to then, with a note."
+)
+DAY_BAR_DOC = (
+    "day_* are the contract's latest daily bar, dated by day_t: an earlier session than today's for a contract "
+    "that has not traded today; prev_close is the close of the bar before it (prev_t)."
 )
 GREEKS_NOTE = (
     "Greeks and implied volatility are Alpaca's Black-Scholes values per share (implied_volatility as an "
@@ -264,6 +268,23 @@ async def options_latest_quotes(ctx: ToolContext, args: LatestIn) -> ToolOutput:
     return await _latest(ctx, args, "quotes")
 
 
+def stale_day_bar_note(rows: list[OptionSnapshot]) -> list[str]:
+    """A note counting the rows whose daily bar is from an earlier session than
+    the newest one in the answer (summing their day_volume mixes sessions)."""
+    days = [r.day_t for r in rows if r.day_t is not None]
+    if not days:
+        return []
+    newest = max(days)
+    older = sum(1 for d in days if d < newest)
+    if not older:
+        return []
+    session = newest.astimezone(NEW_YORK).date().isoformat()
+    return [
+        f"day_* is each contract's latest daily bar: for {older} of {len(days)} contracts with one it is from a "
+        f"session before {session} (day_t), so filter on day_t before summing day_volume across contracts."
+    ]
+
+
 async def _snapshots(
     ctx: ToolContext,
     api: AlpacaClient,
@@ -316,7 +337,11 @@ async def options_snapshots(ctx: ToolContext, args: SnapshotsIn) -> ToolOutput:
         delay=delay,
         as_of=latest_t(page.rows),
         page=page,
-        notes=[GREEKS_NOTE, *missing_note(args.occ_symbols, page.rows, "occ_symbol")],
+        notes=[
+            GREEKS_NOTE,
+            *missing_note(args.occ_symbols, page.rows, "occ_symbol"),
+            *stale_day_bar_note(page.rows),
+        ],
         skips=skips,
     )
 
@@ -355,7 +380,7 @@ async def options_chain(ctx: ToolContext, args: ChainIn) -> ToolOutput:
         delay=delay,
         as_of=latest_t(page.rows),
         page=page,
-        notes=[GREEKS_NOTE],
+        notes=[GREEKS_NOTE, *stale_day_bar_note(page.rows)],
         skips=skips,
     )
 
@@ -430,7 +455,9 @@ SPECS = (
         title="Option snapshots",
         description="Latest state per option contract with greeks (delta, gamma, theta, vega, rho; Alpaca's "
         "Black-Scholes, per share) and implied volatility (annualised fraction): last trade, best bid/ask, "
-        "today's bar, previous close; expiration, strike and type parsed from the OCC symbol." + _SIZE,
+        "the latest daily bar and the close before it; expiration, strike and type parsed from the OCC symbol. "
+        + DAY_BAR_DOC
+        + _SIZE,
         readme="Contract snapshots with greeks and IV",
         input_model=SnapshotsIn,
         output_model=OptionSnapshot,
@@ -446,7 +473,7 @@ SPECS = (
         title="Option chain",
         description="The option chain of one underlying: a snapshot row per contract with greeks and implied "
         "volatility, filtered by type, strike range (USD) and expiration (exact or from/to). Chains are large; "
-        "filter by expiration and strike." + _SIZE,
+        "filter by expiration and strike. " + DAY_BAR_DOC + _SIZE,
         readme="Chain snapshots for an underlying",
         input_model=ChainIn,
         output_model=OptionSnapshot,

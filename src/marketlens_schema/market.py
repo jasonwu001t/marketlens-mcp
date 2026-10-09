@@ -416,7 +416,10 @@ class OptionTrade(CanonicalModel):
 class OptionSnapshot(CanonicalModel):
     """Latest state of one contract with greeks and implied volatility (the
     rows of options_snapshots and options_chain). Expiration, strike and type
-    are parsed from the OCC symbol. Greeks are the provider's, per share:
+    are parsed from the OCC symbol. day_* come from the contract's latest daily
+    bar, which is an earlier session than today's for a contract that has not
+    traded today (day_t dates it), and prev_close from the bar before that
+    (prev_t). Greeks are the provider's, per share:
     delta per 1.00 move of the underlying, gamma per 1.00 move squared, theta
     in premium per calendar day, vega in premium per 1 point (0.01) of IV, rho
     in premium per 1 point (0.01) of rate. ml-alpaca verifies these conventions
@@ -452,7 +455,16 @@ class OptionSnapshot(CanonicalModel):
     day_low: float | None = unit("price", default=None)
     day_close: float | None = unit("price", default=None)
     day_volume: float | None = unit("contracts", default=None)
+    day_t: UtcDatetime | None = unit(
+        "UTC",
+        default=None,
+        description="Start of the daily bar day_open..day_volume come from (00:00 New York of its session): the "
+        "contract's latest daily bar, an earlier session than today's when it has not traded today",
+    )
     prev_close: float | None = unit("price", default=None)
+    prev_t: UtcDatetime | None = unit(
+        "UTC", default=None, description="Start of the daily bar prev_close comes from: the one before day_t"
+    )
     implied_volatility: float | None = unit("fraction_per_year", default=None)
     delta: float | None = unit("per_share_greek", default=None)
     gamma: float | None = unit("per_share_greek", default=None)

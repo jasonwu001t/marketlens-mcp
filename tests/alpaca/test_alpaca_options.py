@@ -149,3 +149,27 @@ def test_option_history_inside_the_last_15_minutes_is_refused_without_realtime_o
         call(specs["options_trades"], ctx, occ_symbols=[C1], start="2026-10-02T19:50:00Z")
     assert e.value.code == "invalid_arguments" and "within the last 15 minutes" in e.value.message
     assert alpaca.requests == []
+
+
+def test_snapshot_day_bars_are_dated_and_a_stale_one_is_noted(specs, ctx, alpaca):
+    def snap(day: str, prev: str, volume: int) -> dict:
+        bar = {"o": 1.0, "h": 1.0, "l": 1.0, "c": 1.0, "n": 1, "vw": 1.0}
+        return {
+            "latestTrade": {"t": f"{day}T15:28:00Z", "x": "C", "p": 1.0, "s": 1, "c": "a"},
+            "dailyBar": {**bar, "t": f"{day}T04:00:00Z", "v": volume},
+            "prevDailyBar": {**bar, "t": f"{prev}T04:00:00Z", "v": 2},
+        }
+
+    stale = {C1: snap("2026-10-02", "2026-10-01", 900), C2: snap("2026-08-31", "2026-08-14", 8)}
+    alpaca.add("/v1beta1/options/snapshots", {"snapshots": stale, "next_page_token": None})
+    out = call(specs["options_snapshots"], ctx, occ_symbols=[C1, C2])
+    by = {r.occ_symbol: r for r in out.rows}
+    assert by[C2].day_t.isoformat() == "2026-08-31T04:00:00+00:00" and by[C2].day_volume == 8
+    assert by[C2].prev_t.isoformat() == "2026-08-14T04:00:00+00:00"
+    note = (
+        "day_* is each contract's latest daily bar: for 1 of 2 contracts with one it is from a session before "
+        "2026-10-02 (day_t), so filter on day_t before summing day_volume across contracts."
+    )
+    assert note in out.notes
+    for tool in ("options_snapshots", "options_chain"):
+        assert "today's bar" not in specs[tool].description and "day_t" in specs[tool].description

@@ -322,7 +322,9 @@ def option_snapshot(raw: Raw | None, *, occ: str, underlying: str | None = None)
         "day_low": num(db.get("l")),
         "day_close": num(db.get("c")),
         "day_volume": num(db.get("v")),
+        "day_t": parse_ts(db.get("t")),
         "prev_close": num(pdb.get("c")),
+        "prev_t": parse_ts(pdb.get("t")),
         "implied_volatility": num(raw.get("impliedVolatility")),
         **{g: num(greeks.get(g)) for g in ("delta", "gamma", "theta", "vega", "rho")},
     }
