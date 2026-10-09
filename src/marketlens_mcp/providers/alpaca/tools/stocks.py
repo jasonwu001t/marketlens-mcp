@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import re
 from collections import Counter
+from datetime import datetime, timedelta
 from typing import Literal
 
 from pydantic import Field, model_validator
 
-from marketlens_mcp.plugin_api import ToolContext, ToolOutput
+from marketlens_mcp.plugin_api import ToolContext, ToolError, ToolOutput
 from marketlens_schema.base import Delay
 from marketlens_schema.market import Bar, MostActive, Mover, Quote, Snapshot, Trade
 
@@ -65,8 +67,15 @@ NOT_TRADES = frozenset({"M", "Q", "9"})
 MOVERS_MAX = 50
 #: Nasdaq's fifth letter of a five-letter symbol for warrants, rights and units (NRSNW, CHARR, CCAQU).
 FIFTH_LETTERS = frozenset("WRU")
-#: Suffixes after the root for warrants, rights and units (Alpaca's AAC.WS and BCAT.RT, our AAC-WS, BCAT-RT).
-SUFFIXES = frozenset({"WS", "RT", "U"})
+#: Suffixes after the root for warrants, rights and units (Alpaca's AAC.WS and BCAT.RT, our AAC-WS,
+#: BCAT-RT): WS and a series of it (NE-WSA, Noble's tranche 2 warrants), RT and RTWI (when issued), U, UN.
+SUFFIX_RE = re.compile(r"^(?:WS[A-Z]?|RT(?:WI)?|UN?)$")
+#: Asset names that say warrant, right or unit without doubt: "Warrant(s)", "Rights", "Units, each
+#: consisting of ...". A partnership's "Common Units", "Corporate Units" and a name like "Right On" do not.
+NAME_RE = re.compile(r"\bwarrants?\b|\brights\b|\bunits?,?\s+each\b", re.IGNORECASE)
+#: How long Alpaca's active US equity names are kept for that screen.
+NAMES_TTL = timedelta(hours=24)
+_names: dict[tuple[str, str | None], tuple[datetime, dict[str, str]]] = {}
 
 
 class BarsIn(Inputs):
@@ -114,9 +123,10 @@ class MoversIn(Inputs):
     )
     exclude_warrants_rights_units: bool = Field(
         False,
-        description="Stocks only: drop warrants, rights and units, judged by symbol alone: five letters ending "
-        "in W, R or U (Nasdaq's fifth letter: NRSNW, CHARR, CCAQU) or a WS, RT or U suffix (AAC-WS, AAC-WS-A, "
-        "BCAT-RT, XYZ-U).",
+        description="Stocks only: drop warrants, rights and units. By symbol: five letters ending in W, R or U "
+        "(Nasdaq's fifth letter: NRSNW, CHARR, CCAQU), or a suffix WS or a WS series, RT, RTWI, U or UN (AAC-WS, "
+        "NE-WSA, BCAT-RT, XYZ-U). By name: Alpaca's asset name says Warrant(s), Rights or Units, each ... "
+        "(names are read once and kept a day; a partnership's common units are kept).",
     )
 
     @model_validator(mode="after")
@@ -424,15 +434,36 @@ async def market_most_active(ctx: ToolContext, args: MostActiveIn) -> ToolOutput
 
 def warrant_right_or_unit(ticker: str) -> bool:
     """By symbol alone: a five-letter symbol whose fifth letter is W, R or U, or
-    a root followed by a WS, RT or U suffix. Four-letter symbols and other fifth
-    letters (Z, miscellaneous) are kept."""
+    a root followed by a WS (or WS series such as WSA), RT, RTWI, U or UN
+    suffix. Four-letter symbols and other fifth letters (Z, miscellaneous) are
+    kept."""
     root, _, suffix = ticker.partition("-")
     if suffix:
-        return suffix.split("-")[0] in SUFFIXES
+        return bool(SUFFIX_RE.match(suffix.split("-")[0]))
     return len(root) == 5 and root.isalpha() and root[-1] in FIFTH_LETTERS
 
 
-def _screen(rows: list[Mover], args: MoversIn, reasons: Counter[tuple[str, str]]) -> list[Mover]:
+async def asset_names(ctx: ToolContext, api: AlpacaClient) -> dict[str, str]:
+    """Alpaca's active US equity names by ticker, read once (one request) and
+    kept NAMES_TTL per account environment and trading URL."""
+    key = (api.environment.value, api.settings.trading_url)
+    now = ctx.now()
+    hit = _names.get(key)
+    if hit is not None and now - hit[0] < NAMES_TTL:
+        return hit[1]
+    data = await api.get("trading", "/v2/assets", {"status": "active", "asset_class": EQ})
+    names = {
+        to_ticker(str(a["symbol"]), EQ): str(a.get("name") or "")
+        for a in data or []
+        if isinstance(a, dict) and a.get("symbol")
+    }
+    _names[key] = (now, names)
+    return names
+
+
+def _screen(
+    rows: list[Mover], args: MoversIn, reasons: Counter[tuple[str, str]], names: dict[str, str] | None = None
+) -> list[Mover]:
     """The movers that pass the filters, in Alpaca's order and ranked from 1
     among themselves; each dropped one is counted under its first reason, as
     (one, many)."""
@@ -442,6 +473,8 @@ def _screen(rows: list[Mover], args: MoversIn, reasons: Counter[tuple[str, str]]
             reasons[(f"priced below min_price {args.min_price:g}",) * 2] += 1
         elif args.exclude_warrants_rights_units and warrant_right_or_unit(row.ticker):
             reasons[("warrant, right or unit by symbol", "warrants, rights or units by symbol")] += 1
+        elif args.exclude_warrants_rights_units and names and NAME_RE.search(names.get(row.ticker, "")):
+            reasons[("warrant, right or unit by asset name", "warrants, rights or units by asset name")] += 1
         else:
             kept.append(row.model_copy(update={"rank": len(kept) + 1}))
     return kept
@@ -489,7 +522,17 @@ async def market_movers(ctx: ToolContext, args: MoversIn) -> ToolOutput:
     screened = args.min_price is not None or args.exclude_warrants_rights_units
     counts: dict[str, tuple[int, int, int]] = {}
     reasons: Counter[tuple[str, str]] = Counter()
+    notes: list[str] = []
     async with AlpacaClient(ctx) as api:
+        names = None
+        if args.exclude_warrants_rights_units:
+            try:
+                names = await asset_names(ctx, api)
+            except ToolError as e:
+                notes.append(
+                    f"Alpaca's asset names could not be read ({e.code}), so warrants, rights and units were "
+                    "judged by symbol alone."
+                )
 
         async def fetch() -> list:
             nonlocal as_of
@@ -508,7 +551,7 @@ async def market_movers(ctx: ToolContext, args: MoversIn) -> ToolOutput:
                     lambda p: str(p[1].get("symbol")),
                 )
                 if screened:
-                    kept = _screen(rows, args, reasons)
+                    kept = _screen(rows, args, reasons, names)
                     counts[direction] = (len(ranked), len(rows) - len(kept), len(kept))
                     rows = kept[: args.top]
                 out += rows
@@ -525,7 +568,7 @@ async def market_movers(ctx: ToolContext, args: MoversIn) -> ToolOutput:
         delay=Delay.UNKNOWN,
         as_of=as_of,
         page=page,
-        notes=_screen_notes(args.top, counts, reasons),
+        notes=_screen_notes(args.top, counts, reasons) + notes,
         skips=skips,
     )
 
@@ -666,8 +709,8 @@ SPECS = (
         description="Today's top gainers and losers for stocks or crypto: price, change (USD) and "
         "percent_change as a fraction (0.05 = 5 %), ranked within each direction. Alpaca's lists include "
         "warrants, rights, units and sub-penny listings: min_price and exclude_warrants_rights_units (stocks, "
-        "by symbol) screen Alpaca's top 50 instead, rank counts the movers kept, and notes say how many were "
-        "dropped and why.",
+        "by symbol and asset name) screen Alpaca's top 50 instead, rank counts the movers kept, and notes say "
+        "how many were dropped and why.",
         readme="Top gainers and losers",
         input_model=MoversIn,
         output_model=Mover,

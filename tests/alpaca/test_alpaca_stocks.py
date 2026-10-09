@@ -5,6 +5,7 @@ market_movers (golden outputs + the behaviours behind them)."""
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from urllib.parse import parse_qsl
 
 import pytest
 from alpaca_harness import NOW, FakeContext, call, check_golden
@@ -13,6 +14,21 @@ from pydantic import ValidationError
 from marketlens_mcp.plugin_api import FetchLimits, ToolError
 
 CURSOR = "QUFQTHxEfDIwMjYtMTAtMDE="  # the synthetic next-page cursor in StockBars__page1
+
+
+def asset_names(alpaca, names: dict[str, str] | None = None):
+    """The active-asset list market_movers reads names from (synthetic, trimmed to what a test needs)."""
+    names = names or {
+        "WORX": "SharpLink Gaming Ltd. Ordinary Shares",
+        "BULG": "Bulgari Holdings Inc. Common Stock",
+    }
+    return alpaca.add(
+        "/v2/assets",
+        [
+            {"symbol": sym, "name": name, "class": "us_equity", "status": "active"}
+            for sym, name in names.items()
+        ],
+    )
 
 
 def test_market_bars_golden_two_pages_and_brk_b(specs, ctx, alpaca):
@@ -524,6 +540,7 @@ def test_market_movers_golden(specs, ctx, alpaca):
 
 def test_market_movers_filters_screen_alpacas_top_50_and_say_what_they_dropped(specs, ctx, alpaca):
     alpaca.fixture("/v1beta1/screener/stocks/movers", "Movers__stocks_screened")
+    asset_names(alpaca)
     out = call(specs["market_movers"], ctx, top=2, min_price=1, exclude_warrants_rights_units=True)
     doc = check_golden(out, "market_movers__screened")
     assert alpaca.params() == {"top": "50"}
@@ -574,6 +591,7 @@ def test_market_movers_a_short_list_from_alpaca_is_not_blamed_on_the_filters(spe
 )
 def test_market_movers_names_the_filters_only_where_alpaca_ranked_top_or_more(specs, ctx, alpaca, top, short):
     alpaca.fixture("/v1beta1/screener/stocks/movers", "Movers__stocks_screened")
+    asset_names(alpaca)
     out = call(specs["market_movers"], ctx, top=top, min_price=1, exclude_warrants_rights_units=True)
     assert out.notes == [
         "Filters dropped 4 of 7 gainers and 2 of 3 losers Alpaca ranked: 3 priced below min_price 1, "
@@ -689,6 +707,7 @@ def test_market_movers_filter_notes_count_one_mover_in_the_singular(specs, ctx, 
             "last_updated": "2026-10-02T19:55:00Z",
         },
     )
+    asset_names(alpaca)
     out = call(specs["market_movers"], ctx, top=1, min_price=1, exclude_warrants_rights_units=True)
     assert [r.ticker for r in out.rows] == ["BULG"]
     assert out.notes == [
@@ -703,6 +722,82 @@ def test_market_movers_symbol_filter_is_for_stocks_only(specs, ctx):
         call(specs["market_movers"], ctx, market_type="crypto", exclude_warrants_rights_units=True)
 
 
+MOVERS_BY_NAME = {
+    "gainers": [
+        {"symbol": "NE.WSA", "percent_change": 40.0, "change": 2.0, "price": 7.0},
+        {"symbol": "ZWRT", "percent_change": 30.0, "change": 1.5, "price": 6.5},
+        {"symbol": "ET", "percent_change": 9.0, "change": 1.5, "price": 18.1},
+        {"symbol": "RTON", "percent_change": 8.0, "change": 0.6, "price": 8.1},
+        {"symbol": "NEWCO", "percent_change": 7.0, "change": 0.5, "price": 7.6},
+    ],
+    "losers": [],
+    "market_type": "stocks",
+    "last_updated": "2026-10-02T19:55:00Z",
+}
+NAMES = {
+    "NE.WSA": "Noble Corporation plc Tranche 2 Warrants",
+    "ZWRT": "Zeta Holdings Tranche 3 Warrants",  # synthetic: a warrant whose symbol says nothing
+    "ET": "Energy Transfer LP Common Units",
+    "RTON": "Right On Brands Inc Common Stock",
+}
+
+
+def test_market_movers_drop_warrants_by_symbol_and_by_asset_name(specs, ctx, alpaca):
+    alpaca.add("/v1beta1/screener/stocks/movers", MOVERS_BY_NAME)
+    names = asset_names(alpaca, NAMES)
+    out = call(specs["market_movers"], ctx, top=3, exclude_warrants_rights_units=True)
+    # NE-WSA by symbol, ZWRT by name; a partnership's common units and "Right On" stay; NEWCO is not listed.
+    assert [r.ticker for r in out.rows] == ["ET", "RTON", "NEWCO"]
+    assert out.notes == [
+        "Filters dropped 2 of 5 gainers Alpaca ranked: 1 warrant, right or unit by symbol, 1 warrant, right or "
+        "unit by asset name.",
+        "Alpaca ranked no losers, fewer than the 3 asked for.",
+    ]
+    assert dict(parse_qsl(names_request(alpaca).url.query.decode())) == {
+        "status": "active",
+        "asset_class": "us_equity",
+    }
+    # The names are read once and kept: a second screen asks Alpaca for the movers only.
+    call(specs["market_movers"], ctx, top=3, exclude_warrants_rights_units=True)
+    assert names.calls == 1
+
+
+def names_request(alpaca):
+    return next(r for r in alpaca.requests if r.url.path == "/v2/assets")
+
+
+def test_market_movers_judge_by_symbol_alone_when_the_names_cannot_be_read(specs, ctx, alpaca):
+    alpaca.add("/v1beta1/screener/stocks/movers", MOVERS_BY_NAME)
+    alpaca.add("/v2/assets", {"message": "forbidden"}, status=403)
+    out = call(specs["market_movers"], ctx, top=5, exclude_warrants_rights_units=True)
+    assert [r.ticker for r in out.rows] == ["ZWRT", "ET", "RTON", "NEWCO"]
+    assert out.notes[-1] == (
+        "Alpaca's asset names could not be read (alpaca_auth), so warrants, rights and units were judged by "
+        "symbol alone."
+    )
+
+
+def test_name_rule_is_conservative():
+    from marketlens_mcp.providers.alpaca.tools.stocks import NAME_RE
+
+    for name in (
+        "Noble Corporation plc Tranche 2 Warrants",
+        "KAIROUS ACQUISITION CORP LTD Warrant   09/15/2026",
+        "AIB Acquisition Corporation Rights",
+        "AA Mission Acquisition Corp. II Units, each consisting of one Class A ordinary share",
+    ):
+        assert NAME_RE.search(name), name
+    for name in (
+        "Energy Transfer LP Common Units",
+        "USD PARTNERS LP COM UNIT REPSTG LTD PARTNER INTS",
+        "NextEra Energy, Inc. 7.299% Corporate Units",
+        "Right On Brands Inc Common Stock",
+        "UnitedHealth Group Incorporated Common Stock",
+        "Uniti Group Inc. Common Stock",
+    ):
+        assert not NAME_RE.search(name), name
+
+
 @pytest.mark.parametrize(
     ("ticker", "dropped"),
     [
@@ -712,7 +807,11 @@ def test_market_movers_symbol_filter_is_for_stocks_only(specs, ctx):
         ("BCAT-RT", True),  # Alpaca's BCAT.RT
         ("AAC-WS", True),
         ("AAC-WS-A", True),
+        ("NE-WSA", True),  # Noble's tranche 2 warrants: a WS series
+        ("XYZ-WSB", True),
+        ("ABC-RTWI", True),  # rights, when issued
         ("XYZ-U", True),
+        ("XYZ-UN", True),
         ("AAPL", False),
         ("GOOGL", False),
         ("BRK-B", False),
@@ -720,6 +819,9 @@ def test_market_movers_symbol_filter_is_for_stocks_only(specs, ctx):
         ("PENU", False),
         ("AMPGZ", False),  # Z is "miscellaneous", left alone
         ("BAC-PL", False),
+        ("NEE-PRS", False),  # NextEra's corporate units trade as a preferred series
+        ("BRK-A", False),
+        ("XYZ-WI", False),  # when issued, not a warrant
     ],
 )
 def test_warrant_right_or_unit_is_judged_by_symbol(ticker, dropped):
