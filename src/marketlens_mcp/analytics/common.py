@@ -81,6 +81,10 @@ def result_id_field(description: str) -> Any:
     return Field(pattern=RESULT_ID_RE.pattern, description=description)
 
 
+def optional_result_id_field(description: str) -> Any:
+    return Field(None, pattern=RESULT_ID_RE.pattern, description=description)
+
+
 def store_field() -> Any:
     return Field(
         False,

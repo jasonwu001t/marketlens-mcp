@@ -38,6 +38,20 @@
       "description": "Per-row reasons for None fields: field name -> AbsenceCode",
       "title": "Absent"
     },
+    "alpha": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Per period: mean(r_a) - beta x mean(r_b) over the window",
+      "title": "Alpha",
+      "x-unit": "fraction"
+    },
     "benchmark": {
       "title": "Benchmark",
       "type": "string"
@@ -52,8 +66,23 @@
         }
       ],
       "default": null,
+      "description": "cov_samp(r_a, r_b) / var_samp(r_b)",
       "title": "Beta",
       "x-unit": "fraction"
+    },
+    "n_obs": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Shared returns in the window",
+      "title": "N Obs",
+      "x-unit": "count"
     },
     "period": {
       "anyOf": [
@@ -68,6 +97,19 @@
       "default": null,
       "title": "Period"
     },
+    "r_squared": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "R Squared",
+      "x-unit": "fraction"
+    },
     "return_kind": {
       "enum": [
         "simple",
@@ -80,7 +122,23 @@
       "title": "Series",
       "type": "string"
     },
+    "start": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Time of the window's first return",
+      "title": "Start",
+      "x-unit": "UTC"
+    },
     "t": {
+      "description": "Time of the window's last return",
       "format": "date-time",
       "title": "T",
       "type": "string",

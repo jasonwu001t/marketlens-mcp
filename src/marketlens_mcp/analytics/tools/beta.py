@@ -20,7 +20,9 @@ from ..common import (
     bar_timeframe,
     check_unique_times,
     model_output,
+    names,
     no_period,
+    optional_result_id_field,
     out_time,
     points_sql,
     price_column,
@@ -29,7 +31,6 @@ from ..common import (
     ql,
     refuse,
     resolve,
-    result_id_field,
     rows,
     series_counts,
     skipped_notes,
@@ -44,11 +45,21 @@ TOOL = "analytics_beta"
 class BetaArgs(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    asset_result_id: str = result_id_field(
-        "A stored result of prices of one or more assets (one beta per series)."
+    result_id: str | None = optional_result_id_field(
+        "One stored result of prices holding the assets and the benchmark (e.g. bars of AAPL, MSFT and SPY), "
+        "as the other analytics tools take it: name the benchmark with benchmark_series. Instead of "
+        "asset_result_id."
     )
-    benchmark_result_id: str = result_id_field(
-        "A stored result of prices of exactly one benchmark series (e.g. SPY)."
+    asset_result_id: str | None = optional_result_id_field(
+        "A stored result of prices of one or more assets (one beta per series); with benchmark_result_id."
+    )
+    benchmark_result_id: str | None = optional_result_id_field(
+        "A stored result of prices of the benchmark: one series (e.g. SPY), or pick one with benchmark_series."
+    )
+    benchmark_series: str | None = Field(
+        None,
+        description="The benchmark's value of the series column (e.g. SPY): picks it out of benchmark_result_id, "
+        "or out of result_id, whose other series are then the assets.",
     )
     price_column: str | None = Field(
         None,
@@ -113,9 +124,86 @@ def _benchmark_name(session: ResultSession, a: Input, b: Input) -> str:
     return b.rid
 
 
+def _inputs(ctx: ToolContext, args: BetaArgs) -> tuple[Input, Input]:
+    """The asset and benchmark handles: result_id (with benchmark_series or
+    benchmark_result_id), or asset_result_id with benchmark_result_id."""
+    if args.result_id is not None and args.asset_result_id is not None:
+        raise refuse("invalid_arguments", f"{TOOL}: pass result_id or asset_result_id, not both.")
+    asset = args.result_id or args.asset_result_id
+    if asset is None:
+        raise refuse(
+            "invalid_arguments",
+            f"{TOOL} needs result_id with benchmark_series (one result holding the assets and the benchmark), or "
+            "asset_result_id with benchmark_result_id.",
+        )
+    bench = args.benchmark_result_id or (asset if args.result_id is not None else None)
+    if bench is None:
+        raise refuse("invalid_arguments", f"{TOOL}: asset_result_id needs benchmark_result_id.")
+    if bench == asset and args.result_id is not None and args.benchmark_series is None:
+        raise refuse(
+            "invalid_arguments",
+            f"{TOOL}: with result_id alone, name the benchmark's series with benchmark_series (e.g. SPY).",
+        )
+    a = resolve(ctx, TOOL, asset, series_column=args.series_column)
+    b = resolve(ctx, TOOL, bench, series_column=args.series_column if bench == asset else None)
+    if args.benchmark_series is not None and b.group is None:
+        raise refuse(
+            "no_series_column",
+            f"{TOOL}: benchmark_series needs a series column in {b.label}; it has none.",
+        )
+    return a, b
+
+
+def _benchmark_points(session: ResultSession, a: Input, b: Input, pb: str, name: str | None) -> str:
+    """The benchmark's points: the one series named ``name`` when given (refused when absent)."""
+    if name is None:
+        return pb
+    found = series_counts(session, pb)
+    if name not in found:
+        raise refuse(
+            "unknown_series",
+            f"{TOOL}: {b.label} has no series {name!r} in column {b.group}. Series: {names(list(found)[:20])}.",
+        )
+    return f"SELECT * FROM ({pb}) WHERE s = {ql(name)}"
+
+
+def _numbered(points: str, *, by_series: bool) -> str:
+    """The points with their position in their series (to tell the returns
+    that skip an observation of one side)."""
+    part = "PARTITION BY s " if by_series else ""
+    return f"SELECT s, ts, v, row_number() OVER ({part}ORDER BY ts) AS i FROM ({points})"
+
+
+def _gap_note(session: ResultSession, rets: str, period: str | None) -> list[str]:
+    """A note naming the series whose returns between shared timestamps skip
+    observations one side has and the other lacks (overnight hours a 24-hour
+    market trades, a missing bar)."""
+    found = [
+        r
+        for r in rows(
+            session,
+            f"SELECT s, count(*) FILTER (WHERE gap) AS g, count(*) AS n FROM ({rets}) GROUP BY s ORDER BY s",
+        )
+        if r["g"]
+    ]
+    if not found:
+        return []
+    listed = ", ".join(f"{r['s']} {r['g']} of {r['n']}" for r in found[:10])
+    more = f" and {len(found) - 10} more series" if len(found) > 10 else ""
+    return [
+        f"Returns that span observations only one side has (hours one market trades and the other does not, or "
+        f"missing bars): {listed}{more}. Both returns of such a row cover the same interval, but a longer one than "
+        "the rest"
+        + (
+            "; pass period (e.g. 1d) to sample both to the same buckets."
+            if period is None
+            else f", even in {period} buckets."
+        )
+    ]
+
+
 async def handler(ctx: ToolContext, args: BetaArgs) -> ToolOutput:
-    a = resolve(ctx, TOOL, args.asset_result_id, series_column=args.series_column)
-    b = resolve(ctx, TOOL, args.benchmark_result_id)
+    a, b = _inputs(ctx, args)
     ca = price_column(TOOL, a, args.price_column, param="price_column")
     cb = price_column(TOOL, b, args.price_column, param="price_column")
     notes = list(a.notes) + list(b.notes)
@@ -128,12 +216,16 @@ async def handler(ctx: ToolContext, args: BetaArgs) -> ToolOutput:
         pb = points_sql(b, cb, positive=True)
         check_unique_times(session, TOOL, a, pa_)
         check_unique_times(session, TOOL, b, pb)
+        pb = _benchmark_points(session, a, b, pb, args.benchmark_series)
+        if args.benchmark_series is not None and b.rid == a.rid:
+            pa_ = f"SELECT * FROM ({pa_}) WHERE s <> {ql(args.benchmark_series)}"
         bench_series = series_counts(session, pb)
         if len(bench_series) > 1:
             raise refuse(
                 "benchmark_not_single_series",
                 f"{TOOL} needs a benchmark with exactly one series; {b.label} has {len(bench_series)} in column "
-                f"{b.group}. Keep one with results_query (store=true) first.",
+                f"{b.group}. Name one with benchmark_series (e.g. {next(iter(bench_series))}), or keep one with "
+                "results_query (store=true) first.",
             )
         asset_series = series_counts(session, pa_)
         if max(asset_series.values(), default=0) < 2 or max(bench_series.values(), default=0) < 2:
@@ -142,23 +234,30 @@ async def handler(ctx: ToolContext, args: BetaArgs) -> ToolOutput:
                 f"{TOOL} needs at least 2 usable prices in the benchmark and in an asset series; {a.label} and "
                 f"{b.label} do not have them.",
             )
-        benchmark = next(iter(bench_series)) if b.group is not None else _benchmark_name(session, a, b)
+        if args.benchmark_series is not None:
+            benchmark = args.benchmark_series
+        elif b.group is not None:
+            benchmark = next(iter(bench_series))
+        else:
+            benchmark = _benchmark_name(session, a, b)
         _check_frequencies(
             a, bar_timeframe(ctx, session, TOOL, a), b, bar_timeframe(ctx, session, TOOL, b), args.period
         )
         f = "ln({x} / lag({x}) OVER w)" if kind == "log" else "{x} / lag({x}) OVER w - 1"
         joined = (
-            f"SELECT x.s, x.ts, x.v AS va, y.v AS vb FROM ({_sampled(pa_, args.period)}) x "
-            f"JOIN ({_sampled(pb, args.period)}) y ON x.ts = y.ts"
+            "SELECT x.s, x.ts, x.v AS va, y.v AS vb, x.i AS ia, y.i AS ib "
+            f"FROM ({_numbered(_sampled(pa_, args.period), by_series=True)}) x "
+            f"JOIN ({_numbered(_sampled(pb, args.period), by_series=False)}) y ON x.ts = y.ts"
         )
         rets = (
-            f"SELECT s, ts, ra, rb FROM (SELECT s, ts, {f.format(x='va')} AS ra, {f.format(x='vb')} AS rb FROM ({joined}) "
-            "WINDOW w AS (PARTITION BY s ORDER BY ts)) WHERE ra IS NOT NULL AND rb IS NOT NULL"
+            f"SELECT s, ts, ra, rb, gap FROM (SELECT s, ts, {f.format(x='va')} AS ra, {f.format(x='vb')} AS rb, "
+            "ia - lag(ia) OVER w > 1 OR ib - lag(ib) OVER w > 1 AS gap FROM "
+            f"({joined}) WINDOW w AS (PARTITION BY s ORDER BY ts)) WHERE ra IS NOT NULL AND rb IS NOT NULL"
         )
         period_sql = "CAST(? AS VARCHAR)"
+        fields3 = "'beta': '{c}', 'alpha': '{c}', 'r_squared': '{c}'"
         if w is None:
             model = BetaResult
-            fields3 = "'beta': '{c}', 'alpha': '{c}', 'r_squared': '{c}'"
             table = session.query(
                 f"WITH st AS (SELECT s, covar_samp(ra, rb) AS cv, var_samp(rb) AS vb, avg(ra) AS ma, avg(rb) AS mb, "
                 f"corr(ra, rb) AS c, count(*) AS n, min(ts) AS t0, max(ts) AS t1 FROM ({rets}) GROUP BY s), "
@@ -181,11 +280,15 @@ async def handler(ctx: ToolContext, args: BetaArgs) -> ToolOutput:
             model = BetaPoint
             table = session.query(
                 f"SELECT s AS series, {ql(benchmark)} AS benchmark, {out_time('ts')} AS t, "
-                f'CASE WHEN vb > 0 THEN cv / vb END AS beta, CAST({w} AS BIGINT) AS "window", '
+                "CASE WHEN vb > 0 THEN cv / vb END AS beta, CASE WHEN vb > 0 THEN ma - (cv / vb) * mb END AS alpha, "
+                "CASE WHEN vb > 0 AND NOT isnan(c) THEN c * c END AS r_squared, n AS n_obs, "
+                f'{out_time("t0")} AS start, CAST({w} AS BIGINT) AS "window", '
                 f"{ql(kind)} AS return_kind, {period_sql} AS period, "
-                "CASE WHEN vb IS NULL OR vb = 0 THEN MAP {'beta': 'not_applicable'} END AS absent "
+                "CASE WHEN vb IS NULL OR vb = 0 THEN MAP {" + fields3.format(c="not_applicable") + "} "
+                "WHEN c IS NULL OR isnan(c) THEN MAP {'r_squared': 'not_applicable'} END AS absent "
                 f"FROM (SELECT s, ts, covar_samp(ra, rb) OVER win AS cv, var_samp(rb) OVER win AS vb, "
-                f"count(*) OVER win AS n FROM ({rets}) "
+                "avg(ra) OVER win AS ma, avg(rb) OVER win AS mb, corr(ra, rb) OVER win AS c, "
+                f"count(*) OVER win AS n, min(ts) OVER win AS t0 FROM ({rets}) "
                 f"WINDOW win AS (PARTITION BY s ORDER BY ts ROWS BETWEEN {w - 1} PRECEDING AND CURRENT ROW)) "
                 f"WHERE n = {w} ORDER BY series, t",
                 [args.period],
@@ -199,6 +302,7 @@ async def handler(ctx: ToolContext, args: BetaArgs) -> ToolOutput:
                     f"{TOOL} needs at least {w} shared returns for window={w}; the most any asset series shares with "
                     f"the benchmark is {most[0]['n'] or 0}.",
                 )
+        gaps = _gap_note(session, rets, args.period)
     if args.period is not None:
         notes.append(
             f"Both results were sampled to their last price per {args.period} bucket (UTC-aligned) first."
@@ -207,6 +311,7 @@ async def handler(ctx: ToolContext, args: BetaArgs) -> ToolOutput:
         "Returns are computed over the timestamps both results share, so the asset and benchmark returns of a row "
         "cover the same interval."
     )
+    notes += gaps
     if w is None:
         notes.append(
             "beta = covar_samp(r_a, r_b) / var_samp(r_b); alpha = mean(r_a) - beta x mean(r_b), per period; "
@@ -214,8 +319,9 @@ async def handler(ctx: ToolContext, args: BetaArgs) -> ToolOutput:
         )
     else:
         notes.append(
-            f"Rolling beta over the last {w} shared returns, at the window's last time; rows before the window "
-            "fills are omitted (min_obs is not used)."
+            f"Rolling beta over the last {w} shared returns, at the window's last time (start is its first); alpha "
+            "and r_squared over the same window, as in the static beta; rows before the window fills are omitted "
+            "(min_obs is not used)."
         )
     for side in (a, b) if b.rid != a.rid else (a,):
         note = adjustment_note(side)
@@ -238,12 +344,15 @@ SPEC = ToolSpec(
     capability=CAPABILITY,
     title="Beta",
     description=(
-        "Beta of each asset series against a benchmark, from two stored price results (the benchmark must hold "
-        "exactly one series), computed locally in DuckDB. Returns (simple or log) are computed over the "
-        "timestamps both results share: beta = covar_samp(r_a, r_b) / var_samp(r_b), alpha = mean(r_a) - beta x "
-        "mean(r_b) per period, r_squared = corr^2; fewer than min_obs (20) shared returns gives None "
-        "(insufficient_data). Bars of different timeframes are refused unless period samples both to the same "
-        "UTC buckets. With window, a rolling beta per window end. Large outputs are stored and you get a result_id."
+        "Beta of each asset series against a benchmark, computed locally in DuckDB, from one stored price result "
+        "(result_id, with benchmark_series naming the benchmark's series, e.g. SPY) or two (asset_result_id and "
+        "benchmark_result_id, whose one series, or benchmark_series, is the benchmark). Returns (simple or log) "
+        "are computed over the timestamps both share: beta = covar_samp(r_a, r_b) / var_samp(r_b), alpha = "
+        "mean(r_a) - beta x mean(r_b) per period, r_squared = corr^2; fewer than min_obs (20) shared returns gives "
+        "None (insufficient_data); a note names returns that span hours only one side trades. Bars of different "
+        "timeframes are refused unless period samples both to the same UTC buckets. With window, a rolling beta "
+        "per window end with alpha, r_squared, n_obs and the window's start. Large outputs are stored and you get "
+        "a result_id."
     ),
     readme="Beta, alpha and R squared versus a one-series benchmark; rolling with window.",
     input_model=BetaArgs,

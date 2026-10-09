@@ -104,12 +104,12 @@ def test_returns_cover_the_same_interval_across_a_gap(store, ctx):
     bench = store.put_rows(
         bars("SPY", [p for i, p in enumerate(pb) if i != 3], times=[t for i, t in enumerate(times) if i != 3])
     )
-    (r,) = output_rows(
-        run(SPEC, ctx, asset_result_id=asset, benchmark_result_id=bench, min_obs=3), BetaResult
-    )
+    out = run(SPEC, ctx, asset_result_id=asset, benchmark_result_id=bench, min_obs=3)
+    (r,) = output_rows(out, BetaResult)
     keep = [0, 1, 2, 4, 5, 6]
     beta, _, _ = expected(simple([pa_[i] for i in keep]), simple([pb[i] for i in keep]))
     assert r.n_obs == 5 and r.beta == pytest.approx(beta, rel=1e-10)
+    assert any("only one side has" in n and "AAPL 1 of 5" in n for n in out.notes)
 
 
 def test_too_few_joined_observations_give_none(store, ctx):
@@ -229,3 +229,99 @@ def test_split_in_raw_asset_prices_distorts_beta(store, ctx):
     assert adj.beta == pytest.approx(1.5, rel=1e-9)
     assert abs(rawr.beta - 1.5) > 1
     assert any("not split-adjusted" in n for n in raw_out.notes)
+
+
+def test_rolling_rows_carry_alpha_r_squared_n_obs_and_the_window_start(store, ctx):
+    """Rolling rows had beta alone; the static row's alpha, r_squared, n_obs and
+    start are there for each window too."""
+    pa_, pb = prices(100, RA_NOISY), prices(400, RB)
+    asset, bench = store.put_rows(bars("AAPL", pa_)), store.put_rows(bars("SPY", pb))
+    out = run(SPEC, ctx, asset_result_id=asset, benchmark_result_id=bench, window=3)
+    rows = output_rows(out, BetaPoint)
+    ra, rb = simple(pa_), simple(pb)
+    for row, i in zip(rows, range(2, 6), strict=True):
+        beta, alpha, r2 = expected(ra[i - 2 : i + 1], rb[i - 2 : i + 1])
+        assert (row.beta, row.alpha, row.r_squared) == pytest.approx((beta, alpha, r2), rel=1e-9)
+        assert (row.n_obs, row.start, row.t) == (3, T0 + (i - 1) * DAY, T0 + (i + 1) * DAY)
+    assert any("alpha and r_squared over the same window" in n for n in out.notes)
+
+
+def test_a_flat_window_explains_every_missing_statistic(store, ctx):
+    asset = store.put_rows(bars("AAPL", prices(100, RA_NOISY)))
+    bench = store.put_rows(bars("SPY", [400.0] * 7))
+    rows = output_rows(run(SPEC, ctx, asset_result_id=asset, benchmark_result_id=bench, window=3), BetaPoint)
+    assert {(r.beta, r.alpha, r.r_squared) for r in rows} == {(None, None, None)}
+    assert {tuple(sorted(r.absent)) for r in rows} == {("alpha", "beta", "r_squared")}
+
+
+def test_one_result_with_benchmark_series(store, ctx):
+    """Passing result_id like every other analytics tool was refused (asset_result_id
+    and benchmark_result_id required): result_id with benchmark_series takes the
+    benchmark out of the same result, and its other series are the assets."""
+    rows = (
+        bars("AAPL", prices(100, RA_NOISY))
+        + bars("MSFT", prices(50, [2 * r for r in RB]))
+        + bars("SPY", prices(400, RB))
+    )
+    both = store.put_rows(rows)
+    out = run(SPEC, ctx, result_id=both, benchmark_series="SPY", min_obs=3)
+    one = output_rows(out, BetaResult)
+    assert [(r.series, r.benchmark) for r in one] == [("AAPL", "SPY"), ("MSFT", "SPY")]
+    assets = store.put_rows(rows[:14])
+    spy = store.put_rows(rows[14:])
+    two = output_rows(run(SPEC, ctx, asset_result_id=assets, benchmark_result_id=spy, min_obs=3), BetaResult)
+    assert [r.beta for r in one] == pytest.approx([r.beta for r in two], rel=1e-12)
+    # benchmark_series also picks the benchmark out of a benchmark result with several series.
+    picked = output_rows(
+        run(SPEC, ctx, asset_result_id=assets, benchmark_result_id=both, benchmark_series="SPY", min_obs=3),
+        BetaResult,
+    )
+    assert [r.beta for r in picked] == pytest.approx([r.beta for r in two], rel=1e-12)
+
+
+@pytest.mark.parametrize(
+    ("arguments", "code", "words"),
+    [
+        ({"result_id": "ONE"}, "invalid_arguments", "benchmark_series"),
+        (
+            {"result_id": "ONE", "asset_result_id": "ONE", "benchmark_series": "SPY"},
+            "invalid_arguments",
+            "not both",
+        ),
+        ({}, "invalid_arguments", "result_id with benchmark_series"),
+        ({"asset_result_id": "ONE"}, "invalid_arguments", "needs benchmark_result_id"),
+        ({"result_id": "ONE", "benchmark_series": "QQQ"}, "unknown_series", "'QQQ'"),
+    ],
+)
+def test_which_results_and_series_are_named(store, ctx, arguments, code, words):
+    one = store.put_rows(bars("AAPL", prices(100, RA_NOISY)) + bars("SPY", prices(400, RB)))
+    with pytest.raises(ToolError) as e:
+        run(SPEC, ctx, **{k: (one if v == "ONE" else v) for k, v in arguments.items()})
+    assert e.value.code == code and words in e.value.message
+
+
+def test_returns_that_span_hours_one_side_lacks_are_noted(store, ctx):
+    """BTC (around the clock) against QQQ (in session) gave a beta over overnight
+    gaps with no word: a note counts the returns that skip one side's bars."""
+    hours = [utc(2026, 1, 5, 15) + i * 60 * MINUTE for i in range(48)]
+    session = [t for t in hours if 15 <= t.hour < 21]
+    btc = store.put_rows(
+        bars(
+            "BTC/USD",
+            [100 + (i * 7) % 5 for i in range(48)],
+            times=hours,
+            timeframe="1h",
+            asset_class="crypto",
+        )
+    )
+    qqq = store.put_rows(
+        bars("QQQ", [400 + (i * 3) % 4 for i in range(len(session))], times=session, timeframe="1h")
+    )
+    out = run(SPEC, ctx, asset_result_id=btc, benchmark_result_id=qqq, min_obs=3)
+    assert any("span observations only one side has" in n and "BTC/USD 1 of 11" in n for n in out.notes)
+    assert any("pass period" in n for n in out.notes)
+    spy = store.put_rows(
+        bars("SPY", [400 + (i * 3) % 4 for i in range(len(session))], times=session, timeframe="1h")
+    )
+    plain = run(SPEC, ctx, asset_result_id=qqq, benchmark_result_id=spy, min_obs=3)
+    assert not any("only one side has" in n for n in plain.notes)

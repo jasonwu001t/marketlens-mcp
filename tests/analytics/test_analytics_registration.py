@@ -90,7 +90,13 @@ def test_manifest_entry(spec: ToolSpec):
     assert golden.is_file() and spec.name in golden.read_text(encoding="utf-8")
     schema = spec.input_model.model_json_schema()
     ids = [k for k in schema["properties"] if k.endswith("result_id")]
-    assert ids and all(schema["properties"][k].get("pattern") == "^r_[0-9a-f]{10}$" for k in ids)
+
+    def pattern(prop: dict) -> str | None:  # an optional id's pattern is on its string branch
+        return prop.get("pattern") or next(
+            (a.get("pattern") for a in prop.get("anyOf", ()) if "pattern" in a), None
+        )
+
+    assert ids and all(pattern(schema["properties"][k]) == "^r_[0-9a-f]{10}$" for k in ids)
 
 
 @pytest.mark.parametrize("model", ANALYTICS_MODELS, ids=lambda m: m.schema_name)

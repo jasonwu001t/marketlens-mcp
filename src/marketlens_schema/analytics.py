@@ -141,8 +141,14 @@ class BetaPoint(CanonicalModel):
 
     series: str
     benchmark: str
-    t: UtcDatetime = unit("UTC")
-    beta: float | None = unit("fraction", default=None)
+    t: UtcDatetime = unit("UTC", description="Time of the window's last return")
+    beta: float | None = unit("fraction", default=None, description="cov_samp(r_a, r_b) / var_samp(r_b)")
+    alpha: float | None = unit(
+        "fraction", default=None, description="Per period: mean(r_a) - beta x mean(r_b) over the window"
+    )
+    r_squared: float | None = unit("fraction", default=None)
+    n_obs: int | None = unit("count", default=None, description="Shared returns in the window")
+    start: UtcDatetime | None = unit("UTC", default=None, description="Time of the window's first return")
     window: int = Field(ge=2)
     return_kind: Literal["simple", "log"]
     period: Timeframe | None = None
