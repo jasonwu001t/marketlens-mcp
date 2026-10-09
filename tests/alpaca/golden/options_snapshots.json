@@ -1,5 +1,14 @@
 {
- "absent": {},
+ "absent": {
+  "open_interest": {
+   "code": "not_provided_by_source",
+   "detail": "Alpaca's snapshots carry no open interest; options_chain and reference_option_contracts give it."
+  },
+  "open_interest_date": {
+   "code": "not_provided_by_source",
+   "detail": "Alpaca's snapshots carry no open interest; options_chain and reference_option_contracts give it."
+  }
+ },
  "model": "marketlens.OptionSnapshot",
  "notes": [
   "Greeks and implied volatility are Alpaca's Black-Scholes values per share (implied_volatility as an annualised fraction); they are null when Alpaca does not compute them for a contract."
@@ -64,6 +73,8 @@
    "last_size": 3.0,
    "last_t": "2026-10-02T19:59:44Z",
    "occ_symbol": "AAPL261016C00250000",
+   "open_interest": null,
+   "open_interest_date": null,
    "option_type": "call",
    "prev_close": 10.15,
    "prev_t": "2026-10-01T04:00:00Z",
@@ -116,6 +127,8 @@
    "last_size": null,
    "last_t": null,
    "occ_symbol": "AAPL261016C00260000",
+   "open_interest": null,
+   "open_interest_date": null,
    "option_type": "call",
    "prev_close": null,
    "prev_t": null,

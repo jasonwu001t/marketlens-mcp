@@ -465,6 +465,14 @@ class OptionSnapshot(CanonicalModel):
     prev_t: UtcDatetime | None = unit(
         "UTC", default=None, description="Start of the daily bar prev_close comes from: the one before day_t"
     )
+    open_interest: int | None = unit(
+        "contracts", default=None, description="Open contracts as of open_interest_date (options_chain only)"
+    )
+    open_interest_date: Date | None = Field(
+        default=None,
+        description="The date of the open interest count. Open interest is published the next morning, so this "
+        "is usually the trading day before day_t",
+    )
     implied_volatility: float | None = unit("fraction_per_year", default=None)
     delta: float | None = unit("per_share_greek", default=None)
     gamma: float | None = unit("per_share_greek", default=None)

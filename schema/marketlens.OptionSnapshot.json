@@ -272,6 +272,34 @@
       "title": "Occ Symbol",
       "type": "string"
     },
+    "open_interest": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Open contracts as of open_interest_date (options_chain only)",
+      "title": "Open Interest",
+      "x-unit": "contracts"
+    },
+    "open_interest_date": {
+      "anyOf": [
+        {
+          "format": "date",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The date of the open interest count. Open interest is published the next morning, so this is usually the trading day before day_t",
+      "title": "Open Interest Date"
+    },
     "option_type": {
       "$ref": "#/$defs/OptionType"
     },

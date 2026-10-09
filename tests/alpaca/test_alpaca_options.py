@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import re
 
+import httpx
 import pytest
 from alpaca_harness import FakeContext, call, check_golden
 from pydantic import ValidationError
@@ -73,6 +74,8 @@ def test_options_snapshots_golden_greeks_and_iv(specs, ctx, alpaca):
     assert thin["delta"] is None and thin["absent"]["delta"] == "not_provided_by_source"
     assert thin["bid_price"] is None and thin["absent"]["bid_price"] == "no_data"
     assert alpaca.params()["limit"] == "1000"
+    assert doc["absent"]["open_interest"]["code"] == "not_provided_by_source"
+    assert "open_interest" not in (full.get("absent") or {})
 
 
 def test_options_chain_golden_two_pages_and_filters(specs, ctx, alpaca):
@@ -80,6 +83,7 @@ def test_options_chain_golden_two_pages_and_filters(specs, ctx, alpaca):
         "/v1beta1/options/snapshots/AAPL", "OptionChain__page2", match={"page_token": CHAIN_CURSOR}
     )
     alpaca.fixture("/v1beta1/options/snapshots/AAPL", "OptionChain__page1")
+    alpaca.fixture("/v2/options/contracts", "OptionContracts__chain")
     out = call(
         specs["options_chain"],
         ctx,
@@ -101,6 +105,19 @@ def test_options_chain_golden_two_pages_and_filters(specs, ctx, alpaca):
     assert alpaca.params(1)["page_token"] == CHAIN_CURSOR
     assert [r["occ_symbol"] for r in doc["rows"]] == [C1, P1]
     assert {r["underlying"] for r in doc["rows"]} == {"AAPL"}
+    # open interest comes from the contract list, asked for what the rows span
+    assert alpaca.requests[2].url.path == "/v2/options/contracts"
+    assert alpaca.params(2) == {
+        "underlying_symbols": "AAPL",
+        "expiration_date_gte": "2026-10-16",
+        "expiration_date_lte": "2026-10-16",
+        "strike_price_gte": "240.0",
+        "strike_price_lte": "250.0",
+        "limit": "10000",
+    }
+    call_row, put_row = doc["rows"]
+    assert (call_row["open_interest"], call_row["open_interest_date"]) == (12011, "2026-10-01")
+    assert put_row["open_interest"] is None and put_row["absent"]["open_interest"] == "not_provided_by_source"
 
 
 def test_options_chain_maps_share_classes_into_the_path(specs, ctx, alpaca):
@@ -199,3 +216,24 @@ def test_option_filters_refuse_an_inverted_range(specs, ctx, tool, args, says):
     first = {"underlying": "AAPL"} if tool == "options_chain" else {"underlyings": ["AAPL"]}
     with pytest.raises(ValidationError, match=re.escape(says)):
         call(specs[tool], ctx, **first, **args)
+
+
+def test_options_chain_open_interest_absences(specs, ctx, alpaca):
+    alpaca.fixture("/v1beta1/options/snapshots/AAPL", "OptionChain__page2")
+    alpaca.add("/v2/options/contracts", {"option_contracts": [], "next_page_token": None})
+    out = call(specs["options_chain"], ctx, underlying="AAPL")
+    assert out.rows[0].absent["open_interest"] == "no_match"
+    assert (
+        "open_interest is null (no_match) for 1 contract(s) Alpaca's contract list did not return."
+        in out.notes
+    )
+
+
+def test_options_chain_survives_a_failed_open_interest_lookup(specs, ctx, alpaca):
+    alpaca.fixture("/v1beta1/options/snapshots/AAPL", "OptionChain__page2")
+    alpaca.add("/v2/options/contracts", httpx.Response(403, json={"message": "forbidden"}))
+    out = call(specs["options_chain"], ctx, underlying="AAPL")
+    assert out.rows[0].occ_symbol == P1 and out.rows[0].absent["open_interest_date"] == "source_error"
+    assert any(
+        n.startswith("open_interest is null: Alpaca's contract list failed (alpaca_auth") for n in out.notes
+    )

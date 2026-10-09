@@ -148,6 +148,7 @@ HTTP_CASES: dict[str, Case] = {
         (
             r("/v1beta1/options/snapshots/AAPL", "OptionChain__page2", match={"page_token": "Q0hBSU58Mg=="}),
             r("/v1beta1/options/snapshots/AAPL", "OptionChain__page1"),
+            r("/v2/options/contracts", "OptionContracts__chain"),
         ),
         {
             "underlying": "aapl",

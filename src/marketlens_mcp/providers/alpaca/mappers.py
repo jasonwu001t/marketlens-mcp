@@ -334,7 +334,9 @@ def option_snapshot(raw: Raw | None, *, occ: str, underlying: str | None = None)
             values, side_codes = _side(lq, prefix, lots=False)
             data.update({k: v for k, v in values.items() if not k.endswith("_exchange")})
             codes.update({k: v for k, v in side_codes.items() if not k.endswith("_exchange")})
-    return build_row(OptionSnapshot, data, codes)
+    # Alpaca's snapshots carry no open interest: options_chain joins it in, and
+    # options_snapshots explains it once for the whole response.
+    return build_row(OptionSnapshot, data, codes, skip=("open_interest", "open_interest_date"))
 
 
 # --- fixed income and news -------------------------------------------------------------------

@@ -12,12 +12,12 @@ from typing import Literal
 from pydantic import Field, model_validator
 
 from marketlens_mcp.plugin_api import ToolContext, ToolError, ToolOutput
-from marketlens_schema.base import Delay
+from marketlens_schema.base import AbsenceCode, Delay
 from marketlens_schema.market import OptionBar, OptionQuote, OptionSnapshot, OptionTrade
 
 from .. import mappers
 from ..client import AlpacaClient
-from ..convert import NEW_YORK, iso_z, path_symbol, timeframe_to_alpaca
+from ..convert import NEW_YORK, alpaca_symbol, integer, iso_z, parse_date, path_symbol, timeframe_to_alpaca
 from .common import (
     CONTINUE_DOC,
     END_DOC,
@@ -34,6 +34,7 @@ from .common import (
     Skips,
     TimeframeIn,
     Window,
+    absence,
     check_option_filters,
     collect,
     latest_t,
@@ -60,6 +61,16 @@ HISTORY_DOC = (
 DAY_BAR_DOC = (
     "day_* are the contract's latest daily bar, dated by day_t: an earlier session than today's for a contract "
     "that has not traded today; prev_close is the close of the bar before it (prev_t)."
+)
+CONTRACTS_PAGE_MAX = 10_000
+OI_FIELDS = ("open_interest", "open_interest_date")
+OI_DOC = (
+    "open_interest (contracts) is joined from Alpaca's contract list, as reference_option_contracts gives it; "
+    "open_interest_date is usually the trading day before day_t (OCC publishes it the next morning)."
+)
+SNAPSHOT_OI_ABSENT = absence(
+    "not_provided_by_source",
+    "Alpaca's snapshots carry no open interest; options_chain and reference_option_contracts give it.",
 )
 GREEKS_NOTE = (
     "Greeks and implied volatility are Alpaca's Black-Scholes values per share (implied_volatility as an "
@@ -274,6 +285,75 @@ async def options_latest_quotes(ctx: ToolContext, args: LatestIn) -> ToolOutput:
     return await _latest(ctx, args, "quotes")
 
 
+async def _open_interest(
+    ctx: ToolContext, api: AlpacaClient, args: ChainIn, rows: list[OptionSnapshot]
+) -> tuple[list[OptionSnapshot], list[str]]:
+    """Fill open_interest and open_interest_date from GET /v2/options/contracts,
+    asked for exactly the underlying, type, root, expirations and strikes the
+    rows span. A contract missing from that list is no_match; a failed lookup
+    leaves the chain as it is, with source_error and a note."""
+    if not rows:
+        return rows, []
+    params = {
+        "underlying_symbols": alpaca_symbol(args.underlying),
+        "type": args.option_type,
+        "root_symbol": args.root_symbol,
+        "expiration_date_gte": min(r.expiration_date for r in rows).isoformat(),
+        "expiration_date_lte": max(r.expiration_date for r in rows).isoformat(),
+        "strike_price_gte": min(r.strike for r in rows),
+        "strike_price_lte": max(r.strike for r in rows),
+    }
+
+    async def fetch_page(token: str | None, limit: int):
+        data = await api.get(
+            "trading",
+            "/v2/options/contracts",
+            {**params, "limit": min(limit, CONTRACTS_PAGE_MAX), "page_token": token},
+        )
+        out = []
+        for c in data.get("option_contracts") or []:
+            try:
+                out.append(
+                    (
+                        str(c["symbol"]),
+                        integer(c.get("open_interest")),
+                        parse_date(c.get("open_interest_date")),
+                    )
+                )
+            except (KeyError, TypeError, ValueError, ArithmeticError):
+                continue
+        return out, data.get("next_page_token") or None
+
+    try:
+        found = {occ: (oi, day) for occ, oi, day in (await ctx.paginate(fetch_page)).rows}
+    except ToolError as e:
+        failed = dict.fromkeys(OI_FIELDS, AbsenceCode.SOURCE_ERROR)
+        note = f"open_interest is null: Alpaca's contract list failed ({e.code}: {e.message})"
+        return [_with(r, {}, failed) for r in rows], [note]
+    out, unmatched = [], 0
+    for r in rows:
+        if r.occ_symbol not in found:
+            unmatched += 1
+            out.append(_with(r, {}, dict.fromkeys(OI_FIELDS, AbsenceCode.NO_MATCH)))
+            continue
+        values = dict(zip(OI_FIELDS, found[r.occ_symbol], strict=True))
+        missing = {k: AbsenceCode.NOT_PROVIDED_BY_SOURCE for k, v in values.items() if v is None}
+        out.append(_with(r, values, missing))
+    notes = (
+        [
+            f"open_interest is null (no_match) for {unmatched} contract(s) Alpaca's contract list did not return."
+        ]
+        if unmatched
+        else []
+    )
+    return out, notes
+
+
+def _with(row: OptionSnapshot, values: dict, codes: dict) -> OptionSnapshot:
+    absent = {**(row.absent or {}), **codes}
+    return row.model_copy(update={**values, "absent": absent or None})
+
+
 def _no_chain_note(args: ChainIn, rows: list, skips: Skips) -> list[str]:
     if rows or skips.labels:
         return []
@@ -352,6 +432,7 @@ async def options_snapshots(ctx: ToolContext, args: SnapshotsIn) -> ToolOutput:
         delay=delay,
         as_of=latest_t(page.rows),
         page=page,
+        absent={"open_interest": SNAPSHOT_OI_ABSENT, "open_interest_date": SNAPSHOT_OI_ABSENT},
         notes=[
             GREEKS_NOTE,
             *missing_note(args.occ_symbols, page.rows, "occ_symbol"),
@@ -384,18 +465,19 @@ async def options_chain(ctx: ToolContext, args: ChainIn) -> ToolOutput:
             args.page_token,
             skips,
         )
+        rows, oi_notes = await _open_interest(ctx, api, args, page.rows)
     return output(
         ctx,
         OptionSnapshot,
-        page.rows,
+        rows,
         route="GET /v1beta1/options/snapshots/{underlying_symbol}",
         operation="OptionChain",
         request=request_of(args, feed=feed),
         feed=feed,
         delay=delay,
-        as_of=latest_t(page.rows),
+        as_of=latest_t(rows),
         page=page,
-        notes=[GREEKS_NOTE, *_no_chain_note(args, page.rows, skips), *stale_day_bar_note(page.rows)],
+        notes=[GREEKS_NOTE, *_no_chain_note(args, rows, skips), *stale_day_bar_note(rows), *oi_notes],
         skips=skips,
     )
 
@@ -488,7 +570,7 @@ SPECS = (
         title="Option chain",
         description="The option chain of one underlying: a snapshot row per contract with greeks and implied "
         "volatility, filtered by type, strike range (USD) and expiration (exact or from/to). Chains are large; "
-        "filter by expiration and strike. " + DAY_BAR_DOC + _SIZE,
+        "filter by expiration and strike. " + DAY_BAR_DOC + " " + OI_DOC + _SIZE,
         readme="Chain snapshots for an underlying",
         input_model=ChainIn,
         output_model=OptionSnapshot,
