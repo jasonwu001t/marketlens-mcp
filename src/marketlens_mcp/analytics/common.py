@@ -181,8 +181,8 @@ _DURATION = re.compile(r"^P(?:(\d+)W)?(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\
 
 def parse_duration(text: str) -> dt.timedelta | None:
     """An ISO-8601 duration of weeks, days, hours, minutes and seconds
-    ("PT30S", "PT1H30M", "P2D"); None for anything else (months and years are
-    not fixed lengths) or a zero duration."""
+    ("PT30S", "PT1H30M", "P2D", "PT0S" for none); None for anything else
+    (months and years are not fixed lengths)."""
     m = _DURATION.match(text)
     if not m or text.endswith("T") or not any(m.groups()):
         return None
@@ -197,7 +197,7 @@ def parse_duration(text: str) -> dt.timedelta | None:
         )
     except OverflowError:  # beyond timedelta's range: not a usable duration
         return None
-    return delta if delta > dt.timedelta(0) else None
+    return delta
 
 
 # --- canonical Arrow types of the output models ---------------------------------------------------

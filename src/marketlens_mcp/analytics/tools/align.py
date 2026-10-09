@@ -51,7 +51,8 @@ class AlignArgs(BaseModel):
     )
     tolerance: str | None = Field(
         None,
-        description="Largest allowed time gap as an ISO-8601 duration (PT30S, PT5M, P1D); none by default.",
+        description="Largest allowed time gap as an ISO-8601 duration (PT30S, PT5M, P1D; PT0S: the same time "
+        "only); none by default.",
     )
     right_columns: list[str] | None = Field(
         None,
@@ -74,11 +75,17 @@ async def handler(ctx: ToolContext, args: AlignArgs) -> ToolOutput:
     tolerance = None
     if args.tolerance is not None:
         tolerance = parse_duration(args.tolerance)
+        if tolerance is None and args.tolerance.lstrip().startswith("-"):
+            raise refuse(
+                "invalid_tolerance",
+                f"{TOOL}: tolerance must be zero or positive; got {args.tolerance!r}. Use PT0S to match the same "
+                "time only.",
+            )
         if tolerance is None:
             raise refuse(
                 "invalid_tolerance",
                 f"{TOOL}: tolerance {args.tolerance!r} is not an ISO-8601 duration of weeks, days, hours, minutes "
-                "or seconds (e.g. PT30S, PT5M, PT1H30M, P1D); months and years are not fixed lengths.",
+                "or seconds (e.g. PT0S, PT30S, PT5M, PT1H30M, P1D); months and years are not fixed lengths.",
             )
     if args.by is not None and (args.by_left is not None or args.by_right is not None):
         raise refuse("invalid_arguments", f"{TOOL}: pass by, or by_left with by_right, not both.")
@@ -202,7 +209,8 @@ SPEC = ToolSpec(
     description=(
         "As-of join of two stored time series, computed locally in DuckDB (ASOF LEFT JOIN): every left row is "
         "kept and gets the right row that is the latest at or before its time (direction backward) or the "
-        "first at or after it (forward), optionally within a tolerance (ISO-8601 duration, e.g. PT5M) and "
+        "first at or after it (forward), optionally within a tolerance (ISO-8601 duration, e.g. PT5M; PT0S "
+        "for exact time matches) and "
         "within the same `by` value (e.g. ticker; when the names differ, by_left and by_right, e.g. bars' ticker "
         "and returns' series). Output: the left columns, the chosen right columns (names "
         "that collide get the suffix, default _right) and matched_t, the matched right row's time; unmatched "

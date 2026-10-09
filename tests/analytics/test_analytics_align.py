@@ -337,3 +337,34 @@ def test_a_stored_aligned_result_keeps_the_units(store, ctx):
         "price",
         "UTC",
     )
+
+
+@pytest.mark.parametrize("zero", ["PT0S", "P0D", "PT0M"])
+@pytest.mark.parametrize("direction", ["backward", "forward"])
+def test_a_zero_tolerance_matches_the_same_time_only(store, ctx, zero, direction):
+    """PT0S was refused as 'not an ISO-8601 duration'; it is an exact match."""
+    left, right = left_bars(store), right_quotes(store)
+    out = run(
+        SPEC,
+        ctx,
+        left_result_id=left,
+        right_result_id=right,
+        right_columns=["bid"],
+        tolerance=zero,
+        direction=direction,
+    )
+    assert picks(out) == [
+        (M0, None, None),
+        (M0 + MINUTE, 1.9, M0 + MINUTE),
+        (M0 + 2 * MINUTE, None, None),
+        (M0 + 3 * MINUTE, None, None),
+    ]
+    assert any("3 of 4 left rows found no right row" in n and f"within {zero}" in n for n in out.notes)
+
+
+def test_a_negative_tolerance_is_refused_by_name(store, ctx):
+    left, right = left_bars(store), right_quotes(store)
+    with pytest.raises(ToolError) as e:
+        run(SPEC, ctx, left_result_id=left, right_result_id=right, tolerance="-PT5M")
+    assert e.value.code == "invalid_tolerance"
+    assert "tolerance must be zero or positive" in e.value.message and "'-PT5M'" in e.value.message
