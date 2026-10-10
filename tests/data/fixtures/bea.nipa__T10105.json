@@ -12,7 +12,9 @@
     {"TableName": "T10105", "SeriesCode": "DPCERC", "LineNumber": "2", "LineDescription": "Personal consumption expenditures", "TimePeriod": "2026Q1", "METRIC_NAME": "Current Dollars", "CL_UNIT": "Level", "UNIT_MULT": "6", "DataValue": "21,098,765", "NoteRef": "T10105"},
     {"TableName": "T10105", "SeriesCode": "DPCERC", "LineNumber": "2", "LineDescription": "Personal consumption expenditures", "TimePeriod": "2026Q2", "METRIC_NAME": "Current Dollars", "CL_UNIT": "Level", "UNIT_MULT": "6", "DataValue": "21,345,678", "NoteRef": "T10105"}
    ],
-   "Notes": []
+   "Notes": [
+    {"NoteRef": "T10105", "NoteText": "Table 1.1.5. Gross Domestic Product [Millions of dollars] - LastRevised: July 30, 2026"}
+   ]
   }
  }
 }

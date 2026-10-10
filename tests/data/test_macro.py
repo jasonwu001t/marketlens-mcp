@@ -31,6 +31,13 @@ def bls_routes(upstream):
         return fixture_json(f"bls.timeseries__{body['startyear']}.json")
 
     upstream.add(BLS, respond, method="POST")
+    # omni dates each month from BLS's archive of the release (LNS: the Employment Situation),
+    # which it reads at most once an hour per process: tests count the API requests only
+    upstream.text_file(r"www\.bls\.gov/bls/news-release/empsit\.htm", "bls.release_archive__empsit.html")
+
+
+def bls_bodies(upstream) -> list[dict]:
+    return [json.loads(r.content) for r in upstream.requests if r.url.host == "api.bls.gov"]
 
 
 # --- macro_series ------------------------------------------------------------------------------
@@ -203,11 +210,9 @@ def test_macro_bls_series_golden_in_decade_blocks(tmp_path, upstream, keys):
     bls_routes(upstream)
     out = call("macro_bls_series", context(tmp_path), series_ids=["lns14000000"])
     doc = check_golden(out, "macro_bls_series")
-    blocks = sorted(
-        (b["startyear"], b["endyear"]) for b in (json.loads(r.content) for r in upstream.requests)
-    )
+    blocks = sorted((b["startyear"], b["endyear"]) for b in bls_bodies(upstream))
     assert blocks == [("2010", "2019"), ("2020", "2026")]  # default 10 years back; capped at this year
-    assert {json.loads(r.content)["registrationkey"] for r in upstream.requests} == {KEYS["BLS_API_KEY"]}
+    assert {b["registrationkey"] for b in bls_bodies(upstream)} == {KEYS["BLS_API_KEY"]}
     # 2016-09 is before the default window (10 years back from 2026-10-02); M13 annual rows dropped
     assert [(r["date"], r["period"], r["value"]) for r in doc["rows"]] == [
         ("2016-10-01", "M10", 4.9),
@@ -217,13 +222,34 @@ def test_macro_bls_series_golden_in_decade_blocks(tmp_path, upstream, keys):
         ("2026-08-01", "M08", None),
         ("2026-09-01", "M09", 4.3),
     ]
-    assert doc["rows"][0]["knowledge_time"] == "2016-11-05T00:00:00Z"  # month + 35-day release lag
+    # fetched after the 10-02 jobs report: that report, 08:30 EDT (was its own: 2016-11-04)
+    assert doc["rows"][0]["knowledge_time"] == "2026-10-02T12:30:00Z"
+
+
+def test_macro_bls_series_history_from_the_first_sync_is_at_its_latest_release(tmp_path, upstream, keys):
+    # The first sync (20:00Z on 2026-10-02) came after that morning's jobs report, and BLS serves
+    # each month's latest revision only, which that report or any before it may have published:
+    # every row dates from 08:30 EDT that day, so an earlier as_of returns none (omni A5, B2).
+    from marketlens_mcp.providers.data.tools.common import parse_instant
+    from marketlens_mcp.providers.data.tools.macro import SPECS
+
+    bls_routes(upstream)
+    out = call("macro_bls_series", context(tmp_path), series_ids=["LNS14000000"])
+    assert {r.knowledge_time for r in out.rows} == {parse_instant("2026-10-02T12:30:00Z")}
+    before = call(
+        "macro_bls_series", context(tmp_path), series_ids=["LNS14000000"], as_of="2026-10-02T12:29:00Z"
+    )
+    assert before.rows == []
+    description = next(s for s in SPECS if s.name == "macro_bls_series").description
+    assert "history older than the first sync takes that sync's latest release" in description
+    assert "real earnings: CPI or jobs report" in description
+    assert "SA CPI from December's to January's CPI" in description
 
 
 def test_macro_bls_series_without_a_key_sends_none(tmp_path, upstream):
     bls_routes(upstream)
     call("macro_bls_series", context(tmp_path), series_ids=["LNS14000000"], start="2021-01-01")
-    bodies = [json.loads(r.content) for r in upstream.requests]
+    bodies = bls_bodies(upstream)
     assert [(b["startyear"], b["endyear"]) for b in bodies] == [("2020", "2026")]
     assert all("registrationkey" not in b for b in bodies)
 
@@ -245,6 +271,25 @@ def test_macro_bea_table_golden(tmp_path, upstream, keys):
     ]
     only = call("macro_bea_table", context(tmp_path), table_name="T10101", line_numbers=[2])
     assert {r.line_number for r in only.rows} == {2}
+
+
+def test_macro_bea_table_history_from_the_first_sync_is_at_its_last_revision_not_the_sync(
+    tmp_path, upstream, keys
+):
+    # The first sync's payload says "LastRevised: July 30, 2026": all it holds is knowable from
+    # 08:30 ET that day, before the sync, so an as_of between the two returns rows (review).
+    from marketlens_mcp.providers.data.tools.common import parse_instant
+    from marketlens_mcp.providers.data.tools.macro import SPECS
+
+    upstream.json_file(BEA, "bea.nipa__T10101.json")
+    out = call("macro_bea_table", context(tmp_path), table_name="T10101")
+    assert {r.knowledge_time for r in out.rows} == {parse_instant("2026-07-30T12:30:00Z")}
+    between = call("macro_bea_table", context(tmp_path), table_name="T10101", as_of="2026-08-01")
+    assert len(between.rows) == len(out.rows)
+    before = call("macro_bea_table", context(tmp_path), table_name="T10101", as_of="2026-07-30T12:29:00Z")
+    assert before.rows == []
+    description = next(s for s in SPECS if s.name == "macro_bea_table").description
+    assert "history older than the first sync takes that sync's last revision date" in description
 
 
 BEA_LEVEL_NOTE = (
