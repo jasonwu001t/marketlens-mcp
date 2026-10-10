@@ -504,8 +504,8 @@ SPECS: tuple[ToolSpec, ...] = (
             "unemployment rate LNS14000000, payrolls CES0000000001, JOLTS openings JTS000000000000000JOL). "
             "value is as BLS publishes it; BLS serves only the latest revision and no release date, so "
             "knowledge_time is the latest release in BLS's archive at the value's first fetch (08:30 ET; "
-            "JOLTS 10:00 ET; real earnings: CPI or jobs report), else that fetch (a release not listed yet, "
-            "a state's JOLTS, SA CPI from December's to January's CPI): history older than the first sync "
+            "JOLTS 10:00 ET; real earnings: CPI or jobs report), else that fetch (the archive lagging or "
+            "unread, a state's JOLTS, SA CPI from December's to January's CPI): history older than the first sync "
             "takes that sync's latest release, so an earlier as_of returns none (first prints: "
             "macro_series). A later revision is a new vintage at its release. BLS_API_KEY is optional.",
             "lagged",
