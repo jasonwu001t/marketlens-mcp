@@ -245,6 +245,7 @@ def test_macro_bls_series_history_from_the_first_sync_is_at_its_latest_release(t
     assert "real earnings: CPI or jobs report" in description
     assert "SA CPI from December's to January's CPI" in description
     assert "the archive lagging or unread" in description
+    assert "A later revision is a new vintage at its release, else at its fetch." in description
 
 
 def test_macro_bls_series_without_a_key_sends_none(tmp_path, upstream):
