@@ -6,6 +6,78 @@ A read-only [Model Context Protocol](https://modelcontextprotocol.io) server for
 
 Alpha (0.2.0, unreleased). The tool names, the canonical schema (1.1.0) and the plugin API (1.0) are versioned; see [CHANGELOG.md](CHANGELOG.md).
 
+## How it works
+
+```text
+  MCP client (Claude Desktop, Claude Code, any MCP client)
+        |  stdio (default), or streamable HTTP on 127.0.0.1 with a bearer token
+        v
+ +------------------------------- marketlens-mcp -------------------------------+
+ |  server.py / transport.py   FastMCP server; reads config.yaml once at start   |
+ |  policy.py                  which capabilities are on; off = tool not listed  |
+ |  registry.py, manifest.py   every tool: name, capability, route, I/O models   |
+ |  trust.py                   wraps every result in the _marketlens envelope    |
+ |  pipeline.py                validate args -> provider handler -> canonical    |
+ |                             rows + provenance -> offload.py (inline/stored)   |
+ |                                                                               |
+ |  providers (registered through the same plugin API as third-party plugins)   |
+ |   +- alpaca/ -------------+  +- data/ (optional extra) -+  +- plugins -------+ |
+ |   | market, reference,    |  | macro, filings,          |  | entry points in | |
+ |   | news, portfolio,      |  | fed_treasury, holidays,  |  | marketlens.     | |
+ |   | provider.docs         |  | calendars                |  | plugins         | |
+ |   +-----------+-----------+  +-------------+------------+  +--------+--------+ |
+ |               |                            |                        |          |
+ |  results/  DuckDB + Parquet result store (per session, 24 h, capped) <- large |
+ |            answers; results_* tools run one guarded read-only SELECT on them |
+ |  analytics/  returns, volatility, correlation, resample, align, drawdown,    |
+ |              beta: computed in DuckDB on result handles                      |
+ +---------------|----------------------------|------------------------|---------+
+                 v                            v                        v
+     Alpaca market-data API,      marketlens-data (import `omni`):   whatever the
+     trading API (reads only),    each publisher's own API -> a      plugin reads
+     docs MCP (opt-in)            local point-in-time DuckDB +
+                                  Parquet store (FRED, BLS, BEA,
+                                  SEC EDGAR, Fed, Treasury, ...)
+```
+
+A tool call, end to end:
+
+1. The client calls a tool. `pipeline.py` validates the arguments against the tool's input model (pydantic); a bad argument comes back as `invalid_arguments` with a hint, before anything is fetched.
+2. The provider's handler calls upstream (paginating up to the fetch ceilings in `fetch.py`, under the per-provider rate limit in `ratelimit.py`) and maps the response onto the canonical models in `marketlens_schema`: SEC-style tickers, UTC instants, decimal-string money, a unit on every number, and a reason on every `null`.
+3. `offload.py` turns the rows into Arrow. At most `inline_max_rows` rows and about `inline_max_tokens` tokens come back inline; anything larger is written to the result store and the model gets a `result_id` marker instead (typed columns, a preview, ready-made queries; see [Large results](#large-results)).
+4. `trust.py` wraps the answer in the `_marketlens` envelope (provenance, notes, the untrusted-data notice), and the client receives it.
+
+Package layout:
+
+| Path | What lives there |
+|---|---|
+| `src/marketlens_mcp/server.py`, `transport.py`, `cli.py` | Server start-up, stdio/HTTP transports, the `marketlens-mcp` command (`serve`, `tools`, `capabilities`, `plugins`, `config`, `doctor`, `schema`, `results`, `add-capability`, `readme`) |
+| `src/marketlens_mcp/config.py`, `paths.py`, `policy.py` | The YAML config, where it and the cache live, capability on/off resolution |
+| `src/marketlens_mcp/registry.py`, `manifest.py`, `builtins.py`, `plugin_api.py` | Tool registration (built-ins and plugins share one API) and the tool manifest |
+| `src/marketlens_mcp/pipeline.py`, `fetch.py`, `ratelimit.py`, `offload.py`, `trust.py` | One tool call: validation, pagination, rate limiting, inline-or-stored, the trust envelope |
+| `src/marketlens_mcp/results/`, `results_api.py` | The result store, the SQL guard, markers, the `results_*` tools |
+| `src/marketlens_mcp/analytics/` | The `analytics_*` tools |
+| `src/marketlens_mcp/providers/alpaca/` | The Alpaca provider (bundled OpenAPI specs, endpoint mapping, parity list) |
+| `src/marketlens_mcp/providers/data/` | The official-data provider over marketlens-data (`sources.py` keys, `parity.py` dataset coverage, `tools/`) |
+| `src/marketlens_schema/` | The vendor-neutral canonical models (pydantic only; usable without the server) |
+| `schema/` | Generated JSON Schemas of the canonical models (`make schema`) |
+
+## Data sources
+
+| Source | Reached through | Key | Capabilities |
+|---|---|---|---|
+| Alpaca market-data API (stocks, options, crypto, fixed income, news, screeners) | built-in `alpaca` provider | `ALPACA_API_KEY`, `ALPACA_SECRET_KEY` | `market`, `reference`, `news` |
+| Alpaca trading API (assets, calendar, clock, corporate-action announcements, option contracts; account reads) | built-in `alpaca` provider | same | `reference`, `portfolio` (off) |
+| Alpaca documentation MCP (`docs.alpaca.markets/mcp`) | built-in `alpaca-docs` | same | `provider.docs` (off) |
+| FRED/ALFRED, BLS, BEA | `data` extra (marketlens-data) | `FRED_API_KEY`, `BEA_API_KEY`, `BLS_API_KEY` (optional) | `macro` |
+| SEC EDGAR (submissions, XBRL company facts, Archives) | `data` extra | `SEC_CONTACT_EMAIL` (recommended) | `filings` |
+| Federal Reserve (FOMC), NY Fed, U.S. Treasury, FiscalData | `data` extra | keyless | `fed_treasury` |
+| NYSE, SIFMA, OPM holiday calendars | `data` extra | keyless | `holidays` |
+| Nasdaq calendars (unofficial endpoint) | `data` extra | keyless | `calendars` (off) |
+| Your own computations | local DuckDB | none | `analytics`, `results` |
+
+What each source needs and how each tool reads it is in [Capabilities and defaults](#capabilities-and-defaults), [Keys](#keys) and the [tool table](#tools). To add a source, see [Adding a data source](#adding-a-data-source).
+
 ## Install
 
 ```sh
@@ -23,6 +95,27 @@ uvx --from "marketlens-mcp[data]" marketlens-mcp
 pipx install "marketlens-mcp[data]"
 pip install "marketlens-mcp[data]"
 ```
+
+## Dependencies
+
+| Package | Why |
+|---|---|
+| `fastmcp` (pinned) | The MCP server and its stdio / streamable-HTTP transports |
+| `pydantic` 2.12+ | Tool input models and the canonical output models (`marketlens_schema`) |
+| `httpx` | Every upstream HTTP call |
+| `duckdb` 1.5+ | The result store's query engine, the SQL guard's sandbox, the analytics |
+| `pyarrow` | Rows in canonical types, Parquet files in the result store |
+| `sqlglot` | Parsing model-written SQL before `results_query` runs it |
+| `pyyaml` | The config file |
+| `tzdata` (Windows only) | Time zones |
+| `marketlens-data` (the `data` extra, Python 3.13+) | Fetching official publishers and keeping them point in time; it brings its own (pandas, DuckDB, the publishers' parsers) |
+| `pytest`, `pytest-asyncio`, `ruff` (the `dev` extra) | Tests and lint |
+
+Outside Python you need:
+
+- **An Alpaca account** (paper is fine) for the `market`, `reference`, `news` and `portfolio` tools. Your market-data plan decides the feeds: `stock_feed: iex` on the free plan, `sip` with a paid one, `delayed_sip` for the consolidated tape 15 minutes late; `options_feed: indicative` unless you have OPRA. Set them in the config so every answer states the feed and delay it really has.
+- **The official sources' free keys** for the `data` extra's tools that need one (see [Keys](#keys)); the rest are keyless.
+- Nothing else: no database server, no daemon. The result store and the data store are local folders.
 
 ## Add it to a client
 
@@ -364,9 +457,48 @@ Every response uses the vendor-neutral models in `marketlens_schema` (pydantic o
 
 See [SECURITY.md](SECURITY.md) to report a vulnerability.
 
-## Plugins and providers
+## Adding a data source
 
-A Python package can add capabilities, tools and canonical models through the `marketlens.plugins` entry-point group. Plugins load only when you name them in `plugins.enabled`; a broken plugin is reported (`marketlens-mcp plugins`) and skipped, never stops the server. Installing a plugin is trusting its code: plugins run in the server's process. See [WRITING_A_PLUGIN.md](WRITING_A_PLUGIN.md), which also covers writing a provider for another data vendor, and [ADDING_A_CAPABILITY.md](ADDING_A_CAPABILITY.md) for mapping new Alpaca endpoints and adding official-data tools.
+Pick the path by where the data comes from:
+
+| You want | Path | Where | Guide |
+|---|---|---|---|
+| An Alpaca endpoint that is not mapped yet | extend the built-in provider | `src/marketlens_mcp/providers/alpaca/` | [ADDING_A_CAPABILITY.md](ADDING_A_CAPABILITY.md) steps 1-6 |
+| A dataset marketlens-data already collects (or a new one you add there) | an official-data tool | `src/marketlens_mcp/providers/data/tools/` | [ADDING_A_CAPABILITY.md, "Adding an official-data tool"](ADDING_A_CAPABILITY.md#adding-an-official-data-tool-the-data-extra) |
+| Another vendor's market data (a broker, a data API, a local database) | a provider plugin on the existing canonical models | your own package | [WRITING_A_PLUGIN.md, "Writing a provider"](WRITING_A_PLUGIN.md#writing-a-provider) |
+| Something that is not market data (your own research store, an internal API) | a plugin with its own capability and models | your own package | [WRITING_A_PLUGIN.md](WRITING_A_PLUGIN.md) |
+
+### Another Alpaca endpoint
+
+1. `make sync-alpaca-specs` ([step 1](ADDING_A_CAPABILITY.md#1-sync-the-specs)) to refresh the bundled OpenAPI specs, then classify every new endpoint: mapped, or excluded with a reason. The parity test fails until each one is classified.
+2. Scaffold the tool: `marketlens-mcp add-capability NAME --capability market --provider alpaca --operation OPID`. It writes the tool skeleton, a fixture and a golden test, and refuses to overwrite anything.
+3. Fill in the handler: map the response onto an existing `marketlens_schema` model (add a model only when none fits), state the feed and delay in the provenance, and give every missing value a reason.
+4. `make test lint`, then `make readme schema` to regenerate the tool table above and `schema/`; `make check` must pass.
+
+### An official dataset (the data extra)
+
+The data provider never calls a publisher itself: marketlens-data (import name `omni`) fetches, stamps each row with when it was knowable, and stores it. A new tool therefore starts from a marketlens-data dataset (`omni.list_datasets()`); if the publisher is not there yet, add it to marketlens-data first (one `Source` module with its datasets, natural key, point-in-time policy and tests). Then write the tool in `providers/data/tools/`, describe its point-in-time rule, name its key in `ToolSpec.env`, record it in `parity.py` (and the key in `sources.py` if the source is new, so `doctor` reports it), and test it against the fake publisher in `tests/data/data_harness.py`.
+
+### Another vendor, or your own data
+
+A Python package adds capabilities, tools and canonical models through the `marketlens.plugins` entry-point group:
+
+```toml
+# your package's pyproject.toml
+[project.entry-points."marketlens.plugins"]
+myvendor = "myvendor_marketlens:PLUGIN"
+```
+
+```yaml
+# ~/.config/marketlens/config.yaml
+plugins:
+  enabled: [myvendor]
+  settings: {myvendor: {region: us}}
+capabilities:
+  myvendor_data: true      # a capability your plugin declares
+```
+
+Plugins load only when you name them in `plugins.enabled`; `marketlens-mcp plugins` lists what was discovered and why one did not load, and a broken plugin is reported and skipped, never stops the server. A provider plugin reuses the canonical models (`marketlens.Bar`, `marketlens.Quote`, ...), prefixes its tools with its own name, sets `provenance.provider`, keeps a list of the vendor endpoints it does not map, and never maps an endpoint that writes. Its large results go to the same result store, so `results_query` and the `analytics_*` tools work on them unchanged. Installing a plugin is trusting its code: plugins run in the server's process. The plugin API, testing helpers (`marketlens_mcp.testing`) and a complete example are in [WRITING_A_PLUGIN.md](WRITING_A_PLUGIN.md).
 
 ## Development
 
