@@ -4,6 +4,7 @@ options_latest_quotes, options_snapshots, options_chain."""
 from __future__ import annotations
 
 import re
+from datetime import UTC, datetime
 
 import httpx
 import pytest
@@ -63,6 +64,93 @@ def test_option_history_names_the_contracts_alpaca_returned_nothing_for(
     alpaca.fixture(path, fixture)
     out = call(specs[tool], ctx, occ_symbols=[C1, P1])
     assert f"No data from Alpaca for: {P1} in this window." in out.notes
+
+
+def _bar(t: str, o: float, h: float, low: float, c: float, v: int, n: int) -> dict:
+    return {"t": t, "o": o, "h": h, "l": low, "c": c, "v": v, "n": n, "vw": round((h + low + c) / 3, 4)}
+
+
+def test_options_weekly_bar_past_end_is_rebuilt_from_its_days_to_end(specs, alpaca):
+    # Alpaca's 1w bar of the week of 2026-10-05 holds Friday 10-09's trades even with end 2026-10-07.
+    weeks = [
+        _bar("2026-09-28T04:00:00Z", 14.65, 15.75, 7.4, 9.95, 8697, 2244),
+        _bar("2026-10-05T04:00:00Z", 9.56, 13.55, 8.0, 10.5, 10358, 2670),
+    ]
+    days = [
+        _bar("2026-10-05T04:00:00Z", 9.56, 11.07, 9.1, 9.3, 818, 260),
+        _bar("2026-10-06T04:00:00Z", 9.1, 9.9, 8.22, 9.35, 733, 252),
+        _bar("2026-10-07T04:00:00Z", 11.2, 12.1, 9.35, 11.25, 1813, 538),
+    ]
+    alpaca.add(
+        "/v1beta1/options/bars", {"bars": {C1: weeks}, "next_page_token": None}, match={"timeframe": "1Week"}
+    )
+    alpaca.add("/v1beta1/options/trades", {"trades": {C1: [{"t": "2026-10-09T14:00:00Z", "p": 10.5}]}})
+    alpaca.add(
+        "/v1beta1/options/bars", {"bars": {C1: days}, "next_page_token": None}, match={"timeframe": "1Day"}
+    )
+    out = call(
+        specs["options_bars"],
+        FakeContext(fixed_now=datetime(2026, 10, 16, 20, tzinfo=UTC)),
+        occ_symbols=[C1],
+        timeframe="1w",
+        start="2026-09-28",
+        end="2026-10-07",
+    )
+    assert alpaca.params(1) == {
+        "symbols": C1,
+        "start": "2026-10-08T03:59:59.999999Z",
+        "end": "2026-10-12T04:00:00Z",
+        "limit": "1000",
+    }
+    assert alpaca.params(2) == {
+        "symbols": C1,
+        "timeframe": "1Day",
+        "start": "2026-10-05T04:00:00Z",
+        "end": "2026-10-08T03:59:59.999999Z",
+        "sort": "asc",
+        "limit": "10000",
+    }
+    rows = [(r.open, r.high, r.low, r.close, r.volume, r.trade_count, r.vwap) for r in out.rows]
+    assert rows == [
+        (14.65, 15.75, 7.4, 9.95, 8697, 2244, 11.0333),  # a whole week before end, as Alpaca sent it
+        (9.56, 12.1, 8.22, 11.25, 3364, 1050, None),  # Monday to Wednesday, not Friday's close 10.5
+    ]
+    assert out.notes[-1] == (
+        f"The 1w bar from 2026-10-05T04:00:00Z ({C1}) runs to 2026-10-12T04:00:00Z, past end "
+        "(2026-10-08T03:59:59.999999Z), and trades after end fall in it: it is rebuilt from the 1d bars of "
+        "2026-10-05 through 2026-10-07 (New York dates), so it covers those days only; its vwap is null "
+        "(insufficient_data), which the 1d bars do not give exactly."
+    )
+
+
+def test_options_bars_name_the_stretch_from_start_no_bar_covers(specs, alpaca):
+    alpaca.add("/v1beta1/options/bars", {"bars": {}, "next_page_token": None})
+    out = call(
+        specs["options_bars"],
+        FakeContext(fixed_now=datetime(2026, 10, 16, 20, tzinfo=UTC)),
+        occ_symbols=[C1],
+        timeframe="1mo",
+        start="2026-08-15",
+        end="2026-09-30",
+    )
+    assert (
+        "Alpaca leaves out the 1mo bar from 2026-08-01T04:00:00Z, which starts before start "
+        "(2026-08-15T00:00:00Z): no bar covers start to 2026-09-01T04:00:00Z. A start of 2026-08-01T04:00:00Z "
+        "takes in that whole bar."
+    ) in out.notes
+
+
+def test_the_newest_bar_of_a_delayed_feed_is_not_said_to_run_past_now(specs, ctx, alpaca):
+    # the indicative feed serves bars to 19:45Z, 15 minutes before now: the 19:45 bar closed at 19:50Z
+    bars = [_bar(t, 1, 2, 1, 2, 10, 1) for t in ("2026-10-02T19:40:00Z", "2026-10-02T19:45:00Z")]
+    alpaca.add("/v1beta1/options/bars", {"bars": {C1: bars}, "next_page_token": None})
+    out = call(specs["options_bars"], ctx, occ_symbols=[C1], timeframe="5min", lookback="PT1H")
+    assert len(out.rows) == 2
+    assert out.notes[-1] == (
+        f"The 5min bar from 2026-10-02T19:45:00Z ({C1}) is the newest one served: its period runs to "
+        "2026-10-02T19:50:00Z, after the newest data the feed serves (2026-10-02T19:45:00Z), so it holds the "
+        "trades to then, and any later trade in its period would change it."
+    )
 
 
 def test_options_refuse_a_non_occ_symbol(specs, ctx):
@@ -258,6 +346,41 @@ def test_options_chain_with_nothing_listed_says_so(specs, ctx, alpaca):
     ],
 )
 def test_option_filters_refuse_an_inverted_range(specs, ctx, tool, args, says):
+    first = {"underlying": "AAPL"} if tool == "options_chain" else {"underlyings": ["AAPL"]}
+    with pytest.raises(ValidationError, match=re.escape(says)):
+        call(specs[tool], ctx, **first, **args)
+
+
+def test_options_chain_sends_an_exact_expiration_without_the_range_that_holds_it(specs, ctx, alpaca):
+    # Alpaca took expiration_date beside expiration_date_gte as the range's upper bound (three expirations).
+    alpaca.fixture("/v1beta1/options/snapshots/AAPL", "OptionChain__page2")
+    alpaca.fixture("/v2/options/contracts", "OptionContracts__chain")
+    call(
+        specs["options_chain"],
+        ctx,
+        underlying="AAPL",
+        expiration="2026-10-16",
+        expiration_from="2026-10-01",
+        expiration_to="2026-10-31",
+    )
+    assert alpaca.params(0) == {"feed": "indicative", "limit": "1000", "expiration_date": "2026-10-16"}
+
+
+@pytest.mark.parametrize("tool", ["options_chain", "reference_option_contracts"])
+@pytest.mark.parametrize(
+    ("args", "says"),
+    [
+        (
+            {"expiration": "2026-11-20", "expiration_from": "2026-12-01"},
+            "expiration (2026-11-20) must not be before expiration_from (2026-12-01)",
+        ),
+        (
+            {"expiration": "2026-11-20", "expiration_to": "2026-11-01"},
+            "expiration (2026-11-20) must not be after expiration_to (2026-11-01)",
+        ),
+    ],
+)
+def test_option_filters_refuse_an_exact_expiration_outside_the_range(specs, ctx, tool, args, says):
     first = {"underlying": "AAPL"} if tool == "options_chain" else {"underlyings": ["AAPL"]}
     with pytest.raises(ValidationError, match=re.escape(says)):
         call(specs[tool], ctx, **first, **args)

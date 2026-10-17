@@ -27,6 +27,7 @@ from ..convert import (
     path_symbol,
     timeframe_to_alpaca,
 )
+from .bars import LAST_BAR_DOC, cap_last_bars, first_bar_note
 from .common import (
     BARS_LOOKBACK_DOC,
     CONTINUE_DOC,
@@ -122,7 +123,11 @@ class ChainIn(Inputs):
     option_type: Literal["call", "put"] | None = Field(None, description="Only calls or only puts.")
     strike_min: float | None = Field(None, ge=0, description="Lowest strike (USD), inclusive.")
     strike_max: float | None = Field(None, ge=0, description="Highest strike (USD), inclusive.")
-    expiration: date | None = Field(None, description="Exact expiration date (YYYY-MM-DD).")
+    expiration: date | None = Field(
+        None,
+        description="Exact expiration date (YYYY-MM-DD); with expiration_from or expiration_to too, it must fall "
+        "in that range, and the chain is that expiration's.",
+    )
     expiration_from: date | None = Field(None, description="Earliest expiration date, inclusive.")
     expiration_to: date | None = Field(None, description="Latest expiration date, inclusive.")
     root_symbol: str | None = Field(None, max_length=10, description="OCC root, for adjusted contracts.")
@@ -130,7 +135,9 @@ class ChainIn(Inputs):
 
     @model_validator(mode="after")
     def _ranges(self) -> ChainIn:
-        check_option_filters(self.strike_min, self.strike_max, self.expiration_from, self.expiration_to)
+        check_option_filters(
+            self.strike_min, self.strike_max, self.expiration_from, self.expiration_to, self.expiration
+        )
         return self
 
 
@@ -203,10 +210,21 @@ async def options_bars(ctx: ToolContext, args: BarsIn) -> ToolOutput:
             mapper=rows,
             start_token=args.page_token,
         )
+        bars, capped = await cap_last_bars(
+            ctx,
+            api,
+            win,
+            page.rows,
+            args.timeframe,
+            path="/v1beta1/options/bars",
+            params=params,
+            key="occ_symbol",
+            zone=NEW_YORK,
+        )
     return output(
         ctx,
         OptionBar,
-        page.rows,
+        bars,
         route="GET /v1beta1/options/bars",
         operation="optionBars",
         request=request_of(args, **win.fields()),
@@ -214,7 +232,12 @@ async def options_bars(ctx: ToolContext, args: BarsIn) -> ToolOutput:
         delay=delay,
         as_of=as_of,
         page=page,
-        notes=[*notes, *missing_in_window_note(args.occ_symbols, page, args.page_token, "occ_symbol")],
+        notes=[
+            *notes,
+            *first_bar_note(win, args.timeframe, NEW_YORK),
+            *missing_in_window_note(args.occ_symbols, page, args.page_token, "occ_symbol"),
+            *capped,
+        ],
         skips=skips,
     )
 
@@ -470,14 +493,17 @@ async def options_chain(ctx: ToolContext, args: ChainIn) -> ToolOutput:
     skips = Skips(OptionSnapshot.schema_name)
     async with AlpacaClient(ctx) as api:
         feed, delay = option_feed(api.settings.options_feed)
+        # Alpaca takes an expiration_date sent beside a range as the range's other bound (2026-11-20 with
+        # gte 2026-11-01 gave 11-06 to 11-20); ChainIn checked that the range holds it, so it is sent alone.
+        lo, hi = (None, None) if args.expiration else (args.expiration_from, args.expiration_to)
         params = {
             "feed": feed,
             "type": args.option_type,
             "strike_price_gte": args.strike_min,
             "strike_price_lte": args.strike_max,
             "expiration_date": args.expiration.isoformat() if args.expiration else None,
-            "expiration_date_gte": args.expiration_from.isoformat() if args.expiration_from else None,
-            "expiration_date_lte": args.expiration_to.isoformat() if args.expiration_to else None,
+            "expiration_date_gte": lo.isoformat() if lo else None,
+            "expiration_date_lte": hi.isoformat() if hi else None,
             "root_symbol": args.root_symbol,
         }
         page = await _snapshots(
@@ -518,6 +544,7 @@ SPECS = (
         description="Historical OHLCV bars for option contracts by OCC symbol (premium per share in USD, volume "
         "in contracts). timeframe default 1d; window by start/end or lookback (default P30D)."
         + HISTORY_DOC
+        + LAST_BAR_DOC
         + _SIZE,
         readme="OHLCV bars for option contracts",
         input_model=BarsIn,

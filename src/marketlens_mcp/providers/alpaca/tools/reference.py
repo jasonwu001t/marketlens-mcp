@@ -96,7 +96,10 @@ class AssetIn(Inputs):
 class ContractsIn(Inputs):
     underlyings: EquityTickers | None = Field(None, description="Underlying stock tickers.")
     status: Literal["active", "inactive"] | None = Field(None, description="Alpaca's default is active only.")
-    expiration: date | None = Field(None, description="Exact expiration date.")
+    expiration: date | None = Field(
+        None,
+        description="Exact expiration date; with expiration_from or expiration_to too, it must fall in that range.",
+    )
     expiration_from: date | None = Field(
         None,
         description="Earliest expiration date, inclusive. With no expiration filter at all, active contracts "
@@ -113,7 +116,9 @@ class ContractsIn(Inputs):
 
     @model_validator(mode="after")
     def _ranges(self) -> ContractsIn:
-        check_option_filters(self.strike_min, self.strike_max, self.expiration_from, self.expiration_to)
+        check_option_filters(
+            self.strike_min, self.strike_max, self.expiration_from, self.expiration_to, self.expiration
+        )
         return self
 
 
