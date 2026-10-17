@@ -199,6 +199,48 @@ def test_doctor_without_network(capsys):
     assert "config: ok" in out
 
 
+@pytest.mark.parametrize(
+    ("env", "expected"),
+    [
+        (
+            {"ALPACA_API_KEY": "k", "ALPACA_SECRET_KEY": "s"},
+            [
+                "environment ALPACA_API_KEY and ALPACA_SECRET_KEY: set",
+                "environment APCA_API_KEY_ID and APCA_API_SECRET_KEY: unset (not needed: ALPACA_API_KEY and ALPACA_SECRET_KEY are set)",
+                "environment MYPLUGIN_TOKEN: unset (a tool that needs it refuses and names it)",
+            ],
+        ),
+        (
+            {"APCA_API_KEY_ID": "k", "APCA_API_SECRET_KEY": "s"},
+            [
+                "environment ALPACA_API_KEY and ALPACA_SECRET_KEY: unset (not needed: APCA_API_KEY_ID and APCA_API_SECRET_KEY are set)",
+                "environment APCA_API_KEY_ID and APCA_API_SECRET_KEY: set",
+                "environment MYPLUGIN_TOKEN: unset (a tool that needs it refuses and names it)",
+            ],
+        ),
+        (
+            {"ALPACA_API_KEY": "k"},
+            [
+                "environment ALPACA_API_KEY and ALPACA_SECRET_KEY: incomplete (ALPACA_SECRET_KEY unset; Alpaca tools refuse until one pair is complete)",
+                "environment APCA_API_KEY_ID and APCA_API_SECRET_KEY: unset (Alpaca tools refuse until one pair is set)",
+                "environment MYPLUGIN_TOKEN: unset (a tool that needs it refuses and names it)",
+            ],
+        ),
+    ],
+)
+def test_doctor_reads_the_alpaca_key_pairs_as_one_credential(env, expected):
+    """2026-10-16: doctor said every unset variable's tools 'will refuse', so the
+    unused alternative Alpaca spelling and an optional plugin bearer looked broken."""
+    names = [
+        "ALPACA_API_KEY",
+        "ALPACA_SECRET_KEY",
+        "APCA_API_KEY_ID",
+        "APCA_API_SECRET_KEY",
+        "MYPLUGIN_TOKEN",
+    ]
+    assert cli._env_lines(sorted(names), env) == expected
+
+
 def test_doctor_reports_a_broken_plugin(capsys, tmp_path):
     write_config(tmp_path, "plugins:\n  enabled: [ghost]\n")
     assert main("doctor") == 1

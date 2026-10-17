@@ -26,7 +26,7 @@ import os
 import pathlib
 import sys
 import tempfile
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from typing import Any
 
 from marketlens_schema import SCHEMA_VERSION
@@ -339,6 +339,36 @@ def data_doctor(rt) -> tuple[list[str], int]:
     return lines, failures
 
 
+def _env_lines(names: list[str], environ: Mapping[str, str]) -> list[str]:
+    """One line per variable the enabled tools read, never its value. Alpaca
+    accepts its key pair under two spellings, so the pairs are one credential:
+    either complete pair is enough. Any other unset variable may be optional
+    (a plugin's bearer, say), so it is not called a failure: a tool that cannot
+    work without it refuses when called and names it."""
+    from .providers.alpaca.client import KEY_NAMES
+
+    pairs = [pair for pair in KEY_NAMES if set(pair) <= set(names)]
+    ready = [pair for pair in pairs if all(environ.get(n) for n in pair)]
+    lines = []
+    for pair in pairs:
+        missing = [n for n in pair if not environ.get(n)]
+        if not missing:
+            state = "set"
+        elif ready:
+            state = f"unset (not needed: {' and '.join(ready[0])} are set)"
+        elif len(missing) < len(pair):
+            state = f"incomplete ({missing[0]} unset; Alpaca tools refuse until one pair is complete)"
+        else:
+            state = "unset (Alpaca tools refuse until one pair is set)"
+        lines.append(f"environment {' and '.join(pair)}: {state}")
+    paired = {n for pair in pairs for n in pair}
+    for name in names:
+        if name not in paired:
+            state = "set" if environ.get(name) else "unset (a tool that needs it refuses and names it)"
+            lines.append(f"environment {name}: {state}")
+    return lines
+
+
 def cmd_doctor(args: argparse.Namespace) -> int:
     from .server import enabled_entries, startup_notices
 
@@ -352,10 +382,8 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     print(
         f"version: marketlens-mcp {__version__}, schema {SCHEMA_VERSION}, plugin API {PLUGIN_API_VERSION[0]}.{PLUGIN_API_VERSION[1]}"
     )
-    names = sorted({n for e in enabled_entries(rt) for n in e.env})
-    for name in names:
-        state = "set" if os.environ.get(name) else "unset (tools that need it will refuse)"
-        print(f"environment {name}: {state}")
+    for line in _env_lines(sorted({n for e in enabled_entries(rt) for n in e.env}), os.environ):
+        print(line)
     cache = rt.store_root.cache_dir
     try:
         paths.ensure_private_dir(rt.store_root.results_dir)
