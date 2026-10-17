@@ -224,7 +224,8 @@ class EarningsFigure(CanonicalModel):
 
 class InsiderTransaction(CanonicalModel):
     """One transaction of a Form 4, or one line of a Form 144 notice of an intended sale: a
-    line per class of security and broker the notice lists."""
+    line per securitiesInformation block the notice lists, each a class of security and a
+    broker (a broker can recur)."""
 
     schema_name: ClassVar[str] = "marketlens.InsiderTransaction"
     time_column: ClassVar[str | None] = "transaction_date"

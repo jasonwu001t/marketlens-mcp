@@ -20,7 +20,7 @@
   },
   "$id": "urn:marketlens:schema:1:marketlens.InsiderTransaction",
   "additionalProperties": false,
-  "description": "One transaction of a Form 4, or one line of a Form 144 notice of an intended sale: a\nline per class of security and broker the notice lists.",
+  "description": "One transaction of a Form 4, or one line of a Form 144 notice of an intended sale: a\nline per securitiesInformation block the notice lists, each a class of security and a\nbroker (a broker can recur).",
   "properties": {
     "absent": {
       "anyOf": [
