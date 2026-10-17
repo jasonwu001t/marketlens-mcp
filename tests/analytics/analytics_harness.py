@@ -253,7 +253,7 @@ def _unit(model: type[CanonicalModel] | None, name: str) -> str | None:
 
 
 def _field_meta(field: pa.Field, key: bytes) -> str | None:
-    """A dynamic table's column unit or source_model, from its Arrow field metadata (as the real store reads it)."""
+    """A dynamic table's column unit, source_model or role, from its Arrow field metadata (as the real store reads it)."""
     raw = (field.metadata or {}).get(key)
     return raw.decode("utf-8") if raw else None
 
@@ -325,6 +325,7 @@ class FakeStore:
         group_column: str | None = None,
         column_units: dict[str, str] | None = None,
         column_sources: dict[str, str] | None = None,
+        column_roles: dict[str, str] | None = None,
     ) -> ResultInfo:
         cls = BUILTIN_MODELS.get(model)
         if cls is not None:
@@ -357,6 +358,7 @@ class FakeStore:
                     max=hi,
                     source_model=(column_sources or {}).get(name)
                     or _field_meta(arrow_field, b"source_model"),
+                    role=(column_roles or {}).get(name) or _field_meta(arrow_field, b"role"),
                 )
             )
         self._n += 1

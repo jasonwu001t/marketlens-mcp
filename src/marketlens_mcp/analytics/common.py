@@ -319,13 +319,28 @@ class Input:
     def table(self) -> str:
         return qi(self.rid)
 
-    def ts(self, alias: str | None = None) -> str:
-        """The time column as a naive UTC timestamp expression."""
-        ref = f"{alias}.{qi(self.time)}" if alias else qi(self.time)
-        col = self.column(self.time)
+    def ts(self, alias: str | None = None, *, column: str | None = None) -> str:
+        """The time column (or another timestamp ``column``) as a naive UTC
+        timestamp expression."""
+        name = column or self.time
+        ref = f"{alias}.{qi(name)}" if alias else qi(name)
+        col = self.column(name)
         if col is not None and col.type == _TZ_TIMESTAMP:
             return f"timezone('UTC', {ref})"
         return f"CAST({ref} AS TIMESTAMP)"
+
+    @property
+    def available(self) -> str | None:
+        """The timestamp column holding when each row became known (role
+        available), other than the time column; None without one."""
+        return next(
+            (
+                c.name
+                for c in self.info.columns
+                if c.role == "available" and c.name != self.time and is_timestamp(c)
+            ),
+            None,
+        )
 
     def series(self, alias: str | None = None) -> str:
         if self.group is None:

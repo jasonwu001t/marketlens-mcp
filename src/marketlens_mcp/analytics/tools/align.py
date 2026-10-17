@@ -17,6 +17,7 @@ from ..common import (
     names,
     out_time,
     parse_duration,
+    plural,
     provenance,
     qi,
     refuse,
@@ -61,6 +62,16 @@ class AlignArgs(BaseModel):
     )
     suffix: str = Field(
         "_right", pattern=r"^_?[A-Za-z0-9_]{1,20}$", description="Added to right column names that collide."
+    )
+    match_on: Literal["available", "time"] = Field(
+        "available",
+        description="What right rows are matched on when the right result has a column with role available "
+        "(when each row became known, e.g. a dataset's knowledge_time). available (default): point in time, "
+        "each left row gets the right row with the latest time among those known at or before the left time "
+        "(backward), or the first update known at or after it (forward), so no value reaches a time before "
+        "it was published; tolerance is measured to when the row became known. time: the right's time "
+        "column, which can pair a left row with a value published after it (look-ahead; a note counts such "
+        "rows). Without such a column the right's time column is always used.",
     )
     store: bool = store_field()
 
@@ -130,6 +141,10 @@ async def handler(ctx: ToolContext, args: AlignArgs) -> ToolOutput:
         taken.add(name)
         out_names.append(name)
     notes = list(left.notes) + list(right.notes)
+    # Point in time: a right column with role available (when each row became
+    # known) is the clock matched on, unless match_on=time.
+    avail = right.available
+    by_clock = avail is not None and args.match_on == "available"
     with ctx.results.open([left.rid, right.rid]) as session:
         if br is None and right.group is not None:
             n = scalar(session, f"SELECT count(DISTINCT {qi(right.group)}) FROM {right.table}")
@@ -139,35 +154,93 @@ async def handler(ctx: ToolContext, args: AlignArgs) -> ToolOutput:
                     f"{TOOL}: {right.label} has {n} series in column {right.group}; pass by (e.g. by={right.group}) "
                     "to match within each series, or keep one series with results_query first.",
                 )
-        lts, rts = left.ts("l"), "r.__rts"
-        cond = f"{lts} >= {rts}" if args.direction == "backward" else f"{lts} <= {rts}"
+        # __rt: the right row's time; __rk: the clock matched on (its time, or
+        # when it became known); __ra: when it became known, to count look-ahead.
+        where = f"{qi(right.time)} IS NOT NULL" + (f" AND {qi(avail)} IS NOT NULL" if by_clock else "")
+        clocks = f"{right.ts()} AS __rt, {right.ts(column=avail) if by_clock else right.ts()} AS __rk"
+        if avail is not None and not by_clock:
+            clocks += f", {right.ts(column=avail)} AS __ra"
+        src = f"SELECT *, {clocks} FROM {right.table} WHERE {where}"
+        if by_clock:
+            # Keep only the rows that were the latest known of their series when
+            # they became known (the latest time known then, a revision of an
+            # older time being no update): an as-of match on __rk then gives the
+            # latest time known at the left time, in its latest version then.
+            series = [qi(br)] if br else []
+            src = (
+                f"SELECT * FROM ({src}) QUALIFY __rt >= max(__rt) OVER ("
+                + (f"PARTITION BY {series[0]} " if series else "")
+                + "ORDER BY __rk RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AND row_number() OVER "
+                f"(PARTITION BY {', '.join([*series, '__rk'])} ORDER BY __rt DESC) = 1"
+            )
+        lts, rks = left.ts("l"), "r.__rk"
+        cond = f"{lts} >= {rks}" if args.direction == "backward" else f"{lts} <= {rks}"
         on = (f"l.{qi(bl)} = r.{qi(br)} AND " if bl else "") + cond
         if tolerance is None:
-            within = "r.__rts IS NOT NULL"
+            within = "r.__rk IS NOT NULL"
         else:
             gap = (
-                f"epoch_us({lts}) - epoch_us({rts})"
+                f"epoch_us({lts}) - epoch_us({rks})"
                 if args.direction == "backward"
-                else f"epoch_us({rts}) - epoch_us({lts})"
+                else f"epoch_us({rks}) - epoch_us({lts})"
             )
-            within = f"r.__rts IS NOT NULL AND {gap} <= {int(tolerance.total_seconds() * 1_000_000)}"
+            within = f"r.__rk IS NOT NULL AND {gap} <= {int(tolerance.total_seconds() * 1_000_000)}"
         picks = [
             f"CASE WHEN {within} THEN r.{qi(c)} END AS {qi(n)}"
             for c, n in zip(chosen, out_names, strict=False)
         ]
-        picks.append(f"CASE WHEN {within} THEN {out_time(rts)} END AS {qi(out_names[-1])}")
+        picks.append(f"CASE WHEN {within} THEN {out_time('r.__rt')} END AS {qi(out_names[-1])}")
+        if avail is not None and not by_clock:
+            picks.append(f"CASE WHEN {within} THEN r.__ra > {lts} END AS __late")
         order = ([f"l.{qi(bl)}"] if bl else []) + [f"l.{qi(left.time)}"]
         table = session.query(
-            f"SELECT l.*, {', '.join(picks)} FROM {left.table} l ASOF LEFT JOIN "
-            f"(SELECT *, {right.ts()} AS __rts FROM {right.table} WHERE {qi(right.time)} IS NOT NULL) r ON {on} "
+            f"SELECT l.*, {', '.join(picks)} FROM {left.table} l ASOF LEFT JOIN ({src}) r ON {on} "
             f"ORDER BY {', '.join(order)}"
         )
+        unknown = (
+            scalar(
+                session,
+                f"SELECT count(*) FROM {right.table} WHERE {qi(right.time)} IS NOT NULL AND {qi(avail)} IS NULL",
+            )
+            if by_clock
+            else 0
+        )
+    late = None
+    if "__late" in table.column_names:
+        late = table.column("__late").to_pylist().count(True)
+        table = table.drop_columns(["__late"])
     unmatched = table.column(out_names[-1]).null_count
     notes.append(
         f"{unmatched} of {table.num_rows} left rows found no right row "
-        f"({'at or before' if args.direction == 'backward' else 'at or after'} their time"
-        f"{f', within {args.tolerance}' if args.tolerance else ''}{_same(bl, br)})."
+        f"({'known ' if by_clock else ''}{'at or before' if args.direction == 'backward' else 'at or after'} "
+        f"their time{f', within {args.tolerance}' if args.tolerance else ''}{_same(bl, br)})."
     )
+    if by_clock:
+        how = (
+            f"each left row gets the right row with the latest {right.time} known at or before its time, so "
+            "none was published after it"
+            if args.direction == "backward"
+            else f"each left row gets the first update known at or after its time: the right row with the "
+            f"latest {right.time} known then"
+        )
+        notes.append(
+            f"Point in time: matched on when each row of {right.rid} became known ({avail}), not on its time "
+            f"column {right.time}: {how}"
+            + (f"; the tolerance is measured to {avail}" if args.tolerance else "")
+            + f". match_on=time matches on {right.time} instead."
+        )
+        if unknown:
+            notes.append(
+                f"{plural(unknown, 'right row')} with no {avail} {'was' if unknown == 1 else 'were'} left out: "
+                f"nothing says when {'it' if unknown == 1 else 'they'} became known."
+            )
+    elif late is not None:
+        notes.append(
+            f"match_on=time: matched on the time column {right.time} of {right.rid}, not on when its rows "
+            f"became known ({avail}): {late} of {table.num_rows - unmatched} matched left rows got a right row "
+            "known only after their time (look-ahead). match_on=available (the default) matches only rows "
+            "known by then."
+        )
     if renamed:
         notes.append("Right columns renamed: " + ", ".join(f"{a} -> {b}" for a, b in renamed) + ".")
     notes.append(f"{out_names[-1]} is the time of the matched right row.")
@@ -223,10 +296,13 @@ SPEC = ToolSpec(
         "within the same `by` value (e.g. ticker; when the names differ, by_left and by_right, e.g. bars' ticker "
         "and returns' series). Output: the left columns, the chosen right columns (names "
         "that collide get the suffix, default _right) and matched_t, the matched right row's time; unmatched "
-        "right values are None (no_match). Use it to line up series of different frequencies. Large outputs "
-        "are stored and you get a result_id."
+        "right values are None (no_match). Point in time: a right column with role available (when each row "
+        "became known, e.g. a dataset's knowledge_time) is matched on, so a left row only gets a value known "
+        "by its time (match_on=time: the right's time column, look-ahead counted in a note). Use it to line up "
+        "series of different frequencies. Large outputs are stored and you get a result_id."
     ),
-    readme="As-of join of two results (backward or forward, tolerance, by column); adds matched_t.",
+    readme="As-of join of two results (backward or forward, tolerance, by column; point in time on a column "
+    "with role available); adds matched_t.",
     input_model=AlignArgs,
     output_model=ALIGNED_SCHEMA_NAME,
     provider=PROVIDER,

@@ -3,11 +3,13 @@ results_sample, results_list, results_drop and results_export."""
 
 from __future__ import annotations
 
+import datetime as dt
 import json
 import os
 import pathlib
 import re
 
+import pyarrow as pa
 import pyarrow.csv as pacsv
 import pyarrow.parquet as pq
 import pytest
@@ -119,13 +121,65 @@ def test_query_max_rows_bounds(setup):
 
 
 def test_query_byte_cap_offloads_its_own_result(setup):
-    ctx, _, bars, *_ = setup
+    """N5: an answer too large to show is stored whole, not cut to max_rows
+    (it was: 200 of 1,200 rows, one ticker of three, marked complete)."""
+    ctx, store, bars, *_ = setup
     out = call(ctx, "results_query", sql=f"SELECT * FROM {bars.result_id}", max_rows=200)
     assert isinstance(out, ResultMarker)
     assert out.model == "marketlens.QueryRow"
     assert out.parents == [bars.result_id]
-    assert out.row_count == 200
+    assert out.row_count == store.info(out.result_id).row_count == 1200
+    assert out.preview.groups_sample == ["AAPL", "MSFT", "NVDA"]
     assert out.provenance.derived_from == [bars.result_id]
+    assert (out.provenance.truncated, out.provenance.truncation_note) == (False, None)
+    assert "Truncated: no" in out.notes and any("LIMIT 50001" in n for n in out.notes)
+    assert any(
+        n.startswith("The answer (its first 200 rows alone: ")
+        and "so all 1200 rows were stored as a new result" in n
+        for n in out.notes
+    )
+    described = call(ctx, "results_describe", result_id=out.result_id)
+    assert (described.row_count, described.provenance.truncated, described.notes) == (1200, False, [])
+    # An answer that is whole at max_rows is stored as it is, without running again.
+    whole = call(ctx, "results_query", sql=f"SELECT * FROM {bars.result_id} LIMIT 150", max_rows=200)
+    assert whole.row_count == 150 and any("LIMIT 150" in n for n in whole.notes)
+    assert any(n.startswith("The answer (150 rows,") for n in whole.notes)
+
+
+def test_a_cut_answer_says_truncated_in_its_provenance_and_describe(tmp_path):
+    """N5: an answer cut at its cap is flagged truncated in provenance, which a
+    stored answer keeps (describe repeats the note, analytics carry it); it
+    was false, so describe and analytics treated the answer as complete."""
+    root = StoreRoot(tmp_path / "cache", StoreLimits(fetch_max_rows=500))
+    store = root.session("s")
+    bars = store.put(
+        bar_table(n=400),
+        tool="market_bars",
+        model=Bar.schema_name,
+        provenance=provenance(),
+        time_column="t",
+        group_column="ticker",
+    )
+    ctx = make_context(store=store)
+    for kw in ({"store": True}, {"max_rows": 200}):
+        out = call(ctx, "results_query", sql=f"SELECT * FROM {bars.result_id}", **kw)
+        assert isinstance(out, ResultMarker) and out.row_count == 500, kw
+        assert out.provenance.truncated is True, kw
+        assert out.provenance.truncation_note.startswith(
+            "The answer is cut: more than 500 rows matched and only the first 500 are kept."
+        )
+        assert "fetch.max_rows (500) bounds a stored one" in out.provenance.truncation_note
+        assert any(n.startswith("Truncated: yes; more than 500 rows matched") for n in out.notes)
+        described = call(ctx, "results_describe", result_id=out.result_id)
+        assert described.provenance.truncated is True
+        assert described.notes == [out.provenance.truncation_note]
+    assert any("so its first 500 rows were stored" in n for n in out.notes)
+    inline = call(ctx, "results_query", sql=f"SELECT ticker FROM {bars.result_id}")
+    assert isinstance(inline, InlineResult) and inline.row_count == 50
+    assert inline.provenance.truncated is True
+    assert "use store=true" in inline.provenance.truncation_note
+    complete = call(ctx, "results_query", sql=f"SELECT count(*) AS n FROM {bars.result_id}")
+    assert (complete.provenance.truncated, complete.provenance.truncation_note) == (False, None)
 
 
 def test_query_store_true_keeps_up_to_fetch_max_rows_and_handles_compose(setup):
@@ -208,12 +262,15 @@ def test_a_stored_answer_records_the_model_its_columns_came_from(setup):
 
 
 def test_a_columns_json_schema_describes_its_fields_where_source_model_is_left_out():
-    """source_model is left out of a column's JSON when None, and the JSON
-    Schema of a column, alone or in a result, still lists every field in
+    """source_model and role are left out of a column's JSON when None, and the
+    JSON Schema of a column, alone or in a result, still lists every field in
     serialization mode as in validation mode (not an opaque object)."""
-    assert "source_model" not in ColumnInfo(name="x", type="DOUBLE").model_dump(mode="json")
+    bare = ColumnInfo(name="x", type="DOUBLE").model_dump(mode="json")
+    assert "source_model" not in bare and "role" not in bare
     kept = ColumnInfo(name="x", type="DOUBLE", source_model="marketlens.Bar").model_dump(mode="json")
     assert kept["source_model"] == "marketlens.Bar"
+    clock = ColumnInfo(name="k", type="TIMESTAMP WITH TIME ZONE", role="available").model_dump(mode="json")
+    assert clock["role"] == "available"
     for model in (ColumnInfo, ResultInfo, ResultMarker, InlineResult):
         for mode in ("validation", "serialization"):
             schema = model.model_json_schema(mode=mode)
@@ -469,3 +526,51 @@ def test_query_stored_for_size_says_which_limit_and_the_description_names_the_li
         "decimals come back as strings",
     ):
         assert words in text
+
+
+def test_a_columns_role_comes_from_its_field_metadata_and_a_stored_answer_keeps_it(setup):
+    """A dynamic table marks the column of when each row became known
+    ({b"role": b"available"}); the stored result's column carries the role, and
+    so does an answer over it that keeps the column unchanged (the time column
+    kept), so analytics_align matches it point in time; a role marketlens does
+    not know is ignored."""
+    ctx, store, *_ = setup
+    ts = pa.timestamp("us", tz="UTC")
+    schema = pa.schema(
+        [
+            pa.field("event_time", ts),
+            pa.field("knowledge_time", ts, metadata={b"unit": b"UTC", b"role": b"available"}),
+            pa.field("ingested_at", ts, metadata={b"role": b"stored"}),
+            pa.field("value", pa.float64()),
+        ]
+    )
+    t0 = dt.datetime(2026, 1, 5, tzinfo=dt.UTC)
+    table = pa.table([[t0], [t0 + dt.timedelta(days=1)], [t0], [1.0]], schema=schema)
+    known = store.put(
+        table,
+        tool="datastore_query",
+        model="marketlens.QueryRow",
+        provenance=provenance(),
+        time_column="event_time",
+    )
+    roles = {c.name: c.role for c in known.columns}
+    assert roles == {"event_time": None, "knowledge_time": "available", "ingested_at": None, "value": None}
+    shown = {
+        c["name"]: c
+        for c in call(ctx, "results_describe", result_id=known.result_id).model_dump(mode="json")["columns"]
+    }
+    assert shown["knowledge_time"]["role"] == "available" and "role" not in shown["value"]
+    kept = call(
+        ctx,
+        "results_query",
+        sql=f"SELECT event_time, knowledge_time, value FROM {known.result_id}",
+        store=True,
+    )
+    assert {c.name: c.role for c in store.info(kept.result_id).columns}["knowledge_time"] == "available"
+    cast = call(
+        ctx,
+        "results_query",
+        sql=f"SELECT event_time, CAST(knowledge_time AS VARCHAR) AS knowledge_time FROM {known.result_id}",
+        store=True,
+    )
+    assert all(c.role is None for c in store.info(cast.result_id).columns)

@@ -188,7 +188,9 @@ class ToolOutput:
     * ``table``: an Arrow table already in the model's canonical Arrow types
       (analytics computed in DuckDB), same treatment as rows. A dynamic
       table's field may name its column's unit in metadata
-      (``{b"unit": b"percent"}``); the result's columns carry it.
+      (``{b"unit": b"percent"}``), and mark the timestamp column holding
+      when each row became known (``{b"role": b"available"}``, which
+      analytics_align matches on); the result's columns carry both.
     * ``stored``: the handler already wrote the result (``ctx.results.put``);
       the middleware returns its marker without re-reading it.
 

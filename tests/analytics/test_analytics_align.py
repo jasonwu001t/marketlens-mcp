@@ -368,3 +368,147 @@ def test_a_negative_tolerance_is_refused_by_name(store, ctx):
         run(SPEC, ctx, left_result_id=left, right_result_id=right, tolerance="-PT5M")
     assert e.value.code == "invalid_tolerance"
     assert "tolerance must be zero or positive" in e.value.message and "'-PT5M'" in e.value.message
+
+
+# --- point in time: a right column with role available ----------------------------------------
+
+D = dt.timedelta(days=1)
+H = dt.timedelta(hours=1)
+#: A datastore-shaped daily series: (event_time, knowledge_time, value). Each day
+#: is known at 22:00 UTC the next day; Jan 2 was revised (its only version known
+#: on Jan 8 12:00) and Dec 31 revised with Jan 7's release (the same knowledge time).
+DAY = [
+    (utc(2026, 1, 2), utc(2026, 1, 8, 12), 0.5),
+    (utc(2026, 1, 5), utc(2026, 1, 6, 22), 1.0),
+    (utc(2026, 1, 6), utc(2026, 1, 7, 22), 2.0),
+    (utc(2026, 1, 7), utc(2026, 1, 8, 22), 3.0),
+    (utc(2025, 12, 31), utc(2026, 1, 8, 22), -1.0),
+]
+LEFT_T = [utc(2026, 1, 6, 4), utc(2026, 1, 7, 4), utc(2026, 1, 8, 4), utc(2026, 1, 8, 15), utc(2026, 1, 9, 4)]
+
+
+def known_series(store, rows=DAY, role=True):
+    """A stored point-in-time result as a plugin stores one: time column
+    event_time, and knowledge_time marked role available in its field metadata.
+    ``rows``: (event_time, knowledge_time, value) of DGS10, or with the series first."""
+    rows = [r if len(r) == 4 else ("DGS10", *r) for r in rows]
+    meta = {b"unit": b"UTC", **({b"role": b"available"} if role else {})}
+    schema = pa.schema(
+        [
+            pa.field("series_id", pa.string()),
+            pa.field("event_time", TS, metadata={b"unit": b"UTC"}),
+            pa.field("knowledge_time", TS, metadata=meta),
+            pa.field("value", pa.float64(), metadata={b"unit": b"percent"}),
+        ]
+    )
+    table = pa.Table.from_pylist([dict(zip(schema.names, r, strict=True)) for r in rows], schema=schema)
+    return store.put_dynamic(
+        table, tool="datastore_query", time_column="event_time", group_column="series_id"
+    )
+
+
+def daily_left(store, times=LEFT_T):
+    table = pa.table({"series_id": ["DGS10"] * len(times), "t": pa.array(times, TS), "x": [1.0] * len(times)})
+    return store.put_dynamic(table, time_column="t")
+
+
+def test_a_right_column_with_role_available_is_matched_point_in_time(store, ctx):
+    """N2: a value is matched to a left time only once it was known there,
+    never by its event time: the time-column match gave four of five rows a
+    value published after them."""
+    left, right = daily_left(store), known_series(store)
+    assert store.info(right).columns[2].role == "available"
+    out = run(
+        SPEC, ctx, left_result_id=left, right_result_id=right, right_columns=["value", "knowledge_time"]
+    )
+    rows = out.table.to_pylist()
+    assert [(r["t"], r["value"], r["matched_t"]) for r in rows] == [
+        (LEFT_T[0], None, None),  # nothing known yet (Jan 5 is known that evening)
+        (LEFT_T[1], 1.0, utc(2026, 1, 5)),
+        (LEFT_T[2], 2.0, utc(2026, 1, 6)),
+        # Jan 2's revision became known at 12:00, later than Jan 6, but Jan 6 is
+        # still the latest day known: an as-of on knowledge_time alone gave 0.5.
+        (LEFT_T[3], 2.0, utc(2026, 1, 6)),
+        # Jan 7 and Dec 31's revision became known together: the latest day wins.
+        (LEFT_T[4], 3.0, utc(2026, 1, 7)),
+    ]
+    assert all(r["knowledge_time"] is None or r["knowledge_time"] <= r["t"] for r in rows)
+    assert any(
+        n.startswith(f"Point in time: matched on when each row of {right} became known") for n in out.notes
+    )
+    assert any("1 of 5 left rows found no right row (known at or before their time)" in n for n in out.notes)
+    assert out.provenance.request["match_on"] == "available"
+    assert unexplained_dynamic(rows, out.absent) == []
+
+
+def test_match_on_time_aligns_on_the_time_column_with_a_look_ahead_note(store, ctx):
+    left, right = daily_left(store), known_series(store)
+    out = run(SPEC, ctx, left_result_id=left, right_result_id=right, right_columns=["value"], match_on="time")
+    assert [(r["value"], r["matched_t"]) for r in out.table.to_pylist()] == [
+        (2.0, utc(2026, 1, 6)),
+        (3.0, utc(2026, 1, 7)),
+        (3.0, utc(2026, 1, 7)),
+        (3.0, utc(2026, 1, 7)),
+        (3.0, utc(2026, 1, 7)),
+    ]
+    assert "__late" not in out.table.column_names
+    assert any(
+        n.startswith("match_on=time: matched on the time column event_time")
+        and "4 of 5 matched left rows got a right row known only after their time (look-ahead)" in n
+        for n in out.notes
+    )
+    assert not any(n.startswith("Point in time") for n in out.notes)
+
+
+def test_without_a_role_the_time_column_is_matched_with_no_clock_note(store, ctx):
+    left, right = daily_left(store), known_series(store, role=False)
+    out = run(SPEC, ctx, left_result_id=left, right_result_id=right, right_columns=["value"])
+    assert [r["value"] for r in out.table.to_pylist()] == [2.0, 3.0, 3.0, 3.0, 3.0]
+    assert not any("Point in time" in n or "match_on" in n for n in out.notes)
+
+
+def test_point_in_time_forward_takes_the_first_update_known_at_or_after(store, ctx):
+    left, right = daily_left(store), known_series(store)
+    out = run(
+        SPEC, ctx, left_result_id=left, right_result_id=right, right_columns=["value"], direction="forward"
+    )
+    # Jan 2's revision (12:00 on Jan 8) is no update: Jan 6 was already known.
+    assert [(r["value"], r["matched_t"]) for r in out.table.to_pylist()] == [
+        (1.0, utc(2026, 1, 5)),
+        (2.0, utc(2026, 1, 6)),
+        (3.0, utc(2026, 1, 7)),
+        (3.0, utc(2026, 1, 7)),
+        (None, None),
+    ]
+    assert any("first update known at or after its time" in n for n in out.notes)
+
+
+def test_point_in_time_tolerance_is_measured_to_when_the_row_became_known(store, ctx):
+    left, right = daily_left(store), known_series(store)
+    out = run(
+        SPEC, ctx, left_result_id=left, right_result_id=right, right_columns=["value"], tolerance="PT12H"
+    )
+    # 15:00 on Jan 8 is 17 hours after Jan 6 became known (22:00 on Jan 7).
+    assert [r["value"] for r in out.table.to_pylist()] == [None, 1.0, 2.0, None, 3.0]
+    assert any("the tolerance is measured to knowledge_time" in n for n in out.notes)
+
+
+def test_point_in_time_matches_within_each_series(store, ctx):
+    """A series whose latest day is later must not hide another series' rows."""
+    rows = [
+        ("A", utc(2026, 1, 5), utc(2026, 1, 6, 22), 1.0),
+        ("B", utc(2026, 1, 8), utc(2026, 1, 6, 21), 9.0),
+    ]
+    right = known_series(store, rows)
+    table = pa.table({"series_id": ["A", "B"], "t": pa.array([LEFT_T[1]] * 2, TS)})
+    left = store.put_dynamic(table, time_column="t", group_column="series_id")
+    out = run(SPEC, ctx, left_result_id=left, right_result_id=right, right_columns=["value"], by="series_id")
+    assert [(r["series_id"], r["value"]) for r in out.table.to_pylist()] == [("A", 1.0), ("B", 9.0)]
+
+
+def test_point_in_time_leaves_out_rows_with_no_knowledge_time(store, ctx):
+    rows = [*DAY, (utc(2026, 1, 8), None, 4.0)]
+    left, right = daily_left(store), known_series(store, rows)
+    out = run(SPEC, ctx, left_result_id=left, right_result_id=right, right_columns=["value"])
+    assert [r["value"] for r in out.table.to_pylist()] == [None, 1.0, 2.0, 2.0, 3.0]
+    assert "1 right row with no knowledge_time was left out: nothing says when it became known." in out.notes

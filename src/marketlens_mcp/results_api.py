@@ -59,6 +59,14 @@ class ColumnInfo(BaseModel):
         "model of the result that computed it (e.g. marketlens.DrawdownPoint), recorded when this result was "
         "created, so it outlives that result. Left out when None.",
     )
+    role: Literal["available"] | None = Field(
+        None,
+        exclude_if=lambda v: v is None,
+        description="available: a timestamp column holding when each row became known (published or first "
+        "available), as opposed to the time column, the time the row describes; analytics_align matches on it "
+        "by default, so no row is paired with a time before it was known. A dynamic table marks it in the "
+        'column\'s Arrow field metadata ({b"role": b"available"}). Left out when None.',
+    )
 
 
 class ResultInfo(BaseModel):
@@ -243,7 +251,9 @@ class ResultStore(Protocol):
         """Write ``table`` as a new Parquet result in this session, compute its
         column summary, run eviction, and return its info. ``table`` must use
         the canonical Arrow types for ``model`` (marketlens_mcp.results.arrow)
-        or, for dynamic models, any DuckDB-readable Arrow types."""
+        or, for dynamic models, any DuckDB-readable Arrow types, whose fields
+        may carry a column's unit (``{b"unit": b"percent"}``) and role
+        (``{b"role": b"available"}``: when each row became known) in metadata."""
         ...
 
     def open(self, result_ids: Sequence[str]) -> AbstractContextManager[ResultSession]:

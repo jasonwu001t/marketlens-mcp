@@ -272,3 +272,85 @@ def test_a_carried_columns_source_outlives_the_result_that_computed_it(tmp_path)
         VOLATILITY, ctx, result_id=both.result_id, price_column="ret_right", window=2, periods_per_year=252
     )
     assert any("ret_right was computed by a marketlens.ReturnPoint result" in n for n in out.notes)
+
+
+def test_a_stored_point_in_time_result_is_aligned_on_when_its_rows_became_known(real):
+    """N2 through the real store and pipeline: a plugin stores a dataset's rows
+    with time column event_time and knowledge_time marked role available in its
+    field metadata (as datastore_query does); analytics_align then gives each
+    bar only a value known by the bar's time, also through a stored query of
+    the result, and match_on=time says how many matches were look-ahead."""
+    store, ctx = real
+    (query,) = [s for s in RESULTS_SPECS if s.name == "results_query"]
+    days = [M0 + i * 24 * 60 * MINUTE for i in range(250)]
+    left = put_bars(store, bars("SPY", [100.0 + i for i in range(250)], start=days[0], step=24 * 60 * MINUTE))
+    ts = pa.timestamp("us", tz="UTC")
+    schema = pa.schema(
+        [
+            pa.field("event_time", ts, metadata={b"unit": b"UTC"}),
+            pa.field("knowledge_time", ts, metadata={b"unit": b"UTC", b"role": b"available"}),
+            pa.field("series_id", pa.string()),
+            pa.field("value", pa.float64(), metadata={b"unit": b"percent"}),
+        ]
+    )
+    # A daily value, known 22:00 UTC the next day (FRED's DGS10 in the store).
+    event = [utc(d.year, d.month, d.day) for d in days]
+    known = [e + dt.timedelta(hours=46) for e in event]
+    table = pa.table([event, known, ["DGS10"] * 250, [4.0 + i / 100 for i in range(250)]], schema=schema)
+    right = store.put(
+        table,
+        tool="datastore_query",
+        model="marketlens.QueryRow",
+        provenance=Provenance(provider="plugin", route="GET /rows", fetched_at=M0),
+        time_column="event_time",
+        group_column="series_id",
+    ).result_id
+    of_right = call(query, ctx, sql=f"SELECT * FROM {right} WHERE value > 0", store=True).result_id
+    for rid in (right, of_right):
+        out = call(
+            ALIGN, ctx, left_result_id=left, right_result_id=rid, right_columns=["value", "knowledge_time"]
+        )
+        assert isinstance(out, ResultMarker)
+        late = call(
+            query,
+            ctx,
+            sql=f"SELECT count(*) FILTER (WHERE knowledge_time > t) AS late, count(value) AS matched FROM {out.result_id}",
+        )
+        assert late.rows == [{"late": 0, "matched": 248}]
+        assert any(
+            n.startswith(f"Point in time: matched on when each row of {rid} became known") for n in out.notes
+        )
+        # The aligned result's knowledge_time is a carried column, not its own clock.
+        assert {c.name: c.role for c in store.info(out.result_id).columns}["knowledge_time"] is None
+    ahead = call(
+        ALIGN, ctx, left_result_id=left, right_result_id=right, right_columns=["value"], match_on="time"
+    )
+    assert any(
+        "250 of 250 matched left rows got a right row known only after their time" in n for n in ahead.notes
+    )
+
+
+def test_an_answer_too_large_to_show_is_stored_whole_and_a_cut_one_says_so_downstream(tmp_path):
+    """N5 through the real store: results_query stored an oversized answer cut
+    to max_rows, marked complete, so analytics computed on part of the data
+    without a word. It is stored whole; one cut at fetch.max_rows is flagged
+    truncated, and an analytics output computed from it says so."""
+    store = StoreRoot(tmp_path, StoreLimits(fetch_max_rows=600)).session("test")
+    ctx = testing.make_context(store=store, capabilities=["analytics", "results"])
+    (query,) = [s for s in RESULTS_SPECS if s.name == "results_query"]
+    three = put_bars(
+        store,
+        bars("SPY", [100.0 + i % 9 for i in range(252)], start=M0)
+        + bars("TLT", [90.0 + i % 7 for i in range(252)], start=M0)
+        + bars("IEF", [95.0 + i % 5 for i in range(252)], start=M0),
+    )
+    whole = call(query, ctx, sql=f"SELECT * FROM {three} WHERE ticker <> 'IEF'", max_rows=200)
+    assert isinstance(whole, ResultMarker) and whole.row_count == 504
+    rets = call(RETURNS, ctx, result_id=whole.result_id, store=True)
+    assert rets.row_count == 502 and rets.preview.groups_sample == ["SPY", "TLT"]
+    assert rets.provenance.truncated is False
+    cut = call(query, ctx, sql=f"SELECT * FROM {three}", store=True)
+    assert cut.row_count == 600 and cut.provenance.truncated is True
+    on_cut = call(RETURNS, ctx, result_id=cut.result_id, store=True)
+    assert on_cut.provenance.truncated is True
+    assert on_cut.provenance.truncation_note.startswith(f"Computed from {cut.result_id}, which stopped")

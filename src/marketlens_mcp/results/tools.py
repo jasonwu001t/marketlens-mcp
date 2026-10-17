@@ -63,8 +63,9 @@ class QueryArgs(BaseModel):
     max_rows: int = Field(
         50,
         ge=1,
-        description="Rows to return (default 50, at most results.query_max_rows, 200 unless configured lower). A "
-        "larger max_rows or LIMIT is lowered to it, with a note.",
+        description="Rows to return inline (default 50, at most results.query_max_rows, 200 unless configured "
+        "lower). A larger max_rows or LIMIT is lowered to it, with a note. An answer too large to show is stored "
+        "whole instead, as with store=true.",
     )
     store: bool = Field(
         False,
@@ -74,12 +75,13 @@ class QueryArgs(BaseModel):
 
 def _inherited(store: FileResultStore, out: QueryOutcome) -> dict:
     """What a stored answer over one parent keeps of it: the parent's time and
-    series columns and its column units, with the model each such column came
-    from (the one the parent recorded for it, else the parent's, unless the
-    parent is itself a query answer or aligned result, which records none of
-    its own), only for columns that are still there with the same name and
-    type, and only when the time column is one of them; so the answer chains
-    into analytics as the parent would, after the parent is gone too."""
+    series columns and its column units and roles, with the model each such
+    column came from (the one the parent recorded for it, else the parent's,
+    unless the parent is itself a query answer or aligned result, which records
+    none of its own), only for columns that are still there with the same name
+    and type, and only when the time column is one of them; so the answer
+    chains into analytics as the parent would (point in time on a column with
+    role available), after the parent is gone too."""
     if len(out.result_ids) != 1:
         return {}
     parent = store.info(out.result_ids[0])
@@ -93,6 +95,7 @@ def _inherited(store: FileResultStore, out: QueryOutcome) -> dict:
         "group_column": parent.group_column if parent.group_column in same else None,
         "column_units": {n: c.unit for n, c in same.items() if c.unit},
         "column_sources": {n: s for n, c in same.items() if c.unit and (s := c.source_model or own)},
+        "column_roles": {n: c.role for n, c in same.items() if c.role},
     }
 
 
@@ -101,36 +104,58 @@ async def results_query(ctx: ToolContext, args: QueryArgs) -> ToolOutput:
     limits = store.limits
     max_rows = min(args.max_rows, limits.query_max_rows)
     out = store.query(args.sql, max_rows=max_rows, store=args.store)
-    cap = limits.fetch_max_rows if args.store else max_rows
-    notes = [f"Executed: {out.executed_sql}"]
-    if max_rows < args.max_rows and not args.store:
-        notes.append(
-            f"max_rows {args.max_rows} is above results.query_max_rows ({limits.query_max_rows}), so it was lowered "
-            "to that; pass store=true to keep the full answer as a new result."
-        )
-    if out.truncated:
-        notes.append(
-            f"Truncated: yes; more than {cap} rows matched and only the first {cap} are kept. Aggregate, filter, "
-            "or use store=true to keep the full answer as a new result."
-        )
-    else:
-        notes.append("Truncated: no")
-    request = {"sql": args.sql[:4000], "max_rows": args.max_rows, "store": args.store}
-    prov = _provenance(ctx, "duckdb:results_query", request, list(out.result_ids))
+    first = out
     rows = table_rows(out.table) if not args.store else None
     size = len(json.dumps(rows, separators=(",", ":")).encode()) if rows is not None else 0
     too_big = size > limits.query_max_bytes
     keep = args.store or too_big or (rows is not None and estimate_tokens(rows) > limits.inline_max_tokens)
+    if keep and not args.store and out.truncated:
+        # max_rows bounds an answer shown inline; one too large to show is
+        # stored whole (up to fetch.max_rows), as store=true keeps it.
+        out = store.query(args.sql, max_rows=max_rows, store=True)
+    cap = limits.fetch_max_rows if keep else max_rows
+    notes = [f"Executed: {out.executed_sql}"]
+    if max_rows < args.max_rows and not keep:
+        notes.append(
+            f"max_rows {args.max_rows} is above results.query_max_rows ({limits.query_max_rows}), so it was lowered "
+            "to that; pass store=true to keep the full answer as a new result."
+        )
+    truncation = None
+    if out.truncated:
+        advice = (
+            f"Aggregate or filter to keep the whole answer: fetch.max_rows ({cap}) bounds a stored one."
+            if keep
+            else "Aggregate, filter, or use store=true to keep the full answer as a new result."
+        )
+        kept = f"more than {cap} rows matched and only the first {cap} are kept"
+        truncation = f"The answer is cut: {kept}. {advice}"
+        notes.append(f"Truncated: yes; {kept}. {advice}")
+    else:
+        notes.append("Truncated: no")
     if keep and not args.store:
         limit = (
             f"results.query_max_bytes ({limits.query_max_bytes:,} bytes)"
             if too_big
             else f"results.inline_max_tokens ({limits.inline_max_tokens:,} tokens)"
         )
-        notes.append(
-            f"The answer ({out.row_count} rows, {size:,} bytes as JSON) is larger than {limit}, so it was stored "
-            "as a new result: query it, or select fewer columns or rows to see it inline."
-        )
+        if first.truncated:
+            kept = (
+                f"its first {out.row_count} rows were" if out.truncated else f"all {out.row_count} rows were"
+            )
+            notes.append(
+                f"The answer (its first {first.row_count} rows alone: {size:,} bytes as JSON) is larger than "
+                f"{limit}, so {kept} stored as a new result (max_rows bounds only an answer shown inline): query "
+                "it, or select fewer columns or rows to see it inline."
+            )
+        else:
+            notes.append(
+                f"The answer ({out.row_count} rows, {size:,} bytes as JSON) is larger than {limit}, so it was "
+                "stored as a new result: query it, or select fewer columns or rows to see it inline."
+            )
+    request = {"sql": args.sql[:4000], "max_rows": args.max_rows, "store": args.store}
+    prov = _provenance(ctx, "duckdb:results_query", request, list(out.result_ids))
+    if truncation:
+        prov = prov.model_copy(update={"truncated": True, "truncation_note": truncation})
     if keep:
         info = store.put(
             out.table,
@@ -165,7 +190,10 @@ class ResultIdArgs(BaseModel):
 
 async def results_describe(ctx: ToolContext, args: ResultIdArgs) -> ToolOutput:
     info = _store(ctx).info(args.result_id)
-    return ToolOutput(model=info.model, provenance=info.provenance, stored=info, risk=info.risk)
+    prov = info.provenance
+    # An incomplete result says so again, as its first answer did.
+    notes = [prov.truncation_note] if prov.truncated and prov.truncation_note else []
+    return ToolOutput(model=info.model, provenance=prov, stored=info, notes=notes, risk=info.risk)
 
 
 # --- results_sample ---------------------------------------------------------------------------
@@ -425,9 +453,10 @@ SPECS: tuple[ToolSpec, ...] = (
         "time_bucket allowed; PIVOT and UNPIVOT are not: use max(x) FILTER (WHERE ...) per column) over at most 8 "
         "results stored in this session, using each result_id as a table name. Returns at most max_rows rows "
         "(default 50, at most 200; a larger max_rows or LIMIT is lowered). An answer over results.query_max_bytes "
-        "(24,000 bytes of JSON by default) or about 6,000 tokens, or store=true, is kept as a new result and you "
-        "get its result_id; a query of one result keeps its time and series columns when they are unchanged, so "
-        "it chains into analytics. Exact decimals come back as strings (CAST to DOUBLE for a number); whole-number "
+        "(24,000 bytes of JSON by default) or about 6,000 tokens, or store=true, is kept whole as a new result "
+        "(max_rows bounds only an inline answer; fetch.max_rows, 50,000 rows by default, a stored one, and a cut "
+        "answer says truncated) and you get its result_id; a query of one result keeps its time and series "
+        "columns when they are unchanged, so it chains into analytics. Exact decimals come back as strings (CAST to DOUBLE for a number); whole-number "
         "sums are numbers. Files, settings, other sessions and every write are refused.",
         "Read-only SQL over this session's results (one SELECT, forced LIMIT)",
         QueryArgs,
