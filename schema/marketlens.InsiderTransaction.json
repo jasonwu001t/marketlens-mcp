@@ -20,7 +20,7 @@
   },
   "$id": "urn:marketlens:schema:1:marketlens.InsiderTransaction",
   "additionalProperties": false,
-  "description": "One transaction of a Form 4, or one Form 144 notice of an intended sale.",
+  "description": "One transaction of a Form 4, or one line of a Form 144 notice of an intended sale: a\nline per class of security and broker the notice lists.",
   "properties": {
     "absent": {
       "anyOf": [
@@ -71,7 +71,7 @@
       "type": "string"
     },
     "has_10b5_1": {
-      "description": "Under a pre-arranged 10b5-1 plan",
+      "description": "Under a pre-arranged 10b5-1 plan (a Form 144: it gives the plan's adoption date)",
       "title": "Has 10B5 1",
       "type": "boolean"
     },
@@ -143,7 +143,7 @@
         }
       ],
       "default": null,
-      "description": "USD",
+      "description": "USD; none on a Form 144, which states no price",
       "title": "Price Per Share",
       "x-unit": "price"
     },
@@ -210,7 +210,7 @@
         }
       ],
       "default": null,
-      "description": "shares x price, or the 144 value",
+      "description": "shares x price, or a Form 144 line's aggregate market value",
       "title": "Value Usd",
       "x-unit": "USD"
     }
