@@ -164,6 +164,31 @@ def tf_seconds(tf: str) -> int:
     return n * _TF_SECONDS[u]
 
 
+#: The zone whose midnight starts a stock's or an option's bar of a day or longer (a crypto pair's: UTC).
+BAR_ZONE = "America/New_York"
+
+
+def span_end(ts: str, span: str) -> str:
+    """SQL: when a bar ends that starts at ``ts`` (a naive UTC timestamp
+    expression) and covers ``span`` (a timeframe expression: 15min, 4h, 1d, 1w,
+    3mo): N minutes or hours later, or N days, weeks or months later on the
+    calendar of the zone it starts at midnight in, New York (stocks and
+    options: a week across a clock change is an hour longer or shorter in UTC)
+    or UTC (crypto), and at a time midnight in neither, the later of the two;
+    NULL for a span that is not a timeframe."""
+    n = f"CAST(regexp_extract({span}, '^[0-9]+') AS INTEGER)"
+    unit = f"regexp_extract({span}, '[a-z]+$')"
+    local = f"timezone('{BAR_ZONE}', timezone('UTC', {ts}))"
+    days = f"CASE {unit} WHEN 'd' THEN to_days({n}) WHEN 'w' THEN to_days(7 * {n}) WHEN 'mo' THEN to_months({n}) END"
+    utc, zoned = f"{ts} + {days}", f"timezone('UTC', timezone('{BAR_ZONE}', {local} + {days}))"
+    return (
+        f"CASE WHEN NOT regexp_full_match({span}, '{TIMEFRAME_RE.pattern.strip('^$')}') THEN NULL "
+        f"WHEN {unit} = 'min' THEN {ts} + to_minutes({n}) WHEN {unit} = 'h' THEN {ts} + to_hours({n}) "
+        f"WHEN {local} = date_trunc('day', {local}) THEN {zoned} WHEN {ts} = date_trunc('day', {ts}) THEN {utc} "
+        f"ELSE greatest({utc}, {zoned}) END"
+    )
+
+
 def tf_nests(source: str, target: str) -> bool:
     """Whether every ``target`` bucket holds whole ``source`` bars (``target``
     already known to be coarser)."""

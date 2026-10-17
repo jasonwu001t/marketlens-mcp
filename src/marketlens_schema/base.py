@@ -373,14 +373,21 @@ class CanonicalModel(BaseModel):
     group_column: ClassVar[str | None] = None
     #: Numeric columns an analytics tool may default to, first is the default.
     value_columns: ClassVar[tuple[str, ...]] = ()
-    #: True when a fetched row is known at its time column and fixed from then
-    #: on (a bar, a quote, a trade; not an order, whose fill comes later, nor
-    #: a news item, updated later), or, with no time column, holds at every
-    #: time (an exchange, a condition code; not an asset or a position, whose
-    #: values are today's). Only a built-in model's counts: results_query and
-    #: analytics_align take no other rows without a column of role available
-    #: as known at their time.
+    #: True when a fetched row is known by its time column and fixed from then
+    #: on: at that time (a quote, a trade; not an order, whose fill comes
+    #: later, nor a news item, updated later), or, with a ``span_column``, at
+    #: the end of its span (a bar, at its start plus its timeframe, when its
+    #: close is known), or, with no time column, at every time (an exchange, a
+    #: condition code; not an asset or a position, whose values are today's).
+    #: Only a built-in model's counts: results_query and analytics_align take
+    #: no other rows without a column of role available as known by their
+    #: time. A fetch that changed the rows after their time (bars adjusted for
+    #: later splits and dividends) is not.
     known_at_time: ClassVar[bool] = False
+    #: The column naming how long the period a row covers from its time
+    #: column lasts (a bar's timeframe: 15min, 1d, 1w), if any; such a row is
+    #: known only at the period's end.
+    span_column: ClassVar[str | None] = None
 
     absent: dict[str, AbsenceCode] | None = Field(
         default=None, description="Per-row reasons for None fields: field name -> AbsenceCode"

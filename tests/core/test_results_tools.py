@@ -653,8 +653,16 @@ def test_a_columns_role_survives_a_join_and_a_new_time_column_and_a_dropped_one_
     result that kept its time column, so a join or a time_bucket silently gave
     analytics_align an answer it matched on event time. A stored answer that
     leaves the column out says so."""
-    ctx, store, _, small, *_ = setup
+    from marketlens_schema.market import Quote
+
+    ctx, store, *_ = setup
     known = _known_result(store)
+    quotes = store.put(
+        rows_to_table(quote_rows(), Quote),
+        tool="market_quotes",
+        model=Quote.schema_name,
+        provenance=provenance(),
+    )
 
     def roles(out):
         return {c.name: c.role for c in store.info(out.result_id).columns}
@@ -662,7 +670,8 @@ def test_a_columns_role_survives_a_join_and_a_new_time_column_and_a_dropped_one_
     joined = call(
         ctx,
         "results_query",
-        sql=f"SELECT k.*, s.t, s.close FROM {known.result_id} k ASOF JOIN {small.result_id} s ON k.event_time >= s.t",
+        sql=f"SELECT k.*, q.t, q.bid_price FROM {known.result_id} k ASOF JOIN {quotes.result_id} q "
+        "ON k.event_time >= q.t",
         store=True,
     )
     assert roles(joined) == {
@@ -670,9 +679,9 @@ def test_a_columns_role_survives_a_join_and_a_new_time_column_and_a_dropped_one_
         "knowledge_time": "available",
         "value": None,
         "t": None,
-        "close": None,
+        "bid_price": None,
     }
-    # The bars' time is the answer's: a joined row is matched no earlier than its bar.
+    # The quotes' time is the answer's: a joined row is matched no earlier than its quote.
     assert store.info(joined.result_id).time_column == "t"
     bucketed = call(
         ctx,
@@ -740,15 +749,23 @@ def test_a_query_computing_rows_from_other_rows_keeps_no_role(setup):
     """Review of N2, round 3: a clock passed through kept its role beside
     values the query computed from other rows, some known later (a
     full-sample z-score, lead(), a forward frame, a filter on the result's
-    maximum, a self-join on the next day, bars joined forward from each row),
+    maximum, a self-join on the next day, quotes joined forward from each row),
     and analytics_align said the answer was point in time. Such a query keeps
     no role, and its note says why; rows built from their own rows (a filter,
-    a union, a fetched list of exchanges joined) keep it, and a bars result
-    joined keeps it with the bars' time as the answer's time column, or in the
-    clock."""
-    ctx, store, _, small, *_ = setup
+    a union, a fetched list of exchanges joined) keep it, and a quotes result
+    joined keeps it with the quotes' time as the answer's time column, or in
+    the clock."""
+    from marketlens_schema.market import Quote
+
+    ctx, store, *_ = setup
     known, other = _known_result(store), _known_result(store)
-    k, o, b = known.result_id, other.result_id, small.result_id
+    quotes = store.put(
+        rows_to_table(quote_rows(), Quote),
+        tool="market_quotes",
+        model=Quote.schema_name,
+        provenance=provenance(),
+    )
+    k, o, b = known.result_id, other.result_id, quotes.result_id
     exchanges = store.put(
         rows_to_table(
             [StockExchange(code="P", name="NYSE Arca"), StockExchange(code="Q", name="NASDAQ")], StockExchange
@@ -812,16 +829,18 @@ def test_a_query_computing_rows_from_other_rows_keeps_no_role(setup):
         f"WITH w AS (SELECT * FROM {k}) SELECT a.event_time, a.knowledge_time, c.value FROM w a JOIN w c "
         f"{next_day}": self_join,
         f"SELECT a.*, m.top FROM {k} a, (SELECT max(value) AS top FROM {k}) m": self_join,
-        f"SELECT m.*, s.close FROM {k} m ASOF JOIN {b} s ON s.t >= m.event_time": forward,
-        f"SELECT m.*, s.close FROM {k} m, (SELECT max(close) AS close FROM {b}) s": forward,
+        f"SELECT m.*, s.bid_price FROM {k} m ASOF JOIN {b} s ON s.t >= m.event_time": forward,
+        f"SELECT m.*, s.bid_price FROM {k} m, (SELECT max(bid_price) AS bid_price FROM {b}) s": forward,
     }.items():
         role, _, notes = stored(sql)
         assert role is None and notes[-1] == note, sql
     for sql, time in {
         f"SELECT * FROM {k} WHERE value > 1 UNION ALL SELECT * FROM {k} WHERE value <= 1": "event_time",
         f"SELECT m.*, x.name FROM {k} m, {exchanges} x": None,
-        f"SELECT s.t, s.close, m.value, m.knowledge_time FROM {b} s ASOF JOIN {k} m ON s.t >= m.event_time": "t",
-        f"SELECT m.event_time, m.value, s.close, greatest(m.knowledge_time, s.t) AS knowledge_time FROM {k} m "
+        f"SELECT s.t, s.bid_price, m.value, m.knowledge_time FROM {b} s ASOF JOIN {k} m ON s.t >= m.event_time": (
+            "t"
+        ),
+        f"SELECT m.event_time, m.value, s.bid_price, greatest(m.knowledge_time, s.t) AS knowledge_time FROM {k} m "
         f"ASOF JOIN {b} s ON s.t >= m.event_time": None,
     }.items():
         role, kept_time, notes = stored(sql)
@@ -907,7 +926,7 @@ def test_an_answer_reading_a_result_that_does_not_show_when_its_rows_became_know
         f"SELECT s.t, m.knowledge_time, s.value FROM {macro} s ASOF JOIN {k} m ON s.t >= m.event_time": lost(
             f"it reads {macro}, which holds marketlens.QueryRow rows with no column of role available (when each "
             "became known), dated by t, the time a row describes, which can be before it was published (only fetched "
-            "market data, such as bars, is taken as known at its time)"
+            "market data, such as quotes or bars, is taken as known by its time)"
         ),
         f"SELECT m.*, a.ex_date FROM {k} m, {actions} a": lost(
             f"it reads {actions}, which holds rows dated (ex_date) with neither a time column nor a column of role "
@@ -1045,6 +1064,150 @@ def test_rows_as_fetched_or_changed_after_their_time_keep_no_role(setup):
     assert role == "available" and not any("keeps no role" in n for n in notes)
 
 
+def test_bars_are_known_only_at_their_end_so_an_answer_joining_them_keeps_no_role(setup):
+    """Review of N2, round 6: a bar was taken as known at its start t, so a
+    dataset's row joined to the day's bar with greatest(knowledge_time, t)
+    kept the role beside that day's close, known only when the session ended,
+    and analytics_align called the match point in time; bars adjusted for
+    splits and dividends after their time (market_bars' default) were taken as
+    fixed too, so a value divided by a close kept the role. A bar is known
+    only at its end, which no column of a query answer shows, and adjusted
+    bars not even then: an answer joining them keeps no role, with a note."""
+    ctx, store, *_ = setup
+    k = _known_result(store).result_id
+    t0 = dt.datetime(2026, 1, 4, 5, tzinfo=dt.UTC)
+
+    def fetched(request):
+        rows = bar_rows(tickers=("SPY",), n=3, start=t0, minutes=1440)
+        rows = [r.model_copy(update={"timeframe": "1d"}) for r in rows]
+        return store.put(
+            rows_to_table(rows, Bar),
+            tool="market_bars",
+            model=Bar.schema_name,
+            provenance=provenance(request=request),
+        ).result_id
+
+    raw, adjusted = fetched({"adjustment": "raw"}), fetched({"adjustment": "all"})
+
+    def stored(sql):
+        out = call(ctx, "results_query", sql=sql, store=True)
+        return {c.name: c.role for c in store.info(out.result_id).columns}.get("knowledge_time"), out.notes
+
+    def lost(why):
+        return (
+            f"The answer's knowledge_time keeps no role available (when each row became known): {why}. "
+            "analytics_align says a match on the answer is not shown point in time, and matches each row from the "
+            "later of its time column and knowledge_time, a lower bound on when it became known."
+        )
+
+    at_end = lost(
+        f"it reads {raw}, which holds marketlens.Bar rows dated by their start t and known only at their end (t plus "
+        "their timeframe), which no column of the answer shows; align them with analytics_align instead, which "
+        "matches each bar from its end"
+    )
+    rescaled = lost(
+        f"it reads {adjusted}, which holds marketlens.Bar rows adjusted for corporate actions (adjustment=all) as "
+        "fetched at 2026-10-04T21:00Z: their prices are rescaled for each split or dividend up to then, after "
+        "their time too, so a price level holds what became known later (a return between two of them does not); fetch "
+        "them with adjustment=raw to match point in time"
+    )
+    clock = "greatest(k.knowledge_time, b.t) AS knowledge_time"
+    for sql, note in {
+        f"SELECT k.event_time, {clock}, k.value, b.close FROM {k} k ASOF JOIN {raw} b ON k.knowledge_time >= b.t": (
+            at_end
+        ),
+        f"SELECT b.t, b.close, k.value, k.knowledge_time FROM {raw} b ASOF JOIN {k} k ON b.t >= k.knowledge_time": (
+            at_end
+        ),
+        f"SELECT k.event_time, {clock}, k.value / b.close AS value FROM {k} k ASOF JOIN {adjusted} b "
+        "ON k.knowledge_time >= b.t": rescaled,
+    }.items():
+        role, notes = stored(sql)
+        assert role is None and notes[-1] == note, sql
+
+
+def test_an_answer_passing_fetched_market_data_through_records_the_fetch(setup):
+    """Review of N2, round 6: an answer of one result was taken as computed,
+    so analytics_align onto bars filtered to one ticker (what its own refusal
+    of several series advises) said the match was not shown point in time,
+    blaming a full-sample average or lead() the query never had. An answer
+    that passes the rows of one fetched result of market data through
+    unchanged (rows filtered or grouped, columns projected or computed from
+    each row's own, its time column and a bar's timeframe kept as they are)
+    records that result's model, fetch time and adjustment (rows_of), also
+    after the result is gone, and the one timeframe of its bars when it leaves
+    that column out; any other answer records none."""
+    from marketlens_mcp.results_api import RowsOf
+    from marketlens_schema.market import Quote
+
+    ctx, store, bars, *_ = setup
+    b = bars.result_id
+    adjusted = store.put(
+        bar_table(n=5),
+        tool="market_bars",
+        model=Bar.schema_name,
+        provenance=provenance(request={"adjustment": "all"}),
+    ).result_id
+    quotes = store.put(
+        rows_to_table(quote_rows(), Quote),
+        tool="market_quotes",
+        model=Quote.schema_name,
+        provenance=provenance(),
+    ).result_id
+    fetched_at = dt.datetime(2026, 10, 4, 21, tzinfo=dt.UTC)
+
+    def rows_of(sql):
+        out = call(ctx, "results_query", sql=sql, store=True)
+        return store.info(out.result_id).rows_of, out.result_id
+
+    as_bars = RowsOf(model=Bar.schema_name, fetched_at=fetched_at)
+    for sql in (
+        f"SELECT * FROM {b} WHERE ticker = 'MSFT'",
+        f"SELECT ticker, t, timeframe, close * 2 AS close FROM {b} WHERE close > 100.6",
+        f"SELECT t, timeframe, avg(close) AS close FROM {b} GROUP BY t, timeframe",
+        f"SELECT ticker, max(t) AS t, timeframe, max(high) AS high FROM {b} GROUP BY ticker, timeframe",
+        f"WITH m AS (SELECT * FROM {b} WHERE ticker = 'MSFT') SELECT * FROM m",
+    ):
+        assert rows_of(sql)[0] == as_bars, sql
+    one_minute = as_bars.model_copy(update={"span": "1min"})
+    assert rows_of(f"SELECT ticker, t, close FROM {b} WHERE ticker = 'MSFT'")[0] == one_minute
+    mixed = store.put(
+        rows_to_table(
+            bar_rows(tickers=("SPY",), n=2)
+            + [r.model_copy(update={"timeframe": "1d"}) for r in bar_rows(n=1)],
+            Bar,
+        ),
+        tool="market_bars",
+        model=Bar.schema_name,
+        provenance=provenance(),
+    ).result_id
+    assert rows_of(f"SELECT * FROM {mixed}")[0] == as_bars
+    for sql in (
+        f"SELECT ticker, t, close FROM {mixed}",
+        f"SELECT ticker, t AS bar_t, timeframe, close FROM {b}",
+        f"SELECT ticker, t + INTERVAL 1 MINUTE AS t, timeframe, close FROM {b}",
+        f"SELECT ticker, min(t) AS t, timeframe, avg(close) AS close FROM {b} GROUP BY ticker, timeframe",
+        f"SELECT ticker, t, timeframe, lead(close) OVER (PARTITION BY ticker ORDER BY t) AS close FROM {b}",
+        f"SELECT * FROM {b} WHERE close > (SELECT avg(close) FROM {b})",
+        f"SELECT a.ticker, a.t, a.timeframe, c.close FROM {b} a JOIN {b} c ON c.t = a.t + INTERVAL 1 MINUTE",
+        f"SELECT time_bucket(INTERVAL 5 MINUTE, t) AS t, '5min' AS timeframe, max(close) AS close FROM {b} GROUP BY 1",
+        f"SELECT a.* FROM {b} a JOIN {quotes} q USING (t)",
+    ):
+        assert rows_of(sql)[0] is None, sql
+    kept, rid = rows_of(f"SELECT * FROM {adjusted} WHERE ticker = 'AAPL'")
+    assert kept == RowsOf(model=Bar.schema_name, fetched_at=fetched_at, adjustment="all")
+    # A pass-through of a pass-through keeps the fetch it passes through, and
+    # so does a stored answer once that fetch is gone.
+    store.drop(adjusted)
+    assert rows_of(f"SELECT * FROM {rid} WHERE close > 0")[0] == kept
+    no_span, rid = rows_of(f"SELECT ticker, t, close FROM {rid}")
+    assert no_span == kept.model_copy(update={"span": "1min"})
+    assert rows_of(f"SELECT t, close FROM {rid} WHERE ticker = 'AAPL'")[0] == no_span
+    assert rows_of(f"SELECT * FROM {quotes} WHERE bid_price > 101")[0] == RowsOf(
+        model=Quote.schema_name, fetched_at=fetched_at
+    )
+
+
 def test_only_market_and_reference_models_fixed_once_known_are_known_at_their_time():
     """The built-in models whose fetched rows marketlens takes as known at
     their time column without a column of role available, or at every time
@@ -1072,6 +1235,11 @@ def test_only_market_and_reference_models_fixed_once_known_are_known_at_their_ti
                 "Trade",
             )
         )
+    ]
+    # A bar covers t to t plus its timeframe, and is known only at its end.
+    assert sorted(n for n, m in BUILTIN_MODELS.items() if m.span_column) == [
+        "marketlens.Bar",
+        "marketlens.OptionBar",
     ]
     for name, model in BUILTIN_MODELS.items():
         if model.known_at_time and model.time_column is None:

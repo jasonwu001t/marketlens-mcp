@@ -8,7 +8,7 @@ import datetime as dt
 
 import pyarrow as pa
 import pytest
-from analytics_harness import MINUTE, bars, run, unexplained_dynamic, utc
+from analytics_harness import MINUTE, bars, run, source_provenance, unexplained_dynamic, utc
 
 from marketlens_mcp.analytics.tools.align import SPEC
 from marketlens_mcp.analytics.tools.correlation import SPEC as CORRELATION
@@ -501,8 +501,8 @@ def test_a_right_result_with_no_clock_is_said_not_point_in_time_unless_it_holds_
     on its time column without a word, though a plugin's rows dated by the
     period they describe (research_macro_series' t) pair a bar with a value
     published weeks later, and a query answer or analytics output can hold
-    values known after its time. Only fetched rows known at their time (bars,
-    quotes, trades) are matched so without a note."""
+    values known after its time. Only fetched rows known at their time (quotes,
+    trades) are matched so without a note (bars from their end, with one)."""
     left = daily_left(store)
     macro = store.put_dynamic(
         pa.table(
@@ -516,8 +516,8 @@ def test_a_right_result_with_no_clock_is_said_not_point_in_time_unless_it_holds_
     assert (
         f"Not shown point in time: {macro} holds marketlens.QueryRow rows with no column of role available (when "
         "each became known), dated by t, the time a row describes, which can be before it was published (only "
-        "fetched market data, such as bars, is taken as known at its time); its rows were matched on the time "
-        "column t alone, which can pair a left row with a value published after it."
+        "fetched market data, such as quotes or bars, is taken as known by its time); its rows were matched on the "
+        "time column t alone, which can pair a left row with a value published after it."
     ) in out.notes
     answer = daily_left(store)
     computed = run(SPEC, ctx, left_result_id=left, right_result_id=answer, right_columns=["x"])
@@ -545,6 +545,114 @@ def test_a_right_result_with_no_clock_is_said_not_point_in_time_unless_it_holds_
     )
     market = run(SPEC, ctx, left_result_id=left, right_result_id=quotes, right_columns=["bid_price"])
     assert not any("point in time" in n.lower() or "match_on" in n for n in market.notes)
+
+
+# --- point in time: a bar is known at its end ---------------------------------------------------
+
+#: Daily bars of a stock start at midnight New York (05:00 UTC in January).
+DAY_BARS = [utc(2026, 1, d, 5) for d in (5, 6, 7)]
+HOURS = [utc(2026, 1, 6, 4), utc(2026, 1, 6, 5), utc(2026, 1, 6, 14), utc(2026, 1, 7, 15)]
+
+
+def daily_bars(store, request=None, times=DAY_BARS, timeframe="1d", asset_class="us_equity"):
+    rows = bars(
+        "SPY",
+        [10.0 + i for i in range(len(times))],
+        times=times,
+        timeframe=timeframe,
+        asset_class=asset_class,
+    )
+    return store.put_rows(rows, provenance=source_provenance(request=request))
+
+
+def hourly_left(store, times=HOURS):
+    return store.put_rows(bars("SPY", [1.0] * len(times), times=times, timeframe="1h"))
+
+
+def test_a_bar_is_matched_from_its_end_not_its_start(store, ctx):
+    """Review of N2, round 6: a bar was matched from its start t, as if known
+    then, so an hourly bar of 14:00 UTC got that day's daily close, known only
+    when the session ended, under no note at all. A bar is usable from its end,
+    t plus its timeframe: each left row gets the last bar that ended by its
+    time (forward: the first that ends at or after it); match_on=time matches
+    on t and counts the bars that ended after the left row."""
+    left, right = hourly_left(store), daily_bars(store)
+    out = run(SPEC, ctx, left_result_id=left, right_result_id=right, right_columns=["close"])
+    assert [(r["t"], r["close_right"], r["matched_t"]) for r in out.table.to_pylist()] == [
+        (HOURS[0], None, None),  # Jan 5's bar runs to Jan 6 05:00
+        (HOURS[1], 10.0, DAY_BARS[0]),
+        (HOURS[2], 10.0, DAY_BARS[0]),  # Jan 6's close is not known at 14:00
+        (HOURS[3], 11.0, DAY_BARS[1]),
+    ]
+    assert (
+        f"Point in time: each bar of {right} is matched from its end, t plus its timeframe, when its close became "
+        "known: each left row gets the bar with the latest t that ended at or before its time. match_on=time "
+        "matches on t, a bar's start, instead."
+    ) in out.notes
+    assert "1 of 4 left rows found no right row (usable at or before their time)." in out.notes
+    assert not any(n.startswith("Not shown") or "older right row" in n for n in out.notes)
+    forward = run(
+        SPEC, ctx, left_result_id=left, right_result_id=right, right_columns=["close"], direction="forward"
+    )
+    assert [r["close_right"] for r in forward.table.to_pylist()] == [10.0, 10.0, 11.0, 12.0]
+    assert any(
+        n.endswith(
+            "each left row gets the first bar that ends at or after its time. match_on=time "
+            "matches on t, a bar's start, instead."
+        )
+        for n in forward.notes
+    )
+    ahead = run(
+        SPEC, ctx, left_result_id=left, right_result_id=right, right_columns=["close"], match_on="time"
+    )
+    assert [r["close_right"] for r in ahead.table.to_pylist()] == [10.0, 11.0, 11.0, 12.0]
+    assert (
+        f"match_on=time: matched on the time column t of {right}, each bar's start, not its end (t plus its "
+        "timeframe), when its close became known: 4 of 4 matched left rows got a bar that ended after their time "
+        "(look-ahead). match_on=available (the default) matches each bar from its end."
+    ) in ahead.notes
+
+
+def test_a_bars_end_is_counted_on_the_calendar_it_starts_in(store, ctx):
+    """A bar of a day or longer ends N days, weeks or months on: a stock's (New
+    York midnight) across a clock change is an hour shorter or longer in UTC,
+    a crypto pair's (UTC midnight) is not; so the next bar's start gets it,
+    never a time before its end."""
+    week = daily_bars(store, times=[utc(2026, 3, 2, 5)], timeframe="1w")  # spring forward on March 8
+    month = daily_bars(store, times=[utc(2026, 11, 1, 4)], timeframe="1mo")  # fall back on November 1
+    crypto = daily_bars(store, times=[utc(2025, 11, 2)], asset_class="crypto")
+    for right, ends in (
+        (week, utc(2026, 3, 9, 4)),
+        (month, utc(2026, 12, 1, 5)),
+        (crypto, utc(2025, 11, 3)),
+    ):
+        left = hourly_left(store, times=[ends - dt.timedelta(minutes=1), ends])
+        out = run(SPEC, ctx, left_result_id=left, right_result_id=right, right_columns=["close"])
+        assert [r["close_right"] for r in out.table.to_pylist()] == [None, 10.0], ends
+
+
+def test_bars_adjusted_after_their_time_are_matched_from_their_end_but_not_called_point_in_time(store, ctx):
+    """Review of N2, round 6: bars fetched adjusted for splits and dividends
+    (market_bars' default, adjustment=all) were taken as fixed once known,
+    though a bar's prices are rescaled for every split and dividend up to the
+    fetch: matched from its end all the same, with a note that the match is
+    not shown point in time; raw bars are."""
+    left = hourly_left(store)
+    adjusted = daily_bars(store, request={"adjustment": "all"})
+    out = run(SPEC, ctx, left_result_id=left, right_result_id=adjusted, right_columns=["close"])
+    assert [r["close_right"] for r in out.table.to_pylist()] == [None, 10.0, 10.0, 11.0]
+    assert (
+        f"Not shown point in time: {adjusted} holds marketlens.Bar rows adjusted for corporate actions "
+        "(adjustment=all) as fetched at 2026-10-02T20:00Z: their prices are rescaled for each split or dividend up "
+        "to then, after their time too, so a price level holds what became known later (a return between two of them "
+        "does not); fetch them with adjustment=raw to match point in time. Each bar was matched all the same from "
+        "its end, t plus its timeframe, the safe default, which keeps out the bars that ended after the left time. "
+        "match_on=time matches on t, a bar's start, instead."
+    ) in out.notes
+    assert not any(n.startswith("Point in time") for n in out.notes)
+    raw = daily_bars(store, request={"adjustment": "raw"})
+    out = run(SPEC, ctx, left_result_id=left, right_result_id=raw, right_columns=["close"])
+    assert any(n.startswith(f"Point in time: each bar of {raw}") for n in out.notes)
 
 
 def test_point_in_time_forward_takes_the_first_update_known_at_or_after(store, ctx):

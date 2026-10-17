@@ -282,6 +282,7 @@ class Bar(CanonicalModel):
     group_column: ClassVar[str | None] = "ticker"
     value_columns: ClassVar[tuple[str, ...]] = ("close", "open", "high", "low", "vwap", "volume")
     known_at_time: ClassVar[bool] = True
+    span_column: ClassVar[str | None] = "timeframe"
 
     ticker: Ticker
     asset_class: AssetClass
@@ -472,6 +473,7 @@ class OptionBar(CanonicalModel):
     group_column: ClassVar[str | None] = "occ_symbol"
     value_columns: ClassVar[tuple[str, ...]] = ("close", "open", "high", "low", "vwap", "volume")
     known_at_time: ClassVar[bool] = True
+    span_column: ClassVar[str | None] = "timeframe"
 
     occ_symbol: OccSymbol
     underlying: Ticker

@@ -465,9 +465,13 @@ def test_a_release_schedule_is_matched_from_each_release_not_from_when_it_was_an
 
 def test_a_query_joining_bars_to_a_dataset_is_matched_no_later_than_each_bar(real):
     """Review of N2: a stored join of bars with a dataset's rows keeps the
-    dataset's knowledge_time, with its role, beside the bars' own time. Matched
-    on knowledge_time alone, every joined row was known before the first bar,
-    so a left row got the last bar of the join, dated after it."""
+    dataset's knowledge_time beside the bars' own time. Matched on
+    knowledge_time alone, every joined row was known before the first bar, so a
+    left row got the last bar of the join, dated after it. Round 6: a bar is
+    known only at its end, which the join does not show, so knowledge_time
+    keeps no role; analytics_align matches each row from the later of its t
+    and knowledge_time all the same, and says the match is not shown point in
+    time."""
     store, ctx = real
     (query,) = [s for s in RESULTS_SPECS if s.name == "results_query"]
     spy = put_bars(store, bars("SPY", [100.0 + i for i in range(10)], start=utc(2026, 9, 1, 20)))
@@ -493,13 +497,69 @@ def test_a_query_joining_bars_to_a_dataset_is_matched_no_later_than_each_bar(rea
         sql=f"SELECT b.t, b.close, m.value, m.knowledge_time FROM {spy} b ASOF JOIN {macro} m ON b.t >= m.event_time",
         store=True,
     ).result_id
-    assert {c.name: c.role for c in store.info(joined).columns}["knowledge_time"] == "available"
+    assert {c.name: c.role for c in store.info(joined).columns}["knowledge_time"] is None
     left = put_bars(store, bars("QQQ", [50.0] * 2, times=[utc(2026, 9, 3, 12), utc(2026, 9, 7, 12)]))
     out = call(ALIGN, ctx, left_result_id=left, right_result_id=joined, right_columns=["close", "value"])
     assert [(r["matched_t"][:13], r["close_right"]) for r in out.rows] == [
         ("2026-09-02T20", 101.0),
         ("2026-09-06T20", 105.0),
     ]
+    assert any(n.startswith(f"Not shown point in time: knowledge_time of {joined}") for n in out.notes)
+    assert not any(n.startswith("Point in time") for n in out.notes)
+
+
+def test_bars_filtered_to_one_series_are_matched_as_the_bars_are(real):
+    """Review of N2, round 6: analytics_align refuses a right result of
+    several series and advises keeping one with results_query; that answer was
+    then said not shown point in time, for a full-sample average or lead() it
+    never had, while the bars themselves were matched without a word, from
+    their start. The answer passes the bars through, so it is matched as they
+    are, from each bar's end, point in time, with their timeframe or without
+    it (all of them 1d); bars adjusted after their time, filtered so, say why
+    they are not."""
+    store, ctx = real
+    (query,) = [s for s in RESULTS_SPECS if s.name == "results_query"]
+    days = [utc(2026, 1, d, 5) for d in (5, 6, 7)]
+    rows = bars("SPY", [10.0, 11.0, 12.0], times=days) + bars("QQQ", [20.0, 21.0, 22.0], times=days)
+    hours = [utc(2026, 1, 6, 14), utc(2026, 1, 7, 15)]
+    left = put_bars(store, bars("SPY", [1.0] * 2, times=hours, timeframe="1h"))
+
+    def fetched(request):
+        return store.put(
+            table_of(type(rows[0]), rows),
+            tool="market_bars",
+            model=type(rows[0]).schema_name,
+            provenance=Provenance(
+                provider="synthetic", route="GET /v2/stocks/bars", fetched_at=M0, request=request
+            ),
+        ).result_id
+
+    raw, adjusted = fetched({"adjustment": "raw"}), fetched({"adjustment": "all"})
+    with pytest.raises(ToolError) as e:
+        call(ALIGN, ctx, left_result_id=left, right_result_id=raw, right_columns=["close"])
+    assert "keep one series with results_query first" in e.value.message
+    for right, columns in ((raw, "*"), (raw, "t, close"), (adjusted, "*")):
+        spy = call(
+            query, ctx, sql=f"SELECT {columns} FROM {right} WHERE ticker = 'SPY'", store=True
+        ).result_id
+        out = call(ALIGN, ctx, left_result_id=left, right_result_id=spy, right_columns=["close"])
+        assert [(r["matched_t"][:10], r["close_right"]) for r in out.rows] == [
+            ("2026-01-05", 10.0),
+            ("2026-01-06", 11.0),
+        ]
+        assert not any("computed by results_query" in n for n in out.notes)
+        said = [n for n in out.notes if "point in time" in n.lower()]
+        if right == raw:
+            assert said == [
+                f"Point in time: each bar of {spy} is matched from its end, t plus its timeframe, when its close "
+                "became known: each left row gets the bar with the latest t that ended at or before its time. "
+                "match_on=time matches on t, a bar's start, instead."
+            ]
+        else:
+            assert len(said) == 1 and said[0].startswith(
+                f"Not shown point in time: {spy} holds marketlens.Bar rows adjusted for corporate actions "
+                "(adjustment=all) as fetched at 2026-01-05T13:30Z"
+            )
 
 
 def test_a_value_computed_from_rows_known_later_is_not_matched_as_point_in_time(real):

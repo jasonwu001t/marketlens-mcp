@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING, Any, Literal, Protocol, runtime_checkable
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from marketlens_schema import BUILTIN_MODELS
+from marketlens_schema import BUILTIN_MODELS, CanonicalModel
 from marketlens_schema.base import AbsenceReason, PaginationState, Provenance, UtcDatetime
 
 if TYPE_CHECKING:  # pyarrow is a runtime dependency of the server, not of this interface
@@ -78,14 +78,34 @@ class ColumnInfo(BaseModel):
         "and a stored query answer keeps it on such a column it passes through unchanged (same name and type) "
         "or builds as max() or greatest() of such columns from every result it read that has one, with each row "
         "computed from the rows it keeps the clocks of (no window function, subquery in an expression or "
-        "self-join; a joined result dated by its time column, such as bars, with that time passed through as the "
+        "self-join; a joined result dated by its time column, such as quotes, with that time passed through as the "
         "answer's or in the clock), and only when every result it read shows when its rows became known: by such "
-        "a column, or as fetched rows known at their time column and fixed from then on (bars, quotes, trades: not "
-        "orders or news, whose fields change later, nor a plugin's rows dated by the period they describe) or "
-        "holding at every time (exchanges, condition codes: not assets or positions, whose values are as fetched); "
-        "never a computed result without the role. analytics_align says a match on a result with no such column "
-        "is not shown point in time unless it holds such fetched rows. Analytics outputs have none, whatever their "
-        "model states. Left out when None.",
+        "a column, or as fetched rows known at their time column and fixed from then on (quotes, trades: not bars, "
+        "known only at their end, nor orders or news, whose fields change later, nor a plugin's rows dated by the "
+        "period they describe) or holding at every time (exchanges, condition codes: not assets or positions, whose "
+        "values are as fetched); never a computed result without the role. analytics_align matches fetched bars, "
+        "or an answer passing them through, from their end (t plus timeframe), and says a match on a result with "
+        "no such column is not shown point in time unless it holds such fetched rows as they were then (not bars "
+        "adjusted for later splits and dividends). Analytics outputs have none, whatever their model states. Left "
+        "out when None.",
+    )
+
+
+class RowsOf(BaseModel):
+    """The fetched result whose rows a stored query answer passes through
+    unchanged: what shows when they became known after that result is gone."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    model: str = Field(description="Its model, e.g. marketlens.Bar")
+    fetched_at: UtcDatetime
+    adjustment: str | None = Field(
+        None,
+        description="Its price adjustment (market_bars: raw, split, dividend or all); None when it has none",
+    )
+    span: str | None = Field(
+        None,
+        description="The one span of its rows (a bar's timeframe, e.g. 1d), when the answer leaves that column out",
     )
 
 
@@ -113,6 +133,42 @@ class ResultInfo(BaseModel):
     parents: list[str] = Field(default_factory=list, description="Result ids this result was derived from")
     time_column: str | None = None
     group_column: str | None = None
+    rows_of: RowsOf | None = Field(
+        None,
+        description="A query answer passing the rows of one fetched result of market data through unchanged "
+        "(filtered or projected, its time column and a bar's timeframe kept as they are or left out): that result, "
+        "so analytics_align takes its rows as known when that result's are (a bar at its end); None otherwise",
+    )
+
+
+def known_model(info: ResultInfo) -> type[CanonicalModel] | None:
+    """The built-in model whose fetched rows ``info`` holds, when that model's
+    rows are known by their time column and fixed from then on
+    (``known_at_time``): the result as fetched, or a query answer passing such
+    rows through unchanged (``rows_of``); None for any other result."""
+    if info.rows_of is not None:
+        name = info.rows_of.model
+    elif info.parents or info.tool == "results_query":
+        return None
+    else:
+        name = info.model
+    cls = BUILTIN_MODELS.get(name)
+    if cls is None or not cls.known_at_time or info.time_column != cls.time_column:
+        return None
+    if cls.span_column is not None and known_span(info, cls) is None:
+        return None
+    return cls
+
+
+def known_span(info: ResultInfo, cls: type[CanonicalModel]) -> str | None:
+    """SQL giving the span of each row of ``info`` (``cls.span_column``: a
+    bar's timeframe): that column, else the one span its rows were recorded
+    with (``rows_of``); None without either."""
+    if cls.span_column in {c.name for c in info.columns}:
+        return '"' + cls.span_column.replace('"', '""') + '"'
+    if info.rows_of is not None and info.rows_of.span is not None:
+        return "'" + info.rows_of.span.replace("'", "''") + "'"
+    return None
 
 
 def unshown_known(info: ResultInfo) -> str | None:
@@ -120,22 +176,35 @@ def unshown_known(info: ResultInfo) -> str | None:
     available became known, as a clause following its result id (results_query
     keeps no role on an answer reading it; analytics_align says a match on it is
     not shown point in time); None for rows fetched as a built-in model that
-    is known at its time column and fixed from then on, or holds at every time
-    (``known_at_time``: bars, quotes, trades; exchanges, condition codes)."""
-    if info.parents or info.tool == "results_query":
+    is known by its time column and fixed from then on (``known_model``:
+    quotes, trades; bars, at their end; exchanges, condition codes), unless
+    the fetch adjusted them for what happened after their time (bars with
+    adjustment other than raw)."""
+    cls = known_model(info)
+    if cls is None and (info.parents or info.tool == "results_query"):
         return (
             f"was computed by {info.tool} with no column of role available (when each row became known), so its "
             "rows can hold values known after their time (a full-sample average, lead(), a bucket dated at its start)"
         )
+    src = info.rows_of
+    fetched_at = src.fetched_at if src is not None else info.provenance.fetched_at
+    fetched = f"as fetched at {fetched_at.astimezone(UTC):%Y-%m-%dT%H:%MZ}"
+    if cls is not None:
+        adjustment = src.adjustment if src is not None else info.provenance.request.get("adjustment")
+        if adjustment in (None, "raw"):
+            return None
+        return (
+            f"holds {cls.schema_name} rows adjusted for corporate actions (adjustment={adjustment}) {fetched}: their "
+            "prices are rescaled for each split or dividend up to then, after their time too, so a price level holds "
+            "what became known later (a return between two of them does not); fetch them with adjustment=raw to "
+            "match point in time"
+        )
     cls = BUILTIN_MODELS.get(info.model)
-    if cls is not None and cls.known_at_time and info.time_column == cls.time_column:
-        return None
-    fetched = f"as fetched at {info.provenance.fetched_at.astimezone(UTC):%Y-%m-%dT%H:%MZ}"
     if info.time_column and cls is None:
         return (
             f"holds {info.model} rows with no column of role available (when each became known), dated by "
             f"{info.time_column}, the time a row describes, which can be before it was published (only fetched "
-            "market data, such as bars, is taken as known at its time)"
+            "market data, such as quotes or bars, is taken as known by its time)"
         )
     if info.time_column:
         return (

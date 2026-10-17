@@ -44,6 +44,7 @@ from ..results_api import (
     ResultInfo,
     ResultMarker,
     ResultNotFound,
+    RowsOf,
     StoreUsage,
 )
 from . import evict as _evict
@@ -318,13 +319,15 @@ class FileResultStore:
         column_units: dict[str, str] | None = None,
         column_sources: dict[str, str] | None = None,
         column_roles: dict[str, str] | None = None,
+        rows_of: RowsOf | None = None,
     ) -> ResultInfo:
         """``column_sources`` and ``column_roles``: the source_model and role of
         carried columns (a query answer's), as ``column_units`` gives their units.
         A result computed from others (``parents``) has a column's role only from
         ``column_roles``, never from its model's x-role or a field's metadata: an
         analytics output can aggregate or relabel rows (a week's mean dated at
-        the week's start, beside its last row's knowledge time)."""
+        the week's start, beside its last row's knowledge time). ``rows_of``: the
+        fetched result whose rows a query answer passes through unchanged."""
         absent = dict(absent or {})
         cls = self.models.get(model)
         table, columns = self._columns(
@@ -369,6 +372,7 @@ class FileResultStore:
             parents=list(parents),
             time_column=time_column,
             group_column=group_column,
+            rows_of=rows_of,
         )
         sidecar = self._sidecar(rid)
         tmp = sidecar.with_name(sidecar.name + ".tmp")
