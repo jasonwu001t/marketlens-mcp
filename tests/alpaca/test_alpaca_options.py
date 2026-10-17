@@ -314,6 +314,41 @@ def test_option_filters_refuse_an_inverted_range(specs, ctx, tool, args, says):
         call(specs[tool], ctx, **first, **args)
 
 
+def test_options_chain_sends_an_exact_expiration_without_the_range_that_holds_it(specs, ctx, alpaca):
+    # Alpaca took expiration_date beside expiration_date_gte as the range's upper bound (three expirations).
+    alpaca.fixture("/v1beta1/options/snapshots/AAPL", "OptionChain__page2")
+    alpaca.fixture("/v2/options/contracts", "OptionContracts__chain")
+    call(
+        specs["options_chain"],
+        ctx,
+        underlying="AAPL",
+        expiration="2026-10-16",
+        expiration_from="2026-10-01",
+        expiration_to="2026-10-31",
+    )
+    assert alpaca.params(0) == {"feed": "indicative", "limit": "1000", "expiration_date": "2026-10-16"}
+
+
+@pytest.mark.parametrize("tool", ["options_chain", "reference_option_contracts"])
+@pytest.mark.parametrize(
+    ("args", "says"),
+    [
+        (
+            {"expiration": "2026-11-20", "expiration_from": "2026-12-01"},
+            "expiration (2026-11-20) must not be before expiration_from (2026-12-01)",
+        ),
+        (
+            {"expiration": "2026-11-20", "expiration_to": "2026-11-01"},
+            "expiration (2026-11-20) must not be after expiration_to (2026-11-01)",
+        ),
+    ],
+)
+def test_option_filters_refuse_an_exact_expiration_outside_the_range(specs, ctx, tool, args, says):
+    first = {"underlying": "AAPL"} if tool == "options_chain" else {"underlyings": ["AAPL"]}
+    with pytest.raises(ValidationError, match=re.escape(says)):
+        call(specs[tool], ctx, **first, **args)
+
+
 def test_options_chain_open_interest_absences(specs, ctx, alpaca):
     alpaca.fixture("/v1beta1/options/snapshots/AAPL", "OptionChain__page2")
     alpaca.add("/v2/options/contracts", {"option_contracts": [], "next_page_token": None})
