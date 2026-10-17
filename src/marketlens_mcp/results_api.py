@@ -14,11 +14,12 @@ from __future__ import annotations
 import re
 from collections.abc import Sequence
 from contextlib import AbstractContextManager
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, Literal, Protocol, runtime_checkable
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from marketlens_schema import BUILTIN_MODELS
 from marketlens_schema.base import AbsenceReason, PaginationState, Provenance, UtcDatetime
 
 if TYPE_CHECKING:  # pyarrow is a runtime dependency of the server, not of this interface
@@ -79,9 +80,12 @@ class ColumnInfo(BaseModel):
         "computed from the rows it keeps the clocks of (no window function, subquery in an expression or "
         "self-join; a joined result dated by its time column, such as bars, with that time passed through as the "
         "answer's or in the clock), and only when every result it read shows when its rows became known: by such "
-        "a column, as fetched market data dated by its time column, or as fetched rows with no date (never a "
-        "computed result without the role). Analytics outputs have none, whatever their model states. Left out "
-        "when None.",
+        "a column, or as fetched rows known at their time column and fixed from then on (bars, quotes, trades: not "
+        "orders or news, whose fields change later, nor a plugin's rows dated by the period they describe) or "
+        "holding at every time (exchanges, condition codes: not assets or positions, whose values are as fetched); "
+        "never a computed result without the role. analytics_align says a match on a result with no such column "
+        "is not shown point in time unless it holds such fetched rows. Analytics outputs have none, whatever their "
+        "model states. Left out when None.",
     )
 
 
@@ -109,6 +113,46 @@ class ResultInfo(BaseModel):
     parents: list[str] = Field(default_factory=list, description="Result ids this result was derived from")
     time_column: str | None = None
     group_column: str | None = None
+
+
+def unshown_known(info: ResultInfo) -> str | None:
+    """Why nothing shows when each row of a result with no column of role
+    available became known, as a clause following its result id (results_query
+    keeps no role on an answer reading it; analytics_align says a match on it is
+    not shown point in time); None for rows fetched as a built-in model that
+    is known at its time column and fixed from then on, or holds at every time
+    (``known_at_time``: bars, quotes, trades; exchanges, condition codes)."""
+    if info.parents or info.tool == "results_query":
+        return (
+            f"was computed by {info.tool} with no column of role available (when each row became known), so its "
+            "rows can hold values known after their time (a full-sample average, lead(), a bucket dated at its start)"
+        )
+    cls = BUILTIN_MODELS.get(info.model)
+    if cls is not None and cls.known_at_time and info.time_column == cls.time_column:
+        return None
+    fetched = f"as fetched at {info.provenance.fetched_at.astimezone(UTC):%Y-%m-%dT%H:%MZ}"
+    if info.time_column and cls is None:
+        return (
+            f"holds {info.model} rows with no column of role available (when each became known), dated by "
+            f"{info.time_column}, the time a row describes, which can be before it was published (only fetched "
+            "market data, such as bars, is taken as known at its time)"
+        )
+    if info.time_column:
+        return (
+            f"holds {info.model} rows with no column of role available (when each became known), {fetched}, which "
+            f"can hold what became known after their time column {info.time_column} (an order's later fill, a news "
+            "item's update, a day's activity placed at its start)"
+        )
+    dates = [c.name for c in info.columns if c.type.startswith(("DATE", "TIMESTAMP"))]
+    if dates:
+        return (
+            f"holds rows dated ({', '.join(dates)}) with neither a time column nor a column of role available (when "
+            "each became known), so a row can be dated or published after the time it is put beside"
+        )
+    return (
+        f"holds {info.model} rows with no date column, {fetched}, so nothing shows a row was known before then (a "
+        "position's price or an asset's status is as of then, and a date held as text is not read as one)"
+    )
 
 
 class ReadyQuery(BaseModel):

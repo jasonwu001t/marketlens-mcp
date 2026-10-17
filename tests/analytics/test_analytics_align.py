@@ -469,8 +469,7 @@ def test_a_knowledge_time_without_the_role_is_matched_on_but_not_called_point_in
     the time-column match gave four of five rows a value published after them.
     It is matched on all the same, as a lower bound (the safe default), with a
     note that the match is not shown point in time; match_on=time counts the
-    look-ahead it shows, at least. A right result with no clock at all is
-    matched on its time column without a word."""
+    look-ahead it shows, at least."""
     left, right = daily_left(store), known_series(store, role=False)
     out = run(SPEC, ctx, left_result_id=left, right_result_id=right, right_columns=["value"])
     assert [r["value"] for r in out.table.to_pylist()] == [None, 1.0, 2.0, 2.0, 3.0]
@@ -495,8 +494,57 @@ def test_a_knowledge_time_without_the_role_is_matched_on_but_not_called_point_in
         and "so this counts by knowledge_time alone" in n
         for n in ahead.notes
     )
-    plain = run(SPEC, ctx, left_result_id=left, right_result_id=daily_left(store), right_columns=["x"])
-    assert not any("point in time" in n.lower() or "match_on" in n for n in plain.notes)
+
+
+def test_a_right_result_with_no_clock_is_said_not_point_in_time_unless_it_holds_market_data(store, ctx):
+    """Review of N2, round 5: a right result with no clock at all was matched
+    on its time column without a word, though a plugin's rows dated by the
+    period they describe (research_macro_series' t) pair a bar with a value
+    published weeks later, and a query answer or analytics output can hold
+    values known after its time. Only fetched rows known at their time (bars,
+    quotes, trades) are matched so without a note."""
+    left = daily_left(store)
+    macro = store.put_dynamic(
+        pa.table(
+            {"series_id": ["CPI"] * 2, "t": pa.array([utc(2026, 1, 1), utc(2026, 1, 8)], TS), "v": [1.0, 2.0]}
+        ),
+        tool="research_macro_series",
+        time_column="t",
+    )
+    out = run(SPEC, ctx, left_result_id=left, right_result_id=macro, right_columns=["v"])
+    assert [r["v"] for r in out.table.to_pylist()] == [1.0, 1.0, 2.0, 2.0, 2.0]
+    assert (
+        f"Not shown point in time: {macro} holds marketlens.QueryRow rows with no column of role available (when "
+        "each became known), dated by t, the time a row describes, which can be before it was published (only "
+        "fetched market data, such as bars, is taken as known at its time); its rows were matched on the time "
+        "column t alone, which can pair a left row with a value published after it."
+    ) in out.notes
+    answer = daily_left(store)
+    computed = run(SPEC, ctx, left_result_id=left, right_result_id=answer, right_columns=["x"])
+    assert (
+        f"Not shown point in time: {answer} was computed by results_query with no column of role available (when "
+        "each row became known), so its rows can hold values known after their time (a full-sample average, lead(), "
+        "a bucket dated at its start); its rows were matched on the time column t alone, which can pair a left row "
+        "with a value published after it."
+    ) in computed.notes
+    assert not any("match_on" in n for n in computed.notes)
+    quotes = store.put_rows(
+        [
+            Quote(
+                ticker="DGS10",
+                asset_class="us_equity",
+                t=t,
+                bid_price=1.0,
+                bid_size=1.0,
+                ask_price=1.1,
+                ask_size=1.0,
+            )
+            for t in LEFT_T[:2]
+        ],
+        tool="market_quotes",
+    )
+    market = run(SPEC, ctx, left_result_id=left, right_result_id=quotes, right_columns=["bid_price"])
+    assert not any("point in time" in n.lower() or "match_on" in n for n in market.notes)
 
 
 def test_point_in_time_forward_takes_the_first_update_known_at_or_after(store, ctx):

@@ -571,10 +571,11 @@ def test_a_value_computed_from_rows_known_later_is_not_matched_as_point_in_time(
     out = call(ALIGN, ctx, left_result_id=left, right_result_id=dropped, right_columns=["value"])
     assert [r["value"] for r in out.rows] == [1.0, 1.0]
     assert (
-        f"Not shown point in time: {dropped} has no column of when each row became known (role available), though "
-        f"it was computed from {series}, whose knowledge_time has that role, so rows were matched on the time "
-        "column event_time alone, which can pair a left row with a value published after it. Keep knowledge_time "
-        "in a query answer (passed through, or its max()) to match point in time."
+        f"Not shown point in time: {dropped} was computed by results_query with no column of role available (when "
+        "each row became known), so its rows can hold values known after their time (a full-sample average, lead(), "
+        "a bucket dated at its start); its rows were matched on the time column event_time alone, which can pair a "
+        f"left row with a value published after it. It was computed from {series}, whose knowledge_time has that "
+        "role: keep knowledge_time in a query answer (passed through, or its max()) to match point in time."
     ) in out.notes
 
 

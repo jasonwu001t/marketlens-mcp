@@ -13,7 +13,7 @@ import pyarrow as pa
 import pyarrow.csv as pacsv
 import pyarrow.parquet as pq
 import pytest
-from coresupport import bar_rows, bar_table, news_rows, provenance, run
+from coresupport import bar_rows, bar_table, news_rows, provenance, quote_rows, run
 
 from marketlens_mcp.plugin_api import ToolError
 from marketlens_mcp.results import tools as rt
@@ -21,7 +21,7 @@ from marketlens_mcp.results.arrow import rows_to_table
 from marketlens_mcp.results.store import StoreLimits, StoreRoot
 from marketlens_mcp.results_api import ColumnInfo, InlineResult, ResultInfo, ResultMarker
 from marketlens_mcp.testing import call_tool, make_context
-from marketlens_schema.market import Bar, NewsItem
+from marketlens_schema.market import Bar, NewsItem, StockExchange
 
 SPECS = {s.name: s for s in rt.SPECS}
 
@@ -743,15 +743,18 @@ def test_a_query_computing_rows_from_other_rows_keeps_no_role(setup):
     maximum, a self-join on the next day, bars joined forward from each row),
     and analytics_align said the answer was point in time. Such a query keeps
     no role, and its note says why; rows built from their own rows (a filter,
-    a union, a fetched undated list joined) keep it, and a bars result joined
-    keeps it with the bars' time as the answer's time column, or in the clock."""
+    a union, a fetched list of exchanges joined) keep it, and a bars result
+    joined keeps it with the bars' time as the answer's time column, or in the
+    clock."""
     ctx, store, _, small, *_ = setup
     known, other = _known_result(store), _known_result(store)
     k, o, b = known.result_id, other.result_id, small.result_id
-    tickers = store.put(
-        pa.table({"ticker": ["AAPL", "MSFT"]}),
-        tool="reference_assets",
-        model="marketlens.QueryRow",
+    exchanges = store.put(
+        rows_to_table(
+            [StockExchange(code="P", name="NYSE Arca"), StockExchange(code="Q", name="NASDAQ")], StockExchange
+        ),
+        tool="reference_stock_exchanges",
+        model=StockExchange.schema_name,
         provenance=provenance(),
     ).result_id
 
@@ -816,7 +819,7 @@ def test_a_query_computing_rows_from_other_rows_keeps_no_role(setup):
         assert role is None and notes[-1] == note, sql
     for sql, time in {
         f"SELECT * FROM {k} WHERE value > 1 UNION ALL SELECT * FROM {k} WHERE value <= 1": "event_time",
-        f"SELECT m.*, u.ticker FROM {k} m, {tickers} u": None,
+        f"SELECT m.*, x.name FROM {k} m, {exchanges} x": None,
         f"SELECT s.t, s.close, m.value, m.knowledge_time FROM {b} s ASOF JOIN {k} m ON s.t >= m.event_time": "t",
         f"SELECT m.event_time, m.value, s.close, greatest(m.knowledge_time, s.t) AS knowledge_time FROM {k} m "
         f"ASOF JOIN {b} s ON s.t >= m.event_time": None,
@@ -832,8 +835,8 @@ def test_an_answer_reading_a_result_that_does_not_show_when_its_rows_became_know
     join kept the role and analytics_align again called a look-ahead value
     point in time; so did a daily high of bars stored without a recorded time
     column, joined forward. A result read keeps the answer's role only when it
-    shows when its rows became known: by a column with the role, as fetched
-    market data dated by its time column, or as fetched rows with no date."""
+    shows when its rows became known: by a column with the role, or as fetched
+    rows known at their time column (bars) or at every time (exchanges)."""
     ctx, store, _, small, *_ = setup
     k, b = _known_result(store).result_id, small.result_id
     ts = pa.timestamp("us", tz="UTC")
@@ -852,9 +855,9 @@ def test_an_answer_reading_a_result_that_does_not_show_when_its_rows_became_know
 
     def computed(rid):
         return lost(
-            f"it reads {rid}, a result computed by results_query with no column of role available (when each row "
-            "became known), so its rows can hold values known later (a full-sample average, say); read the results "
-            "it was computed from in this query instead"
+            f"it reads {rid}, which was computed by results_query with no column of role available (when each row "
+            "became known), so its rows can hold values known after their time (a full-sample average, lead(), a "
+            "bucket dated at its start); read the results it was computed from in this query instead"
         )
 
     z = call(
@@ -902,13 +905,13 @@ def test_an_answer_reading_a_result_that_does_not_show_when_its_rows_became_know
         f"SELECT m.*, x.hi FROM {k} m, (SELECT max(hi) AS hi FROM {daily}) x": computed(daily),
         f"SELECT m.*, u.ticker FROM {k} m, {tickers} u": computed(tickers),
         f"SELECT s.t, m.knowledge_time, s.value FROM {macro} s ASOF JOIN {k} m ON s.t >= m.event_time": lost(
-            f"it reads {macro}, whose rows (marketlens.QueryRow) have no column of role available (when each became "
-            "known), and its time column t is the time a row describes, which can be before it was published (only "
-            "fetched market data, such as bars, is taken as known at its time)"
+            f"it reads {macro}, which holds marketlens.QueryRow rows with no column of role available (when each "
+            "became known), dated by t, the time a row describes, which can be before it was published (only fetched "
+            "market data, such as bars, is taken as known at its time)"
         ),
         f"SELECT m.*, a.ex_date FROM {k} m, {actions} a": lost(
-            f"it reads {actions}, whose rows are dated (ex_date) with neither a time column nor a column of role "
-            "available (when each became known), so a row can hold one dated or published after it"
+            f"it reads {actions}, which holds rows dated (ex_date) with neither a time column nor a column of role "
+            "available (when each became known), so a row can be dated or published after the time it is put beside"
         ),
     }.items():
         role, notes = stored(sql)
@@ -921,6 +924,158 @@ def test_an_answer_reading_a_result_that_does_not_show_when_its_rows_became_know
         f"FROM {k} a JOIN {kept} p USING (event_time)"
     )
     assert role == "available" and not any("keeps no role" in n for n in notes)
+
+
+def test_rows_as_fetched_or_changed_after_their_time_keep_no_role(setup):
+    """Review of N2, round 5: any fetched rows with no date were taken as known
+    at every time, and any built-in rows with a time column as known then, so a
+    position's P&L of today, an asset's status, a plugin's period held as text
+    or an order's fill a week after it was placed, joined to the dataset, kept
+    the role, and analytics_align called the match point in time. Only rows
+    known at their time column and fixed from then on (bars, quotes, trades),
+    or that hold at every time (exchanges), keep it."""
+    from marketlens_schema.market import Asset, Quote
+    from marketlens_schema.portfolio import Order, Position
+
+    ctx, store, _, _, news, _ = setup
+    k = _known_result(store).result_id
+    t0 = dt.datetime(2026, 1, 5, tzinfo=dt.UTC)
+
+    def fetched(rows, model, tool):
+        return store.put(
+            rows_to_table(rows, model), tool=tool, model=model.schema_name, provenance=provenance()
+        ).result_id
+
+    pos = fetched(
+        [
+            Position(
+                environment="paper",
+                asset_class="us_equity",
+                ticker="SPY",
+                side="long",
+                qty="10",
+                avg_entry_price="400",
+                cost_basis="4000",
+                current_price="568",
+                unrealized_plpc=0.42,
+            )
+        ],
+        Position,
+        "account_positions",
+    )
+    assets = fetched(
+        [Asset(ticker="SPY", asset_class="us_equity", status="active", tradable=True, shortable=True)],
+        Asset,
+        "reference_assets",
+    )
+    orders = fetched(
+        [
+            Order(
+                environment="paper",
+                order_id="o1",
+                asset_class="us_equity",
+                ticker="SPY",
+                side="buy",
+                status="filled",
+                filled_qty="10",
+                filled_avg_price="555",
+                created_at=t0,
+                filled_at=t0 + dt.timedelta(days=7),
+            )
+        ],
+        Order,
+        "account_orders",
+    )
+    quotes = fetched(quote_rows(), Quote, "market_quotes")
+    text = store.put(
+        pa.table({"period": ["2026-01-09"], "eps": [7.0]}),
+        tool="research_earnings",
+        model="marketlens.QueryRow",
+        provenance=provenance(),
+    ).result_id
+
+    def stored(sql):
+        out = call(ctx, "results_query", sql=sql, store=True)
+        return {c.name: c.role for c in store.info(out.result_id).columns}.get("knowledge_time"), out.notes
+
+    def lost(why):
+        return (
+            f"The answer's knowledge_time keeps no role available (when each row became known): {why}. "
+            "analytics_align says a match on the answer is not shown point in time, and matches each row from the "
+            "later of its time column and knowledge_time, a lower bound on when it became known."
+        )
+
+    def undated(rid, model):
+        return lost(
+            f"it reads {rid}, which holds {model} rows with no date column, as fetched at 2026-10-04T21:00Z, so "
+            "nothing shows a row was known before then (a position's price or an asset's status is as of then, and "
+            "a date held as text is not read as one)"
+        )
+
+    def later(rid, model, col):
+        return lost(
+            f"it reads {rid}, which holds {model} rows with no column of role available (when each became known), "
+            f"as fetched at 2026-10-04T21:00Z, which can hold what became known after their time column {col} (an "
+            "order's later fill, a news item's update, a day's activity placed at its start)"
+        )
+
+    for sql, note in {
+        f"SELECT k.event_time, k.knowledge_time, k.value * p.unrealized_plpc AS value FROM {k} k, {pos} p": (
+            undated(pos, "marketlens.Position")
+        ),
+        f"SELECT k.* FROM {k} k, {assets} a WHERE a.shortable": undated(assets, "marketlens.Asset"),
+        f"SELECT k.event_time, k.knowledge_time, v.eps AS value FROM {k} k JOIN {text} v "
+        "ON CAST(v.period AS DATE) = CAST(k.event_time AS DATE) + 4": undated(text, "marketlens.QueryRow"),
+        f"SELECT k.event_time, greatest(k.knowledge_time, o.created_at) AS knowledge_time, o.filled_avg_price AS "
+        f"value FROM {k} k ASOF JOIN {orders} o ON k.event_time >= o.created_at": later(
+            orders, "marketlens.Order", "created_at"
+        ),
+        f"SELECT k.event_time, greatest(k.knowledge_time, n.created_at) AS knowledge_time, n.headline FROM {k} k "
+        f"ASOF JOIN {news.result_id} n ON k.event_time >= n.created_at": later(
+            news.result_id, "marketlens.NewsItem", "created_at"
+        ),
+    }.items():
+        role, notes = stored(sql)
+        assert role is None and notes[-1] == note, sql
+    # Quotes are known at their time and fixed from then on, as bars are.
+    role, notes = stored(
+        f"SELECT k.event_time, k.value, q.bid_price, greatest(k.knowledge_time, q.t) AS knowledge_time FROM {k} k "
+        f"ASOF JOIN {quotes} q ON k.event_time >= q.t"
+    )
+    assert role == "available" and not any("keeps no role" in n for n in notes)
+
+
+def test_only_market_and_reference_models_fixed_once_known_are_known_at_their_time():
+    """The built-in models whose fetched rows marketlens takes as known at
+    their time column without a column of role available, or at every time
+    with none: market data fixed once known and reference codes, never
+    account data, news, assets or calendars."""
+    from marketlens_schema import BUILTIN_MODELS
+
+    assert sorted(n for n, m in BUILTIN_MODELS.items() if m.known_at_time) == [
+        f"marketlens.{n}"
+        for n in sorted(
+            (
+                "Bar",
+                "ConditionCode",
+                "FixedIncomeQuote",
+                "MarketClock",
+                "OptionBar",
+                "OptionExchange",
+                "OptionQuote",
+                "OptionSnapshot",
+                "OptionTrade",
+                "OrderBookLevel",
+                "Quote",
+                "Snapshot",
+                "StockExchange",
+                "Trade",
+            )
+        )
+    ]
+    for name, model in BUILTIN_MODELS.items():
+        if model.known_at_time and model.time_column is None:
+            assert not any("date" in str(f.annotation).lower() for f in model.model_fields.values()), name
 
 
 def test_a_query_whose_rows_sqlglot_cannot_trace_keeps_no_role(setup, monkeypatch):

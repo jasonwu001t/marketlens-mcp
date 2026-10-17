@@ -373,6 +373,14 @@ class CanonicalModel(BaseModel):
     group_column: ClassVar[str | None] = None
     #: Numeric columns an analytics tool may default to, first is the default.
     value_columns: ClassVar[tuple[str, ...]] = ()
+    #: True when a fetched row is known at its time column and fixed from then
+    #: on (a bar, a quote, a trade; not an order, whose fill comes later, nor
+    #: a news item, updated later), or, with no time column, holds at every
+    #: time (an exchange, a condition code; not an asset or a position, whose
+    #: values are today's). Only a built-in model's counts: results_query and
+    #: analytics_align take no other rows without a column of role available
+    #: as known at their time.
+    known_at_time: ClassVar[bool] = False
 
     absent: dict[str, AbsenceCode] | None = Field(
         default=None, description="Per-row reasons for None fields: field name -> AbsenceCode"

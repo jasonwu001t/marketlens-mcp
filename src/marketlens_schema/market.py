@@ -62,6 +62,7 @@ class Asset(CanonicalModel):
 class MarketClock(CanonicalModel):
     schema_name: ClassVar[str] = "marketlens.MarketClock"
     time_column: ClassVar[str | None] = "t"
+    known_at_time: ClassVar[bool] = True
 
     market: str = Field(description='The market this clock describes, e.g. "US equities"')
     t: UtcDatetime = unit("UTC", description="The provider's current time")
@@ -126,6 +127,7 @@ class OptionContract(CanonicalModel):
 
 class OptionExchange(CanonicalModel):
     schema_name: ClassVar[str] = "marketlens.OptionExchange"
+    known_at_time: ClassVar[bool] = True
 
     code: str
     name: str
@@ -135,6 +137,7 @@ class StockExchange(CanonicalModel):
     """A stock exchange code as the exchange columns of stock quotes and trades carry it."""
 
     schema_name: ClassVar[str] = "marketlens.StockExchange"
+    known_at_time: ClassVar[bool] = True
 
     code: str
     name: str
@@ -145,6 +148,7 @@ class ConditionCode(CanonicalModel):
     stock and option quotes and trades carry it."""
 
     schema_name: ClassVar[str] = "marketlens.ConditionCode"
+    known_at_time: ClassVar[bool] = True
 
     asset_class: Literal["us_equity", "us_option"]
     tick_type: Literal["trade", "quote"]
@@ -277,6 +281,7 @@ class Bar(CanonicalModel):
     time_column: ClassVar[str | None] = "t"
     group_column: ClassVar[str | None] = "ticker"
     value_columns: ClassVar[tuple[str, ...]] = ("close", "open", "high", "low", "vwap", "volume")
+    known_at_time: ClassVar[bool] = True
 
     ticker: Ticker
     asset_class: AssetClass
@@ -297,6 +302,7 @@ class Quote(CanonicalModel):
     time_column: ClassVar[str | None] = "t"
     group_column: ClassVar[str | None] = "ticker"
     value_columns: ClassVar[tuple[str, ...]] = ("bid_price", "ask_price", "bid_size", "ask_size")
+    known_at_time: ClassVar[bool] = True
 
     ticker: Ticker
     asset_class: AssetClass
@@ -321,6 +327,7 @@ class Trade(CanonicalModel):
     time_column: ClassVar[str | None] = "t"
     group_column: ClassVar[str | None] = "ticker"
     value_columns: ClassVar[tuple[str, ...]] = ("price", "size")
+    known_at_time: ClassVar[bool] = True
 
     ticker: Ticker
     asset_class: AssetClass
@@ -345,6 +352,7 @@ class Snapshot(CanonicalModel):
     time_column: ClassVar[str | None] = "t"
     group_column: ClassVar[str | None] = "ticker"
     value_columns: ClassVar[tuple[str, ...]] = ("last_price", "change_pct")
+    known_at_time: ClassVar[bool] = True
 
     ticker: Ticker
     asset_class: AssetClass
@@ -401,6 +409,7 @@ class OrderBookLevel(CanonicalModel):
     time_column: ClassVar[str | None] = "t"
     group_column: ClassVar[str | None] = "ticker"
     value_columns: ClassVar[tuple[str, ...]] = ("price", "size")
+    known_at_time: ClassVar[bool] = True
 
     ticker: Ticker
     asset_class: AssetClass
@@ -462,6 +471,7 @@ class OptionBar(CanonicalModel):
     time_column: ClassVar[str | None] = "t"
     group_column: ClassVar[str | None] = "occ_symbol"
     value_columns: ClassVar[tuple[str, ...]] = ("close", "open", "high", "low", "vwap", "volume")
+    known_at_time: ClassVar[bool] = True
 
     occ_symbol: OccSymbol
     underlying: Ticker
@@ -482,6 +492,7 @@ class OptionQuote(CanonicalModel):
     time_column: ClassVar[str | None] = "t"
     group_column: ClassVar[str | None] = "occ_symbol"
     value_columns: ClassVar[tuple[str, ...]] = ("bid_price", "ask_price")
+    known_at_time: ClassVar[bool] = True
 
     occ_symbol: OccSymbol
     underlying: Ticker
@@ -501,6 +512,7 @@ class OptionTrade(CanonicalModel):
     time_column: ClassVar[str | None] = "t"
     group_column: ClassVar[str | None] = "occ_symbol"
     value_columns: ClassVar[tuple[str, ...]] = ("price", "size")
+    known_at_time: ClassVar[bool] = True
 
     occ_symbol: OccSymbol
     underlying: Ticker
@@ -534,6 +546,7 @@ class OptionSnapshot(CanonicalModel):
         "bid_price",
         "ask_price",
     )
+    known_at_time: ClassVar[bool] = True
 
     occ_symbol: OccSymbol
     underlying: Ticker
@@ -589,6 +602,7 @@ class FixedIncomeQuote(CanonicalModel):
     time_column: ClassVar[str | None] = "t"
     group_column: ClassVar[str | None] = "isin"
     value_columns: ClassVar[tuple[str, ...]] = ("bid_price", "ask_price", "bid_ytm", "ask_ytm")
+    known_at_time: ClassVar[bool] = True
 
     isin: Isin
     t: UtcDatetime = unit("UTC")

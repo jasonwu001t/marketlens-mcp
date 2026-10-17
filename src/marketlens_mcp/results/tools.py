@@ -21,12 +21,12 @@ from sqlglot.lineage import lineage
 from sqlglot.optimizer.qualify import qualify
 from sqlglot.optimizer.scope import Scope, traverse_scope
 
-from marketlens_schema import BUILTIN_MODELS, QUERY_ROW_SCHEMA_NAME, Delay, Provenance
+from marketlens_schema import QUERY_ROW_SCHEMA_NAME, Delay, Provenance
 
 from ..manifest import DYNAMIC_MODELS
 from ..offload import estimate_tokens
 from ..plugin_api import ToolContext, ToolError, ToolOutput, ToolSpec
-from ..results_api import CLOCK_NAMES, RESULT_ID_RE, QueryRefused, ResultInfo
+from ..results_api import CLOCK_NAMES, RESULT_ID_RE, QueryRefused, ResultInfo, unshown_known
 from .arrow import duckdb_type, json_safe, sql_ident, table_rows
 from .store import FileResultStore, QueryOutcome
 
@@ -176,35 +176,18 @@ def _other_rows(scopes: list[Scope], dated: set[str]) -> str | None:
 
 def _unproven(parent: ResultInfo) -> str | None:
     """Why nothing shows when each row of a result read without a column of
-    role available became known, so an answer reading it can keep no role: it
-    was computed from other results (a query answer or analytics output, whose
-    rows can hold values of rows known later, a full-sample average, say), or
-    its rows are dated otherwise than by a time column of when each happened
-    (a plugin's dated rows: the time they describe, published later; rows dated
-    with no time column). None for marketlens's own market and account data,
-    fetched (bars, quotes, trades, news, orders), each row known at its time
-    column, and for fetched rows with no date at all (a list of assets)."""
-    if parent.parents or parent.tool == "results_query":
-        return (
-            f"it reads {parent.result_id}, a result computed by {parent.tool} with no column of role available (when "
-            "each row became known), so its rows can hold values known later (a full-sample average, say); read the "
-            "results it was computed from in this query instead"
-        )
-    if parent.time_column:
-        if parent.model in BUILTIN_MODELS:
-            return None
-        return (
-            f"it reads {parent.result_id}, whose rows ({parent.model}) have no column of role available (when each "
-            f"became known), and its time column {parent.time_column} is the time a row describes, which can be "
-            "before it was published (only fetched market data, such as bars, is taken as known at its time)"
-        )
-    dates = [c.name for c in parent.columns if c.type.startswith(("DATE", "TIMESTAMP"))]
-    if dates:
-        return (
-            f"it reads {parent.result_id}, whose rows are dated ({', '.join(dates)}) with neither a time column nor "
-            "a column of role available (when each became known), so a row can hold one dated or published after it"
-        )
-    return None
+    role available became known (``unshown_known``), so an answer reading it
+    can keep no role: computed from other results, a plugin's dated rows, rows
+    whose fields change after their time (an order's fill) or rows as of their
+    fetch (positions, assets). None for fetched rows known at their time column
+    and fixed from then on (bars, quotes, trades), or that hold at every time
+    (exchanges, condition codes)."""
+    why = unshown_known(parent)
+    if why is None:
+        return None
+    computed = parent.parents or parent.tool == "results_query"
+    advice = "; read the results it was computed from in this query instead" if computed else ""
+    return f"it reads {parent.result_id}, which {why}{advice}"
 
 
 def _clocks(store: FileResultStore, out: QueryOutcome) -> tuple[dict[str, str], str | None, str | None]:
@@ -735,15 +718,15 @@ SPECS: tuple[ToolSpec, ...] = (
         "results_query",
         "results",
         "Query stored results",
-        "Run ONE read-only SQL SELECT (DuckDB SQL; WITH, joins, window functions, ASOF JOIN and "
+        "Run ONE read-only SQL SELECT (DuckDB; WITH, joins, window functions, ASOF JOIN and "
         "time_bucket allowed; PIVOT and UNPIVOT are not: use max(x) FILTER (WHERE ...) per column) over at most 8 "
         "results of this session, each result_id a table name. Returns at most max_rows rows "
         "(default 50, at most 200; a larger max_rows or LIMIT is lowered). An answer over results.query_max_bytes "
-        "(24,000 bytes of JSON by default) or about 6,000 tokens, or store=true, is kept whole as a new result "
+        "(24,000 bytes of JSON, default) or about 6,000 tokens, or store=true, is kept whole as a new result "
         "(max_rows bounds only an inline answer; fetch.max_rows, 50,000 rows by default, a stored one; an answer "
         "cut, or over a cut result, says truncated) and you get its result_id; a query of one result keeps its "
         "unchanged time and series columns, and a clock's role passed through (or max; no window, subquery, "
-        "self-join, role-less computed input), so it chains into analytics. Exact decimals come back as "
+        "self-join, role-less input but market data), so it chains into analytics. Exact decimals come back as "
         "strings (CAST to DOUBLE); whole-number sums as numbers. Files, settings, other sessions and every write "
         "are refused.",
         "Read-only SQL over this session's results (one SELECT, forced LIMIT)",
