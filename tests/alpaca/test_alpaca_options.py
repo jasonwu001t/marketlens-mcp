@@ -140,6 +140,19 @@ def test_options_bars_name_the_stretch_from_start_no_bar_covers(specs, alpaca):
     ) in out.notes
 
 
+def test_the_newest_bar_of_a_delayed_feed_is_not_said_to_run_past_now(specs, ctx, alpaca):
+    # the indicative feed serves bars to 19:45Z, 15 minutes before now: the 19:45 bar closed at 19:50Z
+    bars = [_bar(t, 1, 2, 1, 2, 10, 1) for t in ("2026-10-02T19:40:00Z", "2026-10-02T19:45:00Z")]
+    alpaca.add("/v1beta1/options/bars", {"bars": {C1: bars}, "next_page_token": None})
+    out = call(specs["options_bars"], ctx, occ_symbols=[C1], timeframe="5min", lookback="PT1H")
+    assert len(out.rows) == 2
+    assert out.notes[-1] == (
+        f"The 5min bar from 2026-10-02T19:45:00Z ({C1}) is the newest one served: its period runs to "
+        "2026-10-02T19:50:00Z, after the newest data the feed serves (2026-10-02T19:45:00Z), so it holds the "
+        "trades to then, and any later trade in its period would change it."
+    )
+
+
 def test_options_refuse_a_non_occ_symbol(specs, ctx):
     with pytest.raises(ValidationError, match="'AAPL'"):
         call(specs["options_bars"], ctx, occ_symbols=["AAPL"])

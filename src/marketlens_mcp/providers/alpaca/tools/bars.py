@@ -8,8 +8,9 @@ the newest data is kept whole when no trade falls between ``end`` and its
 close (a week ending on a Friday), and otherwise rebuilt from the daily bars of
 its whole days up to ``end`` (1w and Nmo bars, whose open, high, low, close,
 volume and trade count are their days') or left out (1d and shorter bars, which
-only trades would rebuild exactly). When the window reaches the newest data,
-the bar still open is kept and named."""
+only trades would rebuild exactly). A bar still open, its period running past
+the newest data, is named: the window reaches the newest data, or nothing
+traded from end to it."""
 
 from __future__ import annotations
 
@@ -141,30 +142,49 @@ async def cap_last_bars(
     unit: str = "",
 ) -> tuple[list[Any], list[str]]:
     """The rows without trades after the window's end, and notes naming the
-    bars whose period runs past it. ``path`` and ``params`` are the tool's
-    bars request (its trades are asked whether anything trades after end, and
-    it is sent again for the 1Day bars that rebuild a 1w or Nmo bar), ``key``
-    is the rows' instrument column, ``symbol`` its Alpaca symbol and ``unit``
-    what a note calls the instruments it does not name."""
+    bars whose period runs past it or past the newest data. ``path`` and
+    ``params`` are the tool's bars request (its trades are asked whether
+    anything trades after end, and it is sent again for the 1Day bars that
+    rebuild a 1w or Nmo bar), ``key`` is the rows' instrument column,
+    ``symbol`` its Alpaca symbol and ``unit`` what a note calls the
+    instruments it does not name."""
     after = (win.end or win.latest) + TICK
     over = [r for r in rows if bar_end(r.t, timeframe, zone) > after]
     if not over:
         return rows, []
     start = min(r.t for r in over)
     close = bar_end(start, timeframe, zone)
-    if win.end is None or win.end >= win.latest:
-        return rows, [
-            f"The {timeframe} bar from {iso_z(start)} ({named(sorted({getattr(r, key) for r in over}), unit)}) is "
-            f"the current one: its period runs to {iso_z(close)}, after now ({iso_z(ctx.now())}), so it holds the "
-            "trades so far, and any later trade in its period would change it."
+
+    def current(bars: list[Any], held: str = "") -> list[str]:
+        """The bars whose period runs past the newest data: later trades would change them."""
+        if not bars:
+            return []
+        now = ctx.now()
+        which, reach, so_far = (
+            ("current one", f"now ({iso_z(now)})", "so far")
+            if close > now
+            else ("newest one served", f"the newest data the feed serves ({iso_z(win.latest)})", "to then")
+        )
+        return [
+            f"The {timeframe} bar from {iso_z(start)} ({named(sorted({getattr(r, key) for r in bars}), unit)}) is "
+            f"the {which}: its period runs to {iso_z(close)}, after {reach}, so it holds the trades {so_far}{held}, "
+            "and any later trade in its period would change it."
         ]
-    # a bar with no trade between end and its close (a week whose end is a Friday) is whole as it is
+
+    if win.end is None or win.end >= win.latest:
+        return rows, current(over)
+    # a bar with no trade between end and its close (a week whose end is a Friday) is whole as it is, and still
+    # the current one when its period runs past the newest data (a month whose end is last Friday)
     trading, seen = await _trading_after(
         api, path, params, sorted({symbol(getattr(r, key)) for r in over}), win.end, min(close, win.latest)
     )
+    forming = current(
+        [r for r in over if symbol(getattr(r, key)) not in trading and close > win.latest],
+        " (none after end)",
+    )
     over = [r for r in over if symbol(getattr(r, key)) in trading]
     if not over:
-        return rows, []
+        return rows, forming
 
     def said(bars: list[Any], what: str) -> str:
         return (
@@ -176,7 +196,8 @@ async def cap_last_bars(
     day = datetime.combine(after.astimezone(zone).date(), time(0), zone).astimezone(UTC)
     if not timeframe.endswith(("w", "mo")) or day <= start:
         return _without(rows, over), [
-            said(over, "it is left out; bars of a shorter timeframe cover its start to end.")
+            said(over, "it is left out; bars of a shorter timeframe cover its start to end."),
+            *forming,
         ]
     try:
         days = await fetch_grouped(
@@ -194,10 +215,11 @@ async def cap_last_bars(
             mapper=lambda s, records: [(s, d) for d in records],
         )
     except ToolError as e:
-        return _without(rows, over), [said(over, f"it is left out (its 1d bars failed: {e.code}).")]
+        return _without(rows, over), [said(over, f"it is left out (its 1d bars failed: {e.code})."), *forming]
     if not days.complete or days.row_cap_hit or days.page_cap_hit:
         return _without(rows, over), [
-            said(over, "it is left out (its 1d bars stopped at the fetch limits; narrow the request).")
+            said(over, "it is left out (its 1d bars stopped at the fetch limits; narrow the request)."),
+            *forming,
         ]
     by_symbol: dict[str, list[Any]] = {}
     for s, d in days.rows:
@@ -222,7 +244,7 @@ async def cap_last_bars(
     left = [r for r in over if id(r) not in rebuilt]
     if left:
         notes.append(said(left, f"it is left out, as no 1d bar of it falls on {dates}."))
-    return _without([rebuilt.get(id(r), r) for r in rows], left), notes
+    return _without([rebuilt.get(id(r), r) for r in rows], left), [*notes, *forming]
 
 
 def _without(rows: list[Any], drop: list[Any]) -> list[Any]:
