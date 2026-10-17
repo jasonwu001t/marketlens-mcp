@@ -650,7 +650,10 @@ async def sec_insider_trades(ctx: ToolContext, args: InsiderInputs) -> ToolOutpu
                     "transaction_code": F.text(r["transaction_code"]) or "",
                     "acquired_disposed": F.text(r["acquired_disposed"]),
                     "shares": F.number(r["shares"]),
-                    "price_per_share": F.number(r["price_per_share"]),
+                    # A Form 144 states shares and an aggregate market value, no
+                    # price: the stored price of a notice is the value over the
+                    # shares, no price anyone traded at.
+                    "price_per_share": None if notice else F.number(r["price_per_share"]),
                     "value_usd": F.number(r["value_usd"]),
                     "shares_owned_after": F.number(r["shares_owned_after"]),
                     "knowledge_time": F.instant(r["knowledge_time"]),
@@ -658,6 +661,7 @@ async def sec_insider_trades(ctx: ToolContext, args: InsiderInputs) -> ToolOutpu
                 codes={
                     "insider_cik": NPS,
                     "officer_title": NA,
+                    "price_per_share": NA if notice else AbsenceCode.NO_DATA,
                     "acquired_disposed": NA if notice else AbsenceCode.NO_DATA,
                     "shares_owned_after": NA if notice else AbsenceCode.NO_DATA,
                 },

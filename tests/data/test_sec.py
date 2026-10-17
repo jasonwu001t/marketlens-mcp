@@ -271,9 +271,13 @@ def test_sec_insider_trades_golden(tmp_path, edgar):
     assert exercise["absent"] == {"price_per_share": "no_data", "value_usd": "no_data"}
     assert exercise["is_derivative"] is True and exercise["has_10b5_1"] is True
     notice = doc["rows"][2]
+    # a Form 144 states 2,000 shares worth 101,000 and no price: the stored 50.50 is
+    # the value over the shares, no price anyone traded at
+    assert (notice["shares"], notice["price_per_share"]) == (2000.0, None)
     assert notice["absent"] == {
         "insider_cik": "not_provided_by_source",
         "acquired_disposed": "not_applicable",
+        "price_per_share": "not_applicable",
         "shares_owned_after": "not_applicable",
     }
     # the 2025 Form 4 is before marketlens-data's insider history floor: never fetched
