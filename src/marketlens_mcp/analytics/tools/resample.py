@@ -20,6 +20,7 @@ from ..common import (
     Input,
     bar_timeframe,
     check_unique_times,
+    derived_rows_of,
     dynamic_output,
     finite,
     model_output,
@@ -275,6 +276,8 @@ async def handler(ctx: ToolContext, args: ResampleArgs) -> ToolOutput:
             notes += _merged_note(session, inp, args.agg)
         skipped, bad_columns = _non_finite(session, inp, values)
         table = session.query(sql)
+        # A bucket is known when the last row in it is: at its end, or later.
+        known = derived_rows_of(session, [inp], period=target)
     skipped_text = (
         f"{plural(skipped, 'row')} with a non-finite value (NaN or infinity) in {', '.join(bad_columns)}"
     )
@@ -306,7 +309,18 @@ async def handler(ctx: ToolContext, args: ResampleArgs) -> ToolOutput:
     prov = provenance(ctx, TOOL, [inp.info], args)
     cls = BUILTIN_MODELS.get(inp.model)
     if cls is not None:
-        return model_output(table, cls, prov, notes=notes, absent=absent, inputs=[inp.info], store=args.store)
+        return model_output(
+            table,
+            cls,
+            prov,
+            notes=notes,
+            absent=absent,
+            inputs=[inp.info],
+            store=args.store,
+            ctx=ctx,
+            tool=TOOL,
+            rows_of=known,
+        )
     return dynamic_output(
         ctx,
         TOOL,
@@ -321,6 +335,7 @@ async def handler(ctx: ToolContext, args: ResampleArgs) -> ToolOutput:
         units=inp.units(),
         sources=inp.sources(),
         store=args.store,
+        rows_of=known,
     )
 
 

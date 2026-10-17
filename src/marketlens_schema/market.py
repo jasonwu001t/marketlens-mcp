@@ -353,7 +353,7 @@ class Snapshot(CanonicalModel):
     time_column: ClassVar[str | None] = "t"
     group_column: ClassVar[str | None] = "ticker"
     value_columns: ClassVar[tuple[str, ...]] = ("last_price", "change_pct")
-    known_at_time: ClassVar[bool] = True
+    known_at_fetch: ClassVar[bool] = True
 
     ticker: Ticker
     asset_class: AssetClass
@@ -548,7 +548,7 @@ class OptionSnapshot(CanonicalModel):
         "bid_price",
         "ask_price",
     )
-    known_at_time: ClassVar[bool] = True
+    known_at_fetch: ClassVar[bool] = True
 
     occ_symbol: OccSymbol
     underlying: Ticker

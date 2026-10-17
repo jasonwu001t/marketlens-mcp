@@ -1136,7 +1136,9 @@ def test_an_answer_passing_fetched_market_data_through_records_the_fetch(setup):
     each row's own, its time column and a bar's timeframe kept as they are)
     records that result's model, fetch time and adjustment (rows_of), also
     after the result is gone, and the one timeframe of its bars when it leaves
-    that column out; any other answer records none."""
+    that column out. Round 7: any other answer computed from market data
+    records it marked not shown, so analytics_align refuses it unless
+    match_on=time, where it matched a bucket or lead() on its start."""
     from marketlens_mcp.results_api import RowsOf
     from marketlens_schema.market import Quote
 
@@ -1193,7 +1195,14 @@ def test_an_answer_passing_fetched_market_data_through_records_the_fetch(setup):
         f"SELECT time_bucket(INTERVAL 5 MINUTE, t) AS t, '5min' AS timeframe, max(close) AS close FROM {b} GROUP BY 1",
         f"SELECT a.* FROM {b} a JOIN {quotes} q USING (t)",
     ):
-        assert rows_of(sql)[0] is None, sql
+        assert rows_of(sql)[0] == as_bars.model_copy(update={"shown": False}), sql
+    # Quotes are known at their time: an answer computing from them records none, as before.
+    assert (
+        rows_of(
+            f"SELECT time_bucket(INTERVAL 1 MINUTE, t) AS t, max(bid_price) AS bid FROM {quotes} GROUP BY 1"
+        )[0]
+        is None
+    )
     kept, rid = rows_of(f"SELECT * FROM {adjusted} WHERE ticker = 'AAPL'")
     assert kept == RowsOf(model=Bar.schema_name, fetched_at=fetched_at, adjustment="all")
     # A pass-through of a pass-through keeps the fetch it passes through, and
@@ -1226,16 +1235,21 @@ def test_only_market_and_reference_models_fixed_once_known_are_known_at_their_ti
                 "OptionBar",
                 "OptionExchange",
                 "OptionQuote",
-                "OptionSnapshot",
                 "OptionTrade",
                 "OrderBookLevel",
                 "Quote",
-                "Snapshot",
                 "StockExchange",
                 "Trade",
             )
         )
     ]
+    # A snapshot holds values as of its fetch (open interest, greeks, a
+    # session still trading): known only then (round 7).
+    assert sorted(n for n, m in BUILTIN_MODELS.items() if m.known_at_fetch) == [
+        "marketlens.OptionSnapshot",
+        "marketlens.Snapshot",
+    ]
+    assert not any(m.known_at_time and m.known_at_fetch for m in BUILTIN_MODELS.values())
     # A bar covers t to t plus its timeframe, and is known only at its end.
     assert sorted(n for n, m in BUILTIN_MODELS.items() if m.span_column) == [
         "marketlens.Bar",

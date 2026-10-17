@@ -19,6 +19,7 @@ from ..common import (
     adjustment_note,
     bar_timeframe,
     check_unique_times,
+    derived_rows_of,
     model_output,
     names,
     no_period,
@@ -303,6 +304,8 @@ async def handler(ctx: ToolContext, args: BetaArgs) -> ToolOutput:
                     f"the benchmark is {most[0]['n'] or 0}.",
                 )
         gaps = _gap_note(session, rets, args.period)
+        # A window is known when its last returns are (a static beta has no time to match on).
+        known = derived_rows_of(session, [a, b], period=args.period, levels=False) if w is not None else None
     if args.period is not None:
         notes.append(
             f"Both results were sampled to their last price per {args.period} bucket (UTC-aligned) first."
@@ -336,6 +339,9 @@ async def handler(ctx: ToolContext, args: BetaArgs) -> ToolOutput:
         absent=no_period(args.period),
         inputs=[a.info, b.info],
         store=args.store,
+        ctx=ctx,
+        tool=TOOL,
+        rows_of=known,
     )
 
 

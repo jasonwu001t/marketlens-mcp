@@ -26,7 +26,7 @@ from marketlens_mcp.analytics.tools.volatility import SPEC as VOLATILITY  # noqa
 from marketlens_mcp.plugin_api import ToolError  # noqa: E402
 from marketlens_mcp.results.store import StoreLimits, StoreRoot  # noqa: E402
 from marketlens_mcp.results.tools import SPECS as RESULTS_SPECS  # noqa: E402
-from marketlens_mcp.results_api import InlineResult, ResultMarker, ResultNotFound  # noqa: E402
+from marketlens_mcp.results_api import InlineResult, ResultMarker, ResultNotFound, RowsOf  # noqa: E402
 from marketlens_schema import BUILTIN_MODELS  # noqa: E402
 from marketlens_schema.analytics import ANALYTICS_MODELS  # noqa: E402
 from marketlens_schema.base import Provenance  # noqa: E402
@@ -469,9 +469,11 @@ def test_a_query_joining_bars_to_a_dataset_is_matched_no_later_than_each_bar(rea
     knowledge_time alone, every joined row was known before the first bar, so a
     left row got the last bar of the join, dated after it. Round 6: a bar is
     known only at its end, which the join does not show, so knowledge_time
-    keeps no role; analytics_align matches each row from the later of its t
-    and knowledge_time all the same, and says the match is not shown point in
-    time."""
+    keeps no role. Round 7: matched from the later of its t and knowledge_time,
+    the lower bound left out the bar's end, so a left row got a bar that ended
+    after it; the answer records that it was computed from bars without
+    showing when its rows became known, and analytics_align refuses it unless
+    match_on=time, which counts the look-ahead it can see."""
     store, ctx = real
     (query,) = [s for s in RESULTS_SPECS if s.name == "results_query"]
     spy = put_bars(store, bars("SPY", [100.0 + i for i in range(10)], start=utc(2026, 9, 1, 20)))
@@ -498,13 +500,31 @@ def test_a_query_joining_bars_to_a_dataset_is_matched_no_later_than_each_bar(rea
         store=True,
     ).result_id
     assert {c.name: c.role for c in store.info(joined).columns}["knowledge_time"] is None
+    assert store.info(joined).rows_of == RowsOf(model="marketlens.Bar", fetched_at=M0, shown=False)
     left = put_bars(store, bars("QQQ", [50.0] * 2, times=[utc(2026, 9, 3, 12), utc(2026, 9, 7, 12)]))
-    out = call(ALIGN, ctx, left_result_id=left, right_result_id=joined, right_columns=["close", "value"])
+    with pytest.raises(ToolError) as e:
+        call(ALIGN, ctx, left_result_id=left, right_result_id=joined, right_columns=["close", "value"])
+    assert e.value.code == "not_point_in_time"
+    assert e.value.message == (
+        f"analytics_align: {joined} was computed by results_query from marketlens.Bar rows (fetched at "
+        "2026-01-05T13:30Z) in a way that shows neither when each of its rows became known nor when the period it "
+        "covers ends (a bucket dated at its start, lead(), a join), so matching on its time column t could pair a "
+        "left row with values known only after it. Align onto the fetched rows, or an analytics output of them "
+        "(analytics_resample, analytics_returns and the others record when each row ends), or pass match_on=time "
+        "to match on t anyway, look-ahead included."
+    )
+    out = call(
+        ALIGN,
+        ctx,
+        left_result_id=left,
+        right_result_id=joined,
+        right_columns=["close", "value"],
+        match_on="time",
+    )
     assert [(r["matched_t"][:13], r["close_right"]) for r in out.rows] == [
         ("2026-09-02T20", 101.0),
         ("2026-09-06T20", 105.0),
     ]
-    assert any(n.startswith(f"Not shown point in time: knowledge_time of {joined}") for n in out.notes)
     assert not any(n.startswith("Point in time") for n in out.notes)
 
 
@@ -687,4 +707,275 @@ def test_an_analytics_output_carries_no_role_from_its_model(real):
         )
         and "(analytics_resample gives its outputs none)" in n
         for n in out.notes
+    )
+
+
+def test_an_analytics_output_of_bars_is_matched_from_the_end_of_the_period_it_covers(real):
+    """Review of round 6 (round 7): an analytics output of bars was matched on
+    its t, the start of the bar it ends on, by default, under only a note:
+    returns of SPY's daily bars gave the hourly bar of 2026-10-08T13:00Z
+    (09:00 New York, before the open) that day's return, 773.93 / 777.22 - 1,
+    known only at the close. The output records the bars its rows come from
+    (rows_of: a return is known when its later bar ends), so analytics_align
+    matches each row from the end of the period it covers, also after the bars
+    are gone; match_on=time counts the look-ahead."""
+    store, ctx = real
+    days = [utc(2026, 10, d, 4) for d in (6, 7, 8)]
+    spy = put_bars(store, bars("SPY", [770.0, 777.22, 773.93], times=days))
+    rets = call(RETURNS, ctx, result_id=spy, store=True).result_id
+    assert store.info(rets).rows_of == RowsOf(model="marketlens.Bar", fetched_at=M0, span="1d")
+    store.drop(spy)
+    hours = [utc(2026, 10, 8, 13), utc(2026, 10, 9, 4)]
+    left = put_bars(store, bars("SPY", [1.0, 1.0], times=hours, timeframe="1h"))
+    out = call(ALIGN, ctx, left_result_id=left, right_result_id=rets, right_columns=["ret"])
+    assert [(r["matched_t"][:13], round(r["ret"], 6)) for r in out.rows] == [
+        ("2026-10-07T04", round(777.22 / 770.0 - 1, 6)),
+        ("2026-10-08T04", round(773.93 / 777.22 - 1, 6)),
+    ]
+    assert (
+        f"Point in time: each row of {rets} is matched from the end of the period it covers, t plus 1d, when the "
+        "marketlens.Bar rows it was computed from had all become known: each left row gets the row with the latest "
+        "t whose period ended at or before its time. match_on=time matches on t, the period's start, instead."
+    ) in out.notes
+    assert not any(n.startswith("Not shown") for n in out.notes)
+    ahead = call(
+        ALIGN, ctx, left_result_id=left, right_result_id=rets, right_columns=["ret"], match_on="time"
+    )
+    assert [r["matched_t"][:13] for r in ahead.rows] == ["2026-10-08T04"] * 2
+    assert (
+        f"match_on=time: matched on the time column t of {rets}, each period's start, not the end of the period it "
+        "covers (t plus 1d), when the marketlens.Bar rows it was computed from had all become known: 1 of 2 matched "
+        "left rows got a row whose period ended after their time (look-ahead). match_on=available (the default) "
+        "matches each row from its end."
+    ) in ahead.notes
+    # A filter of the returns passes their rows through, and records what they do.
+    one = call(
+        next(s for s in RESULTS_SPECS if s.name == "results_query"),
+        ctx,
+        sql=f"SELECT t, series, ret FROM {rets} WHERE ret > -1",
+        store=True,
+    ).result_id
+    assert store.info(one).rows_of == store.info(rets).rows_of
+    again = call(ALIGN, ctx, left_result_id=left, right_result_id=one, right_columns=["ret"])
+    assert [r["matched_t"][:13] for r in again.rows] == ["2026-10-07T04", "2026-10-08T04"]
+
+
+def test_a_bucket_of_bars_is_matched_from_its_end_or_its_last_bars(real):
+    """Review of round 6 (round 7): analytics_resample of SPY's 1h bars to 1d
+    gave the hourly bar of 14:00 UTC the close of that day's 20:00 hour, and
+    daily bars resampled to 1w gave Tuesday 2026-01-06 the Friday close of its
+    week: a bucket was matched on its start. A bucket is matched from its end;
+    a UTC month of New York day bars from the end of its last bar, 4 hours on
+    in summer (lag_seconds), and returns sampled to a period alike."""
+    store, ctx = real
+    hours = [utc(2026, 10, d, h) for d in (7, 8) for h in range(13, 21)]
+    spy = put_bars(store, bars("SPY", [700.0 + i for i in range(16)], times=hours, timeframe="1h"))
+    daily = call(RESAMPLE, ctx, result_id=spy, timeframe="1d", store=True).result_id
+    assert store.info(daily).rows_of == RowsOf(model="marketlens.Bar", fetched_at=M0, span="1d")
+    left = put_bars(store, bars("SPY", [1.0], times=[utc(2026, 10, 8, 14)], timeframe="1min"))
+    out = call(ALIGN, ctx, left_result_id=left, right_result_id=daily, right_columns=["close"])
+    assert [(r["matched_t"][:10], r["close_right"]) for r in out.rows] == [("2026-10-07", 707.0)]
+    assert (
+        f"Point in time: each bar of {daily} is matched from its end, t plus its timeframe, when its close became "
+        "known: each left row gets the bar with the latest t that ended at or before its time. match_on=time "
+        "matches on t, a bar's start, instead."
+    ) in out.notes
+    weeks = [utc(2025, 12, d, 5) for d in (29, 30, 31)] + [utc(2026, 1, d, 5) for d in (2, 5, 6, 7, 8, 9)]
+    days = put_bars(
+        store, bars("SPY", [96.0, 97.0, 98.0, 99.0, 100.0, 101.0, 102.0, 103.0, 104.0], times=weeks)
+    )
+    weekly = call(RESAMPLE, ctx, result_id=days, timeframe="1w", store=True).result_id
+    left = put_bars(store, bars("SPY", [1.0], times=[utc(2026, 1, 6, 15)], timeframe="1h"))
+    out = call(ALIGN, ctx, left_result_id=left, right_result_id=weekly, right_columns=["close"])
+    assert [(r["matched_t"][:10], r["close_right"]) for r in out.rows] == [("2025-12-29", 99.0)]
+    # Day bars of New York in UTC months: September's last ends 2026-10-01T04:00Z.
+    month_days = [utc(2026, 8, 31, 4), utc(2026, 9, 29, 4), utc(2026, 9, 30, 4), utc(2026, 10, 1, 4)]
+    nyc = put_bars(store, bars("SPY", [10.0, 11.0, 12.0, 13.0], times=month_days))
+    monthly = call(RESAMPLE, ctx, result_id=nyc, timeframe="1mo", store=True).result_id
+    assert store.info(monthly).rows_of == RowsOf(
+        model="marketlens.Bar", fetched_at=M0, span="1mo", lag_seconds=4 * 3600
+    )
+    left = put_bars(
+        store, bars("SPY", [1.0] * 2, times=[utc(2026, 10, 1, 2), utc(2026, 10, 1, 4)], timeframe="1h")
+    )
+    out = call(ALIGN, ctx, left_result_id=left, right_result_id=monthly, right_columns=["close"])
+    assert [(r["matched_t"][:10], r["close_right"]) for r in out.rows] == [
+        ("2026-08-01", 10.0),
+        ("2026-09-01", 12.0),
+    ]
+    assert (
+        f"Point in time: each row of {monthly} is matched from the end of the period it covers, t plus its "
+        "timeframe and 4 hours more, as late as one of the rows in it ends, when the marketlens.Bar rows it was "
+        "computed from had all become known: each left row gets the row with the latest t whose period ended at "
+        "or before its time. match_on=time matches on t, the period's start, instead."
+    ) in out.notes
+    sampled = call(RETURNS, ctx, result_id=nyc, period="1d", store=True).result_id
+    assert store.info(sampled).rows_of == RowsOf(
+        model="marketlens.Bar", fetched_at=M0, span="1d", lag_seconds=4 * 3600
+    )
+    late = put_bars(store, bars("SPY", [1.0], times=[utc(2026, 10, 1, 2)], timeframe="1h"))
+    out = call(ALIGN, ctx, left_result_id=late, right_result_id=sampled, right_columns=["ret"])
+    assert [r["matched_t"][:10] for r in out.rows] == ["2026-09-29"]  # Sep 30's close ends at 04:00Z
+
+
+def test_every_analytics_output_dated_by_bars_records_them(real):
+    """Round 7: volatility, a drawdown series and a rolling beta are known
+    when the last bar they cover is, as are aligned rows with bars on the left
+    matched point in time; a ratio of adjusted bars is not adjusted (a later
+    split leaves it as it was), a drawdown's price levels are. An output with
+    no time (a summary) records nothing; aligned rows matched forward show not
+    when they became known, and are refused."""
+    store, ctx = real
+    times = [utc(2026, 1, 5, 5) + i * dt.timedelta(days=1) for i in range(8)]
+    adjusted = store.put(
+        table_of(type(bars("SPY", [1.0])[0]), bars("SPY", [100.0 + (i % 3) for i in range(8)], times=times)),
+        tool="market_bars",
+        model="marketlens.Bar",
+        provenance=Provenance(
+            provider="synthetic", route="GET /v2/stocks/bars", fetched_at=M0, request={"adjustment": "all"}
+        ),
+    ).result_id
+    qqq = put_bars(store, bars("QQQ", [50.0 + (i % 4) for i in range(8)], times=times))
+    ratio = RowsOf(model="marketlens.Bar", fetched_at=M0, span="1d")
+    vol = call(VOLATILITY, ctx, result_id=adjusted, window=3, periods_per_year=252, store=True).result_id
+    assert store.info(vol).rows_of == ratio
+    dd = call(DRAWDOWN, ctx, result_id=adjusted, mode="series", store=True).result_id
+    assert store.info(dd).rows_of == ratio.model_copy(update={"adjustment": "all"})
+    assert store.info(call(DRAWDOWN, ctx, result_id=adjusted, store=True).result_id).rows_of is None
+    beta = call(BETA, ctx, result_id=qqq, benchmark_result_id=adjusted, window=3, store=True).result_id
+    assert store.info(beta).rows_of == ratio
+    hourly = put_bars(store, bars("SPY", [1.0] * 3, times=[t + dt.timedelta(hours=10) for t in times[:3]]))
+    aligned = call(
+        ALIGN, ctx, left_result_id=qqq, right_result_id=hourly, right_columns=["close"], store=True
+    ).result_id
+    assert store.info(aligned).rows_of == ratio
+    forward = call(
+        ALIGN,
+        ctx,
+        left_result_id=qqq,
+        right_result_id=hourly,
+        right_columns=["close"],
+        direction="forward",
+        store=True,
+    ).result_id
+    assert store.info(forward).rows_of == ratio.model_copy(update={"span": None, "shown": False})
+    with pytest.raises(ToolError) as e:
+        call(ALIGN, ctx, left_result_id=hourly, right_result_id=forward, right_columns=["close"])
+    assert e.value.code == "not_point_in_time" and "pass match_on=time" in e.value.message
+
+
+def test_bars_bucketed_by_a_query_are_refused_unless_match_on_time(real):
+    """Review of round 6 (round 7): a results_query time_bucket of bars, dated
+    at the bucket's start, was matched on that start by default (a 14:00 bar
+    got that day's 20:00 close) with only a note: nothing shows when its rows
+    became known. The answer records the bars it was computed from, marked not
+    shown, and analytics_align refuses it, naming match_on=time as the way to
+    match on its time anyway; the refusal holds after the bars are gone."""
+    store, ctx = real
+    (query,) = [s for s in RESULTS_SPECS if s.name == "results_query"]
+    hours = [utc(2026, 10, d, h) for d in (7, 8) for h in range(13, 21)]
+    spy = put_bars(store, bars("SPY", [700.0 + i for i in range(16)], times=hours, timeframe="1h"))
+    days = call(
+        query,
+        ctx,
+        sql=f"SELECT time_bucket(INTERVAL 1 DAY, t) AS t, ticker, timeframe, last(close ORDER BY t) AS close "
+        f"FROM {spy} GROUP BY ALL",
+        store=True,
+    ).result_id
+    store.drop(spy)
+    left = put_bars(store, bars("SPY", [1.0], times=[utc(2026, 10, 8, 14)], timeframe="1min"))
+    with pytest.raises(ToolError) as e:
+        call(ALIGN, ctx, left_result_id=left, right_result_id=days, right_columns=["close"])
+    assert e.value.code == "not_point_in_time"
+    assert "pass match_on=time to match on t anyway, look-ahead included" in e.value.message
+    out = call(
+        ALIGN, ctx, left_result_id=left, right_result_id=days, right_columns=["close"], match_on="time"
+    )
+    assert [r["close_right"] for r in out.rows] == [715.0]
+    assert any(
+        n.startswith(f"Not shown point in time: {days} was computed by results_query") for n in out.notes
+    )
+
+
+def test_a_snapshot_is_known_at_its_fetch(real):
+    """Review of round 6 (round 7): options_chain rows were taken as known at
+    t, the newest of their parts, though they carry open interest published
+    the next morning and greeks as fetched: a contract's Friday 20:00Z row,
+    fetched on Monday, gave a Friday 20:30Z bar Monday's open interest. A
+    snapshot is matched from its fetch; a query joining it keeps no role."""
+    from marketlens_schema.market import OptionSnapshot
+
+    store, ctx = real
+    (query,) = [s for s in RESULTS_SPECS if s.name == "results_query"]
+    fetched = utc(2026, 10, 12, 12)
+    snap = OptionSnapshot(
+        occ_symbol="SPY261120C00700000",
+        underlying="SPY",
+        expiration_date=dt.date(2026, 11, 20),
+        strike=700.0,
+        option_type="call",
+        t=utc(2026, 10, 9, 20),
+        open_interest=12345,
+        open_interest_date=dt.date(2026, 10, 9),
+        implied_volatility=0.2,
+    )
+    chain = store.put(
+        table_of(OptionSnapshot, [snap]),
+        tool="options_chain",
+        model=OptionSnapshot.schema_name,
+        provenance=Provenance(
+            provider="synthetic", route="GET /v1beta1/options/snapshots", fetched_at=fetched
+        ),
+    ).result_id
+    left = put_bars(
+        store,
+        bars("SPY", [1.0] * 2, times=[utc(2026, 10, 9, 20, 30), utc(2026, 10, 12, 13)], timeframe="1min"),
+    )
+    out = call(ALIGN, ctx, left_result_id=left, right_result_id=chain, right_columns=["open_interest"])
+    assert [r["open_interest"] for r in out.rows] == [None, 12345]
+    assert (
+        f"Point in time: each row of {chain} is matched from its fetch at 2026-10-12T12:00Z, when the values it "
+        "holds were current (a snapshot's open interest, greeks and session still trading are as of its fetch): "
+        "each left row gets the row with the latest t fetched at or before its time. match_on=time matches on t "
+        "instead."
+    ) in out.notes
+    ahead = call(
+        ALIGN,
+        ctx,
+        left_result_id=left,
+        right_result_id=chain,
+        right_columns=["open_interest"],
+        match_on="time",
+    )
+    assert [r["open_interest"] for r in ahead.rows] == [12345, 12345]
+    assert any(
+        "1 of 2 matched left rows got a row fetched after their time (look-ahead)" in n for n in ahead.notes
+    )
+    ts = pa.timestamp("us", tz="UTC")
+    schema = pa.schema(
+        [
+            pa.field("event_time", ts),
+            pa.field("knowledge_time", ts, metadata={b"role": b"available"}),
+            pa.field("value", pa.float64()),
+        ]
+    )
+    rates = store.put(
+        pa.table([[utc(2026, 10, 9)], [utc(2026, 10, 9, 21)], [4.1]], schema=schema),
+        tool="datastore_query",
+        model="marketlens.QueryRow",
+        provenance=Provenance(provider="plugin", route="GET /rows", fetched_at=M0),
+        time_column="event_time",
+    ).result_id
+    joined = call(
+        query,
+        ctx,
+        sql=f"SELECT s.t, greatest(r.knowledge_time, s.t) AS knowledge_time, r.value, s.open_interest "
+        f"FROM {chain} s ASOF JOIN {rates} r ON s.t >= r.event_time",
+        store=True,
+    )
+    assert {c.name: c.role for c in store.info(joined.result_id).columns}["knowledge_time"] is None
+    assert any(
+        f"it reads {chain}, which holds marketlens.OptionSnapshot rows as fetched at 2026-10-12T12:00Z, known only "
+        "then" in n
+        for n in joined.notes
     )

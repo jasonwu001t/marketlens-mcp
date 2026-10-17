@@ -41,6 +41,11 @@ from marketlens_mcp.results_api import (
     ResultInfo,
     ResultNotFound,
     ResultSession,
+    RowsOf,
+    known_late,
+    known_model,
+    known_span,
+    source_rows,
 )
 from marketlens_schema import ALIGNED_SCHEMA_NAME, BUILTIN_MODELS, QUERY_ROW_SCHEMA_NAME, CanonicalModel
 from marketlens_schema.base import TIMEFRAME_RE, AbsenceCode, AbsenceReason, Delay, Provenance
@@ -186,6 +191,91 @@ def span_end(ts: str, span: str) -> str:
         f"WHEN {unit} = 'min' THEN {ts} + to_minutes({n}) WHEN {unit} = 'h' THEN {ts} + to_hours({n}) "
         f"WHEN {local} = date_trunc('day', {local}) THEN {zoned} WHEN {ts} = date_trunc('day', {ts}) THEN {utc} "
         f"ELSE greatest({utc}, {zoned}) END"
+    )
+
+
+def known_time(inp: Input, cls: type[CanonicalModel]) -> str | None:
+    """SQL: when each row of ``inp`` became known by the rule its rows follow
+    (``cls``, its ``known_model``), as a naive UTC timestamp: the end of the
+    period it covers (a bar's, a bucket's: ``span_end``) and ``lag_seconds``
+    after it, or its fetch (a snapshot); None when that is its time column
+    itself (quotes, trades)."""
+    info = inp.info
+    src = info.rows_of
+    if cls.known_at_fetch:
+        at = (src.fetched_at if src is not None else info.provenance.fetched_at).astimezone(dt.UTC)
+        return f"TIMESTAMP '{at:%Y-%m-%d %H:%M:%S.%f}'"
+    span = known_span(info, cls)
+    lag = src.lag_seconds if src is not None else 0
+    if span is None and not lag:
+        return None
+    end = span_end(inp.ts(), span) if span is not None else inp.ts()
+    return f"({end} + to_seconds({lag}))" if lag else end
+
+
+def derived_rows_of(
+    session: ResultSession, inputs: Sequence[Input], *, period: str | None = None, levels: bool = True
+) -> RowsOf | None:
+    """What an output computed from ``inputs`` records of the fetched market
+    data its rows come from (``ResultInfo.rows_of``), so analytics_align takes
+    each row as known when the last of the input rows it covers was: with
+    ``period``, a row dated at a bucket's start covers the bucket's rows, known
+    at its end, or ``lag_seconds`` after it when one of them is known later (a
+    stock's day bar ends at midnight New York time, after a UTC bucket);
+    without, a row dated as an input row is known when that row is (a return,
+    a drawdown, a window ending there). ``levels``: the output holds price
+    levels, so it keeps the inputs' adjustment (returns, volatility and beta
+    hold ratios of prices, which a later split or dividend leaves as they
+    were). None when no input holds fetched market data; when one does but
+    an input's rows are not known by the same kind of rule, or cover different
+    spans, marked not shown if the data is known only after its time
+    (``known_late``: bars, snapshots), else None."""
+    found = [(inp, known_model(inp.info), source_rows(inp.info)) for inp in inputs]
+    srcs = [src for _, _, src in found if src is not None]
+    if not srcs:
+        return None
+    late = [x for x in srcs if known_late(x)]
+    adjusted = [x.adjustment for x in srcs if x.adjustment not in (None, "raw")]
+    out = RowsOf(
+        model=(late or srcs)[0].model,
+        fetched_at=max(x.fetched_at for x in srcs),
+        adjustment=(adjusted[0] if adjusted else srcs[0].adjustment) if levels else None,
+    )
+    hidden = out.model_copy(update={"shown": False}) if late else None
+    classes = [cls for _, cls, _ in found]
+    if any(cls is None for cls in classes) or len({cls.known_at_fetch for cls in classes}) > 1:
+        return hidden
+    if classes[0].known_at_fetch:
+        return out
+    if period is not None:
+        lag = 0
+        for inp, cls, _ in found:
+            known = known_time(inp, cls) or inp.ts()
+            end = span_end(f"time_bucket({tf_interval(period)}, {inp.ts()})", ql(period))
+            gap = scalar(
+                session,
+                f"SELECT max(epoch_us({known}) - epoch_us({end})) FROM {inp.table} WHERE {qi(inp.time)} IS NOT NULL",
+            )
+            if gap is not None and gap > 0:
+                lag = max(lag, math.ceil(gap / 1_000_000))
+        return out.model_copy(update={"span": period, "lag_seconds": lag})
+    spans: set[str | None] = set()
+    for inp, cls, _ in found:
+        span = known_span(inp.info, cls)
+        if span is None:
+            spans.add(None)
+            continue
+        spans |= {
+            r["s"]
+            for r in rows(
+                session,
+                f"SELECT DISTINCT {span} AS s FROM {inp.table} WHERE {qi(inp.time)} IS NOT NULL AND {span} IS NOT NULL",
+            )
+        }
+    if len(spans) > 1:
+        return hidden
+    return out.model_copy(
+        update={"span": next(iter(spans), None), "lag_seconds": max(x.lag_seconds for x in srcs)}
     )
 
 
@@ -474,7 +564,13 @@ def resolve(ctx: ToolContext, tool: str, result_id: str, *, series_column: str |
             time = stamps[0]
             notes.append(
                 f"{info.result_id} has no recorded time column; time column '{time}' was used"
-                + (f", not the point-in-time clock {names(clocks)}." if clocks else ".")
+                + (
+                    f" as the time each row describes; {names(clocks)} "
+                    + ("says" if len(clocks) == 1 else "say")
+                    + " when it became known."
+                    if clocks
+                    else "."
+                )
             )
         elif stamps:
             raise refuse(
@@ -744,16 +840,52 @@ def model_output(
     absent: dict[str, AbsenceReason] | None = None,
     inputs: Sequence[ResultInfo] = (),
     store: bool = False,
+    ctx: ToolContext | None = None,
+    tool: str | None = None,
+    rows_of: RowsOf | None = None,
 ) -> ToolOutput:
     """A canonical-model output; the server's offload decides inline or
-    stored (always stored with ``store``)."""
+    stored (always stored with ``store``). With ``rows_of`` (the fetched
+    market data its rows come from, ``derived_rows_of``) an output to store is
+    stored here, recording it, and one shown inline is never stored."""
+    table = to_model_table(table, model)
+    out_risk = risk(inputs)
+    if rows_of is not None and ctx is not None and tool is not None:
+        if not store and _inline(ctx, table):
+            return ToolOutput(
+                model=model,
+                provenance=prov,
+                table=table,
+                notes=list(notes),
+                absent=dict(absent or {}),
+                risk=out_risk,
+                offload="never",
+            )
+        info = ctx.results.put(
+            table,
+            tool=tool,
+            model=model.schema_name,
+            provenance=prov,
+            absent=dict(absent or {}),
+            risk=out_risk or "api_structured",
+            parents=list(prov.derived_from),
+            rows_of=rows_of,  # marketlens's own store's: the ResultStore protocol predates it
+        )
+        return ToolOutput(
+            model=model,
+            provenance=prov,
+            stored=info,
+            notes=list(notes),
+            absent=dict(absent or {}),
+            risk=out_risk,
+        )
     return ToolOutput(
         model=model,
         provenance=prov,
-        table=to_model_table(table, model),
+        table=table,
         notes=list(notes),
         absent=dict(absent or {}),
-        risk=risk(inputs),
+        risk=out_risk,
         offload="always" if store else "auto",
     )
 
@@ -790,11 +922,21 @@ def with_units(
     return table.cast(pa.schema(fields))
 
 
-def _small(table: pa.Table) -> bool:
-    if table.num_rows > INLINE_ROWS:
+def _small(table: pa.Table, max_rows: int = INLINE_ROWS, max_tokens: int = INLINE_TOKENS) -> bool:
+    if table.num_rows > max_rows:
         return False
     text = json.dumps(table.to_pylist(), default=str, separators=(",", ":"), ensure_ascii=False)
-    return math.ceil(len(text.encode("utf-8")) / 4) <= INLINE_TOKENS
+    return math.ceil(len(text.encode("utf-8")) / 4) <= max_tokens
+
+
+def _inline(ctx: ToolContext, table: pa.Table) -> bool:
+    """``_small`` by the store's own inline limits, when it states them."""
+    limits = getattr(ctx.results, "limits", None)
+    return _small(
+        table,
+        getattr(limits, "inline_max_rows", INLINE_ROWS),
+        getattr(limits, "inline_max_tokens", INLINE_TOKENS),
+    )
 
 
 def dynamic_output(
@@ -812,17 +954,20 @@ def dynamic_output(
     units: Mapping[str, str] | None = None,
     sources: Mapping[str, str] | None = None,
     store: bool = False,
+    rows_of: RowsOf | None = None,
 ) -> ToolOutput:
     """A dynamic-schema output. Small (and not ``store``): the table (inline).
     Large: stored here with its time and series columns, which the offload
     cannot know for a dynamic schema, so the stored result chains into other
     analytics tools. ``units`` labels columns (a price stays a price for the
     next tool), and ``sources`` the model each carried column was computed by
-    (a drawdown stays a drawdown after its result is gone)."""
+    (a drawdown stays a drawdown after its result is gone). ``rows_of``: the
+    fetched market data its rows come from (``derived_rows_of``); with it, an
+    output shown inline is never stored."""
     out_risk = risk(inputs)
     units = {k: v for k, v in (units or {}).items() if v}
     table = with_units(utc_times(table), units, sources)
-    if not store and _small(table):
+    if not store and (_inline(ctx, table) if rows_of is not None else _small(table)):
         return ToolOutput(
             model=model,
             provenance=prov,
@@ -830,6 +975,7 @@ def dynamic_output(
             notes=list(notes),
             absent=dict(absent or {}),
             risk=out_risk,
+            offload="never" if rows_of is not None else "auto",
         )
     info = ctx.results.put(
         table,
@@ -842,6 +988,8 @@ def dynamic_output(
         time_column=time_column,
         group_column=group_column,
         column_units=units or None,
+        # marketlens's own store's: the ResultStore protocol predates it.
+        **({"rows_of": rows_of} if rows_of is not None else {}),
     )
     return ToolOutput(
         model=model, provenance=prov, stored=info, notes=list(notes), absent=dict(absent or {}), risk=out_risk

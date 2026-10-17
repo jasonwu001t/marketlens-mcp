@@ -49,7 +49,13 @@ if _SRC_PKG.is_dir() and str(_SRC_PKG) not in [str(Path(p).resolve()) for p in _
         sys.modules.pop(_name)
 
 from marketlens_mcp.plugin_api import FetchLimits, ToolOutput, ToolSpec  # noqa: E402
-from marketlens_mcp.results_api import ColumnInfo, ResultInfo, ResultNotFound, StoreUsage  # noqa: E402
+from marketlens_mcp.results_api import (  # noqa: E402
+    ColumnInfo,
+    ResultInfo,
+    ResultNotFound,
+    RowsOf,
+    StoreUsage,
+)
 from marketlens_schema import BUILTIN_MODELS, SCHEMA_VERSION, CanonicalModel  # noqa: E402
 from marketlens_schema.base import (  # noqa: E402
     AbsenceReason,
@@ -334,6 +340,7 @@ class FakeStore:
         column_units: dict[str, str] | None = None,
         column_sources: dict[str, str] | None = None,
         column_roles: dict[str, str] | None = None,
+        rows_of: RowsOf | None = None,
     ) -> ResultInfo:
         cls = BUILTIN_MODELS.get(model)
         if cls is not None:
@@ -390,9 +397,11 @@ class FakeStore:
             parents=list(parents),
             time_column=time_column,
             group_column=group_column,
+            rows_of=rows_of,
         )
         self.tables[rid] = table
         self.infos[rid] = info
+        _STORED[id(info)] = (info, table)
         self.puts.append({"result_id": rid, "tool": tool, "model": model, "parents": list(parents)})
         return info
 
@@ -516,12 +525,27 @@ def run(spec: ToolSpec, ctx: FakeContext, **arguments: Any) -> ToolOutput:
     return out
 
 
+#: The table of each result a FakeStore put, by the id of its info: a handler
+#: that stores its output itself (one recording rows_of) returns only the info.
+_STORED: dict[int, tuple[ResultInfo, pa.Table]] = {}
+
+
+def output_table(out: ToolOutput) -> pa.Table:
+    """The output's table, also when the handler stored it itself."""
+    if out.table is None and out.stored is not None:
+        info, table = _STORED[id(out.stored)]
+        assert info is out.stored
+        return table
+    assert out.table is not None, "expected a table output"
+    return out.table
+
+
 def output_rows(out: ToolOutput, model: type[CanonicalModel]) -> list[CanonicalModel]:
     """The output's rows as model instances; asserts the canonical Arrow schema
     and the absence rule on the way."""
-    assert out.table is not None, "expected a table output"
-    assert out.table.schema.equals(schema_of(model)), f"{out.table.schema}\n!=\n{schema_of(model)}"
-    rows = rows_of(out.table, model)
+    table = output_table(out)
+    assert table.schema.equals(schema_of(model)), f"{table.schema}\n!=\n{schema_of(model)}"
+    rows = rows_of(table, model)
     assert unexplained_absences(rows, out.absent) == []
     return rows
 
@@ -554,6 +578,7 @@ __all__ = [
     "bars",
     "dyn_rows",
     "output_rows",
+    "output_table",
     "rows_of",
     "run",
     "schema_of",

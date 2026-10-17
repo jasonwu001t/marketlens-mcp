@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import contextlib
+import datetime as dt
 import json
 import os
 import pathlib
@@ -32,7 +33,10 @@ from ..results_api import (
     QueryRefused,
     ResultInfo,
     RowsOf,
+    known_late,
     known_model,
+    known_span,
+    source_rows,
     unshown_known,
 )
 from .arrow import duckdb_type, json_safe, sql_ident, table_rows
@@ -189,25 +193,63 @@ def _unproven(parent: ResultInfo) -> str | None:
     can keep no role: computed from other results, a plugin's dated rows, rows
     whose fields change after their time (an order's fill), rows as of their
     fetch (positions, assets) or adjusted after their time (bars, unless raw);
-    or fetched rows known only at the end of their span (bars), which no column
-    of the answer shows. None for fetched rows known at their time column and
-    fixed from then on (quotes, trades), or that hold at every time
-    (exchanges, condition codes)."""
+    or rows known only at the end of the period they cover (bars, a bucket of
+    them) or at their fetch (snapshots), which no column of the answer shows.
+    None for fetched rows known at their time column and fixed from then on
+    (quotes, trades), rows computed from those recording so, or rows that hold
+    at every time (exchanges, condition codes)."""
     why = unshown_known(parent)
     cls = known_model(parent)
     advice = ""
-    if why is None and cls is not None and cls.span_column is not None:
+    src = parent.rows_of
+    if why is None and cls is not None and cls.known_at_fetch:
+        fetched = (src.fetched_at if src is not None else parent.provenance.fetched_at).astimezone(dt.UTC)
+        why = (
+            f"holds {cls.schema_name} rows as fetched at {fetched:%Y-%m-%dT%H:%MZ}, known only then (open interest, "
+            "greeks, a session still trading), which no column of the answer shows"
+        )
+        advice = "; align them with analytics_align instead, which matches each from its fetch"
+    elif why is None and cls is not None and cls.span_column in {c.name for c in parent.columns}:
         why = (
             f"holds {cls.schema_name} rows dated by their start {cls.time_column} and known only at their end "
-            f"({cls.time_column} plus their {cls.span_column}), which no column of the answer shows"
+            f"({cls.time_column} plus their {cls.span_column}"
+            + (f", and {src.lag_seconds:,} seconds more" if src is not None and src.lag_seconds else "")
+            + "), which no column of the answer shows"
         )
         advice = "; align them with analytics_align instead, which matches each bar from its end"
+    elif (
+        why is None and cls is not None and (known_span(parent, cls) or (src is not None and src.lag_seconds))
+    ):
+        why = (
+            f"holds rows computed from {cls.schema_name} rows, each dated by the start of the period it covers and "
+            f"known only at its end ({cls.time_column} plus {src.span if src is not None else None}"
+            + (f", and {src.lag_seconds:,} seconds more" if src is not None and src.lag_seconds else "")
+            + "), which no column of the answer shows"
+        )
+        advice = "; align it with analytics_align instead, which matches each row from its end"
     elif cls is None and (parent.parents or parent.tool == "results_query"):
         advice = "; read the results it was computed from in this query instead"
     return f"it reads {parent.result_id}, which {why}{advice}" if why else None
 
 
-def _rows_of(store: FileResultStore, out: QueryOutcome) -> RowsOf | None:
+def _rows_of(store: FileResultStore, out: QueryOutcome, roles: dict[str, str]) -> RowsOf | None:
+    """The fetched market data a stored answer holds (``_passed``), else, when
+    it reads such data known only after its time (``known_late``: bars,
+    snapshots, a bucket of rows) and keeps no role, that data marked not shown
+    (``RowsOf.shown``): nothing shows when the answer's rows became known (a
+    bucket dated at its start, lead(), a join), so analytics_align refuses it
+    unless match_on=time. None otherwise."""
+    passed = _passed(store, out)
+    if passed is not None or roles:
+        return passed
+    for rid in sorted(out.result_ids):
+        src = source_rows(store.info(rid))
+        if src is not None and known_late(src):
+            return src.model_copy(update={"span": None, "lag_seconds": 0, "shown": False})
+    return None
+
+
+def _passed(store: FileResultStore, out: QueryOutcome) -> RowsOf | None:
     """The fetched result of market data (``known_model``) a stored answer of
     that one result passes the rows of through unchanged: rows filtered or
     grouped, columns projected or computed from each row's own, with its time
@@ -245,7 +287,7 @@ def _rows_of(store: FileResultStore, out: QueryOutcome) -> RowsOf | None:
     if _from_others(sql, schema, {rid}) is not None:
         return None
     if parent.rows_of is not None:
-        return parent.rows_of.model_copy(update={"span": span})
+        return parent.rows_of.model_copy(update={"span": span or parent.rows_of.span})
     adjustment = parent.provenance.request.get("adjustment")
     return RowsOf(
         model=cls.schema_name,
@@ -329,19 +371,22 @@ def _inherited(store: FileResultStore, out: QueryOutcome, roles: dict[str, str],
     """What a stored answer keeps of the results it read: ``roles``, the role
     of each column that still says when each row became known (``_clocks``),
     whatever its time column, so analytics_align stays point in time on the
-    answer, with the ``time`` column those roles need over several results.
-    Over one parent, also its time and
+    answer, with the ``time`` column those roles need over several results;
+    the fetched market data it passes through unchanged, so analytics_align
+    takes its rows as known when the parent's are, or else reads and shows not
+    (``_rows_of``). Over one parent, also its time and
     series columns and its column units, with the
     model each such column came from (the one the parent recorded for it, else
     the parent's, unless the parent is itself a query answer or aligned result,
     which records none of its own), only for columns still there with the same
     name and type, and only when the time column is one of them; so the answer
-    chains into analytics as the parent would, after the parent is gone too;
-    and the fetched rows it passes through unchanged (``_rows_of``), so
-    analytics_align takes them as known when the parent's are."""
+    chains into analytics as the parent would, after the parent is gone too."""
     types = {f.name: duckdb_type(f.type) for f in out.table.schema}
     parents = [store.info(rid) for rid in out.result_ids]
     kept: dict = {"column_roles": roles} if roles else {}
+    rows_of = _rows_of(store, out, roles)
+    if rows_of is not None:
+        kept["rows_of"] = rows_of
     if len(parents) != 1:
         return {**kept, "time_column": time} if time else kept
     parent = parents[0]
@@ -355,7 +400,6 @@ def _inherited(store: FileResultStore, out: QueryOutcome, roles: dict[str, str],
         "group_column": parent.group_column if parent.group_column in same else None,
         "column_units": {n: c.unit for n, c in same.items() if c.unit},
         "column_sources": {n: s for n, c in same.items() if c.unit and (s := c.source_model or own)},
-        "rows_of": _rows_of(store, out),
     }
 
 
@@ -791,13 +835,13 @@ SPECS: tuple[ToolSpec, ...] = (
         "time_bucket allowed; PIVOT and UNPIVOT are not: use max(x) FILTER (WHERE ...) per column) over at most 8 "
         "results of this session, each result_id a table name. Returns at most max_rows rows "
         "(default 50, at most 200; a larger max_rows or LIMIT is lowered). An answer over results.query_max_bytes "
-        "(24,000 bytes of JSON, default) or about 6,000 tokens, or store=true, is kept whole as a new result "
-        "(max_rows bounds only an inline answer; fetch.max_rows, 50,000 rows by default, a stored one; an answer "
-        "cut, or over a cut result, says truncated) and you get its result_id; a query of one result keeps its "
-        "unchanged time and series columns, and a clock's role passed through (or max; no window, subquery, "
-        "self-join, bars, role-less input but quotes, trades), so it chains into analytics. Exact decimals come "
-        "back as strings (CAST to DOUBLE); whole-number sums as numbers. Files, settings, other sessions and every "
-        "write are refused.",
+        "(24,000 bytes of JSON) or about 6,000 tokens, or store=true, is stored whole (max_rows bounds only an "
+        "inline answer, fetch.max_rows (50,000) a stored one; one cut, or over a cut result, says truncated) and "
+        "you get its result_id; a query of one result keeps its unchanged time and series columns, and a clock's "
+        "role passed through or max() (no window, subquery, self-join, bars, snapshots, role-less input but "
+        "quotes, trades; a top-N LIMIT is not caught), so it chains into analytics. Exact decimals come back as "
+        "strings (CAST to DOUBLE); whole-number sums as numbers. Files, settings, other sessions and every write "
+        "are refused.",
         "Read-only SQL over this session's results (one SELECT, forced LIMIT)",
         QueryArgs,
         results_query,

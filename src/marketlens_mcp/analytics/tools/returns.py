@@ -16,6 +16,7 @@ from ..common import (
     adjustment_note,
     bar_timeframe,
     check_unique_times,
+    derived_rows_of,
     model_output,
     names,
     no_period,
@@ -85,6 +86,8 @@ async def handler(ctx: ToolContext, args: ReturnsArgs) -> ToolOutput:
             f"FROM ({rets}) ORDER BY series, t",
             [args.period],
         )
+        # A return is known when its later price is (with period, at its bucket's end).
+        known = derived_rows_of(session, [inp], period=args.period, levels=False)
     if table.num_rows == 0:
         raise refuse(
             "too_few_points",
@@ -114,6 +117,9 @@ async def handler(ctx: ToolContext, args: ReturnsArgs) -> ToolOutput:
         absent=no_period(args.period),
         inputs=[inp.info],
         store=args.store,
+        ctx=ctx,
+        tool=TOOL,
+        rows_of=known,
     )
 
 

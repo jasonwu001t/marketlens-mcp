@@ -379,11 +379,17 @@ class CanonicalModel(BaseModel):
     #: the end of its span (a bar, at its start plus its timeframe, when its
     #: close is known), or, with no time column, at every time (an exchange, a
     #: condition code; not an asset or a position, whose values are today's).
-    #: Only a built-in model's counts: results_query and analytics_align take
-    #: no other rows without a column of role available as known by their
-    #: time. A fetch that changed the rows after their time (bars adjusted for
-    #: later splits and dividends) is not.
+    #: Only a built-in model's counts, whichever tool emits its rows (a
+    #: plugin's that declares the model too): results_query and
+    #: analytics_align take no other rows without a column of role available
+    #: as known by their time. A fetch that changed the rows after their time
+    #: (bars adjusted for later splits and dividends) is not.
     known_at_time: ClassVar[bool] = False
+    #: True when a fetched row holds values as of its fetch, whatever its time
+    #: column (a snapshot: open interest published the next morning, greeks
+    #: and a session still trading, as fetched), so it is known only at the
+    #: fetch. Only a built-in model's counts, as for ``known_at_time``.
+    known_at_fetch: ClassVar[bool] = False
     #: The column naming how long the period a row covers from its time
     #: column lasts (a bar's timeframe: 15min, 1d, 1w), if any; such a row is
     #: known only at the period's end.

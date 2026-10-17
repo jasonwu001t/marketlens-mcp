@@ -327,7 +327,8 @@ class FileResultStore:
         ``column_roles``, never from its model's x-role or a field's metadata: an
         analytics output can aggregate or relabel rows (a week's mean dated at
         the week's start, beside its last row's knowledge time). ``rows_of``: the
-        fetched result whose rows a query answer passes through unchanged."""
+        fetched market data a query answer or analytics output holds or was
+        computed from, and when each of its rows became known (``RowsOf``)."""
         absent = dict(absent or {})
         cls = self.models.get(model)
         table, columns = self._columns(
