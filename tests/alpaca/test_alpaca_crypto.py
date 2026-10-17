@@ -125,11 +125,48 @@ def test_crypto_bars_say_the_newest_bar_is_still_forming(specs, ctx, alpaca):
     ],
 )
 def test_forming_bar_by_timeframe(timeframe, start, forming):
-    from marketlens_mcp.providers.alpaca import mappers
-    from marketlens_mcp.providers.alpaca.tools.crypto import forming_bar_note
+    from marketlens_mcp.providers.alpaca.convert import parse_ts
+    from marketlens_mcp.providers.alpaca.tools.bars import bar_end
 
-    row = mappers.bar(_daily(start, 1.0), ticker="BTC/USD", asset_class="crypto", timeframe=timeframe)
-    assert bool(forming_bar_note([row], timeframe, NOW)) is forming
+    assert (bar_end(parse_ts(start), timeframe) > NOW) is forming
+
+
+def test_crypto_weekly_bar_past_end_is_rebuilt_from_its_utc_days_to_end(specs, alpaca):
+    from datetime import UTC, datetime
+
+    weeks = [_daily("2026-09-28T00:00:00Z", 86515.34), _daily("2026-10-05T00:00:00Z", 83677.93)]
+    closes = {"05": 85755.2, "06": 85551.35, "07": 83280.89, "08": 81692.51}
+    days = [_daily(f"2026-10-{d}T00:00:00Z", c) for d, c in closes.items()]
+    alpaca.add("/v1beta3/crypto/us/bars", {"bars": {"BTC/USD": weeks}}, match={"timeframe": "1Week"})
+    alpaca.add("/v1beta3/crypto/us/bars", {"bars": {"BTC/USD": days}}, match={"timeframe": "1Day"})
+    out = call(
+        specs["crypto_bars"],
+        FakeContext(fixed_now=datetime(2026, 10, 16, 20, tzinfo=UTC)),
+        tickers=["BTC/USD"],
+        timeframe="1w",
+        start="2026-09-28",
+        end="2026-10-08",
+    )
+    assert alpaca.params(1) == {
+        "symbols": "BTC/USD",
+        "timeframe": "1Day",
+        "start": "2026-10-05T00:00:00Z",
+        "end": "2026-10-08T23:59:59.999999Z",
+        "sort": "asc",
+        "limit": "10000",
+    }
+    week, part = out.rows
+    assert (week.close, week.volume, week.trade_count) == (86515.34, 1.5, 12)
+    assert (part.open, part.high, part.low, part.close) == (85755.2, 85755.2, 81692.51, 81692.51)
+    assert (part.volume, part.trade_count, part.vwap) == (6.0, 48, None)
+    assert out.notes == [
+        "end 2026-10-08 is a date: the window includes that whole day, to midnight UTC "
+        "(2026-10-08T23:59:59.999999Z).",
+        "The 1w bar from 2026-10-05T00:00:00Z (BTC/USD) runs to 2026-10-12T00:00:00Z, past end "
+        "(2026-10-08T23:59:59.999999Z), and Alpaca's bar holds the trades after end: it is rebuilt from the 1d "
+        "bars of 2026-10-05 through 2026-10-08 (UTC dates), so it covers those days only; its vwap is null "
+        "(insufficient_data), which the 1d bars do not give exactly.",
+    ]
 
 
 def test_crypto_location_setting_picks_the_path(specs, alpaca):

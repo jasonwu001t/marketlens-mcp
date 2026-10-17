@@ -4,6 +4,7 @@ options_latest_quotes, options_snapshots, options_chain."""
 from __future__ import annotations
 
 import re
+from datetime import UTC, datetime
 
 import httpx
 import pytest
@@ -63,6 +64,56 @@ def test_option_history_names_the_contracts_alpaca_returned_nothing_for(
     alpaca.fixture(path, fixture)
     out = call(specs[tool], ctx, occ_symbols=[C1, P1])
     assert f"No data from Alpaca for: {P1} in this window." in out.notes
+
+
+def _bar(t: str, o: float, h: float, low: float, c: float, v: int, n: int) -> dict:
+    return {"t": t, "o": o, "h": h, "l": low, "c": c, "v": v, "n": n, "vw": round((h + low + c) / 3, 4)}
+
+
+def test_options_weekly_bar_past_end_is_rebuilt_from_its_days_to_end(specs, alpaca):
+    # Alpaca's 1w bar of the week of 2026-10-05 holds Friday 10-09's trades even with end 2026-10-07.
+    weeks = [
+        _bar("2026-09-28T04:00:00Z", 14.65, 15.75, 7.4, 9.95, 8697, 2244),
+        _bar("2026-10-05T04:00:00Z", 9.56, 13.55, 8.0, 10.5, 10358, 2670),
+    ]
+    days = [
+        _bar("2026-10-05T04:00:00Z", 9.56, 11.07, 9.1, 9.3, 818, 260),
+        _bar("2026-10-06T04:00:00Z", 9.1, 9.9, 8.22, 9.35, 733, 252),
+        _bar("2026-10-07T04:00:00Z", 11.2, 12.1, 9.35, 11.25, 1813, 538),
+    ]
+    alpaca.add(
+        "/v1beta1/options/bars", {"bars": {C1: weeks}, "next_page_token": None}, match={"timeframe": "1Week"}
+    )
+    alpaca.add(
+        "/v1beta1/options/bars", {"bars": {C1: days}, "next_page_token": None}, match={"timeframe": "1Day"}
+    )
+    out = call(
+        specs["options_bars"],
+        FakeContext(fixed_now=datetime(2026, 10, 16, 20, tzinfo=UTC)),
+        occ_symbols=[C1],
+        timeframe="1w",
+        start="2026-09-28",
+        end="2026-10-07",
+    )
+    assert alpaca.params(1) == {
+        "symbols": C1,
+        "timeframe": "1Day",
+        "start": "2026-10-05T04:00:00Z",
+        "end": "2026-10-08T03:59:59.999999Z",
+        "sort": "asc",
+        "limit": "10000",
+    }
+    rows = [(r.open, r.high, r.low, r.close, r.volume, r.trade_count, r.vwap) for r in out.rows]
+    assert rows == [
+        (14.65, 15.75, 7.4, 9.95, 8697, 2244, 11.0333),  # a whole week before end, as Alpaca sent it
+        (9.56, 12.1, 8.22, 11.25, 3364, 1050, None),  # Monday to Wednesday, not Friday's close 10.5
+    ]
+    assert out.notes[-1] == (
+        f"The 1w bar from 2026-10-05T04:00:00Z ({C1}) runs to 2026-10-12T04:00:00Z, past end "
+        "(2026-10-08T03:59:59.999999Z), and Alpaca's bar holds the trades after end: it is rebuilt from the 1d "
+        "bars of 2026-10-05 through 2026-10-07 (New York dates), so it covers those days only; its vwap is null "
+        "(insufficient_data), which the 1d bars do not give exactly."
+    )
 
 
 def test_options_refuse_a_non_occ_symbol(specs, ctx):

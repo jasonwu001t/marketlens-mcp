@@ -27,6 +27,7 @@ from ..convert import (
     path_symbol,
     timeframe_to_alpaca,
 )
+from .bars import LAST_BAR_DOC, cap_last_bars
 from .common import (
     BARS_LOOKBACK_DOC,
     CONTINUE_DOC,
@@ -203,10 +204,21 @@ async def options_bars(ctx: ToolContext, args: BarsIn) -> ToolOutput:
             mapper=rows,
             start_token=args.page_token,
         )
+        bars, capped = await cap_last_bars(
+            ctx,
+            api,
+            win,
+            page.rows,
+            args.timeframe,
+            path="/v1beta1/options/bars",
+            params=params,
+            key="occ_symbol",
+            zone=NEW_YORK,
+        )
     return output(
         ctx,
         OptionBar,
-        page.rows,
+        bars,
         route="GET /v1beta1/options/bars",
         operation="optionBars",
         request=request_of(args, **win.fields()),
@@ -214,7 +226,11 @@ async def options_bars(ctx: ToolContext, args: BarsIn) -> ToolOutput:
         delay=delay,
         as_of=as_of,
         page=page,
-        notes=[*notes, *missing_in_window_note(args.occ_symbols, page, args.page_token, "occ_symbol")],
+        notes=[
+            *notes,
+            *missing_in_window_note(args.occ_symbols, page, args.page_token, "occ_symbol"),
+            *capped,
+        ],
         skips=skips,
     )
 
@@ -518,6 +534,7 @@ SPECS = (
         description="Historical OHLCV bars for option contracts by OCC symbol (premium per share in USD, volume "
         "in contracts). timeframe default 1d; window by start/end or lookback (default P30D)."
         + HISTORY_DOC
+        + LAST_BAR_DOC
         + _SIZE,
         readme="OHLCV bars for option contracts",
         input_model=BarsIn,

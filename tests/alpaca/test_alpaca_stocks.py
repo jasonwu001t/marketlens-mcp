@@ -7,11 +7,14 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from urllib.parse import parse_qsl
 
+import httpx
 import pytest
 from alpaca_harness import NOW, FakeContext, call, check_golden
 from pydantic import ValidationError
 
 from marketlens_mcp.plugin_api import FetchLimits, ToolError
+from marketlens_mcp.providers.alpaca.convert import iso_z
+from marketlens_schema.base import unexplained_absences
 
 CURSOR = "QUFQTHxEfDIwMjYtMTAtMDE="  # the synthetic next-page cursor in StockBars__page1
 
@@ -134,7 +137,7 @@ def test_a_daily_lookback_starts_at_the_first_days_utc_midnight(specs, alpaca, t
         lookback="P1Y",
         end="2026-10-07T04:31:05-04:00",
     )
-    assert alpaca.params()["start"] == start
+    assert alpaca.params(0)["start"] == start
 
 
 @pytest.mark.parametrize(
@@ -214,6 +217,237 @@ def test_a_future_end_on_a_real_time_feed_is_cut_to_now(specs, ctx, alpaca):
     assert alpaca.params()["end"] == "2026-10-02T20:00:00Z"
     assert out.provenance.as_of == NOW
     assert out.notes[0] == "end 2026-10-10 is in the future: the window ends now, 2026-10-02T20:00:00Z."
+
+
+def _bar(t: str, o: float, h: float, low: float, c: float, v: float, n: int | None = 100) -> dict:
+    bar = {"t": t, "o": o, "h": h, "l": low, "c": c, "v": v, "vw": round((h + low + c) / 3, 4)}
+    return bar if n is None else {**bar, "n": n}
+
+
+def _bars(by_symbol: dict[str, list[dict]]) -> dict:
+    return {"bars": by_symbol, "next_page_token": None}
+
+
+AFTER_THE_WEEK = datetime(2026, 10, 16, 20, tzinfo=UTC)
+#: A week's bar as Alpaca serves it for end 2026-10-08: whole, with Friday 10-09's trades (close 111).
+WEEK = _bar("2026-10-05T04:00:00Z", 100, 112, 95, 111, 5000, 50)
+#: The days of that week up to end, Monday to Thursday.
+DAYS = [
+    _bar("2026-10-05T04:00:00Z", 100, 104, 99, 103, 1000, 10),
+    _bar("2026-10-06T04:00:00Z", 103, 105, 95, 96, 1200, 12),
+    _bar("2026-10-07T04:00:00Z", 96, 101, 96, 100, 900, 9),
+    _bar("2026-10-08T04:00:00Z", 100, 108, 99, 107, 1100, 11),
+]
+
+
+def test_a_weekly_bar_past_end_is_rebuilt_from_its_days_to_end(specs, alpaca):
+    brk_week = _bar("2026-10-05T04:00:00Z", 400, 420, 390, 415, 90, None)
+    brk_days = [_bar(d["t"], 400, 410, 395, 405, 20, None) for d in DAYS]
+    alpaca.add("/v2/stocks/bars", _bars({"AAPL": [WEEK], "BRK.B": [brk_week]}), match={"timeframe": "1Week"})
+    alpaca.add("/v2/stocks/bars", _bars({"AAPL": DAYS, "BRK.B": brk_days}), match={"timeframe": "1Day"})
+    out = call(
+        specs["market_bars"],
+        FakeContext(fixed_now=AFTER_THE_WEEK),
+        tickers=["AAPL", "BRK-B"],
+        timeframe="1w",
+        start="2026-10-05",
+        end="2026-10-08",
+    )
+    assert alpaca.params(1) == {
+        "symbols": "AAPL,BRK.B",
+        "timeframe": "1Day",
+        "start": "2026-10-05T04:00:00Z",
+        "end": "2026-10-09T03:59:59.999999Z",
+        "adjustment": "all",
+        "feed": "iex",
+        "sort": "asc",
+        "limit": "10000",
+    }
+    aapl, brk = out.rows
+    assert aapl.t == datetime(2026, 10, 5, 4, tzinfo=UTC) and aapl.timeframe == "1w"
+    assert (aapl.open, aapl.high, aapl.low, aapl.close, aapl.volume, aapl.trade_count) == (
+        100,
+        108,
+        95,
+        107,  # Thursday's close, not Friday's 111
+        4200,
+        42,
+    )
+    assert aapl.vwap is None and aapl.absent == {"vwap": "insufficient_data"}
+    assert (brk.ticker, brk.close, brk.volume, brk.trade_count) == ("BRK-B", 405, 80, None)
+    assert brk.absent == {"vwap": "insufficient_data", "trade_count": "not_provided_by_source"}
+    assert unexplained_absences(out.rows, out.absent) == []
+    assert out.provenance.as_of == datetime(2026, 10, 9, 3, 59, 59, 999999, tzinfo=UTC)
+    assert out.notes[1:] == [
+        "The 1w bar from 2026-10-05T04:00:00Z (AAPL, BRK-B) runs to 2026-10-12T04:00:00Z, past end "
+        "(2026-10-09T03:59:59.999999Z), and Alpaca's bar holds the trades after end: it is rebuilt from the 1d "
+        "bars of 2026-10-05 through 2026-10-08 (New York dates), so it covers those days only; its vwap is null "
+        "(insufficient_data), which the 1d bars do not give exactly."
+    ]
+
+
+def test_a_monthly_bar_past_a_mid_day_end_covers_its_whole_days_only(specs, alpaca):
+    month = _bar("2026-10-01T04:00:00Z", 90, 120, 80, 118, 9000)
+    days = [_bar(t, 90, 100, 85, 95, 500) for t in ("2026-10-01T04:00:00Z", "2026-10-02T04:00:00Z")]
+    alpaca.add("/v2/stocks/bars", _bars({"AAPL": [month]}), match={"timeframe": "1Month"})
+    alpaca.add("/v2/stocks/bars", _bars({"AAPL": days}), match={"timeframe": "1Day"})
+    out = call(
+        specs["market_bars"],
+        FakeContext(fixed_now=AFTER_THE_WEEK),
+        tickers=["AAPL"],
+        timeframe="1mo",
+        start="2026-09-01",
+        end="2026-10-05T15:00:00Z",
+    )
+    # the days before the New York midnight before end: Monday 10-05 itself is cut at 15:00Z, so it is left out
+    assert (alpaca.params(1)["start"], alpaca.params(1)["end"]) == (
+        "2026-10-01T04:00:00Z",
+        "2026-10-05T03:59:59.999999Z",
+    )
+    assert [(r.close, r.volume) for r in out.rows] == [(95, 1000)]
+    assert out.notes == [
+        "The 1mo bar from 2026-10-01T04:00:00Z (AAPL) runs to 2026-11-01T04:00:00Z, past end "
+        "(2026-10-05T15:00:00Z), and Alpaca's bar holds the trades after end: it is rebuilt from the 1d bars of "
+        "2026-10-01 through 2026-10-04 (New York dates), so it covers those days only; its vwap is null "
+        "(insufficient_data), which the 1d bars do not give exactly."
+    ]
+
+
+@pytest.mark.parametrize(
+    ("timeframe", "end", "kept", "straddling", "runs_to"),
+    [
+        (
+            "1h",
+            "2026-10-05T14:30:00Z",
+            "2026-10-05T13:00:00Z",
+            "2026-10-05T14:00:00Z",
+            "2026-10-05T15:00:00Z",
+        ),
+        (
+            "1d",
+            "2026-10-05T18:00:00Z",
+            "2026-10-02T04:00:00Z",
+            "2026-10-05T04:00:00Z",
+            "2026-10-06T04:00:00Z",
+        ),
+        # no whole day of the week falls before end, so nothing rebuilds it
+        (
+            "1w",
+            "2026-10-05T18:00:00Z",
+            "2026-09-28T04:00:00Z",
+            "2026-10-05T04:00:00Z",
+            "2026-10-12T04:00:00Z",
+        ),
+    ],
+)
+def test_a_day_or_shorter_bar_past_end_is_left_out(specs, alpaca, timeframe, end, kept, straddling, runs_to):
+    alpaca.add(
+        "/v2/stocks/bars",
+        _bars(
+            {
+                "AAPL": [_bar(straddling, 1, 2, 1, 2, 10)],
+                "MSFT": [_bar(kept, 1, 2, 1, 2, 10), _bar(straddling, 1, 2, 1, 2, 10)],
+            }
+        ),
+    )
+    out = call(
+        specs["market_bars"],
+        FakeContext(fixed_now=AFTER_THE_WEEK),
+        tickers=["AAPL", "MSFT"],
+        timeframe=timeframe,
+        start="2026-09-28",
+        end=end,
+    )
+    assert len(alpaca.requests) == 1
+    assert [(r.ticker, iso_z(r.t)) for r in out.rows] == [("MSFT", kept)]
+    # AAPL had a bar in the window: it is not called missing
+    assert out.notes == [
+        f"The {timeframe} bar from {straddling} (AAPL, MSFT) runs to {runs_to}, past end ({end}), and Alpaca's "
+        "bar holds the trades after end: it is left out; bars of a shorter timeframe cover its start to end."
+    ]
+
+
+@pytest.mark.parametrize(
+    ("settings", "end", "first_note"),
+    [
+        ({}, None, None),
+        ({"stock_feed": "delayed_sip"}, "2026-10-10", "end 2026-10-10 is later than the newest data"),
+    ],
+)
+def test_the_bar_still_forming_now_is_kept_and_named(specs, alpaca, settings, end, first_note):
+    week = [_bar("2026-09-21T04:00:00Z", 1, 2, 1, 2, 10), _bar("2026-09-28T04:00:00Z", 2, 3, 2, 3, 10)]
+    alpaca.add("/v2/stocks/bars", _bars({"MSFT": week}))
+    args = {"end": end} if end else {}
+    out = call(
+        specs["market_bars"],
+        FakeContext(settings=settings),
+        tickers=["MSFT"],
+        timeframe="1w",
+        lookback="P14D",
+        **args,
+    )
+    assert len(alpaca.requests) == 1 and len(out.rows) == 2 and out.rows[1].close == 3
+    assert out.notes[-1] == (
+        "The 1w bar from 2026-09-28T04:00:00Z (MSFT) is still forming: it holds trades up to now "
+        "(2026-10-02T20:00:00Z) only, not a whole 1w."
+    )
+    assert first_note is None or out.notes[0].startswith(first_note)
+
+
+@pytest.mark.parametrize(
+    ("days", "limits", "why"),
+    [
+        (
+            httpx.Response(429, json={"message": "too many requests"}),
+            FetchLimits(),
+            "it is left out (its 1d bars failed: alpaca_rate_limited).",
+        ),
+        (
+            _bars({"AAPL": DAYS}),
+            FetchLimits(max_rows=3),
+            "it is left out (its 1d bars stopped at the fetch limits; narrow the request).",
+        ),
+        (
+            _bars({}),
+            FetchLimits(),
+            "it is left out, as no 1d bar of it falls on 2026-10-05 through 2026-10-08 (New York dates).",
+        ),
+    ],
+)
+def test_a_weekly_bar_its_days_cannot_rebuild_is_left_out(specs, alpaca, days, limits, why):
+    alpaca.add("/v2/stocks/bars", _bars({"AAPL": [WEEK]}), match={"timeframe": "1Week"})
+    alpaca.add("/v2/stocks/bars", days, match={"timeframe": "1Day"})
+    out = call(
+        specs["market_bars"],
+        FakeContext(fixed_now=AFTER_THE_WEEK, limits=limits),
+        tickers=["AAPL"],
+        timeframe="1w",
+        start="2026-10-05",
+        end="2026-10-08",
+    )
+    assert out.rows == []
+    assert out.notes[-1] == (
+        "The 1w bar from 2026-10-05T04:00:00Z (AAPL) runs to 2026-10-12T04:00:00Z, past end "
+        f"(2026-10-09T03:59:59.999999Z), and Alpaca's bar holds the trades after end: {why}"
+    )
+
+
+@pytest.mark.parametrize(
+    ("t", "timeframe", "closes"),
+    [
+        # stocks' and options' bars of a day or longer start at midnight New York, also across the clock change
+        ("2026-10-26T04:00:00Z", "1w", "2026-11-02T05:00:00Z"),
+        ("2026-11-01T04:00:00Z", "1d", "2026-11-02T05:00:00Z"),
+        ("2026-10-01T04:00:00Z", "3mo", "2027-01-01T05:00:00Z"),
+        ("2026-01-01T05:00:00Z", "12mo", "2027-01-01T05:00:00Z"),
+        ("2026-11-01T05:30:00Z", "4h", "2026-11-01T09:30:00Z"),
+    ],
+)
+def test_bar_end_in_new_york(t, timeframe, closes):
+    from marketlens_mcp.providers.alpaca.convert import NEW_YORK, parse_ts
+    from marketlens_mcp.providers.alpaca.tools.bars import bar_end
+
+    assert iso_z(bar_end(parse_ts(t), timeframe, NEW_YORK)) == closes
 
 
 def test_a_start_past_the_delayed_sip_feeds_reach_is_refused(specs, alpaca):
