@@ -252,6 +252,14 @@ def _unit(model: type[CanonicalModel] | None, name: str) -> str | None:
     return extra.get("x-unit") if isinstance(extra, dict) else None
 
 
+def _role(model: type[CanonicalModel] | None, name: str) -> str | None:
+    """A model field's role (``x-role`` in its JSON Schema), as the real store reads it."""
+    if model is None or name not in model.model_fields:
+        return None
+    extra = model.model_fields[name].json_schema_extra
+    return extra.get("x-role") if isinstance(extra, dict) else None
+
+
 def _field_meta(field: pa.Field, key: bytes) -> str | None:
     """A dynamic table's column unit, source_model or role, from its Arrow field metadata (as the real store reads it)."""
     raw = (field.metadata or {}).get(key)
@@ -358,7 +366,9 @@ class FakeStore:
                     max=hi,
                     source_model=(column_sources or {}).get(name)
                     or _field_meta(arrow_field, b"source_model"),
-                    role=(column_roles or {}).get(name) or _field_meta(arrow_field, b"role"),
+                    role=(column_roles or {}).get(name)
+                    or _field_meta(arrow_field, b"role")
+                    or _role(cls, name),
                 )
             )
         self._n += 1

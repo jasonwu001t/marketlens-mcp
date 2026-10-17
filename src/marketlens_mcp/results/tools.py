@@ -21,7 +21,7 @@ from marketlens_schema import QUERY_ROW_SCHEMA_NAME, Delay, Provenance
 from ..manifest import DYNAMIC_MODELS
 from ..offload import estimate_tokens
 from ..plugin_api import ToolContext, ToolError, ToolOutput, ToolSpec
-from ..results_api import RESULT_ID_RE
+from ..results_api import RESULT_ID_RE, QueryRefused
 from .arrow import duckdb_type, json_safe, sql_ident, table_rows
 from .store import FileResultStore, QueryOutcome
 
@@ -74,29 +74,69 @@ class QueryArgs(BaseModel):
 
 
 def _inherited(store: FileResultStore, out: QueryOutcome) -> dict:
-    """What a stored answer over one parent keeps of it: the parent's time and
-    series columns and its column units and roles, with the model each such
-    column came from (the one the parent recorded for it, else the parent's,
-    unless the parent is itself a query answer or aligned result, which records
-    none of its own), only for columns that are still there with the same name
-    and type, and only when the time column is one of them; so the answer
-    chains into analytics as the parent would (point in time on a column with
-    role available), after the parent is gone too."""
-    if len(out.result_ids) != 1:
-        return {}
-    parent = store.info(out.result_ids[0])
-    own = None if parent.model in DYNAMIC_MODELS else parent.model
+    """What a stored answer keeps of the results it read: the role of every
+    column still there with the same name and type as in any of them, whatever
+    its time column, so analytics_align stays point in time on the answer (a
+    column of when each row became known). Over one parent, also its time and
+    series columns and its column units, with the
+    model each such column came from (the one the parent recorded for it, else
+    the parent's, unless the parent is itself a query answer or aligned result,
+    which records none of its own), only for columns still there with the same
+    name and type, and only when the time column is one of them; so the answer
+    chains into analytics as the parent would, after the parent is gone too."""
     types = {f.name: duckdb_type(f.type) for f in out.table.schema}
+    parents = [store.info(rid) for rid in out.result_ids]
+    roles = {c.name: c.role for p in parents for c in p.columns if c.role and types.get(c.name) == c.type}
+    kept: dict = {"column_roles": roles} if roles else {}
+    if len(parents) != 1:
+        return kept
+    parent = parents[0]
+    own = None if parent.model in DYNAMIC_MODELS else parent.model
     same = {c.name: c for c in parent.columns if types.get(c.name) == c.type}
     if parent.time_column not in same:
-        return {}
+        return kept
     return {
+        **kept,
         "time_column": parent.time_column,
         "group_column": parent.group_column if parent.group_column in same else None,
         "column_units": {n: c.unit for n, c in same.items() if c.unit},
         "column_sources": {n: s for n, c in same.items() if c.unit and (s := c.source_model or own)},
-        "column_roles": {n: c.role for n, c in same.items() if c.role},
     }
+
+
+def _lost_clocks(store: FileResultStore, out: QueryOutcome) -> str | None:
+    """A note naming each column of when a row became known (role available)
+    of the results read that a stored answer leaves out (or changes the type
+    of): without it, analytics_align matches the answer on its time column."""
+    types = {f.name: duckdb_type(f.type) for f in out.table.schema}
+    lost = list(
+        dict.fromkeys(
+            f"{c.name} of {rid}"
+            for rid in out.result_ids
+            for c in store.info(rid).columns
+            if c.role == "available" and types.get(c.name) != c.type
+        )
+    )
+    if not lost:
+        return None
+    return (
+        f"The answer leaves out {', '.join(lost)} (role available: when each row became known), so "
+        "analytics_align matches it on its time column, which can pair a left row with a value published after "
+        "it; keep the column, with its name and type, to match point in time."
+    )
+
+
+def _incomplete_parents(store: FileResultStore, out: QueryOutcome) -> str | None:
+    """A note naming the results read that are themselves cut (truncated):
+    an answer over one is incomplete too, whether or not it was cut itself."""
+    cut = [rid for rid in out.result_ids if store.info(rid).provenance.truncated]
+    if not cut:
+        return None
+    which = f"{cut[0]}, which is" if len(cut) == 1 else f"{', '.join(cut)}, which are"
+    return (
+        f"Computed from {which} incomplete (truncated: results_describe says where it stopped), so this answer "
+        "may be incomplete too."
+    )
 
 
 async def results_query(ctx: ToolContext, args: QueryArgs) -> ToolOutput:
@@ -109,11 +149,21 @@ async def results_query(ctx: ToolContext, args: QueryArgs) -> ToolOutput:
     size = len(json.dumps(rows, separators=(",", ":")).encode()) if rows is not None else 0
     too_big = size > limits.query_max_bytes
     keep = args.store or too_big or (rows is not None and estimate_tokens(rows) > limits.inline_max_tokens)
+    slow = None
     if keep and not args.store and out.truncated:
         # max_rows bounds an answer shown inline; one too large to show is
-        # stored whole (up to fetch.max_rows), as store=true keeps it.
-        out = store.query(args.sql, max_rows=max_rows, store=True)
-    cap = limits.fetch_max_rows if keep else max_rows
+        # stored whole (up to fetch.max_rows), as store=true keeps it. If the
+        # whole answer runs out of time, the rows already read are stored, cut.
+        try:
+            out = store.query(args.sql, max_rows=max_rows, store=True)
+        except QueryRefused as exc:
+            if exc.code != "sql_timeout":
+                raise
+            slow = (
+                f"the whole answer took longer than {limits.query_timeout_seconds:g} seconds to run, so only "
+                f"the first {max_rows} rows, read before, are kept"
+            )
+    cap = limits.fetch_max_rows if keep and slow is None else max_rows
     notes = [f"Executed: {out.executed_sql}"]
     if max_rows < args.max_rows and not keep:
         notes.append(
@@ -121,15 +171,25 @@ async def results_query(ctx: ToolContext, args: QueryArgs) -> ToolOutput:
             "to that; pass store=true to keep the full answer as a new result."
         )
     truncation = None
+    inherited = _incomplete_parents(store, out)
     if out.truncated:
-        advice = (
-            f"Aggregate or filter to keep the whole answer: fetch.max_rows ({cap}) bounds a stored one."
-            if keep
-            else "Aggregate, filter, or use store=true to keep the full answer as a new result."
-        )
-        kept = f"more than {cap} rows matched and only the first {cap} are kept"
+        if slow:
+            advice = "Aggregate or filter so that the whole answer runs in time."
+        elif keep:
+            advice = (
+                f"Aggregate or filter to keep the whole answer: fetch.max_rows ({cap}) bounds a stored one."
+            )
+        else:
+            advice = "Aggregate, filter, or use store=true to keep the full answer as a new result."
+        kept = slow or f"more than {cap} rows matched and only the first {cap} are kept"
         truncation = f"The answer is cut: {kept}. {advice}"
         notes.append(f"Truncated: yes; {kept}. {advice}")
+        if inherited:
+            notes.append(inherited)
+            truncation += f" {inherited}"
+    elif inherited:
+        truncation = inherited
+        notes.append(f"Truncated: yes; {inherited}")
     else:
         notes.append("Truncated: no")
     if keep and not args.store:
@@ -152,6 +212,8 @@ async def results_query(ctx: ToolContext, args: QueryArgs) -> ToolOutput:
                 f"The answer ({out.row_count} rows, {size:,} bytes as JSON) is larger than {limit}, so it was "
                 "stored as a new result: query it, or select fewer columns or rows to see it inline."
             )
+    if keep and (lost := _lost_clocks(store, out)):
+        notes.append(lost)
     request = {"sql": args.sql[:4000], "max_rows": args.max_rows, "store": args.store}
     prov = _provenance(ctx, "duckdb:results_query", request, list(out.result_ids))
     if truncation:
@@ -454,9 +516,10 @@ SPECS: tuple[ToolSpec, ...] = (
         "results stored in this session, using each result_id as a table name. Returns at most max_rows rows "
         "(default 50, at most 200; a larger max_rows or LIMIT is lowered). An answer over results.query_max_bytes "
         "(24,000 bytes of JSON by default) or about 6,000 tokens, or store=true, is kept whole as a new result "
-        "(max_rows bounds only an inline answer; fetch.max_rows, 50,000 rows by default, a stored one, and a cut "
-        "answer says truncated) and you get its result_id; a query of one result keeps its time and series "
-        "columns when they are unchanged, so it chains into analytics. Exact decimals come back as strings (CAST to DOUBLE for a number); whole-number "
+        "(max_rows bounds only an inline answer; fetch.max_rows, 50,000 rows by default, a stored one; an answer "
+        "cut, or over a cut result, says truncated) and you get its result_id; a query of one result keeps its "
+        "time and series columns when they are unchanged, and of any result its columns' roles, so it chains "
+        "into analytics. Exact decimals come back as strings (CAST to DOUBLE for a number); whole-number "
         "sums are numbers. Files, settings, other sessions and every write are refused.",
         "Read-only SQL over this session's results (one SELECT, forced LIMIT)",
         QueryArgs,

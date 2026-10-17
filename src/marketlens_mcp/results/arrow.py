@@ -229,6 +229,13 @@ def _unit(model: type[BaseModel], name: str) -> str | None:
     return None
 
 
+def _role(model: type[BaseModel], name: str) -> str | None:
+    """The role a model's field states in its JSON Schema (``x-role``)."""
+    extra = model.model_fields[name].json_schema_extra
+    role = extra.get("x-role") if isinstance(extra, dict) else None
+    return role if role in ROLES else None
+
+
 def column_infos(model: type[CanonicalModel]) -> list[ColumnInfo]:
     """ColumnInfo for every column of a canonical model (no summary values)."""
     schema = arrow_schema(model)
@@ -245,6 +252,7 @@ def column_infos(model: type[CanonicalModel]) -> list[ColumnInfo]:
                 unit=_unit(model, field.name) if field.name != "absent" else None,
                 nullable=field.nullable,
                 description=desc,
+                role=_role(model, field.name) if field.name != "absent" else None,
             )
         )
     return out
@@ -257,9 +265,9 @@ def column_infos_for(
     sources: Mapping[str, str] | None = None,
     roles: Mapping[str, str] | None = None,
 ) -> list[ColumnInfo]:
-    """ColumnInfo for a table's actual columns: types from the table, units
-    and descriptions from ``model`` where a column of the same name and type
-    exists there (``units`` overrides)."""
+    """ColumnInfo for a table's actual columns: types from the table, units,
+    descriptions and roles from ``model`` where a column of the same name and
+    type exists there (``units`` overrides)."""
     infos = column_infos_from_schema(schema, units, sources, roles)
     if model is None:
         return infos
@@ -269,7 +277,12 @@ def column_infos_for(
         k = known.get(c.name)
         if k is not None and k.type == c.type:
             c = c.model_copy(
-                update={"unit": c.unit or k.unit, "description": k.description, "nullable": k.nullable}
+                update={
+                    "unit": c.unit or k.unit,
+                    "description": k.description,
+                    "nullable": k.nullable,
+                    "role": c.role or k.role,
+                }
             )
         out.append(c)
     return out

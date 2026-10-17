@@ -64,8 +64,10 @@ class ColumnInfo(BaseModel):
         exclude_if=lambda v: v is None,
         description="available: a timestamp column holding when each row became known (published or first "
         "available), as opposed to the time column, the time the row describes; analytics_align matches on it "
-        "by default, so no row is paired with a time before it was known. A dynamic table marks it in the "
-        'column\'s Arrow field metadata ({b"role": b"available"}). Left out when None.',
+        "by default, so no row is paired with a time before it was known. A model states it in its field's "
+        'JSON Schema (x-role), a dynamic table in the column\'s Arrow field metadata ({b"role": b"available"}), '
+        "and a stored query answer keeps it on a column it keeps with the same name and type. Left out when "
+        "None.",
     )
 
 

@@ -512,3 +512,111 @@ def test_point_in_time_leaves_out_rows_with_no_knowledge_time(store, ctx):
     out = run(SPEC, ctx, left_result_id=left, right_result_id=right, right_columns=["value"])
     assert [r["value"] for r in out.table.to_pylist()] == [None, 1.0, 2.0, 2.0, 3.0]
     assert "1 right row with no knowledge_time was left out: nothing says when it became known." in out.notes
+
+
+#: PAYEMS in the store as datastore_query serves it, one version of each month
+#: (the latest): the February 2026 benchmark revision re-stamped December 2021
+#: and February 2022 to November 2025 on its release day; January 2022 last
+#: changed in 2025; December 2025 and January 2026 are later revisions.
+BENCHMARKED = [
+    ("PAYEMS", utc(2021, 12, 1), utc(2026, 2, 11, 23), 149816.0),
+    ("PAYEMS", utc(2022, 1, 1), utc(2025, 2, 7, 23), 150006.0),
+    ("PAYEMS", utc(2022, 2, 1), utc(2026, 2, 11, 23), 150825.0),
+    ("PAYEMS", utc(2025, 10, 1), utc(2026, 2, 11, 23), 158408.0),
+    ("PAYEMS", utc(2025, 11, 1), utc(2026, 2, 11, 23), 158449.0),
+    ("PAYEMS", utc(2025, 12, 1), utc(2026, 3, 6, 23), 158432.0),
+    ("PAYEMS", utc(2026, 1, 1), utc(2026, 4, 3, 22), 158592.0),
+]
+BARS_T = [utc(2026, 1, 26, 5), utc(2026, 3, 2, 5), utc(2026, 4, 6, 4)]
+
+
+def test_a_series_held_in_its_latest_version_says_how_much_older_its_matches_are(store, ctx):
+    """Review of N2: with one version of each month, a benchmark revision
+    hides every month it re-stamped until its release, so a bar of January
+    2026 got January 2022's value (the newest month not revised since) with
+    nothing said; a note now gives how much older the matches are than the
+    latest month by time, and one says the result holds revised rows only in
+    their revision, so a newer month may have been known then."""
+    right = known_series(store, BENCHMARKED)
+    left = daily_left(store, BARS_T)
+    out = run(
+        SPEC, ctx, left_result_id=left, right_result_id=right, right_columns=["value", "knowledge_time"]
+    )
+    rows = out.table.to_pylist()
+    assert [(r["value"], r["matched_t"]) for r in rows] == [
+        (150006.0, utc(2022, 1, 1)),
+        (158449.0, utc(2025, 11, 1)),
+        (158592.0, utc(2026, 1, 1)),
+    ]
+    assert all(r["knowledge_time"] <= r["t"] for r in rows)
+    assert "__newest" not in out.table.column_names and "__at" not in out.table.column_names
+    assert (
+        "2 of 3 matched left rows got an older right row than the latest event_time at or before their time, "
+        f"which {right} has only as known after it: older by a median of 61 days and at most 1,461 days (left "
+        "2026-01-26T05:00Z: event_time 2022-01-01 matched, 2026-01-01 the latest)."
+    ) in out.notes
+    assert any(
+        n.startswith(
+            f"{right} holds one version of each event_time, and at least 1 of its 7 rows are revisions"
+        )
+        and "a newer one may have been known at its time in a version this result does not hold" in n
+        for n in out.notes
+    )
+
+
+def test_a_series_never_revised_says_only_its_publication_lag(store, ctx):
+    """A daily value known 22:00 UTC the next business day: each bar at
+    midnight New York gets an older day than its own, by the publication lag;
+    nothing is revised, so nothing is said about missing versions."""
+    days = [utc(2026, 1, d) for d in (5, 6, 7, 8, 9, 12)]
+    known = [utc(2026, 1, 6, 22), utc(2026, 1, 7, 22), utc(2026, 1, 8, 22), utc(2026, 1, 9, 22)]
+    known += [utc(2026, 1, 12, 22), utc(2026, 1, 13, 22)]
+    right = known_series(
+        store, [(d, k, 4.0 + i / 10) for i, (d, k) in enumerate(zip(days, known, strict=True))]
+    )
+    left = daily_left(store, [utc(2026, 1, d, 5) for d in (7, 8, 9, 12, 13)])
+    out = run(SPEC, ctx, left_result_id=left, right_result_id=right, right_columns=["value"], by="series_id")
+    assert [r["matched_t"] for r in out.table.to_pylist()] == [utc(2026, 1, d) for d in (5, 6, 7, 8, 9)]
+    assert any(
+        n.startswith(
+            "5 of 5 matched left rows got an older right row than the latest event_time at or before"
+        )
+        and "older by a median of 2 days and at most 4 days (left 2026-01-12T05:00Z: event_time 2026-01-08 "
+        "matched, 2026-01-12 the latest)"
+        in n
+        for n in out.notes
+    )
+    assert not any("holds one version" in n for n in out.notes)
+
+
+def test_a_series_with_every_version_matches_the_release_known_then(store, ctx):
+    """With every version of each month (first release and revision), the
+    match is the value as first published, and no note says versions are missing."""
+    rows = [
+        (utc(2025, 12, 1), utc(2026, 1, 9, 13, 30), 158400.0),
+        (utc(2025, 12, 1), utc(2026, 2, 11, 23), 158432.0),
+        (utc(2026, 1, 1), utc(2026, 2, 11, 23), 158500.0),
+    ]
+    right = known_series(store, rows)
+    left = daily_left(store, [utc(2026, 1, 26, 5), utc(2026, 2, 12, 5)])
+    out = run(SPEC, ctx, left_result_id=left, right_result_id=right, right_columns=["value"])
+    assert [(r["value"], r["matched_t"]) for r in out.table.to_pylist()] == [
+        (158400.0, utc(2025, 12, 1)),
+        (158500.0, utc(2026, 1, 1)),
+    ]
+    assert any(n.startswith("1 of 2 matched left rows got an older right row") for n in out.notes)
+    assert not any("holds one version" in n for n in out.notes)
+
+
+def test_forward_says_how_much_older_the_update_is_than_the_latest_by_time_when_it_came(store, ctx):
+    right = known_series(store, BENCHMARKED)
+    left = daily_left(store, BARS_T)
+    out = run(
+        SPEC, ctx, left_result_id=left, right_result_id=right, right_columns=["value"], direction="forward"
+    )
+    assert [r["matched_t"] for r in out.table.to_pylist()] == [utc(2025, 11, 1), utc(2025, 12, 1), None]
+    assert (
+        "2 of 2 matched left rows got an older right row than the latest event_time at or before when the "
+        f"matched row became known, which {right} has only as known after it: older by a median of 31 days and "
+        "at most 61 days (left 2026-01-26T05:00Z: event_time 2025-11-01 matched, 2026-01-01 the latest)."
+    ) in out.notes

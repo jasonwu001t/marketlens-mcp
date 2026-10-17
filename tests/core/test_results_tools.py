@@ -574,3 +574,146 @@ def test_a_columns_role_comes_from_its_field_metadata_and_a_stored_answer_keeps_
         store=True,
     )
     assert all(c.role is None for c in store.info(cast.result_id).columns)
+    assert any(n.startswith(f"The answer leaves out knowledge_time of {known.result_id}") for n in cast.notes)
+
+
+def test_an_answer_over_a_cut_result_says_truncated_too(tmp_path):
+    """Review of N5: a query over an incomplete result is incomplete too; it
+    said truncated=false and "Truncated: no", so describe and analytics took a
+    count over MSFT's first 100 of 400 bars for the whole."""
+    store = StoreRoot(tmp_path / "cache", StoreLimits(fetch_max_rows=500)).session("s")
+    bars = store.put(
+        bar_table(n=400),
+        tool="market_bars",
+        model=Bar.schema_name,
+        provenance=provenance(),
+        time_column="t",
+        group_column="ticker",
+    )
+    ctx = make_context(store=store)
+    cut = call(ctx, "results_query", sql=f"SELECT * FROM {bars.result_id} ORDER BY ticker, t", store=True)
+    assert cut.row_count == 500 and cut.provenance.truncated is True
+    note = (
+        f"Computed from {cut.result_id}, which is incomplete (truncated: results_describe says where it stopped), "
+        "so this answer may be incomplete too."
+    )
+    over = call(ctx, "results_query", sql=f"SELECT * FROM {cut.result_id} ORDER BY ticker, t", max_rows=200)
+    assert isinstance(over, ResultMarker) and over.row_count == 500
+    assert (over.provenance.truncated, over.provenance.truncation_note) == (True, note)
+    assert f"Truncated: yes; {note}" in over.notes and "Truncated: no" not in over.notes
+    assert call(ctx, "results_describe", result_id=over.result_id).notes == [note]
+    counts = call(
+        ctx,
+        "results_query",
+        sql=f"SELECT ticker, count(*) AS n FROM {cut.result_id} GROUP BY ticker ORDER BY ticker",
+    )
+    assert isinstance(counts, InlineResult) and counts.rows == [
+        {"ticker": "AAPL", "n": 400},
+        {"ticker": "MSFT", "n": 100},
+    ]
+    assert (counts.provenance.truncated, counts.provenance.truncation_note) == (True, note)
+    # Cut itself and over a cut result: both said.
+    both = call(
+        ctx,
+        "results_query",
+        sql=f"SELECT b.ticker, b.t, c.close FROM {bars.result_id} b LEFT JOIN {cut.result_id} c USING (ticker, t)",
+        store=True,
+    )
+    assert both.provenance.truncated is True and both.provenance.truncation_note.endswith(note)
+    assert both.provenance.truncation_note.startswith("The answer is cut: more than 500 rows matched")
+    whole = call(ctx, "results_query", sql=f"SELECT count(*) AS n FROM {bars.result_id}")
+    assert (whole.provenance.truncated, whole.notes[-1]) == (False, "Truncated: no")
+
+
+def _known_result(store):
+    ts = pa.timestamp("us", tz="UTC")
+    schema = pa.schema(
+        [
+            pa.field("event_time", ts),
+            pa.field("knowledge_time", ts, metadata={b"unit": b"UTC", b"role": b"available"}),
+            pa.field("value", pa.float64()),
+        ]
+    )
+    t0 = dt.datetime(2026, 1, 5, tzinfo=dt.UTC)
+    days = [t0 + dt.timedelta(days=i) for i in range(3)]
+    table = pa.table([days, [d + dt.timedelta(hours=46) for d in days], [1.0, 2.0, 3.0]], schema=schema)
+    return store.put(
+        table,
+        tool="datastore_query",
+        model="marketlens.QueryRow",
+        provenance=provenance(),
+        time_column="event_time",
+    )
+
+
+def test_a_columns_role_survives_a_join_and_a_new_time_column_and_a_dropped_one_is_named(setup):
+    """Review of N2: the role of when each row became known is kept on any
+    column a stored answer keeps with its name and type, from any result it
+    read and whatever its time column: it was kept only by a query of one
+    result that kept its time column, so a join or a time_bucket silently gave
+    analytics_align an answer it matched on event time. A stored answer that
+    leaves the column out says so."""
+    ctx, store, _, small, *_ = setup
+    known = _known_result(store)
+
+    def roles(out):
+        return {c.name: c.role for c in store.info(out.result_id).columns}
+
+    joined = call(
+        ctx,
+        "results_query",
+        sql=f"SELECT k.*, s.close FROM {known.result_id} k, (SELECT max(close) AS close FROM {small.result_id}) s",
+        store=True,
+    )
+    assert roles(joined) == {"event_time": None, "knowledge_time": "available", "value": None, "close": None}
+    bucketed = call(
+        ctx,
+        "results_query",
+        sql=f"SELECT time_bucket(INTERVAL 2 DAY, event_time) AS day, max(knowledge_time) AS knowledge_time, "
+        f"avg(value) AS value FROM {known.result_id} GROUP BY 1",
+        store=True,
+    )
+    assert roles(bucketed)["knowledge_time"] == "available"
+    assert not any("leaves out" in n for n in joined.notes + bucketed.notes)
+    dropped = call(ctx, "results_query", sql=f"SELECT event_time, value FROM {known.result_id}", store=True)
+    assert all(r is None for r in roles(dropped).values())
+    assert (
+        f"The answer leaves out knowledge_time of {known.result_id} (role available: when each row became known), "
+        "so analytics_align matches it on its time column, which can pair a left row with a value published after "
+        "it; keep the column, with its name and type, to match point in time."
+    ) in dropped.notes
+    inline = call(ctx, "results_query", sql=f"SELECT event_time, value FROM {known.result_id}")
+    assert isinstance(inline, InlineResult) and not any("leaves out" in n for n in inline.notes)
+
+
+def test_a_whole_answer_that_runs_out_of_time_stores_the_rows_read_cut(setup, monkeypatch):
+    """Review of N5: storing an answer too large to show runs it again
+    without max_rows; when that run is stopped at the time limit, the rows the
+    first run read are stored, flagged cut, instead of failing the query."""
+    ctx, store, bars, *_ = setup
+    first = store.query
+
+    def query(sql, *, max_rows, store=False):
+        if store:
+            raise rt.QueryRefused("sql_timeout", "The query ran longer than 10 seconds and was stopped.")
+        return first(sql, max_rows=max_rows, store=store)
+
+    monkeypatch.setattr(store, "query", query)
+    out = call(ctx, "results_query", sql=f"SELECT * FROM {bars.result_id}", max_rows=200)
+    assert isinstance(out, ResultMarker) and out.row_count == 200
+    assert out.provenance.truncated is True
+    assert out.provenance.truncation_note == (
+        "The answer is cut: the whole answer took longer than 10 seconds to run, so only the first 200 rows, read "
+        "before, are kept. Aggregate or filter so that the whole answer runs in time."
+    )
+    assert any("so its first 200 rows were stored as a new result" in n for n in out.notes)
+
+    def broken(sql, *, max_rows, store=False):
+        if store:
+            raise rt.QueryRefused("sql_error", "Binder Error: out of memory")
+        return first(sql, max_rows=max_rows, store=store)
+
+    # Any other refusal of the whole answer still fails the query.
+    monkeypatch.setattr(store, "query", broken)
+    with pytest.raises(ToolError, match="out of memory"):
+        call(ctx, "results_query", sql=f"SELECT * FROM {bars.result_id}", max_rows=200)

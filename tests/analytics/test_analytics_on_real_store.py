@@ -354,3 +354,64 @@ def test_an_answer_too_large_to_show_is_stored_whole_and_a_cut_one_says_so_downs
     on_cut = call(RETURNS, ctx, result_id=cut.result_id, store=True)
     assert on_cut.provenance.truncated is True
     assert on_cut.provenance.truncation_note.startswith(f"Computed from {cut.result_id}, which stopped")
+    # A query over the cut answer is incomplete too, and says so to analytics
+    # (it said truncated=false, so returns and describe took IEF's first 96
+    # days for its year).
+    of_cut = call(query, ctx, sql=f"SELECT * FROM {cut.result_id} WHERE ticker = 'IEF'", store=True)
+    assert of_cut.row_count == 96 and of_cut.provenance.truncated is True
+    assert of_cut.provenance.truncation_note.startswith(f"Computed from {cut.result_id}, which is incomplete")
+    rets_of_cut = call(RETURNS, ctx, result_id=of_cut.result_id, price_column="close", store=True)
+    assert rets_of_cut.provenance.truncated is True
+
+
+def test_a_data_models_knowledge_time_is_matched_point_in_time_through_a_query(real):
+    """Review of N2: a built-in model's knowledge_time states x-role available,
+    so the stored column has the role, and a stored query that turns the date
+    into the instant analytics_align needs (the time column changed) keeps it.
+    The bars of September 2 and 30 got September's CPI, dated September 1 and
+    published October 15, with nothing said; each now gets the month known by
+    then."""
+    from marketlens_schema.data import EconomicObservation
+
+    store, ctx = real
+    (query,) = [s for s in RESULTS_SPECS if s.name == "results_query"]
+    cpi = [
+        EconomicObservation(
+            source="fred",
+            series_id="CPIAUCSL",
+            date=dt.date(2026, m, 1),
+            value=320.0 + m,
+            knowledge_time=utc(2026, m + 1, 15, 12, 30),
+            pit="vintage",
+        )
+        for m in (7, 8, 9)
+    ]
+    econ = store.put(
+        table_of(EconomicObservation, cpi),
+        tool="econ_series",
+        model=EconomicObservation.schema_name,
+        provenance=Provenance(provider="fred", route="GET /fred/series/observations", fetched_at=M0),
+    ).result_id
+    assert {c.name: c.role for c in store.info(econ).columns}["knowledge_time"] == "available"
+    as_t = call(
+        query,
+        ctx,
+        sql=f"SELECT series_id, CAST(date AS TIMESTAMPTZ) AS t, value, knowledge_time FROM {econ}",
+        store=True,
+    ).result_id
+    assert {c.name: c.role for c in store.info(as_t).columns}["knowledge_time"] == "available"
+    left = put_bars(
+        store,
+        bars("SPY", [100.0] * 3, times=[utc(2026, 9, 2, 20), utc(2026, 9, 30, 20), utc(2026, 10, 16, 20)]),
+    )
+    out = call(
+        ALIGN, ctx, left_result_id=left, right_result_id=as_t, right_columns=["value", "knowledge_time"]
+    )
+    assert [(r["value"], r["matched_t"][:10]) for r in out.rows] == [
+        (327.0, "2026-07-01"),
+        (328.0, "2026-08-01"),
+        (329.0, "2026-09-01"),
+    ]
+    assert any(
+        n.startswith(f"Point in time: matched on when each row of {as_t} became known") for n in out.notes
+    )

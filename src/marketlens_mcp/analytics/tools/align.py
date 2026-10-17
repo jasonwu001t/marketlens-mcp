@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Literal
+import datetime as dt
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -23,6 +24,7 @@ from ..common import (
     refuse,
     resolve,
     result_id_field,
+    rows,
     scalar,
     store_field,
 )
@@ -69,11 +71,29 @@ class AlignArgs(BaseModel):
         "(when each row became known, e.g. a dataset's knowledge_time). available (default): point in time, "
         "each left row gets the right row with the latest time among those known at or before the left time "
         "(backward), or the first update known at or after it (forward), so no value reaches a time before "
-        "it was published; tolerance is measured to when the row became known. time: the right's time "
+        "it was published; tolerance is measured to when the row became known. A note says how much older the "
+        "matches are than the latest right time by the time column; a result holding one version of each row "
+        "(its latest) has a revised row only as known from its revision, so a match can be older than the value "
+        "known then (a note says so when the result shows revisions). time: the right's time "
         "column, which can pair a left row with a value published after it (look-ahead; a note counts such "
         "rows). Without such a column the right's time column is always used.",
     )
     store: bool = store_field()
+
+
+def _span(gap: dt.timedelta) -> str:
+    seconds = gap.total_seconds()
+    for size, name in ((86400, "day"), (3600, "hour"), (60, "minute")):
+        if seconds >= size:
+            x = round(seconds / size, 1)
+            return f"{x:,g} {name}" + ("" if x == 1 else "s")
+    return f"{seconds:g} seconds"
+
+
+def _at(t: dt.datetime) -> str:
+    """An instant as UTC text: the day alone at midnight (a naive time is UTC)."""
+    t = t.astimezone(dt.UTC) if t.tzinfo else t
+    return t.strftime("%Y-%m-%d" if t.time() == dt.time() else "%Y-%m-%dT%H:%MZ")
 
 
 def _same(bl: str | None, br: str | None) -> str:
@@ -160,7 +180,7 @@ async def handler(ctx: ToolContext, args: AlignArgs) -> ToolOutput:
         clocks = f"{right.ts()} AS __rt, {right.ts(column=avail) if by_clock else right.ts()} AS __rk"
         if avail is not None and not by_clock:
             clocks += f", {right.ts(column=avail)} AS __ra"
-        src = f"SELECT *, {clocks} FROM {right.table} WHERE {where}"
+        src = known = f"SELECT *, {clocks} FROM {right.table} WHERE {where}"
         if by_clock:
             # Keep only the rows that were the latest known of their series when
             # they became known (the latest time known then, a revision of an
@@ -192,11 +212,24 @@ async def handler(ctx: ToolContext, args: AlignArgs) -> ToolOutput:
         picks.append(f"CASE WHEN {within} THEN {out_time('r.__rt')} END AS {qi(out_names[-1])}")
         if avail is not None and not by_clock:
             picks.append(f"CASE WHEN {within} THEN r.__ra > {lts} END AS __late")
-        order = ([f"l.{qi(bl)}"] if bl else []) + [f"l.{qi(left.time)}"]
-        table = session.query(
-            f"SELECT l.*, {', '.join(picks)} FROM {left.table} l ASOF LEFT JOIN ({src}) r ON {on} "
-            f"ORDER BY {', '.join(order)}"
-        )
+        alias = "l"
+        sql = f"SELECT l.*, {', '.join(picks)} FROM {left.table} l ASOF LEFT JOIN ({src}) r ON {on}"
+        if by_clock:
+            # __newest: the latest right time at or before the clock the match
+            # was made at (the left time; forward: when the matched row became
+            # known) by the time column alone. Later than the match, it is a
+            # row this result has only as known after that clock.
+            at = lts if args.direction == "backward" else f"CASE WHEN {within} THEN r.__rk END"
+            times = f"SELECT {f'{qi(br)}, ' if br else ''}__rt FROM ({known})"
+            sql = (
+                f"SELECT j.*, {out_time('e.__rt')} AS __newest FROM (SELECT l.*, {', '.join(picks)}, {at} AS __at "
+                f"FROM {left.table} l ASOF LEFT JOIN ({src}) r ON {on}) j ASOF LEFT JOIN ({times}) e ON "
+                + (f"j.{qi(bl)} = e.{qi(br)} AND " if bl else "")
+                + "j.__at >= e.__rt"
+            )
+            alias = "j"
+        order = ([f"{alias}.{qi(bl)}"] if bl else []) + [f"{alias}.{qi(left.time)}"]
+        table = session.query(f"{sql} ORDER BY {', '.join(order)}")
         unknown = (
             scalar(
                 session,
@@ -205,6 +238,38 @@ async def handler(ctx: ToolContext, args: AlignArgs) -> ToolOutput:
             if by_clock
             else 0
         )
+        older: list[tuple[dt.timedelta, Any, Any, Any]] = []
+        revised = total = 0
+        if by_clock:
+            older = [
+                (n - m, t, m, n)
+                for t, m, n in zip(
+                    table.column(left.time).to_pylist(),
+                    table.column(out_names[-1]).to_pylist(),
+                    table.column("__newest").to_pylist(),
+                    strict=True,
+                )
+                if m is not None and n is not None and n > m
+            ]
+            table = table.drop_columns(["__at", "__newest"])
+        if older:
+            # A result with one version of each time (the latest) has a
+            # revised row only as its revision: a row that became known after
+            # a later time of its series did shows one.
+            key = f"{qi(br)}, __rt" if br else "__rt"
+            one_version = (
+                scalar(session, f"SELECT max(n) FROM (SELECT count(*) AS n FROM ({known}) GROUP BY {key})")
+                == 1
+            )
+            series = f"PARTITION BY {qi(br)} " if br else ""
+            if one_version:
+                (counts,) = rows(
+                    session,
+                    f"SELECT count(*) FILTER (WHERE __rk > __next) AS revised, count(*) AS total FROM (SELECT __rk, "
+                    f"min(__rk) OVER ({series}ORDER BY __rt DESC ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING) "
+                    f"AS __next FROM ({known}))",
+                )
+                revised, total = counts["revised"], counts["total"]
     late = None
     if "__late" in table.column_names:
         late = table.column("__late").to_pylist().count(True)
@@ -233,6 +298,24 @@ async def handler(ctx: ToolContext, args: AlignArgs) -> ToolOutput:
             notes.append(
                 f"{plural(unknown, 'right row')} with no {avail} {'was' if unknown == 1 else 'were'} left out: "
                 f"nothing says when {'it' if unknown == 1 else 'they'} became known."
+            )
+        if older:
+            older.sort(key=lambda o: o[0])
+            gap, t, m, n = older[-1]
+            clock = "their time" if args.direction == "backward" else "when the matched row became known"
+            notes.append(
+                f"{len(older)} of {table.num_rows - unmatched} matched left rows got an older right row than the "
+                f"latest {right.time} at or before {clock}, which {right.rid} has only as known after it: older by "
+                f"a median of {_span(older[(len(older) - 1) // 2][0])} and at most {_span(gap)} (left {_at(t)}: "
+                f"{right.time} {_at(m)} matched, {_at(n)} the latest)."
+            )
+        if revised:
+            notes.append(
+                f"{right.rid} holds one version of each {right.time}{f' per {br}' if br else ''}, and at least "
+                f"{revised:,} of its {total:,} rows are revisions (known only after a later {right.time} was): a "
+                "revised row's earlier releases are not there, so where a left row got an older right row, a newer one may have been known at its time in "
+                "a version this result does not hold, the likelier the larger the gap. A result with every version "
+                "of each row matches exactly."
             )
     elif late is not None:
         notes.append(
