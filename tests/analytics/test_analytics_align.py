@@ -463,11 +463,40 @@ def test_match_on_time_aligns_on_the_time_column_with_a_look_ahead_note(store, c
     assert not any(n.startswith("Point in time") for n in out.notes)
 
 
-def test_without_a_role_the_time_column_is_matched_with_no_clock_note(store, ctx):
+def test_a_knowledge_time_without_the_role_is_matched_on_but_not_called_point_in_time(store, ctx):
+    """Review of N2, round 4: a knowledge_time without the role (a query
+    answer's that cannot show when its rows became known) was left aside, and
+    the time-column match gave four of five rows a value published after them.
+    It is matched on all the same, as a lower bound (the safe default), with a
+    note that the match is not shown point in time; match_on=time counts the
+    look-ahead it shows, at least. A right result with no clock at all is
+    matched on its time column without a word."""
     left, right = daily_left(store), known_series(store, role=False)
     out = run(SPEC, ctx, left_result_id=left, right_result_id=right, right_columns=["value"])
-    assert [r["value"] for r in out.table.to_pylist()] == [2.0, 3.0, 3.0, 3.0, 3.0]
-    assert not any("Point in time" in n or "match_on" in n for n in out.notes)
+    assert [r["value"] for r in out.table.to_pylist()] == [None, 1.0, 2.0, 2.0, 3.0]
+    assert not any(n.startswith("Point in time") for n in out.notes)
+    assert (
+        f"Not shown point in time: knowledge_time of {right} is named as when each row became known but has no "
+        "role available (datastore_query did not mark it), so nothing shows a row was known by then. Each row was matched all the same from the later of "
+        "its time column event_time and knowledge_time, the safe default, which keeps out the values "
+        "knowledge_time shows were published after the left time, but a value computed from rows known later can "
+        "still hold data published after it. match_on=time matches on event_time alone instead."
+    ) in out.notes
+    assert "1 of 5 left rows found no right row (usable at or before their time)." in out.notes
+    ahead = run(
+        SPEC, ctx, left_result_id=left, right_result_id=right, right_columns=["value"], match_on="time"
+    )
+    assert [r["value"] for r in ahead.table.to_pylist()] == [2.0, 3.0, 3.0, 3.0, 3.0]
+    assert any(
+        n.startswith(
+            f"match_on=time: matched on the time column event_time of {right} alone: at least 4 of 5 "
+            "matched left rows got a right row with knowledge_time after their time (look-ahead)."
+        )
+        and "so this counts by knowledge_time alone" in n
+        for n in ahead.notes
+    )
+    plain = run(SPEC, ctx, left_result_id=left, right_result_id=daily_left(store), right_columns=["x"])
+    assert not any("point in time" in n.lower() or "match_on" in n for n in plain.notes)
 
 
 def test_point_in_time_forward_takes_the_first_update_known_at_or_after(store, ctx):

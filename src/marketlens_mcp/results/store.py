@@ -320,12 +320,22 @@ class FileResultStore:
         column_roles: dict[str, str] | None = None,
     ) -> ResultInfo:
         """``column_sources`` and ``column_roles``: the source_model and role of
-        carried columns (a query answer's), as ``column_units`` gives their units."""
+        carried columns (a query answer's), as ``column_units`` gives their units.
+        A result computed from others (``parents``) has a column's role only from
+        ``column_roles``, never from its model's x-role or a field's metadata: an
+        analytics output can aggregate or relabel rows (a week's mean dated at
+        the week's start, beside its last row's knowledge time)."""
         absent = dict(absent or {})
         cls = self.models.get(model)
         table, columns = self._columns(
             table, cls, column_units or {}, column_sources or {}, column_roles or {}
         )
+        if parents:
+            shown = column_roles or {}
+            columns = [
+                c.model_copy(update={"role": None}) if c.role and shown.get(c.name) != c.role else c
+                for c in columns
+            ]
         if cls is not None:
             time_column = time_column or cls.time_column
             group_column = group_column or cls.group_column

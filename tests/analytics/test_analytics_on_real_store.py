@@ -503,12 +503,15 @@ def test_a_query_joining_bars_to_a_dataset_is_matched_no_later_than_each_bar(rea
 
 
 def test_a_value_computed_from_rows_known_later_is_not_matched_as_point_in_time(real):
-    """Review of N2, round 3: a stored query passing knowledge_time through
-    kept its role beside a full-sample z-score, so a bar of January 7 got
-    -49.5, which averages in the 100.0s published from January 10, under a
-    note that none was published after it. The answer keeps no role, so
-    analytics_align matches it on its time column and counts the left rows
-    its unmarked knowledge_time shows getting a row known after them."""
+    """Review of N2, rounds 3 and 4: a stored query passing knowledge_time
+    through kept its role beside a full-sample z-score, so a bar of January 7
+    got -49.5, which averages in the 100.0s published from January 10, under a
+    note that none was published after it; the z-score joined back to the
+    dataset's knowledge_time got the role again, and the same note. Neither
+    keeps the role, so analytics_align says the match is not shown point in
+    time, and matches from the later of each row's time and its knowledge_time
+    all the same (match_on=time counts the look-ahead that shows, at least); an
+    answer that dropped the clock is matched on its time column, and says so."""
     store, ctx = real
     (query,) = [s for s in RESULTS_SPECS if s.name == "results_query"]
     ts = pa.timestamp("us", tz="UTC")
@@ -534,14 +537,93 @@ def test_a_value_computed_from_rows_known_later_is_not_matched_as_point_in_time(
         sql=f"SELECT event_time, knowledge_time, value - avg(value) OVER () AS value FROM {series}",
         store=True,
     ).result_id
-    assert {c.name: c.role for c in store.info(z).columns}["knowledge_time"] is None
+    back = call(
+        query,
+        ctx,
+        sql=f"SELECT z.event_time, s.knowledge_time, z.value FROM {series} s JOIN {z} z ON z.event_time = s.event_time",
+        store=True,
+    ).result_id
     left = put_bars(store, bars("SPY", [100.0] * 2, times=[utc(2026, 1, 7, 6), utc(2026, 1, 7, 20)]))
-    out = call(ALIGN, ctx, left_result_id=left, right_result_id=z, right_columns=["value"])
-    assert [(r["matched_t"][:10], r["value"]) for r in out.rows] == [("2026-01-07", -49.5)] * 2
-    assert not any(n.startswith("Point in time") for n in out.notes)
+    for rid in (z, back):
+        assert {c.name: c.role for c in store.info(rid).columns}["knowledge_time"] is None
+        out = call(ALIGN, ctx, left_result_id=left, right_result_id=rid, right_columns=["value"])
+        assert [(r["matched_t"][:10], r["value"]) for r in out.rows] == [
+            ("2026-01-06", -49.5),
+            ("2026-01-07", -49.5),
+        ]
+        assert not any(n.startswith("Point in time") for n in out.notes)
+        assert any(
+            n.startswith(
+                f"Not shown point in time: knowledge_time of {rid} is named as when each row became known"
+            )
+            for n in out.notes
+        )
+        ahead = call(
+            ALIGN, ctx, left_result_id=left, right_result_id=rid, right_columns=["value"], match_on="time"
+        )
+        assert [r["matched_t"][:10] for r in ahead.rows] == ["2026-01-07"] * 2
+        assert any(
+            "at least 1 of 2 matched left rows got a right row with knowledge_time after their time (look-ahead)"
+            in n
+            for n in ahead.notes
+        )
+    dropped = call(query, ctx, sql=f"SELECT event_time, value FROM {series}", store=True).result_id
+    out = call(ALIGN, ctx, left_result_id=left, right_result_id=dropped, right_columns=["value"])
+    assert [r["value"] for r in out.rows] == [1.0, 1.0]
     assert (
-        f"knowledge_time of {z} is named as when each row became known but has no role available (a query answer "
-        "keeps none where its query computes the clock, or rows from other rows, and says why), so rows were matched "
-        "on the time column event_time alone: 1 of 2 matched left rows got a right row with knowledge_time after "
-        "their time (look-ahead)."
+        f"Not shown point in time: {dropped} has no column of when each row became known (role available), though "
+        f"it was computed from {series}, whose knowledge_time has that role, so rows were matched on the time "
+        "column event_time alone, which can pair a left row with a value published after it. Keep knowledge_time "
+        "in a query answer (passed through, or its max()) to match point in time."
     ) in out.notes
+
+
+def test_an_analytics_output_carries_no_role_from_its_model(real):
+    """Review of N2, round 4: analytics_resample keeps its input's model, and
+    a built-in data model states knowledge_time's role, so a week's mean of
+    earnings figures, dated at the week's start beside its last row's
+    knowledge time, kept the role, though the mean took in a figure revised
+    on January 16: analytics_align called a bar of January 12 getting it point
+    in time. A result computed from others has the role only where the tool
+    shows it (a query answer's), so the match is not called point in time."""
+    from marketlens_schema.data import EarningsFigure
+
+    store, ctx = real
+    figures = [
+        EarningsFigure(
+            ticker="AAPL",
+            cik="320193",
+            accession_number=f"0000320193-26-0000{d:02d}",
+            accepted_at=utc(2026, 1, d, 21),
+            exhibit="EX-99.1",
+            exhibit_url="https://example.com/ex99.htm",
+            metric="eps_diluted_gaap",
+            value=float(d),
+            unit="USD/share",
+            basis="diluted",
+            source_text="EPS",
+            parse_rule="table",
+            knowledge_time=utc(2026, 1, 16, 21) if d == 6 else utc(2026, 1, d, 21),
+        )
+        for d in range(5, 12)
+    ]
+    rid = store.put(
+        table_of(EarningsFigure, figures),
+        tool="earnings_figures",
+        model=EarningsFigure.schema_name,
+        provenance=Provenance(provider="sec", route="GET /figures", fetched_at=M0),
+    ).result_id
+    assert {c.name: c.role for c in store.info(rid).columns}["knowledge_time"] == "available"
+    week = call(RESAMPLE, ctx, result_id=rid, timeframe="1w", agg="mean", store=True).result_id
+    assert {c.name: c.role for c in store.info(week).columns}["knowledge_time"] is None
+    left = put_bars(store, bars("SPY", [100.0], times=[utc(2026, 1, 12, 20)]))
+    out = call(ALIGN, ctx, left_result_id=left, right_result_id=week, right_columns=["value"])
+    assert [r["value"] for r in out.rows] == [8.0]
+    assert not any(n.startswith("Point in time") for n in out.notes)
+    assert any(
+        n.startswith(
+            f"Not shown point in time: knowledge_time of {week} is named as when each row became known"
+        )
+        and "(analytics_resample gives its outputs none)" in n
+        for n in out.notes
+    )

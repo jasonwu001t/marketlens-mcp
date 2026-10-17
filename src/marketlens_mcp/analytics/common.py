@@ -34,6 +34,7 @@ from pydantic import BaseModel, Field
 
 from marketlens_mcp.plugin_api import ToolContext, ToolError, ToolOutput
 from marketlens_mcp.results_api import (
+    CLOCK_NAMES,
     RESULT_ID_RE,
     ColumnInfo,
     OutputRisk,
@@ -346,8 +347,10 @@ class Input:
     def unmarked_clock(self) -> str | None:
         """Without a column with role available, a timestamp column named as
         a point-in-time clock (``knowledge_time``, ``ingested_at``) other than
-        the time column, which has lost the role (a query answer whose query
-        computed it, or its rows from others); None otherwise."""
+        the time column, which has lost the role (a query answer that cannot
+        show when its rows became known: its query computed the clock, or rows
+        from others, or read a computed result without the role); None
+        otherwise."""
         if self.available is not None:
             return None
         return next(
@@ -400,9 +403,31 @@ def _parent_value(ctx: ToolContext, info: ResultInfo) -> str | None:
     return name if mine is not None and theirs is not None and mine.type == theirs.type else None
 
 
+def clocked_ancestor(ctx: ToolContext, info: ResultInfo) -> tuple[str, str] | None:
+    """A result ``info`` was computed from (its parents, their parents, ...)
+    that has a column with role available (when each row became known), as
+    (result id, column), the nearest first; None when none still stored has
+    one."""
+    queue, seen = list(info.parents), set()
+    while queue:
+        rid = queue.pop(0)
+        if rid in seen:
+            continue
+        seen.add(rid)
+        try:
+            parent = ctx.results.info(rid)
+        except ResultNotFound:
+            continue
+        clock = next((c.name for c in parent.columns if c.role == "available"), None)
+        if clock is not None:
+            return rid, clock
+        queue.extend(parent.parents)
+    return None
+
+
 #: Point-in-time clock columns next to ``event_time`` (a datastore's values):
 #: when a value was known or stored, not the time it describes.
-_CLOCKS = ("knowledge_time", "ingested_at")
+_CLOCKS = CLOCK_NAMES
 
 
 def resolve(ctx: ToolContext, tool: str, result_id: str, *, series_column: str | None = None) -> Input:

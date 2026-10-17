@@ -714,8 +714,8 @@ def test_a_clock_the_query_computes_keeps_no_role(setup):
         "The answer's knowledge_time keeps no role available (when each row became known): a query keeps it only "
         "on such a column passed through, or on max() or greatest() of such columns from every result read that "
         "has one, never earlier than any row's (min() of a week's, say, is earlier than some of the week's "
-        "values). analytics_align matches the answer on its time column, which can pair a left row with a value "
-        "published after it."
+        "values). analytics_align says a match on the answer is not shown point in time, and matches each row from "
+        "the later of its time column and knowledge_time, a lower bound on when it became known."
     )
     for sql in (
         f"SELECT {week}, min(knowledge_time) AS knowledge_time FROM {k} GROUP BY ALL",
@@ -743,13 +743,17 @@ def test_a_query_computing_rows_from_other_rows_keeps_no_role(setup):
     maximum, a self-join on the next day, bars joined forward from each row),
     and analytics_align said the answer was point in time. Such a query keeps
     no role, and its note says why; rows built from their own rows (a filter,
-    a union, an undated list joined) keep it, and a bars result joined keeps
-    it with the bars' time as the answer's time column, or in the clock."""
+    a union, a fetched undated list joined) keep it, and a bars result joined
+    keeps it with the bars' time as the answer's time column, or in the clock."""
     ctx, store, _, small, *_ = setup
     known, other = _known_result(store), _known_result(store)
     k, o, b = known.result_id, other.result_id, small.result_id
-    tickers = call(ctx, "results_query", sql=f"SELECT DISTINCT ticker FROM {b}", store=True).result_id
-    assert store.info(tickers).time_column is None
+    tickers = store.put(
+        pa.table({"ticker": ["AAPL", "MSFT"]}),
+        tool="reference_assets",
+        model="marketlens.QueryRow",
+        provenance=provenance(),
+    ).result_id
 
     def stored(sql):
         out = call(ctx, "results_query", sql=sql, store=True)
@@ -759,8 +763,8 @@ def test_a_query_computing_rows_from_other_rows_keeps_no_role(setup):
     def lost(why):
         return (
             f"The answer's knowledge_time keeps no role available (when each row became known): {why}. "
-            "analytics_align matches the answer on its time column, which can pair a left row with a value "
-            "published after it."
+            "analytics_align says a match on the answer is not shown point in time, and matches each row from the "
+            "later of its time column and knowledge_time, a lower bound on when it became known."
         )
 
     window = lost(
@@ -776,6 +780,10 @@ def test_a_query_computing_rows_from_other_rows_keeps_no_role(setup):
 
     self_join = lost(
         f"its query reads {k} twice for one row (a self-join), so a row can hold another row's values, known later"
+    )
+    lateral = lost(
+        f"its query reads {k} in a LATERAL subquery (one run for each row it joins), so a row can depend on other "
+        "rows, some known later"
     )
     forward = lost(
         f"it joins {b}, whose rows are dated by t, without passing t through as its time column or taking "
@@ -795,6 +803,8 @@ def test_a_query_computing_rows_from_other_rows_keeps_no_role(setup):
         f"SELECT {cols}, value - (SELECT avg(value) FROM {k}) AS value FROM {k}": subquery(k),
         f"SELECT * FROM {k} WHERE event_time IN (SELECT event_time - INTERVAL 1 DAY FROM {o})": subquery(o),
         f"SELECT a.* FROM {k} a SEMI JOIN {k} c {next_day}": subquery(k),
+        f"SELECT a.event_time, a.knowledge_time, l.value FROM {k} a, LATERAL (SELECT avg(value) AS value FROM {k} c "
+        "WHERE c.event_time >= a.event_time) l": lateral,
         f"SELECT a.event_time, a.knowledge_time, c.value FROM {k} a JOIN {k} c {next_day}": self_join,
         f"WITH w AS (SELECT * FROM {k}) SELECT a.event_time, a.knowledge_time, c.value FROM w a JOIN w c "
         f"{next_day}": self_join,
@@ -813,6 +823,104 @@ def test_a_query_computing_rows_from_other_rows_keeps_no_role(setup):
     }.items():
         role, kept_time, notes = stored(sql)
         assert (role, kept_time) == ("available", time) and not any("keeps no role" in n for n in notes), sql
+
+
+def test_an_answer_reading_a_result_that_does_not_show_when_its_rows_became_known_keeps_no_role(setup):
+    """Review of N2, round 4: an answer that lost the role (a full-sample
+    z-score) was read as known at its time column when joined back to the
+    dataset, and an undated one (the full-sample mean) as known always, so the
+    join kept the role and analytics_align again called a look-ahead value
+    point in time; so did a daily high of bars stored without a recorded time
+    column, joined forward. A result read keeps the answer's role only when it
+    shows when its rows became known: by a column with the role, as fetched
+    market data dated by its time column, or as fetched rows with no date."""
+    ctx, store, _, small, *_ = setup
+    k, b = _known_result(store).result_id, small.result_id
+    ts = pa.timestamp("us", tz="UTC")
+    t0 = dt.datetime(2026, 1, 5, tzinfo=dt.UTC)
+
+    def stored(sql):
+        out = call(ctx, "results_query", sql=sql, store=True)
+        return {c.name: c.role for c in store.info(out.result_id).columns}.get("knowledge_time"), out.notes
+
+    def lost(why):
+        return (
+            f"The answer's knowledge_time keeps no role available (when each row became known): {why}. "
+            "analytics_align says a match on the answer is not shown point in time, and matches each row from the "
+            "later of its time column and knowledge_time, a lower bound on when it became known."
+        )
+
+    def computed(rid):
+        return lost(
+            f"it reads {rid}, a result computed by results_query with no column of role available (when each row "
+            "became known), so its rows can hold values known later (a full-sample average, say); read the results "
+            "it was computed from in this query instead"
+        )
+
+    z = call(
+        ctx,
+        "results_query",
+        sql=f"SELECT event_time, knowledge_time, value - avg(value) OVER () AS z FROM {k}",
+        store=True,
+    ).result_id
+    assert store.info(z).time_column == "event_time"
+    assert {c.name: c.role for c in store.info(z).columns}["knowledge_time"] is None
+    mu = call(ctx, "results_query", sql=f"SELECT avg(value) AS mu FROM {k}", store=True).result_id
+    daily = call(
+        ctx,
+        "results_query",
+        sql=f"SELECT time_bucket(INTERVAL 1 DAY, t) AS day, max(close) AS hi FROM {b} GROUP BY 1",
+        store=True,
+    ).result_id
+    assert store.info(daily).time_column is None
+    tickers = call(ctx, "results_query", sql=f"SELECT DISTINCT ticker FROM {b}", store=True).result_id
+    macro = store.put(
+        pa.table(
+            {
+                "series_id": ["CPI"] * 2,
+                "t": pa.array([t0, t0 + dt.timedelta(days=1)], ts),
+                "value": [1.0, 2.0],
+            }
+        ),
+        tool="research_macro_series",
+        model="marketlens.QueryRow",
+        provenance=provenance(),
+        time_column="t",
+    ).result_id
+    actions = store.put(
+        pa.table({"ticker": ["AAPL"], "ex_date": pa.array([dt.date(2026, 1, 9)], pa.date32())}),
+        tool="reference_corporate_actions",
+        model="marketlens.QueryRow",
+        provenance=provenance(),
+    ).result_id
+    for sql, note in {
+        f"SELECT z.event_time, k.knowledge_time, z.z AS value FROM {k} k JOIN {z} z ON z.event_time = k.event_time": (
+            computed(z)
+        ),
+        f"SELECT k.event_time, k.knowledge_time, k.value - m.mu AS value FROM {k} k, {mu} m": computed(mu),
+        f"SELECT m.*, x.hi FROM {k} m ASOF JOIN {daily} x ON x.day >= m.event_time": computed(daily),
+        f"SELECT m.*, x.hi FROM {k} m, (SELECT max(hi) AS hi FROM {daily}) x": computed(daily),
+        f"SELECT m.*, u.ticker FROM {k} m, {tickers} u": computed(tickers),
+        f"SELECT s.t, m.knowledge_time, s.value FROM {macro} s ASOF JOIN {k} m ON s.t >= m.event_time": lost(
+            f"it reads {macro}, whose rows (marketlens.QueryRow) have no column of role available (when each became "
+            "known), and its time column t is the time a row describes, which can be before it was published (only "
+            "fetched market data, such as bars, is taken as known at its time)"
+        ),
+        f"SELECT m.*, a.ex_date FROM {k} m, {actions} a": lost(
+            f"it reads {actions}, whose rows are dated (ex_date) with neither a time column nor a column of role "
+            "available (when each became known), so a row can hold one dated or published after it"
+        ),
+    }.items():
+        role, notes = stored(sql)
+        assert role is None and notes[-1] == note, sql
+    # An answer that kept the role shows when its rows became known: joined
+    # to the dataset with greatest() of both clocks, the role stays.
+    kept = call(ctx, "results_query", sql=f"SELECT * FROM {k} WHERE value > 1", store=True).result_id
+    role, notes = stored(
+        f"SELECT a.event_time, a.value, greatest(a.knowledge_time, p.knowledge_time) AS knowledge_time "
+        f"FROM {k} a JOIN {kept} p USING (event_time)"
+    )
+    assert role == "available" and not any("keeps no role" in n for n in notes)
 
 
 def test_a_query_whose_rows_sqlglot_cannot_trace_keeps_no_role(setup, monkeypatch):

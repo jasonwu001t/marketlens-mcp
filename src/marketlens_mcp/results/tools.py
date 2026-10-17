@@ -21,12 +21,12 @@ from sqlglot.lineage import lineage
 from sqlglot.optimizer.qualify import qualify
 from sqlglot.optimizer.scope import Scope, traverse_scope
 
-from marketlens_schema import QUERY_ROW_SCHEMA_NAME, Delay, Provenance
+from marketlens_schema import BUILTIN_MODELS, QUERY_ROW_SCHEMA_NAME, Delay, Provenance
 
 from ..manifest import DYNAMIC_MODELS
 from ..offload import estimate_tokens
 from ..plugin_api import ToolContext, ToolError, ToolOutput, ToolSpec
-from ..results_api import RESULT_ID_RE, QueryRefused
+from ..results_api import CLOCK_NAMES, RESULT_ID_RE, QueryRefused, ResultInfo
 from .arrow import duckdb_type, json_safe, sql_ident, table_rows
 from .store import FileResultStore, QueryOutcome
 
@@ -118,10 +118,10 @@ def _from_others(sql: str, schema: dict, dated: set[str]) -> str | None:
     """Why the answer's rows can hold values of rows other than the ones each
     keeps the clock of, some known later, when the query reads a ``dated``
     result (one whose rows have a clock or a time) so: a window function
-    (avg() OVER (), lead(), a QUALIFY filter), a subquery in an expression or
-    a SEMI or ANTI join (a filter on its maximum, on a later row), or such a
-    result read twice for one row (a self-join); or that sqlglot cannot trace
-    the query's rows. None otherwise."""
+    (avg() OVER (), lead(), a QUALIFY filter), a subquery in an expression, a
+    LATERAL subquery or a SEMI or ANTI join (a filter on its maximum, on a
+    later row), or such a result read twice for one row (a self-join); or that
+    sqlglot cannot trace the query's rows. None otherwise."""
     try:
         return _other_rows(
             traverse_scope(
@@ -145,6 +145,15 @@ def _other_rows(scopes: list[Scope], dated: set[str]) -> str | None:
             if j.kind in ("SEMI", "ANTI")
             for r in reads.get(j.alias_or_name, ())
         ]
+        if (
+            scope.is_subquery
+            and here
+            and isinstance(getattr(scope.expression.parent, "parent", None), exp.Lateral)
+        ):
+            return (
+                f"its query reads {sorted(here)[0]} in a LATERAL subquery (one run for each row it joins), so a row "
+                "can depend on other rows, some known later"
+            )
         if (scope.is_subquery and here) or filters:
             return (
                 f"its query reads {sorted(here | set(filters))[0]} in a subquery inside an expression (a scalar "
@@ -165,12 +174,46 @@ def _other_rows(scopes: list[Scope], dated: set[str]) -> str | None:
     return None
 
 
+def _unproven(parent: ResultInfo) -> str | None:
+    """Why nothing shows when each row of a result read without a column of
+    role available became known, so an answer reading it can keep no role: it
+    was computed from other results (a query answer or analytics output, whose
+    rows can hold values of rows known later, a full-sample average, say), or
+    its rows are dated otherwise than by a time column of when each happened
+    (a plugin's dated rows: the time they describe, published later; rows dated
+    with no time column). None for marketlens's own market and account data,
+    fetched (bars, quotes, trades, news, orders), each row known at its time
+    column, and for fetched rows with no date at all (a list of assets)."""
+    if parent.parents or parent.tool == "results_query":
+        return (
+            f"it reads {parent.result_id}, a result computed by {parent.tool} with no column of role available (when "
+            "each row became known), so its rows can hold values known later (a full-sample average, say); read the "
+            "results it was computed from in this query instead"
+        )
+    if parent.time_column:
+        if parent.model in BUILTIN_MODELS:
+            return None
+        return (
+            f"it reads {parent.result_id}, whose rows ({parent.model}) have no column of role available (when each "
+            f"became known), and its time column {parent.time_column} is the time a row describes, which can be "
+            "before it was published (only fetched market data, such as bars, is taken as known at its time)"
+        )
+    dates = [c.name for c in parent.columns if c.type.startswith(("DATE", "TIMESTAMP"))]
+    if dates:
+        return (
+            f"it reads {parent.result_id}, whose rows are dated ({', '.join(dates)}) with neither a time column nor "
+            "a column of role available (when each became known), so a row can hold one dated or published after it"
+        )
+    return None
+
+
 def _clocks(store: FileResultStore, out: QueryOutcome) -> tuple[dict[str, str], str | None, str | None]:
     """The answer's columns that keep role available (when each row became
     known), each with its role; the time column the answer needs for them
     (over several results, see below); and why none keeps it when the query
-    computes rows from others (``_from_others``) or joins a result dated by
-    its time column without that time in the clock.
+    reads a result that does not show when its rows became known
+    (``_unproven``), computes rows from others (``_from_others``) or joins a
+    result dated by its time column without that time in the clock.
 
     A column keeps the role with the name and type of such a column of a
     result read, built from such columns (``_leaves``): fed by every result
@@ -184,6 +227,13 @@ def _clocks(store: FileResultStore, out: QueryOutcome) -> tuple[dict[str, str], 
     named = {c.name for p in parents for c in p.columns if c.role and types.get(c.name) == c.type}
     if not named:
         return {}, None, None
+    unproven = [
+        why
+        for p in sorted(parents, key=lambda p: p.result_id)
+        if not any(c.role == "available" for c in p.columns) and (why := _unproven(p))
+    ]
+    if unproven:
+        return {}, None, unproven[0]
     sql = out.executed_sql
     schema = {p.result_id: {c.name: c.type for c in p.columns} for p in parents}
     clocks = {(p.result_id, c.name.lower()) for p in parents for c in p.columns if c.role == "available"}
@@ -284,10 +334,17 @@ def _lost_clocks(
             "every result read that has one, never earlier than any row's (min() of a week's, say, is earlier than "
             "some of the week's values)"
         )
+        clock = next((c for c in computed if c in CLOCK_NAMES), None)
+        align = (
+            f"analytics_align says a match on the answer is not shown point in time, and matches each row from the "
+            f"later of its time column and {clock}, a lower bound on when it became known."
+            if clock
+            else "analytics_align matches the answer on its time column, which can pair a left row with a value "
+            "published after it."
+        )
         notes.append(
             f"The answer's {', '.join(computed)} keeps no role available (when each row became known): {why}. "
-            "analytics_align matches the answer on its time column, which can pair a left row with a value "
-            "published after it."
+            + align
         )
     return notes
 
@@ -678,16 +735,17 @@ SPECS: tuple[ToolSpec, ...] = (
         "results_query",
         "results",
         "Query stored results",
-        "Run ONE read-only SQL SELECT (DuckDB dialect; WITH, joins, window functions, ASOF JOIN and "
+        "Run ONE read-only SQL SELECT (DuckDB SQL; WITH, joins, window functions, ASOF JOIN and "
         "time_bucket allowed; PIVOT and UNPIVOT are not: use max(x) FILTER (WHERE ...) per column) over at most 8 "
-        "results stored in this session, with each result_id as a table name. Returns at most max_rows rows "
+        "results of this session, each result_id a table name. Returns at most max_rows rows "
         "(default 50, at most 200; a larger max_rows or LIMIT is lowered). An answer over results.query_max_bytes "
         "(24,000 bytes of JSON by default) or about 6,000 tokens, or store=true, is kept whole as a new result "
         "(max_rows bounds only an inline answer; fetch.max_rows, 50,000 rows by default, a stored one; an answer "
         "cut, or over a cut result, says truncated) and you get its result_id; a query of one result keeps its "
-        "unchanged time and series columns, and a clock column's role passed through (or max; no window, "
-        "subquery, self-join), so it chains into analytics. Exact decimals come back as strings (CAST to "
-        "DOUBLE); whole-number sums as numbers. Files, settings, other sessions and every write are refused.",
+        "unchanged time and series columns, and a clock's role passed through (or max; no window, subquery, "
+        "self-join, role-less computed input), so it chains into analytics. Exact decimals come back as "
+        "strings (CAST to DOUBLE); whole-number sums as numbers. Files, settings, other sessions and every write "
+        "are refused.",
         "Read-only SQL over this session's results (one SELECT, forced LIMIT)",
         QueryArgs,
         results_query,

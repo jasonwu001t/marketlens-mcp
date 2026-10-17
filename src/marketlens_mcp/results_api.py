@@ -32,6 +32,13 @@ JSONScalar = str | int | float | bool | None
 INLINE_KIND = "inline"
 STORED_KIND = "stored"
 
+#: Names of a timestamp column holding when each row became known, beside the
+#: time the row describes (a dataset's knowledge_time, a store's ingested_at).
+#: Without its role available (a query answer that cannot show it),
+#: analytics_align still matches on such a column by default, as a lower bound,
+#: and says the match is not shown point in time.
+CLOCK_NAMES = ("knowledge_time", "ingested_at")
+
 
 class ColumnInfo(BaseModel):
     """One column of a result, typed from the canonical model (or from DuckDB
@@ -71,8 +78,10 @@ class ColumnInfo(BaseModel):
         "or builds as max() or greatest() of such columns from every result it read that has one, with each row "
         "computed from the rows it keeps the clocks of (no window function, subquery in an expression or "
         "self-join; a joined result dated by its time column, such as bars, with that time passed through as the "
-        "answer's or in the clock). Left out when "
-        "None.",
+        "answer's or in the clock), and only when every result it read shows when its rows became known: by such "
+        "a column, as fetched market data dated by its time column, or as fetched rows with no date (never a "
+        "computed result without the role). Analytics outputs have none, whatever their model states. Left out "
+        "when None.",
     )
 
 
