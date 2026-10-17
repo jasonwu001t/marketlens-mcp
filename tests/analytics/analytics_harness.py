@@ -401,7 +401,6 @@ class FakeStore:
         )
         self.tables[rid] = table
         self.infos[rid] = info
-        _STORED[id(info)] = (info, table)
         self.puts.append({"result_id": rid, "tool": tool, "model": model, "parents": list(parents)})
         return info
 
@@ -484,6 +483,7 @@ class FakeStore:
             absent=out.absent,
             risk=out.risk or "api_structured",
             parents=out.provenance.derived_from,
+            rows_of=getattr(out, "rows_of", None),
         ).result_id
 
 
@@ -525,27 +525,12 @@ def run(spec: ToolSpec, ctx: FakeContext, **arguments: Any) -> ToolOutput:
     return out
 
 
-#: The table of each result a FakeStore put, by the id of its info: a handler
-#: that stores its output itself (one recording rows_of) returns only the info.
-_STORED: dict[int, tuple[ResultInfo, pa.Table]] = {}
-
-
-def output_table(out: ToolOutput) -> pa.Table:
-    """The output's table, also when the handler stored it itself."""
-    if out.table is None and out.stored is not None:
-        info, table = _STORED[id(out.stored)]
-        assert info is out.stored
-        return table
-    assert out.table is not None, "expected a table output"
-    return out.table
-
-
 def output_rows(out: ToolOutput, model: type[CanonicalModel]) -> list[CanonicalModel]:
     """The output's rows as model instances; asserts the canonical Arrow schema
     and the absence rule on the way."""
-    table = output_table(out)
-    assert table.schema.equals(schema_of(model)), f"{table.schema}\n!=\n{schema_of(model)}"
-    rows = rows_of(table, model)
+    assert out.table is not None, "expected a table output"
+    assert out.table.schema.equals(schema_of(model)), f"{out.table.schema}\n!=\n{schema_of(model)}"
+    rows = rows_of(out.table, model)
     assert unexplained_absences(rows, out.absent) == []
     return rows
 
@@ -578,7 +563,6 @@ __all__ = [
     "bars",
     "dyn_rows",
     "output_rows",
-    "output_table",
     "rows_of",
     "run",
     "schema_of",

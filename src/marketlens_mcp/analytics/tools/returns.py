@@ -117,8 +117,6 @@ async def handler(ctx: ToolContext, args: ReturnsArgs) -> ToolOutput:
         absent=no_period(args.period),
         inputs=[inp.info],
         store=args.store,
-        ctx=ctx,
-        tool=TOOL,
         rows_of=known,
     )
 

@@ -9,7 +9,15 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from marketlens_mcp.plugin_api import ToolContext, ToolOutput, ToolSpec
-from marketlens_mcp.results_api import ResultInfo, known_late, known_model, known_span, unshown_known
+from marketlens_mcp.results_api import (
+    ResultInfo,
+    RowsOf,
+    known_model,
+    known_span,
+    period_rows,
+    source_rows,
+    unshown_known,
+)
 from marketlens_schema import ALIGNED_SCHEMA_NAME, CanonicalModel
 from marketlens_schema.base import AbsenceCode, AbsenceReason
 
@@ -104,11 +112,14 @@ class AlignArgs(BaseModel):
         "ends later), when its values became known (time: on t, the period's start), and a note says the match is "
         "not shown point in time when they hold prices adjusted for splits and dividends after their time "
         "(adjustment other than raw). A snapshot (market_snapshots, options_snapshots, options_chain) is matched "
-        "from its fetch, as its values are as of then. A result computed from bars or snapshots that shows neither "
-        "(its rows_of not shown: a query's time_bucket of bars, a join) is refused unless match_on=time. Else the "
-        "right's time column is used, and a note says the match is not shown point in time unless the right holds "
-        "fetched rows known at their time (quotes, trades; not a computed result, a plugin's rows dated by the "
-        "period they describe, or orders or news, whose fields change later).",
+        "from its fetch, as its values are as of then. A bucket of other rows (a dataset's resampled) is matched "
+        "from its end, with a note that its rows are not shown point in time. A result that shows neither when "
+        "its rows became known nor when their period ends (its rows_of not shown: a query's bucket dated at its "
+        "start or window over dated rows, a join of bars, returns leaving a knowledge_time out, rows aligned "
+        "forward or on time) is refused unless match_on=time. Else the right's time column is used, and a note "
+        "says the match is not shown point in time unless the right holds fetched rows known at their time "
+        "(quotes, trades; not a computed result, a plugin's rows dated by the period they describe, or orders or "
+        "news, whose fields change later).",
     )
     store: bool = store_field()
 
@@ -146,11 +157,12 @@ class _Rule:
     span: str | None  # the column naming each row's span, if any
 
 
-def _rule(right: Input, cls: type[CanonicalModel]) -> _Rule | None:
-    """The rule of ``known_time``: None for rows known at their time."""
+def _rule(right: Input, cls: type[CanonicalModel] | None) -> _Rule | None:
+    """The rule of ``known_time``: None for rows known at their time. ``cls``
+    None: a bucket of rows not known by a rule (``period_rows``)."""
     info, t = right.info, right.time
     src = info.rows_of
-    if cls.known_at_fetch:
+    if cls is not None and cls.known_at_fetch:
         at = _at(src.fetched_at if src is not None else info.provenance.fetched_at)
         return _Rule(
             noun="row",
@@ -170,10 +182,12 @@ def _rule(right: Input, cls: type[CanonicalModel]) -> _Rule | None:
     lag = src.lag_seconds if src is not None else 0
     if span is None and not lag:
         return None
-    column = cls.span_column if cls.span_column in {c.name for c in info.columns} else None
+    column = (
+        cls.span_column if cls is not None and cls.span_column in {c.name for c in info.columns} else None
+    )
     # Bars as fetched, or passed through (their timeframe kept or left out).
     passed = info.tool == "results_query" or not info.parents
-    if cls.span_column is not None and not lag and (column is not None or passed):
+    if cls is not None and cls.span_column is not None and not lag and (column is not None or passed):
         return _Rule(
             noun="bar",
             end=f"its end, {t} plus its {cls.span_column}",
@@ -194,7 +208,9 @@ def _rule(right: Input, cls: type[CanonicalModel]) -> _Rule | None:
         noun="row",
         end=f"the end of the period it covers, {covers}",
         end_paren=f"the end of the period it covers ({covers})",
-        why=f"when the {src.model if src else cls.schema_name} rows it was computed from had all become known",
+        why=f"when the {src.model if src else cls.schema_name} rows it was computed from had all become known"
+        if cls is not None
+        else "the earliest it can hold every row it covers",
         known="its end",
         usable="whose period ended",
         usable_fwd="whose period ends",
@@ -278,28 +294,33 @@ async def handler(ctx: ToolContext, args: AlignArgs) -> ToolOutput:
     # (quotes, trades), at the end of the period it covers (a bar, t plus its
     # timeframe; a bucket of them), at its fetch (a snapshot).
     known = known_model(right.info) if proven is None else None
-    rule = _rule(right, known) if known is not None else None
-    hidden = right.info.rows_of if proven is None and known is None else None
+    # A bucket of other rows (a dataset's) records its span: matched from its
+    # end, the earliest it can hold every row it covers, though not shown point in time.
+    period = period_rows(right.info) if proven is None else None
+    ruled = known is not None or period is not None
+    rule = _rule(right, known) if ruled else None
+    hidden = right.info.rows_of if proven is None and not ruled else None
     if hidden is not None and args.match_on == "available":
-        # Computed from market data in a way that shows neither: matched on its
-        # time column (a bucket's start) it would take values known only later.
+        # Computed from dated rows in a way that shows neither: matched on its
+        # time column (a bucket's start) it could take values known only later.
         raise refuse(
             "not_point_in_time",
             f"{TOOL}: {right.rid} was computed by {right.info.tool} from {hidden.model} rows (fetched at "
             f"{_at(hidden.fetched_at)}) in a way that shows neither when each of its rows became known nor when the "
-            f"period it covers ends (a bucket dated at its start, lead(), a join), so matching on its time column "
-            f"{right.time} could pair a left row with values known only after it. Align onto the fetched rows, or an "
-            "analytics output of them (analytics_resample, analytics_returns and the others record when each row "
-            f"ends), or pass match_on=time to match on {right.time} anyway, look-ahead included.",
+            "period it covers ends (a bucket dated at its start, lead() or another window, a join of bars, rows "
+            f"aligned forward, a knowledge_time left out), so matching on its time column {right.time} could pair a "
+            "left row with values known only after it. Align onto the rows it was computed from (analytics_resample "
+            f"records when each of its buckets ends), or pass match_on=time to match on {right.time} anyway, "
+            "look-ahead included.",
         )
     # Else a column named as when each row became known that has lost its role
     # (a query answer that cannot show it) is matched on the same way, the safe
     # default, as a lower bound: the match is not called point in time.
-    avail = proven if proven is not None else (right.unmarked_clock if known is None else None)
+    avail = proven if proven is not None else (right.unmarked_clock if not ruled else None)
     unshown = unshown_known(right.info) if avail is None else None
     if avail is not None:
         known_at = right.ts(column=avail)
-    elif known is not None:
+    elif ruled:
         known_at = known_time(right, known)
     else:
         known_at = None
@@ -327,7 +348,7 @@ async def handler(ctx: ToolContext, args: AlignArgs) -> ToolOutput:
         clocks = f"{right.ts()} AS __rt, {clock} AS __rk"
         if seen is not None and not by_clock:
             clocks += f", {seen} AS __ra"
-        src = known = f"SELECT *, {clocks} FROM {right.table} WHERE {where}"
+        src = base = f"SELECT *, {clocks} FROM {right.table} WHERE {where}"
         if by_clock:
             # Keep only the rows that were the latest usable of their series when
             # they became usable (the latest time usable then, a revision of an
@@ -368,7 +389,7 @@ async def handler(ctx: ToolContext, args: AlignArgs) -> ToolOutput:
             # usable) by the time column alone. Later than the match, it is a
             # row this result has only as known after that clock.
             at = lts if args.direction == "backward" else f"CASE WHEN {within} THEN r.__rk END"
-            times = f"SELECT {f'{qi(br)}, ' if br else ''}__rt FROM ({known})"
+            times = f"SELECT {f'{qi(br)}, ' if br else ''}__rt FROM ({base})"
             sql = (
                 f"SELECT j.*, {out_time('e.__rt')} AS __newest FROM (SELECT l.*, {', '.join(picks)}, {at} AS __at "
                 f"FROM {left.table} l ASOF LEFT JOIN ({src}) r ON {on}) j ASOF LEFT JOIN ({times}) e ON "
@@ -380,15 +401,21 @@ async def handler(ctx: ToolContext, args: AlignArgs) -> ToolOutput:
         table = session.query(f"{sql} ORDER BY {', '.join(order)}")
         # Each output row holds its left row and a right row known by then
         # (backward, matched from when it became known or by its time when that
-        # is when it was): it is known when its left row is; else it shows not.
-        own = derived_rows_of(session, [left])
+        # is when it was): it is known when its left row is; else it shows not
+        # (matched forward or on its time, or a right row that shows not), and
+        # aligning onto it is refused unless match_on=time.
+        own = derived_rows_of(session, [left], keeps_clock=True)
         settled = args.direction == "backward" and (
             (proven is not None and by_clock)
             or (known is not None and unshown is None and (by_clock or known_at is None))
         )
-        if own is not None and not settled:
-            hidden_own = own.model_copy(update={"span": None, "lag_seconds": 0, "shown": False})
-            own = hidden_own if known_late(own) else None
+        if not settled:
+            of = (
+                own
+                or source_rows(right.info)
+                or RowsOf(model=right.model, fetched_at=right.info.provenance.fetched_at)
+            )
+            own = of.model_copy(update={"span": None, "lag_seconds": 0, "shown": False})
         unknown = (
             scalar(
                 session,
@@ -417,7 +444,7 @@ async def handler(ctx: ToolContext, args: AlignArgs) -> ToolOutput:
             # a later time of its series did shows one.
             key = f"{qi(br)}, __rt" if br else "__rt"
             one_version = (
-                scalar(session, f"SELECT max(n) FROM (SELECT count(*) AS n FROM ({known}) GROUP BY {key})")
+                scalar(session, f"SELECT max(n) FROM (SELECT count(*) AS n FROM ({base}) GROUP BY {key})")
                 == 1
             )
             series = f"PARTITION BY {qi(br)} " if br else ""
@@ -426,7 +453,7 @@ async def handler(ctx: ToolContext, args: AlignArgs) -> ToolOutput:
                     session,
                     f"SELECT count(*) FILTER (WHERE __rk > __next) AS revised, count(*) AS total FROM (SELECT __rk, "
                     f"min(__rk) OVER ({series}ORDER BY __rt DESC ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING) "
-                    f"AS __next FROM ({known}))",
+                    f"AS __next FROM ({base}))",
                 )
                 revised, total = counts["revised"], counts["total"]
     late = None
@@ -532,7 +559,7 @@ async def handler(ctx: ToolContext, args: AlignArgs) -> ToolOutput:
     # Without a clock, only fetched rows known by their time column (quotes,
     # trades; bars and buckets at their end, snapshots at their fetch, said
     # above), or rows computed from them recording so, show the match point in time.
-    if unshown is not None and not (known is not None and by_clock):
+    if unshown is not None and not (rule is not None and by_clock):
         origin = clocked_ancestor(ctx, right.info)
         notes.append(
             f"Not shown point in time: {right.rid} {unshown}; its rows were matched on the time column {right.time} "
@@ -600,7 +627,7 @@ SPEC = ToolSpec(
         "get suffix, default _right) and matched_t, the matched right row's time; unmatched right values are None. "
         "Point in time: a right row counts from the later of its time and a column with role available (e.g. "
         "knowledge_time) or a knowledge_time without it; a bar or an analytics output of bars from its period's "
-        "end; a snapshot from its fetch; a result computed from bars showing neither is refused; notes say when a "
+        "end; a snapshot from its fetch; a computed result showing neither is refused; notes say when a "
         "match is not shown point in time (match_on=time: the time column alone, look-ahead counted). Lines up "
         "series of different frequencies. Large outputs are stored and you get a result_id."
     ),

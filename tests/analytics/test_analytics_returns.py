@@ -40,8 +40,9 @@ def test_simple_returns_per_series_hand_computed(store, ctx):
     assert {r.period for r in rows} == {None}
     assert {r.price_column for r in rows} == {"close"}
     assert out.model is ReturnPoint
-    # Shown inline, and never stored without what it records of its bars (rows_of).
-    assert out.offload == "never"
+    # The offload decides, and stores it with the bars its rows come from (rows_of).
+    assert out.offload == "auto"
+    assert (out.rows_of.model, out.rows_of.span) == ("marketlens.Bar", "1d")
     p = out.provenance
     assert (p.provider, p.route, p.derived_from) == ("marketlens", "duckdb:analytics_returns", [rid])
     assert p.request["result_id"] == rid and p.request["kind"] == "simple"

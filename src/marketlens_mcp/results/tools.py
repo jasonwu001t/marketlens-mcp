@@ -22,7 +22,7 @@ from sqlglot.lineage import lineage
 from sqlglot.optimizer.qualify import qualify
 from sqlglot.optimizer.scope import Scope, traverse_scope
 
-from marketlens_schema import QUERY_ROW_SCHEMA_NAME, Delay, Provenance
+from marketlens_schema import BUILTIN_MODELS, QUERY_ROW_SCHEMA_NAME, Delay, Provenance
 
 from ..manifest import DYNAMIC_MODELS
 from ..offload import estimate_tokens
@@ -33,9 +33,11 @@ from ..results_api import (
     QueryRefused,
     ResultInfo,
     RowsOf,
+    implied_time,
     known_late,
     known_model,
     known_span,
+    period_rows,
     source_rows,
     unshown_known,
 )
@@ -232,52 +234,86 @@ def _unproven(parent: ResultInfo) -> str | None:
     return f"it reads {parent.result_id}, which {why}{advice}" if why else None
 
 
-def _rows_of(store: FileResultStore, out: QueryOutcome, roles: dict[str, str]) -> RowsOf | None:
-    """The fetched market data a stored answer holds (``_passed``), else, when
-    it reads such data known only after its time (``known_late``: bars,
-    snapshots, a bucket of rows) and keeps no role, that data marked not shown
-    (``RowsOf.shown``): nothing shows when the answer's rows became known (a
-    bucket dated at its start, lead(), a join), so analytics_align refuses it
-    unless match_on=time. None otherwise."""
+def _stamps(columns: list[tuple[str, str]]) -> list[str]:
+    """The timestamp columns among (name, DuckDB type) pairs."""
+    return [name for name, typ in columns if typ.startswith("TIMESTAMP")]
+
+
+def _dates(info: ResultInfo) -> set[str]:
+    """The columns dating each row of a result read: its time column (as
+    analytics tools take it, ``implied_time`` for one that records none) and
+    its clocks (when each row became known); empty for undated rows."""
+    stamps = _stamps([(c.name, c.type) for c in info.columns])
+    time = info.time_column or (None if info.model in BUILTIN_MODELS else implied_time(stamps))
+    clocks = {
+        c.name for c in info.columns if c.role == "available" or (c.name in CLOCK_NAMES and c.name in stamps)
+    }
+    return clocks | ({time} if time else set())
+
+
+def _rows_of(
+    store: FileResultStore, out: QueryOutcome, roles: dict[str, str], time: str | None
+) -> RowsOf | None:
+    """The rows a stored answer passes through (``_passed``), else, when it
+    keeps no role, the rows it was computed from marked not shown
+    (``RowsOf.shown``: analytics_align refuses the answer unless
+    match_on=time) when nothing shows when its rows became known: it reads
+    rows known only after their time (``known_late``: bars, snapshots, a
+    bucket), or dated rows from which it computes its ``time`` column (a
+    bucket dated at its start, a cast), or none (a full-sample average, a list
+    of tickers), or rows from others (``_from_others``: lead(), a z-score).
+    None otherwise: its rows are dated as the rows it read (a filter, quotes
+    joined to reference codes), matched on its time column, or from a clock
+    it keeps (as a lower bound)."""
     passed = _passed(store, out)
     if passed is not None or roles:
         return passed
-    for rid in sorted(out.result_ids):
-        src = source_rows(store.info(rid))
-        if src is not None and known_late(src):
-            return src.model_copy(update={"span": None, "lag_seconds": 0, "shown": False})
-    return None
+    parents = [store.info(rid) for rid in sorted(out.result_ids)]
+    src = next((x for p in parents if (x := source_rows(p)) is not None and known_late(x)), None)
+    dated = {p.result_id: p for p in parents if _dates(p)}
+    if src is None and dated:
+        sql = out.executed_sql
+        schema = {p.result_id: {c.name: c.type for c in p.columns} for p in parents}
+        dates = {(rid, c.lower()) for rid, p in dated.items() for c in _dates(p)}
+        leaves = _leaves(sql, time, schema) if time is not None else None
+        if leaves is None or not leaves <= dates or _from_others(sql, schema, set(dated)) is not None:
+            p = next(iter(dated.values()))
+            src = source_rows(p) or RowsOf(model=p.model, fetched_at=p.provenance.fetched_at)
+    return None if src is None else src.model_copy(update={"span": None, "lag_seconds": 0, "shown": False})
 
 
 def _passed(store: FileResultStore, out: QueryOutcome) -> RowsOf | None:
-    """The fetched result of market data (``known_model``) a stored answer of
-    that one result passes the rows of through unchanged: rows filtered or
-    grouped, columns projected or computed from each row's own, with its time
-    column passed through (or max() of the rows'), a bar's timeframe passed
-    through or left out (then recorded, when all the rows have one), and no
-    row computed from others (``_from_others``); so analytics_align takes the
-    answer's rows as known when that result's are (a bar at its end). None
-    otherwise."""
+    """The fetched result of market data (``known_model``), or the bucket of
+    other rows (``period_rows``), a stored answer of that one result passes the
+    rows of through unchanged: rows filtered or grouped, columns projected or
+    computed from each row's own, with its time column passed through (or
+    max() of the rows'), a bar's timeframe passed through or left out (then
+    recorded, when all the rows have one), and no row computed from others
+    (``_from_others``); so analytics_align takes the answer's rows as known
+    when that result's are (a bar at its end). None otherwise."""
     if len(out.result_ids) != 1:
         return None
     parent = store.info(out.result_ids[0])
     cls = known_model(parent)
-    if cls is None or cls.time_column is None:
+    period = period_rows(parent)
+    time_column = cls.time_column if cls is not None else parent.time_column if period is not None else None
+    if time_column is None:
         return None
+    span_column = cls.span_column if cls is not None else None
     rid, sql = parent.result_id, out.executed_sql
     types = {f.name: duckdb_type(f.type) for f in out.table.schema}
     schema = {rid: {c.name: c.type for c in parent.columns}}
     span = None
-    if cls.span_column is not None and cls.span_column not in types:
+    if span_column is not None and span_column not in types:
         # Left out: the one span all the parent's rows have.
-        col = next((c for c in parent.columns if c.name == cls.span_column), None)
+        col = next((c for c in parent.columns if c.name == span_column), None)
         if col is not None and col.nulls == 0 and isinstance(col.min, str) and col.min == col.max:
             span = col.min
         elif parent.rows_of is not None and parent.rows_of.span is not None:
             span = parent.rows_of.span
         else:
             return None
-    for name, plain in ((cls.time_column, False), (cls.span_column, True)):
+    for name, plain in ((time_column, False), (span_column, True)):
         if name is None or (plain and span is not None):
             continue
         if types.get(name) != schema[rid].get(name) or _leaves(sql, name, schema, plain=plain) != {
@@ -384,14 +420,18 @@ def _inherited(store: FileResultStore, out: QueryOutcome, roles: dict[str, str],
     types = {f.name: duckdb_type(f.type) for f in out.table.schema}
     parents = [store.info(rid) for rid in out.result_ids]
     kept: dict = {"column_roles": roles} if roles else {}
-    rows_of = _rows_of(store, out, roles)
+    same = {c.name: c for c in parents[0].columns if types.get(c.name) == c.type} if len(parents) == 1 else {}
+    if len(parents) == 1:
+        time = parents[0].time_column if parents[0].time_column in same else None
+    # The time column analytics tools take the answer's rows to describe.
+    dated = time or implied_time(_stamps(list(types.items())))
+    rows_of = _rows_of(store, out, roles, dated)
     if rows_of is not None:
         kept["rows_of"] = rows_of
     if len(parents) != 1:
         return {**kept, "time_column": time} if time else kept
     parent = parents[0]
     own = None if parent.model in DYNAMIC_MODELS else parent.model
-    same = {c.name: c for c in parent.columns if types.get(c.name) == c.type}
     if parent.time_column not in same:
         return kept
     return {
@@ -404,13 +444,17 @@ def _inherited(store: FileResultStore, out: QueryOutcome, roles: dict[str, str],
 
 
 def _lost_clocks(
-    store: FileResultStore, out: QueryOutcome, roles: dict[str, str], why: str | None
+    store: FileResultStore, out: QueryOutcome, roles: dict[str, str], why: str | None, refused: bool
 ) -> list[str]:
     """Notes naming each column of when a row became known (role available)
     of the results read that a stored answer leaves out (or changes the type
     of), or keeps but computes or keeps beside rows computed from others (not
     in ``roles``; ``why``, when ``_clocks`` says): without one,
-    analytics_align matches the answer on its time column."""
+    analytics_align matches the answer on its time column, or refuses it
+    (``refused``: marked not shown, ``_rows_of``)."""
+    refuse = (
+        "analytics_align refuses the answer unless match_on=time, as nothing shows when its rows became known"
+    )
     types = {f.name: duckdb_type(f.type) for f in out.table.schema}
     clocks = [(rid, c) for rid in out.result_ids for c in store.info(rid).columns if c.role == "available"]
     lost = list(dict.fromkeys(f"{c.name} of {rid}" for rid, c in clocks if types.get(c.name) != c.type))
@@ -421,8 +465,13 @@ def _lost_clocks(
     if lost:
         notes.append(
             f"The answer leaves out {', '.join(lost)} (role available: when each row became known), so "
-            "analytics_align matches it on its time column, which can pair a left row with a value published after "
-            "it; keep the column, with its name and type, to match point in time."
+            + (
+                refuse
+                if refused
+                else "analytics_align matches it on its time column, which can pair a left row with a value "
+                "published after it"
+            )
+            + "; keep the column, with its name and type, to match point in time."
         )
     if computed:
         why = why or (
@@ -431,13 +480,18 @@ def _lost_clocks(
             "some of the week's values)"
         )
         clock = next((c for c in computed if c in CLOCK_NAMES), None)
-        align = (
-            f"analytics_align says a match on the answer is not shown point in time, and matches each row from the "
-            f"later of its time column and {clock}, a lower bound on when it became known."
-            if clock
-            else "analytics_align matches the answer on its time column, which can pair a left row with a value "
-            "published after it."
-        )
+        if refused:
+            align = refuse + "."
+        elif clock:
+            align = (
+                f"analytics_align says a match on the answer is not shown point in time, and matches each row from "
+                f"the later of its time column and {clock}, a lower bound on when it became known."
+            )
+        else:
+            align = (
+                "analytics_align matches the answer on its time column, which can pair a left row with a value "
+                "published after it."
+            )
         notes.append(
             f"The answer's {', '.join(computed)} keeps no role available (when each row became known): {why}. "
             + align
@@ -532,8 +586,10 @@ async def results_query(ctx: ToolContext, args: QueryArgs) -> ToolOutput:
                 "stored as a new result: query it, or select fewer columns or rows to see it inline."
             )
     roles, time, why = _clocks(store, out) if keep else ({}, None, None)
+    carried = _inherited(store, out, roles, time) if keep else {}
     if keep:
-        notes.extend(_lost_clocks(store, out, roles, why))
+        refused = carried.get("rows_of") is not None and not carried["rows_of"].shown
+        notes.extend(_lost_clocks(store, out, roles, why, refused))
     request = {"sql": args.sql[:4000], "max_rows": args.max_rows, "store": args.store}
     prov = _provenance(ctx, "duckdb:results_query", request, list(out.result_ids))
     if truncation:
@@ -546,7 +602,7 @@ async def results_query(ctx: ToolContext, args: QueryArgs) -> ToolOutput:
             provenance=prov,
             risk=out.risk,
             parents=list(out.result_ids),
-            **_inherited(store, out, roles, time),
+            **carried,
         )
         return ToolOutput(
             model=QUERY_ROW_SCHEMA_NAME, provenance=prov, stored=info, notes=notes, risk=out.risk

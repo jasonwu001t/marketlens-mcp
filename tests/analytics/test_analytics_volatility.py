@@ -437,12 +437,11 @@ def test_window_all_is_the_full_sample_volatility_of_each_series(store, ctx):
 
 def test_store_keeps_a_small_output(store, ctx):
     rid = store.put_rows(bars("AAPL", CLOSES))
-    small = run(SPEC, ctx, result_id=rid, window=3)
-    assert small.offload == "never" and small.table is not None
-    # Stored by the tool, with the bars its rows come from (each known at the end of its last bar).
+    assert run(SPEC, ctx, result_id=rid, window=3).offload == "auto"
     kept = run(SPEC, ctx, result_id=rid, window=3, store=True)
-    assert kept.table is None and kept.stored is not None
-    assert (kept.stored.rows_of.model, kept.stored.rows_of.span) == ("marketlens.Bar", "1d")
+    assert kept.offload == "always"
+    # Stored with the bars its rows come from (each known at the end of its last bar).
+    assert (kept.rows_of.model, kept.rows_of.span) == ("marketlens.Bar", "1d")
 
 
 def query_returns(store, rets, units=None, times=None, parents=(), series="PORT", sources=None):

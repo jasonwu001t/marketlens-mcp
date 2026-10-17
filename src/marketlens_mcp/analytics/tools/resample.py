@@ -8,7 +8,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from marketlens_mcp.plugin_api import ToolContext, ToolOutput, ToolSpec
-from marketlens_mcp.results_api import ResultSession
+from marketlens_mcp.results_api import CLOCK_NAMES, ResultSession
 from marketlens_schema import BUILTIN_MODELS
 from marketlens_schema.base import AbsenceCode, AbsenceReason, Timeframe
 from marketlens_schema.market import Bar
@@ -220,7 +220,11 @@ def _generic_sql(inp: Input, target: str, agg: str, columns: list[str], values: 
     carried = [
         c for c in columns if c not in values and c not in (inp.time, inp.group, "absent", "timeframe")
     ]
-    inner = [_agg(inp, c, agg) for c in values] + [f"last({qi(c)} {_ORDERED}) AS {qi(c)}" for c in carried]
+    # A clock (when each row became known) is the bucket's latest: its aggregate is known once all its rows are.
+    clocks = {c.name for c in inp.info.columns if c.role == "available" or c.name in CLOCK_NAMES}
+    inner = [_agg(inp, c, agg) for c in values] + [
+        f"max({qi(c)}) AS {qi(c)}" if c in clocks else f"last({qi(c)} {_ORDERED}) AS {qi(c)}" for c in carried
+    ]
     has_absent = "absent" in columns
     if has_absent:
         keep = "[" + ", ".join(ql(c) for c in carried) + "]"
@@ -276,8 +280,8 @@ async def handler(ctx: ToolContext, args: ResampleArgs) -> ToolOutput:
             notes += _merged_note(session, inp, args.agg)
         skipped, bad_columns = _non_finite(session, inp, values)
         table = session.query(sql)
-        # A bucket is known when the last row in it is: at its end, or later.
-        known = derived_rows_of(session, [inp], period=target)
+        # A bucket is known when the last row in it is: at its end, or later (its clock, carried).
+        known = derived_rows_of(session, [inp], period=target, keeps_clock=True)
     skipped_text = (
         f"{plural(skipped, 'row')} with a non-finite value (NaN or infinity) in {', '.join(bad_columns)}"
     )
@@ -296,7 +300,8 @@ async def handler(ctx: ToolContext, args: ResampleArgs) -> ToolOutput:
         notes.append(
             f"Resample: {', '.join(values)} aggregated with {args.agg} per series and {target} bucket (NULLs "
             "skipped; UTC-aligned, weeks start Monday 00:00 UTC; t = the bucket start); every other column is "
-            "taken from the bucket's last row by time."
+            "taken from the bucket's last row by time, but a clock of when each row became known (knowledge_time), "
+            "the bucket's latest."
         )
         for c in values:
             if table.column(c).null_count:
@@ -317,8 +322,6 @@ async def handler(ctx: ToolContext, args: ResampleArgs) -> ToolOutput:
             absent=absent,
             inputs=[inp.info],
             store=args.store,
-            ctx=ctx,
-            tool=TOOL,
             rows_of=known,
         )
     return dynamic_output(
@@ -349,7 +352,7 @@ SPEC = ToolSpec(
         "= volume-weighted (None when the volume is 0); the target must be coarser than the bars and hold whole "
         "bars, and a series may not hold two bars at one time (a series_column that merges tickers). Other series (quotes, trades, snapshots, portfolio history, query results): each value column "
         "aggregated with agg (last, first, mean, sum, min, max) per series and bucket; other columns come from "
-        "the bucket's last row. Rows with a NaN or infinite value are skipped. Buckets are UTC-aligned (weeks "
+        "the bucket's last row (a knowledge_time: the bucket's latest). Rows with a NaN or infinite value are skipped. Buckets are UTC-aligned (weeks "
         "start Monday 00:00 UTC; t = bucket start). The output has the input's model. Large outputs are stored "
         "and you get a result_id."
     ),

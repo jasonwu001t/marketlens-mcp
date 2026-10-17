@@ -42,9 +42,11 @@ from marketlens_mcp.results_api import (
     ResultNotFound,
     ResultSession,
     RowsOf,
+    implied_time,
     known_late,
     known_model,
     known_span,
+    period_rows,
     source_rows,
 )
 from marketlens_schema import ALIGNED_SCHEMA_NAME, BUILTIN_MODELS, QUERY_ROW_SCHEMA_NAME, CanonicalModel
@@ -194,15 +196,16 @@ def span_end(ts: str, span: str) -> str:
     )
 
 
-def known_time(inp: Input, cls: type[CanonicalModel]) -> str | None:
+def known_time(inp: Input, cls: type[CanonicalModel] | None) -> str | None:
     """SQL: when each row of ``inp`` became known by the rule its rows follow
-    (``cls``, its ``known_model``), as a naive UTC timestamp: the end of the
-    period it covers (a bar's, a bucket's: ``span_end``) and ``lag_seconds``
-    after it, or its fetch (a snapshot); None when that is its time column
-    itself (quotes, trades)."""
+    (``cls``, its ``known_model``; None for a bucket of other rows,
+    ``period_rows``), as a naive UTC timestamp: the end of the period it
+    covers (a bar's, a bucket's: ``span_end``) and ``lag_seconds`` after it,
+    or its fetch (a snapshot); None when that is its time column itself
+    (quotes, trades)."""
     info = inp.info
     src = info.rows_of
-    if cls.known_at_fetch:
+    if cls is not None and cls.known_at_fetch:
         at = (src.fetched_at if src is not None else info.provenance.fetched_at).astimezone(dt.UTC)
         return f"TIMESTAMP '{at:%Y-%m-%d %H:%M:%S.%f}'"
     span = known_span(info, cls)
@@ -214,26 +217,45 @@ def known_time(inp: Input, cls: type[CanonicalModel]) -> str | None:
 
 
 def derived_rows_of(
-    session: ResultSession, inputs: Sequence[Input], *, period: str | None = None, levels: bool = True
+    session: ResultSession,
+    inputs: Sequence[Input],
+    *,
+    period: str | None = None,
+    levels: bool = True,
+    keeps_clock: bool = False,
 ) -> RowsOf | None:
-    """What an output computed from ``inputs`` records of the fetched market
-    data its rows come from (``ResultInfo.rows_of``), so analytics_align takes
-    each row as known when the last of the input rows it covers was: with
-    ``period``, a row dated at a bucket's start covers the bucket's rows, known
-    at its end, or ``lag_seconds`` after it when one of them is known later (a
-    stock's day bar ends at midnight New York time, after a UTC bucket);
-    without, a row dated as an input row is known when that row is (a return,
-    a drawdown, a window ending there). ``levels``: the output holds price
-    levels, so it keeps the inputs' adjustment (returns, volatility and beta
-    hold ratios of prices, which a later split or dividend leaves as they
-    were). None when no input holds fetched market data; when one does but
-    an input's rows are not known by the same kind of rule, or cover different
-    spans, marked not shown if the data is known only after its time
-    (``known_late``: bars, snapshots), else None."""
+    """What an output computed from ``inputs`` records of the rows its own
+    come from (``ResultInfo.rows_of``), so analytics_align takes each of its
+    rows as known no earlier than the last of the input rows it covers: with
+    ``period``, a row dated at a bucket's start covers the bucket's rows,
+    known at its end, or ``lag_seconds`` after it when one of them is known
+    later (a stock's day bar ends at midnight New York time, after a UTC
+    bucket); without, a row dated as an input row is known when that row is (a
+    return, a drawdown, a window ending there). ``levels``: the output holds
+    price levels, so it keeps the inputs' adjustment (returns, volatility and
+    beta hold ratios of prices, which a later split or dividend leaves as they
+    were). ``keeps_clock``: the output carries its inputs' other columns, a
+    clock among them (knowledge_time), which analytics_align matches on.
+
+    Fetched market data is known by its model's rule. Other rows (a
+    dataset's) are known no earlier than their time: a bucket of them records
+    its span (``period_rows``); rows dated as theirs record nothing (matched on
+    their time, not shown point in time), unless they show when they became
+    known only by a clock the output leaves out (returns of a dataset with a
+    knowledge_time). Marked not shown then, or when an input's rows are not
+    known by the same kind of rule as the others' or cover different spans and
+    are known only after their time (``known_late``: bars, snapshots)."""
     found = [(inp, known_model(inp.info), source_rows(inp.info)) for inp in inputs]
     srcs = [src for _, _, src in found if src is not None]
+    clocked = [inp for inp, cls, _ in found if cls is None and (inp.available or inp.unmarked_clock)]
+    dropped = [] if keeps_clock else clocked
     if not srcs:
-        return None
+        fetched_at = max(inp.info.provenance.fetched_at for inp in inputs)
+        if dropped:
+            return RowsOf(model=dropped[0].model, fetched_at=fetched_at, shown=False)
+        if period is None or clocked:
+            return None
+        return RowsOf(model=inputs[0].model, fetched_at=fetched_at, span=period)
     late = [x for x in srcs if known_late(x)]
     adjusted = [x.adjustment for x in srcs if x.adjustment not in (None, "raw")]
     out = RowsOf(
@@ -241,11 +263,13 @@ def derived_rows_of(
         fetched_at=max(x.fetched_at for x in srcs),
         adjustment=(adjusted[0] if adjusted else srcs[0].adjustment) if levels else None,
     )
-    hidden = out.model_copy(update={"shown": False}) if late else None
+    hidden = out.model_copy(update={"shown": False}) if late or dropped else None
     classes = [cls for _, cls, _ in found]
-    if any(cls is None for cls in classes) or len({cls.known_at_fetch for cls in classes}) > 1:
+    at_fetch = {cls is not None and cls.known_at_fetch for cls in classes}
+    ruled = all(cls is not None or period_rows(inp.info) is not None for inp, cls, _ in found)
+    if dropped or not ruled or len(at_fetch) > 1:
         return hidden
-    if classes[0].known_at_fetch:
+    if at_fetch == {True}:
         return out
     if period is not None:
         lag = 0
@@ -555,13 +579,9 @@ def resolve(ctx: ToolContext, tool: str, result_id: str, *, series_column: str |
     time = info.time_column
     if time is None and info.model not in BUILTIN_MODELS:
         stamps = [c.name for c in info.columns if is_timestamp(c)]
-        clocks: list[str] = []
-        if len(stamps) > 1 and "t" in stamps:
-            stamps = ["t"]
-        elif len(stamps) > 1 and "event_time" in stamps and set(stamps) - {"event_time"} <= set(_CLOCKS):
-            clocks, stamps = [c for c in stamps if c != "event_time"], ["event_time"]
-        if len(stamps) == 1:
-            time = stamps[0]
+        time = implied_time(stamps)
+        clocks = [c for c in stamps if c != "event_time"] if time == "event_time" and len(stamps) > 1 else []
+        if time is not None:
             notes.append(
                 f"{info.result_id} has no recorded time column; time column '{time}' was used"
                 + (
@@ -831,6 +851,15 @@ def risk(inputs: Sequence[ResultInfo]) -> OutputRisk | None:
     return "external_text" if any(i.risk == "external_text" for i in inputs) else None
 
 
+@dataclass
+class DerivedOutput(ToolOutput):
+    """A ToolOutput that records the rows its own come from (``rows_of``,
+    ``derived_rows_of``): the server's offload stores it with them when it
+    stores the output. ToolOutput's own fields are the contract's."""
+
+    rows_of: RowsOf | None = None
+
+
 def model_output(
     table: pa.Table,
     model: type[CanonicalModel],
@@ -840,53 +869,20 @@ def model_output(
     absent: dict[str, AbsenceReason] | None = None,
     inputs: Sequence[ResultInfo] = (),
     store: bool = False,
-    ctx: ToolContext | None = None,
-    tool: str | None = None,
     rows_of: RowsOf | None = None,
 ) -> ToolOutput:
     """A canonical-model output; the server's offload decides inline or
-    stored (always stored with ``store``). With ``rows_of`` (the fetched
-    market data its rows come from, ``derived_rows_of``) an output to store is
-    stored here, recording it, and one shown inline is never stored."""
-    table = to_model_table(table, model)
-    out_risk = risk(inputs)
-    if rows_of is not None and ctx is not None and tool is not None:
-        if not store and _inline(ctx, table):
-            return ToolOutput(
-                model=model,
-                provenance=prov,
-                table=table,
-                notes=list(notes),
-                absent=dict(absent or {}),
-                risk=out_risk,
-                offload="never",
-            )
-        info = ctx.results.put(
-            table,
-            tool=tool,
-            model=model.schema_name,
-            provenance=prov,
-            absent=dict(absent or {}),
-            risk=out_risk or "api_structured",
-            parents=list(prov.derived_from),
-            rows_of=rows_of,  # marketlens's own store's: the ResultStore protocol predates it
-        )
-        return ToolOutput(
-            model=model,
-            provenance=prov,
-            stored=info,
-            notes=list(notes),
-            absent=dict(absent or {}),
-            risk=out_risk,
-        )
-    return ToolOutput(
+    stored (always stored with ``store``), and stores it with ``rows_of``
+    (the rows its own come from, ``derived_rows_of``)."""
+    return DerivedOutput(
         model=model,
         provenance=prov,
-        table=table,
+        table=to_model_table(table, model),
         notes=list(notes),
         absent=dict(absent or {}),
-        risk=out_risk,
+        risk=risk(inputs),
         offload="always" if store else "auto",
+        rows_of=rows_of,
     )
 
 
@@ -922,21 +918,11 @@ def with_units(
     return table.cast(pa.schema(fields))
 
 
-def _small(table: pa.Table, max_rows: int = INLINE_ROWS, max_tokens: int = INLINE_TOKENS) -> bool:
-    if table.num_rows > max_rows:
+def _small(table: pa.Table) -> bool:
+    if table.num_rows > INLINE_ROWS:
         return False
     text = json.dumps(table.to_pylist(), default=str, separators=(",", ":"), ensure_ascii=False)
-    return math.ceil(len(text.encode("utf-8")) / 4) <= max_tokens
-
-
-def _inline(ctx: ToolContext, table: pa.Table) -> bool:
-    """``_small`` by the store's own inline limits, when it states them."""
-    limits = getattr(ctx.results, "limits", None)
-    return _small(
-        table,
-        getattr(limits, "inline_max_rows", INLINE_ROWS),
-        getattr(limits, "inline_max_tokens", INLINE_TOKENS),
-    )
+    return math.ceil(len(text.encode("utf-8")) / 4) <= INLINE_TOKENS
 
 
 def dynamic_output(
@@ -962,20 +948,19 @@ def dynamic_output(
     analytics tools. ``units`` labels columns (a price stays a price for the
     next tool), and ``sources`` the model each carried column was computed by
     (a drawdown stays a drawdown after its result is gone). ``rows_of``: the
-    fetched market data its rows come from (``derived_rows_of``); with it, an
-    output shown inline is never stored."""
+    rows its own come from (``derived_rows_of``), stored with it either way."""
     out_risk = risk(inputs)
     units = {k: v for k, v in (units or {}).items() if v}
     table = with_units(utc_times(table), units, sources)
-    if not store and (_inline(ctx, table) if rows_of is not None else _small(table)):
-        return ToolOutput(
+    if not store and _small(table):
+        return DerivedOutput(
             model=model,
             provenance=prov,
             table=table,
             notes=list(notes),
             absent=dict(absent or {}),
             risk=out_risk,
-            offload="never" if rows_of is not None else "auto",
+            rows_of=rows_of,
         )
     info = ctx.results.put(
         table,
@@ -988,7 +973,7 @@ def dynamic_output(
         time_column=time_column,
         group_column=group_column,
         column_units=units or None,
-        # marketlens's own store's: the ResultStore protocol predates it.
+        # marketlens's own store's (the contract pins the ResultStore protocol's put).
         **({"rows_of": rows_of} if rows_of is not None else {}),
     )
     return ToolOutput(

@@ -425,8 +425,6 @@ async def handler(ctx: ToolContext, args: VolatilityArgs) -> ToolOutput:
         notes=notes,
         inputs=[inp.info],
         store=args.store,
-        ctx=ctx,
-        tool=TOOL,
         rows_of=known,
     )
 
