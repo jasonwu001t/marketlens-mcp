@@ -14,16 +14,19 @@ from typing import Literal
 import pyarrow as pa
 import pyarrow.csv as pacsv
 import pyarrow.parquet as pq
+import sqlglot
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlglot import exp
 from sqlglot.lineage import lineage
+from sqlglot.optimizer.qualify import qualify
+from sqlglot.optimizer.scope import Scope, traverse_scope
 
 from marketlens_schema import QUERY_ROW_SCHEMA_NAME, Delay, Provenance
 
 from ..manifest import DYNAMIC_MODELS
 from ..offload import estimate_tokens
 from ..plugin_api import ToolContext, ToolError, ToolOutput, ToolSpec
-from ..results_api import RESULT_ID_RE, QueryRefused, ResultInfo
+from ..results_api import RESULT_ID_RE, QueryRefused
 from .arrow import duckdb_type, json_safe, sql_ident, table_rows
 from .store import FileResultStore, QueryOutcome
 
@@ -75,53 +78,160 @@ class QueryArgs(BaseModel):
     )
 
 
-def _is_clock(sql: str, name: str, parents: list[ResultInfo]) -> bool:
-    """Whether the answer's column ``name`` still says when each of its rows
-    became known: by its lineage (sqlglot's, through subqueries, CTEs and set
-    operations), a column with role available of the results read, passed
-    through or taken as max() (an aggregate) or greatest() of such columns,
-    never earlier than any clock it is built from, and fed by every result read
-    that has one (a join takes the later of both sides' clocks). A clock the
-    query computes otherwise (min() of a week's, a time_bucket of it) or that
-    sqlglot cannot trace is not."""
-    clocks = {(p.result_id, c.name.lower()) for p in parents for c in p.columns if c.role == "available"}
-    schema = {p.result_id: {c.name: c.type for c in p.columns} for p in parents}
+def _leaves(sql: str, name: str, schema: dict) -> set[tuple[str, str]] | None:
+    """The (result_id, column) pairs the answer's column ``name`` is taken
+    from, by its lineage (sqlglot's, through subqueries, CTEs and set
+    operations), when it is one of them passed through, or max() (an
+    aggregate) or greatest() of them, never earlier than any; None when the
+    query computes it otherwise (min() of a week's, a time_bucket of it) or
+    sqlglot cannot trace it."""
     try:
         node = lineage(name, sql, schema=schema, dialect="duckdb")
     except Exception:  # a query sqlglot cannot trace keeps no role; the answer is stored all the same
-        return False
-    fed = set()
+        return None
+    leaves = set()
     for n in node.walk():
         if not n.downstream:
-            source = n.source.name.lower() if isinstance(n.source, exp.Table) else None
-            if (source, exp.to_column(n.name, dialect="duckdb").name.lower()) not in clocks:
-                return False
-            fed.add(source)
+            if not isinstance(n.source, exp.Table):
+                return None
+            leaves.add((n.source.name.lower(), exp.to_column(n.name, dialect="duckdb").name.lower()))
             continue
         e = n.expression.unalias()
         if not isinstance(e, exp.Column) and not (
             isinstance(e, exp.Max | exp.Greatest)
             and all(isinstance(a, exp.Column) for a in e.iter_expressions())
         ):
-            return False
-    return fed >= {rid for rid, _ in clocks}
+            return None
+    return leaves
 
 
-def _clocks(store: FileResultStore, out: QueryOutcome) -> dict[str, str]:
+def _reads(source: exp.Table | Scope) -> set[str]:
+    """The results a query source reads for its rows: a table's own, or a
+    derived table's or CTE's sources', through set operations."""
+    if isinstance(source, exp.Table):
+        return {source.name.lower()}
+    out = {r for _, s in source.selected_sources.values() for r in _reads(s)}
+    return out.union(*(_reads(b) for b in source.set_operation_scopes))
+
+
+def _from_others(sql: str, schema: dict, dated: set[str]) -> str | None:
+    """Why the answer's rows can hold values of rows other than the ones each
+    keeps the clock of, some known later, when the query reads a ``dated``
+    result (one whose rows have a clock or a time) so: a window function
+    (avg() OVER (), lead(), a QUALIFY filter), a subquery in an expression or
+    a SEMI or ANTI join (a filter on its maximum, on a later row), or such a
+    result read twice for one row (a self-join); or that sqlglot cannot trace
+    the query's rows. None otherwise."""
+    try:
+        return _other_rows(
+            traverse_scope(
+                qualify(sqlglot.parse_one(sql, dialect="duckdb"), schema=schema, dialect="duckdb")
+            ),
+            dated,
+        )
+    except Exception:  # a query sqlglot cannot trace keeps no role; the answer is stored all the same
+        return "sqlglot cannot trace how its query computes rows"
+
+
+def _other_rows(scopes: list[Scope], dated: set[str]) -> str | None:
+    """``_from_others`` over the query's scopes (sqlglot's)."""
+    for scope in scopes:
+        reads = {alias: _reads(s) & dated for alias, s in scope.sources.items()}
+        here = {r for alias in scope.selected_sources for r in reads[alias]}
+        here |= {r for b in scope.set_operation_scopes for r in _reads(b) & dated}
+        filters = [
+            r
+            for j in scope.find_all(exp.Join)
+            if j.kind in ("SEMI", "ANTI")
+            for r in reads.get(j.alias_or_name, ())
+        ]
+        if (scope.is_subquery and here) or filters:
+            return (
+                f"its query reads {sorted(here | set(filters))[0]} in a subquery inside an expression (a scalar "
+                "subquery, IN or EXISTS) or a SEMI or ANTI join, so a row can depend on other rows, some known later"
+            )
+        if here and next(scope.find_all(exp.Window), None) is not None:
+            return (
+                "its query computes rows from other rows, some known later, with a window function (avg() OVER (), "
+                "lead(), a QUALIFY filter); align first and compute over the aligned answer to stay point in time"
+            )
+        seen = [r for alias in scope.selected_sources for r in reads[alias]]
+        twice = sorted({r for r in seen if seen.count(r) > 1})
+        if twice:
+            return (
+                f"its query reads {twice[0]} twice for one row (a self-join), so a row can hold another row's values, "
+                "known later"
+            )
+    return None
+
+
+def _clocks(store: FileResultStore, out: QueryOutcome) -> tuple[dict[str, str], str | None, str | None]:
     """The answer's columns that keep role available (when each row became
-    known), each with its role: a column with the name and type of such a
-    column of a result read that still is one (``_is_clock``)."""
+    known), each with its role; the time column the answer needs for them
+    (over several results, see below); and why none keeps it when the query
+    computes rows from others (``_from_others``) or joins a result dated by
+    its time column without that time in the clock.
+
+    A column keeps the role with the name and type of such a column of a
+    result read, built from such columns (``_leaves``): fed by every result
+    read that has one, and by the time column of every other result read that
+    has one (bars joined to a dataset's rows: a joined row is known no earlier
+    than its bar), unless those results share a time column the answer passes
+    through (or takes max() or greatest() of), which is then its time column,
+    so analytics_align matches a row from the later of the two."""
     types = {f.name: duckdb_type(f.type) for f in out.table.schema}
     parents = [store.info(rid) for rid in out.result_ids]
-    named = {c.name: c.role for p in parents for c in p.columns if c.role and types.get(c.name) == c.type}
-    return {n: r for n, r in named.items() if _is_clock(out.executed_sql, n, parents)}
+    named = {c.name for p in parents for c in p.columns if c.role and types.get(c.name) == c.type}
+    if not named:
+        return {}, None, None
+    sql = out.executed_sql
+    schema = {p.result_id: {c.name: c.type for c in p.columns} for p in parents}
+    clocks = {(p.result_id, c.name.lower()) for p in parents for c in p.columns if c.role == "available"}
+    clocked = {rid for rid, _ in clocks}
+    times = {
+        (p.result_id, p.time_column.lower()) for p in parents if p.result_id not in clocked and p.time_column
+    }
+    timed = {rid for rid, _ in times}
+    why = _from_others(sql, schema, clocked | timed)
+    if why:
+        return {}, None, why
+    time, by_time = None, set()
+    if len({c for _, c in times}) == 1:
+        (shared,) = {c for _, c in times}
+        time = next((n for n in types if n.lower() == shared), None)
+        leaves = _leaves(sql, time, schema) if time else None
+        if leaves and leaves <= times:
+            by_time = leaves
+        else:
+            time = None
+    roles: dict[str, str] = {}
+    undated: set[str] = set()
+    for name in named:
+        leaves = _leaves(sql, name, schema)
+        if leaves is None or not leaves <= clocks | times or not {r for r, _ in leaves & clocks} >= clocked:
+            continue
+        missing = timed - {r for r, _ in (leaves | by_time) & times}
+        if missing:
+            undated |= missing
+        else:
+            roles[name] = "available"
+    if undated and not roles:
+        rid = sorted(undated)[0]
+        col = next(c for r, c in times if r == rid)
+        why = (
+            f"it joins {rid}, whose rows are dated by {col}, without passing {col} through as its time column or "
+            f"taking greatest() of it and the clock, so a row can hold a {rid} row dated after it (an ASOF JOIN "
+            "forward, say)"
+        )
+    return roles, (time if roles and by_time else None), why
 
 
-def _inherited(store: FileResultStore, out: QueryOutcome, roles: dict[str, str]) -> dict:
+def _inherited(store: FileResultStore, out: QueryOutcome, roles: dict[str, str], time: str | None) -> dict:
     """What a stored answer keeps of the results it read: ``roles``, the role
     of each column that still says when each row became known (``_clocks``),
     whatever its time column, so analytics_align stays point in time on the
-    answer. Over one parent, also its time and
+    answer, with the ``time`` column those roles need over several results.
+    Over one parent, also its time and
     series columns and its column units, with the
     model each such column came from (the one the parent recorded for it, else
     the parent's, unless the parent is itself a query answer or aligned result,
@@ -132,7 +242,7 @@ def _inherited(store: FileResultStore, out: QueryOutcome, roles: dict[str, str])
     parents = [store.info(rid) for rid in out.result_ids]
     kept: dict = {"column_roles": roles} if roles else {}
     if len(parents) != 1:
-        return kept
+        return {**kept, "time_column": time} if time else kept
     parent = parents[0]
     own = None if parent.model in DYNAMIC_MODELS else parent.model
     same = {c.name: c for c in parent.columns if types.get(c.name) == c.type}
@@ -147,11 +257,14 @@ def _inherited(store: FileResultStore, out: QueryOutcome, roles: dict[str, str])
     }
 
 
-def _lost_clocks(store: FileResultStore, out: QueryOutcome, roles: dict[str, str]) -> list[str]:
+def _lost_clocks(
+    store: FileResultStore, out: QueryOutcome, roles: dict[str, str], why: str | None
+) -> list[str]:
     """Notes naming each column of when a row became known (role available)
     of the results read that a stored answer leaves out (or changes the type
-    of), or keeps but computes (not in ``roles``): without one, analytics_align
-    matches the answer on its time column."""
+    of), or keeps but computes or keeps beside rows computed from others (not
+    in ``roles``; ``why``, when ``_clocks`` says): without one,
+    analytics_align matches the answer on its time column."""
     types = {f.name: duckdb_type(f.type) for f in out.table.schema}
     clocks = [(rid, c) for rid in out.result_ids for c in store.info(rid).columns if c.role == "available"]
     lost = list(dict.fromkeys(f"{c.name} of {rid}" for rid, c in clocks if types.get(c.name) != c.type))
@@ -166,12 +279,15 @@ def _lost_clocks(store: FileResultStore, out: QueryOutcome, roles: dict[str, str
             "it; keep the column, with its name and type, to match point in time."
         )
     if computed:
+        why = why or (
+            "a query keeps it only on such a column passed through, or on max() or greatest() of such columns from "
+            "every result read that has one, never earlier than any row's (min() of a week's, say, is earlier than "
+            "some of the week's values)"
+        )
         notes.append(
-            f"The answer's {', '.join(computed)} keeps no role available (when each row became known): a query "
-            "keeps it only on such a column passed through, or on max() or greatest() of such columns from every "
-            "result read that has one, never earlier than any row's (min() of a week's, say, is earlier than some "
-            "of the week's values). analytics_align matches the answer on its time column, which can pair a left "
-            "row with a value published after it."
+            f"The answer's {', '.join(computed)} keeps no role available (when each row became known): {why}. "
+            "analytics_align matches the answer on its time column, which can pair a left row with a value "
+            "published after it."
         )
     return notes
 
@@ -262,9 +378,9 @@ async def results_query(ctx: ToolContext, args: QueryArgs) -> ToolOutput:
                 f"The answer ({out.row_count} rows, {size:,} bytes as JSON) is larger than {limit}, so it was "
                 "stored as a new result: query it, or select fewer columns or rows to see it inline."
             )
-    roles = _clocks(store, out) if keep else {}
+    roles, time, why = _clocks(store, out) if keep else ({}, None, None)
     if keep:
-        notes.extend(_lost_clocks(store, out, roles))
+        notes.extend(_lost_clocks(store, out, roles, why))
     request = {"sql": args.sql[:4000], "max_rows": args.max_rows, "store": args.store}
     prov = _provenance(ctx, "duckdb:results_query", request, list(out.result_ids))
     if truncation:
@@ -277,7 +393,7 @@ async def results_query(ctx: ToolContext, args: QueryArgs) -> ToolOutput:
             provenance=prov,
             risk=out.risk,
             parents=list(out.result_ids),
-            **_inherited(store, out, roles),
+            **_inherited(store, out, roles, time),
         )
         return ToolOutput(
             model=QUERY_ROW_SCHEMA_NAME, provenance=prov, stored=info, notes=notes, risk=out.risk
@@ -564,14 +680,14 @@ SPECS: tuple[ToolSpec, ...] = (
         "Query stored results",
         "Run ONE read-only SQL SELECT (DuckDB dialect; WITH, joins, window functions, ASOF JOIN and "
         "time_bucket allowed; PIVOT and UNPIVOT are not: use max(x) FILTER (WHERE ...) per column) over at most 8 "
-        "results stored in this session, using each result_id as a table name. Returns at most max_rows rows "
+        "results stored in this session, with each result_id as a table name. Returns at most max_rows rows "
         "(default 50, at most 200; a larger max_rows or LIMIT is lowered). An answer over results.query_max_bytes "
         "(24,000 bytes of JSON by default) or about 6,000 tokens, or store=true, is kept whole as a new result "
         "(max_rows bounds only an inline answer; fetch.max_rows, 50,000 rows by default, a stored one; an answer "
         "cut, or over a cut result, says truncated) and you get its result_id; a query of one result keeps its "
-        "time and series columns when they are unchanged, and a clock column's role passed through (or max), so "
-        "it chains into analytics. Exact decimals come back as strings (CAST to DOUBLE for a number); whole-number "
-        "sums are numbers. Files, settings, other sessions and every write are refused.",
+        "unchanged time and series columns, and a clock column's role passed through (or max; no window, "
+        "subquery, self-join), so it chains into analytics. Exact decimals come back as strings (CAST to "
+        "DOUBLE); whole-number sums as numbers. Files, settings, other sessions and every write are refused.",
         "Read-only SQL over this session's results (one SELECT, forced LIMIT)",
         QueryArgs,
         results_query,

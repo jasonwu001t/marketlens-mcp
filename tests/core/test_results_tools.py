@@ -662,10 +662,18 @@ def test_a_columns_role_survives_a_join_and_a_new_time_column_and_a_dropped_one_
     joined = call(
         ctx,
         "results_query",
-        sql=f"SELECT k.*, s.close FROM {known.result_id} k, (SELECT max(close) AS close FROM {small.result_id}) s",
+        sql=f"SELECT k.*, s.t, s.close FROM {known.result_id} k ASOF JOIN {small.result_id} s ON k.event_time >= s.t",
         store=True,
     )
-    assert roles(joined) == {"event_time": None, "knowledge_time": "available", "value": None, "close": None}
+    assert roles(joined) == {
+        "event_time": None,
+        "knowledge_time": "available",
+        "value": None,
+        "t": None,
+        "close": None,
+    }
+    # The bars' time is the answer's: a joined row is matched no earlier than its bar.
+    assert store.info(joined.result_id).time_column == "t"
     bucketed = call(
         ctx,
         "results_query",
@@ -712,7 +720,6 @@ def test_a_clock_the_query_computes_keeps_no_role(setup):
     for sql in (
         f"SELECT {week}, min(knowledge_time) AS knowledge_time FROM {k} GROUP BY ALL",
         f"SELECT event_time, time_bucket(INTERVAL 1 DAY, knowledge_time) AS knowledge_time FROM {k}",
-        f"SELECT event_time, max(knowledge_time) OVER () AS knowledge_time FROM {k}",
         f"WITH w AS (SELECT {week}, min(knowledge_time) AS knowledge_time FROM {k} GROUP BY ALL) SELECT * FROM w",
         # A join keeping one side's clock: the other side's values may be known later.
         f"SELECT a.event_time, a.value, b.value AS b_value, a.knowledge_time FROM {k} a JOIN {o} b USING (event_time)",
@@ -727,6 +734,103 @@ def test_a_clock_the_query_computes_keeps_no_role(setup):
     ):
         kept, notes = role(sql)
         assert kept == "available" and computed not in notes, sql
+
+
+def test_a_query_computing_rows_from_other_rows_keeps_no_role(setup):
+    """Review of N2, round 3: a clock passed through kept its role beside
+    values the query computed from other rows, some known later (a
+    full-sample z-score, lead(), a forward frame, a filter on the result's
+    maximum, a self-join on the next day, bars joined forward from each row),
+    and analytics_align said the answer was point in time. Such a query keeps
+    no role, and its note says why; rows built from their own rows (a filter,
+    a union, an undated list joined) keep it, and a bars result joined keeps
+    it with the bars' time as the answer's time column, or in the clock."""
+    ctx, store, _, small, *_ = setup
+    known, other = _known_result(store), _known_result(store)
+    k, o, b = known.result_id, other.result_id, small.result_id
+    tickers = call(ctx, "results_query", sql=f"SELECT DISTINCT ticker FROM {b}", store=True).result_id
+    assert store.info(tickers).time_column is None
+
+    def stored(sql):
+        out = call(ctx, "results_query", sql=sql, store=True)
+        info = store.info(out.result_id)
+        return {c.name: c.role for c in info.columns}.get("knowledge_time"), info.time_column, out.notes
+
+    def lost(why):
+        return (
+            f"The answer's knowledge_time keeps no role available (when each row became known): {why}. "
+            "analytics_align matches the answer on its time column, which can pair a left row with a value "
+            "published after it."
+        )
+
+    window = lost(
+        "its query computes rows from other rows, some known later, with a window function (avg() OVER (), "
+        "lead(), a QUALIFY filter); align first and compute over the aligned answer to stay point in time"
+    )
+
+    def subquery(rid):
+        return lost(
+            f"its query reads {rid} in a subquery inside an expression (a scalar subquery, IN or EXISTS) or a SEMI "
+            "or ANTI join, so a row can depend on other rows, some known later"
+        )
+
+    self_join = lost(
+        f"its query reads {k} twice for one row (a self-join), so a row can hold another row's values, known later"
+    )
+    forward = lost(
+        f"it joins {b}, whose rows are dated by t, without passing t through as its time column or taking "
+        f"greatest() of it and the clock, so a row can hold a {b} row dated after it (an ASOF JOIN forward, say)"
+    )
+    cols = "event_time, knowledge_time"
+    next_day = "ON c.event_time = a.event_time + INTERVAL 1 DAY"
+    for sql, note in {
+        f"SELECT {cols}, value - avg(value) OVER () AS value FROM {k}": window,
+        f"SELECT {cols}, lead(value) OVER (ORDER BY event_time) AS value FROM {k}": window,
+        f"SELECT {cols}, avg(value) OVER (ORDER BY event_time ROWS BETWEEN CURRENT ROW AND 2 FOLLOWING) AS value "
+        f"FROM {k}": window,
+        f"SELECT * FROM {k} QUALIFY row_number() OVER (ORDER BY value DESC) = 1": window,
+        f"SELECT event_time, max(knowledge_time) OVER () AS knowledge_time FROM {k}": window,
+        f"SELECT * FROM (SELECT {cols}, lag(value) OVER (ORDER BY event_time) AS value FROM {k}) s": window,
+        f"SELECT * FROM {k} WHERE value >= (SELECT max(value) - 1 FROM {k})": subquery(k),
+        f"SELECT {cols}, value - (SELECT avg(value) FROM {k}) AS value FROM {k}": subquery(k),
+        f"SELECT * FROM {k} WHERE event_time IN (SELECT event_time - INTERVAL 1 DAY FROM {o})": subquery(o),
+        f"SELECT a.* FROM {k} a SEMI JOIN {k} c {next_day}": subquery(k),
+        f"SELECT a.event_time, a.knowledge_time, c.value FROM {k} a JOIN {k} c {next_day}": self_join,
+        f"WITH w AS (SELECT * FROM {k}) SELECT a.event_time, a.knowledge_time, c.value FROM w a JOIN w c "
+        f"{next_day}": self_join,
+        f"SELECT a.*, m.top FROM {k} a, (SELECT max(value) AS top FROM {k}) m": self_join,
+        f"SELECT m.*, s.close FROM {k} m ASOF JOIN {b} s ON s.t >= m.event_time": forward,
+        f"SELECT m.*, s.close FROM {k} m, (SELECT max(close) AS close FROM {b}) s": forward,
+    }.items():
+        role, _, notes = stored(sql)
+        assert role is None and notes[-1] == note, sql
+    for sql, time in {
+        f"SELECT * FROM {k} WHERE value > 1 UNION ALL SELECT * FROM {k} WHERE value <= 1": "event_time",
+        f"SELECT m.*, u.ticker FROM {k} m, {tickers} u": None,
+        f"SELECT s.t, s.close, m.value, m.knowledge_time FROM {b} s ASOF JOIN {k} m ON s.t >= m.event_time": "t",
+        f"SELECT m.event_time, m.value, s.close, greatest(m.knowledge_time, s.t) AS knowledge_time FROM {k} m "
+        f"ASOF JOIN {b} s ON s.t >= m.event_time": None,
+    }.items():
+        role, kept_time, notes = stored(sql)
+        assert (role, kept_time) == ("available", time) and not any("keeps no role" in n for n in notes), sql
+
+
+def test_a_query_whose_rows_sqlglot_cannot_trace_keeps_no_role(setup, monkeypatch):
+    """A query whose rows sqlglot cannot trace keeps no role, with a note:
+    nothing shows each row computed from the rows it keeps the clocks of."""
+    ctx, store, *_ = setup
+    k = _known_result(store).result_id
+
+    def untraceable(*args, **kwargs):
+        raise rt.sqlglot.errors.OptimizeError("cannot trace")
+
+    monkeypatch.setattr(rt, "traverse_scope", untraceable)
+    out = call(ctx, "results_query", sql=f"SELECT * FROM {k}", store=True)
+    assert {c.name: c.role for c in store.info(out.result_id).columns}["knowledge_time"] is None
+    assert out.notes[-1].startswith(
+        "The answer's knowledge_time keeps no role available (when each row became known): sqlglot cannot trace "
+        "how its query computes rows."
+    )
 
 
 def test_a_whole_answer_that_runs_out_of_time_stores_the_rows_read_cut(setup, monkeypatch):

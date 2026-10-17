@@ -500,3 +500,48 @@ def test_a_query_joining_bars_to_a_dataset_is_matched_no_later_than_each_bar(rea
         ("2026-09-02T20", 101.0),
         ("2026-09-06T20", 105.0),
     ]
+
+
+def test_a_value_computed_from_rows_known_later_is_not_matched_as_point_in_time(real):
+    """Review of N2, round 3: a stored query passing knowledge_time through
+    kept its role beside a full-sample z-score, so a bar of January 7 got
+    -49.5, which averages in the 100.0s published from January 10, under a
+    note that none was published after it. The answer keeps no role, so
+    analytics_align matches it on its time column and counts the left rows
+    its unmarked knowledge_time shows getting a row known after them."""
+    store, ctx = real
+    (query,) = [s for s in RESULTS_SPECS if s.name == "results_query"]
+    ts = pa.timestamp("us", tz="UTC")
+    schema = pa.schema(
+        [
+            pa.field("event_time", ts),
+            pa.field("knowledge_time", ts, metadata={b"role": b"available"}),
+            pa.field("value", pa.float64()),
+        ]
+    )
+    days = [utc(2026, 1, d) for d in range(5, 15)]
+    known = [d + dt.timedelta(hours=12) for d in days]
+    series = store.put(
+        pa.table([days, known, [1.0] * 5 + [100.0] * 5], schema=schema),
+        tool="datastore_query",
+        model="marketlens.QueryRow",
+        provenance=Provenance(provider="plugin", route="GET /rows", fetched_at=M0),
+        time_column="event_time",
+    ).result_id
+    z = call(
+        query,
+        ctx,
+        sql=f"SELECT event_time, knowledge_time, value - avg(value) OVER () AS value FROM {series}",
+        store=True,
+    ).result_id
+    assert {c.name: c.role for c in store.info(z).columns}["knowledge_time"] is None
+    left = put_bars(store, bars("SPY", [100.0] * 2, times=[utc(2026, 1, 7, 6), utc(2026, 1, 7, 20)]))
+    out = call(ALIGN, ctx, left_result_id=left, right_result_id=z, right_columns=["value"])
+    assert [(r["matched_t"][:10], r["value"]) for r in out.rows] == [("2026-01-07", -49.5)] * 2
+    assert not any(n.startswith("Point in time") for n in out.notes)
+    assert (
+        f"knowledge_time of {z} is named as when each row became known but has no role available (a query answer "
+        "keeps none where its query computes the clock, or rows from other rows, and says why), so rows were matched "
+        "on the time column event_time alone: 1 of 2 matched left rows got a right row with knowledge_time after "
+        "their time (look-ahead)."
+    ) in out.notes

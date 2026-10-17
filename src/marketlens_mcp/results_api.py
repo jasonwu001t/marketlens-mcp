@@ -68,7 +68,10 @@ class ColumnInfo(BaseModel):
         "its own. A model states it in its field's "
         'JSON Schema (x-role), a dynamic table in the column\'s Arrow field metadata ({b"role": b"available"}), '
         "and a stored query answer keeps it on such a column it passes through unchanged (same name and type) "
-        "or builds as max() or greatest() of such columns from every result it read that has one. Left out when "
+        "or builds as max() or greatest() of such columns from every result it read that has one, with each row "
+        "computed from the rows it keeps the clocks of (no window function, subquery in an expression or "
+        "self-join; a joined result dated by its time column, such as bars, with that time passed through as the "
+        "answer's or in the clock). Left out when "
         "None.",
     )
 

@@ -342,6 +342,23 @@ class Input:
             None,
         )
 
+    @property
+    def unmarked_clock(self) -> str | None:
+        """Without a column with role available, a timestamp column named as
+        a point-in-time clock (``knowledge_time``, ``ingested_at``) other than
+        the time column, which has lost the role (a query answer whose query
+        computed it, or its rows from others); None otherwise."""
+        if self.available is not None:
+            return None
+        return next(
+            (
+                c.name
+                for c in self.info.columns
+                if c.name in _CLOCKS and c.name != self.time and is_timestamp(c)
+            ),
+            None,
+        )
+
     def series(self, alias: str | None = None) -> str:
         if self.group is None:
             return ql(SERIES_ALL)

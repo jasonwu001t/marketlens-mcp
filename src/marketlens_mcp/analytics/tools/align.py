@@ -167,6 +167,9 @@ async def handler(ctx: ToolContext, args: AlignArgs) -> ToolOutput:
     # known) joins the clock matched on, unless match_on=time.
     avail = right.available
     by_clock = avail is not None and args.match_on == "available"
+    # Not matched on, but its look-ahead counted: the clock of match_on=time,
+    # or one named so that has lost its role.
+    seen = avail if avail is not None else right.unmarked_clock
     with ctx.results.open([left.rid, right.rid]) as session:
         if br is None and right.group is not None:
             n = scalar(session, f"SELECT count(DISTINCT {qi(right.group)}) FROM {right.table}")
@@ -183,8 +186,8 @@ async def handler(ctx: ToolContext, args: AlignArgs) -> ToolOutput:
         where = f"{qi(right.time)} IS NOT NULL" + (f" AND {qi(avail)} IS NOT NULL" if by_clock else "")
         clock = f"greatest({right.ts()}, {right.ts(column=avail)})" if by_clock else right.ts()
         clocks = f"{right.ts()} AS __rt, {clock} AS __rk"
-        if avail is not None and not by_clock:
-            clocks += f", {right.ts(column=avail)} AS __ra"
+        if seen is not None and not by_clock:
+            clocks += f", {right.ts(column=seen)} AS __ra"
         src = known = f"SELECT *, {clocks} FROM {right.table} WHERE {where}"
         if by_clock:
             # Keep only the rows that were the latest usable of their series when
@@ -216,7 +219,7 @@ async def handler(ctx: ToolContext, args: AlignArgs) -> ToolOutput:
             for c, n in zip(chosen, out_names, strict=False)
         ]
         picks.append(f"CASE WHEN {within} THEN {out_time('r.__rt')} END AS {qi(out_names[-1])}")
-        if avail is not None and not by_clock:
+        if seen is not None and not by_clock:
             picks.append(f"CASE WHEN {within} THEN r.__ra > {lts} END AS __late")
         alias = "l"
         sql = f"SELECT l.*, {', '.join(picks)} FROM {left.table} l ASOF LEFT JOIN ({src}) r ON {on}"
@@ -323,6 +326,13 @@ async def handler(ctx: ToolContext, args: AlignArgs) -> ToolOutput:
                 "a version this result does not hold, the likelier the larger the gap. A result with every version "
                 "of each row matches exactly."
             )
+    elif late is not None and avail is None:
+        notes.append(
+            f"{seen} of {right.rid} is named as when each row became known but has no role available (a query "
+            "answer keeps none where its query computes the clock, or rows from other rows, and says why), so rows "
+            f"were matched on the time column {right.time} alone: {late} of {table.num_rows - unmatched} matched "
+            f"left rows got a right row with {seen} after their time (look-ahead)."
+        )
     elif late is not None:
         notes.append(
             f"match_on=time: matched on the time column {right.time} of {right.rid}, not on when its rows "
