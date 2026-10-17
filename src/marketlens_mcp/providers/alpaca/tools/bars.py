@@ -1,12 +1,15 @@
-"""The last bar of a window (market_bars, options_bars, crypto_bars).
+"""The first and last bars of a window (market_bars, options_bars, crypto_bars).
 
-Alpaca returns every bar that starts by ``end``, whole: the 1w bar of a week
-whose Thursday is ``end`` holds Friday's trades too. A bar whose period runs
-past an ``end`` before the newest data is therefore rebuilt from the daily bars
-of its whole days up to ``end`` (1w and Nmo bars, whose open, high, low, close,
+Alpaca returns the bars that start from ``start`` through ``end``, each whole:
+the week whose Wednesday is ``start`` has no bar, and the 1w bar of a week
+whose Thursday is ``end`` holds Friday's trades too. The stretch from ``start``
+that no bar covers is named. A bar whose period runs past an ``end`` before
+the newest data is kept whole when no trade falls between ``end`` and its
+close (a week ending on a Friday), and otherwise rebuilt from the daily bars of
+its whole days up to ``end`` (1w and Nmo bars, whose open, high, low, close,
 volume and trade count are their days') or left out (1d and shorter bars, which
 only trades would rebuild exactly). When the window reaches the newest data,
-the bar still forming is kept and named."""
+the bar still open is kept and named."""
 
 from __future__ import annotations
 
@@ -24,12 +27,21 @@ from .common import Window, named
 from .marketdata import fetch_grouped
 
 TICK = timedelta(microseconds=1)
+#: Alpaca starts Nmin and Nh bars at multiples of N from Go's zero time (7min bars at 13:34Z, 5h bars at 04:00Z).
+ZERO_TIME = datetime(1, 1, 1, tzinfo=UTC)
+#: Trades asked for to learn which instruments trade after end; past it, one the answer does not show may.
+TRADES_PEEK = 1000
 #: Appended to the bar tools' descriptions.
 LAST_BAR_DOC = (
-    " No bar holds trades after end: a 1w or Nmo bar whose period runs past it is rebuilt from the 1d bars of "
-    "its whole days to end (vwap null), a 1d or shorter one is left out, and the bar still forming now is "
-    "kept; notes name each."
+    " Bars hold no trades outside the window: Alpaca leaves out the bar that starts before start, and a bar "
+    "whose period runs past end is kept whole only if no trade falls after end; else a 1w or Nmo bar is "
+    "rebuilt from the 1d bars of its whole days to end (vwap null) and a shorter one is left out (an end "
+    "given as a date takes in that whole day). Notes name each, as they do the bar still open now."
 )
+
+
+def _size(timeframe: str) -> tuple[int, str]:
+    return int(timeframe.rstrip("minhdwo")), timeframe.lstrip("0123456789")
 
 
 def bar_end(t: datetime, timeframe: str, zone: tzinfo = UTC) -> datetime:
@@ -38,7 +50,7 @@ def bar_end(t: datetime, timeframe: str, zone: tzinfo = UTC) -> datetime:
     Alpaca starts the bars of a day or longer (midnight New York for stocks and
     options, so a week across a clock change is an hour longer or shorter in
     UTC; midnight UTC for crypto)."""
-    n, unit = int(timeframe.rstrip("minhdwo")), timeframe.lstrip("0123456789")
+    n, unit = _size(timeframe)
     if unit == "min":
         return t + timedelta(minutes=n)
     if unit == "h":
@@ -50,6 +62,68 @@ def bar_end(t: datetime, timeframe: str, zone: tzinfo = UTC) -> datetime:
     else:
         local += timedelta(days=n * 7 if unit == "w" else n)
     return local.astimezone(UTC)
+
+
+def bar_start(t: datetime, timeframe: str, zone: tzinfo = UTC) -> datetime:
+    """When the bar of ``timeframe`` that holds ``t`` starts: N minutes or hours
+    from ZERO_TIME, or at midnight in ``zone`` of the day, the Monday or the
+    first month of N counted from January."""
+    n, unit = _size(timeframe)
+    if unit in ("min", "h"):
+        return t - (t - ZERO_TIME) % timedelta(**{"minutes" if unit == "min" else "hours": n})
+    day = t.astimezone(zone).date()
+    if unit == "w":
+        day -= timedelta(days=day.weekday())
+    elif unit == "mo":
+        day = day.replace(month=(day.month - 1) // n * n + 1, day=1)
+    return datetime.combine(day, time(0), zone).astimezone(UTC)
+
+
+def first_bar_note(win: Window, timeframe: str, zone: tzinfo = UTC) -> list[str]:
+    """Alpaca leaves out the bar that starts before the window's start: name
+    the stretch from start that no bar covers. A start at 00:00 UTC (a date,
+    or a lookback for bars of a day or longer) means that day in ``zone``, and
+    the arbitrary start a lookback gives shorter bars is not named."""
+    intraday = timeframe.endswith(("min", "h"))
+    if intraday and win.lookback is not None:
+        return []
+    start = win.start.astimezone(UTC)
+    if not intraday and start.time() == time(0):
+        start = datetime.combine(start.date(), time(0), zone).astimezone(UTC)
+    first = bar_start(start, timeframe, zone)
+    upto = min(bar_end(first, timeframe, zone), win.as_of)
+    if first == start or upto <= win.start:
+        return []
+    return [
+        f"Alpaca leaves out the {timeframe} bar from {iso_z(first)}, which starts before start "
+        f"({iso_z(win.start)}): no bar covers start to {iso_z(upto)}. A start of {iso_z(first)} takes in that "
+        "whole bar."
+    ]
+
+
+async def _trading_after(
+    api: AlpacaClient,
+    path: str,
+    params: Mapping[str, Any],
+    symbols: list[str],
+    start: datetime,
+    end: datetime,
+) -> tuple[set[str], bool]:
+    """Which of ``symbols`` (Alpaca's) may trade from ``start`` through ``end``,
+    and whether each of those was seen to: one request for their trades, on
+    the bars' feed. A symbol it does not settle (the request failed, or its
+    answer runs past TRADES_PEEK trades) may trade."""
+    query = {"symbols": symbols, "start": iso_z(start), "end": iso_z(end), "limit": TRADES_PEEK}
+    if "feed" in params:
+        query["feed"] = params["feed"]
+    try:
+        data = await api.get("data", path.removesuffix("/bars") + "/trades", query)
+    except ToolError:
+        return set(symbols), False
+    seen = {s for s, trades in (data.get("trades") or {}).items() if trades}
+    if data.get("next_page_token"):
+        return set(symbols), seen >= set(symbols)
+    return seen, True
 
 
 async def cap_last_bars(
@@ -64,27 +138,39 @@ async def cap_last_bars(
     key: str,
     zone: tzinfo = UTC,
     symbol: Callable[[str], str] = str,
+    unit: str = "",
 ) -> tuple[list[Any], list[str]]:
     """The rows without trades after the window's end, and notes naming the
     bars whose period runs past it. ``path`` and ``params`` are the tool's
-    bars request (sent again for the 1Day bars that rebuild a 1w or Nmo bar),
-    ``key`` is the rows' instrument column and ``symbol`` its Alpaca symbol."""
+    bars request (its trades are asked whether anything trades after end, and
+    it is sent again for the 1Day bars that rebuild a 1w or Nmo bar), ``key``
+    is the rows' instrument column, ``symbol`` its Alpaca symbol and ``unit``
+    what a note calls the instruments it does not name."""
     after = (win.end or win.latest) + TICK
     over = [r for r in rows if bar_end(r.t, timeframe, zone) > after]
     if not over:
         return rows, []
     start = min(r.t for r in over)
+    close = bar_end(start, timeframe, zone)
     if win.end is None or win.end >= win.latest:
         return rows, [
-            f"The {timeframe} bar from {iso_z(start)} ({named(sorted({getattr(r, key) for r in over}))}) is still "
-            f"forming: it holds trades up to now ({iso_z(ctx.now())}) only, not a whole {timeframe}."
+            f"The {timeframe} bar from {iso_z(start)} ({named(sorted({getattr(r, key) for r in over}), unit)}) is "
+            f"the current one: its period runs to {iso_z(close)}, after now ({iso_z(ctx.now())}), so it holds the "
+            "trades so far, and any later trade in its period would change it."
         ]
+    # a bar with no trade between end and its close (a week whose end is a Friday) is whole as it is
+    trading, seen = await _trading_after(
+        api, path, params, sorted({symbol(getattr(r, key)) for r in over}), win.end, min(close, win.latest)
+    )
+    over = [r for r in over if symbol(getattr(r, key)) in trading]
+    if not over:
+        return rows, []
 
     def said(bars: list[Any], what: str) -> str:
         return (
-            f"The {timeframe} bar from {iso_z(start)} ({named(sorted(getattr(r, key) for r in bars))}) runs to "
-            f"{iso_z(bar_end(start, timeframe, zone))}, past end ({iso_z(win.end)}), and Alpaca's bar holds the "
-            f"trades after end: {what}"
+            f"The {timeframe} bar from {iso_z(start)} ({named(sorted(getattr(r, key) for r in bars), unit)}) runs "
+            f"to {iso_z(close)}, past end ({iso_z(win.end)}), and trades after end "
+            f"{'fall' if seen else 'may fall'} in it: {what}"
         )
 
     day = datetime.combine(after.astimezone(zone).date(), time(0), zone).astimezone(UTC)

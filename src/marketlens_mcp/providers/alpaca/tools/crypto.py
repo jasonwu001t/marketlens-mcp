@@ -15,7 +15,7 @@ from marketlens_schema.market import Bar, OrderBookLevel, Quote, Snapshot, Trade
 from .. import mappers
 from ..client import AlpacaClient
 from ..convert import iso_z, timeframe_to_alpaca, to_ticker
-from .bars import LAST_BAR_DOC, cap_last_bars
+from .bars import LAST_BAR_DOC, cap_last_bars, first_bar_note
 from .common import (
     BARS_LOOKBACK_DOC,
     CONTINUE_DOC,
@@ -196,6 +196,7 @@ async def _history(
                     path=f"{BASE.format(loc=loc)}/bars",
                     params=params,
                     key="ticker",
+                    unit=" pair(s)",
                 )
         else:
 
@@ -228,6 +229,7 @@ async def _history(
         absent=_absent(kind),
         notes=[
             *win.notes,
+            *(first_bar_note(win, timeframe) if kind == "bars" else []),
             *missing_in_window_note(args.tickers, page, args.page_token),
             *(no_trades_note(kept) if kind == "bars" else []),
             *capped,

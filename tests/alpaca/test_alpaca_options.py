@@ -84,6 +84,7 @@ def test_options_weekly_bar_past_end_is_rebuilt_from_its_days_to_end(specs, alpa
     alpaca.add(
         "/v1beta1/options/bars", {"bars": {C1: weeks}, "next_page_token": None}, match={"timeframe": "1Week"}
     )
+    alpaca.add("/v1beta1/options/trades", {"trades": {C1: [{"t": "2026-10-09T14:00:00Z", "p": 10.5}]}})
     alpaca.add(
         "/v1beta1/options/bars", {"bars": {C1: days}, "next_page_token": None}, match={"timeframe": "1Day"}
     )
@@ -96,6 +97,12 @@ def test_options_weekly_bar_past_end_is_rebuilt_from_its_days_to_end(specs, alpa
         end="2026-10-07",
     )
     assert alpaca.params(1) == {
+        "symbols": C1,
+        "start": "2026-10-08T03:59:59.999999Z",
+        "end": "2026-10-12T04:00:00Z",
+        "limit": "1000",
+    }
+    assert alpaca.params(2) == {
         "symbols": C1,
         "timeframe": "1Day",
         "start": "2026-10-05T04:00:00Z",
@@ -110,10 +117,27 @@ def test_options_weekly_bar_past_end_is_rebuilt_from_its_days_to_end(specs, alpa
     ]
     assert out.notes[-1] == (
         f"The 1w bar from 2026-10-05T04:00:00Z ({C1}) runs to 2026-10-12T04:00:00Z, past end "
-        "(2026-10-08T03:59:59.999999Z), and Alpaca's bar holds the trades after end: it is rebuilt from the 1d "
-        "bars of 2026-10-05 through 2026-10-07 (New York dates), so it covers those days only; its vwap is null "
+        "(2026-10-08T03:59:59.999999Z), and trades after end fall in it: it is rebuilt from the 1d bars of "
+        "2026-10-05 through 2026-10-07 (New York dates), so it covers those days only; its vwap is null "
         "(insufficient_data), which the 1d bars do not give exactly."
     )
+
+
+def test_options_bars_name_the_stretch_from_start_no_bar_covers(specs, alpaca):
+    alpaca.add("/v1beta1/options/bars", {"bars": {}, "next_page_token": None})
+    out = call(
+        specs["options_bars"],
+        FakeContext(fixed_now=datetime(2026, 10, 16, 20, tzinfo=UTC)),
+        occ_symbols=[C1],
+        timeframe="1mo",
+        start="2026-08-15",
+        end="2026-09-30",
+    )
+    assert (
+        "Alpaca leaves out the 1mo bar from 2026-08-01T04:00:00Z, which starts before start "
+        "(2026-08-15T00:00:00Z): no bar covers start to 2026-09-01T04:00:00Z. A start of 2026-08-01T04:00:00Z "
+        "takes in that whole bar."
+    ) in out.notes
 
 
 def test_options_refuse_a_non_occ_symbol(specs, ctx):

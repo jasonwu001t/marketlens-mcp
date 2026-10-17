@@ -27,7 +27,7 @@ from ..convert import (
     path_symbol,
     timeframe_to_alpaca,
 )
-from .bars import LAST_BAR_DOC, cap_last_bars
+from .bars import LAST_BAR_DOC, cap_last_bars, first_bar_note
 from .common import (
     BARS_LOOKBACK_DOC,
     CONTINUE_DOC,
@@ -234,6 +234,7 @@ async def options_bars(ctx: ToolContext, args: BarsIn) -> ToolOutput:
         page=page,
         notes=[
             *notes,
+            *first_bar_note(win, args.timeframe, NEW_YORK),
             *missing_in_window_note(args.occ_symbols, page, args.page_token, "occ_symbol"),
             *capped,
         ],

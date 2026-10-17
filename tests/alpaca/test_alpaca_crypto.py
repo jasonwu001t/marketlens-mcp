@@ -43,7 +43,7 @@ def test_a_crypto_date_end_includes_that_utc_day(specs, ctx, alpaca, tool, path,
     # Crypto daily bars are stamped at 00:00 UTC.
     alpaca.fixture(path, fixture)
     out = call(specs[tool], ctx, tickers=["BTC/USD"], start="2026-09-28", end="2026-10-01")
-    assert alpaca.params()["end"] == "2026-10-01T23:59:59.999999Z"
+    assert alpaca.params(0)["end"] == "2026-10-01T23:59:59.999999Z"
     assert out.notes[0] == (
         "end 2026-10-01 is a date: the window includes that whole day, to midnight UTC "
         "(2026-10-01T23:59:59.999999Z)."
@@ -107,9 +107,35 @@ def test_crypto_bars_say_the_newest_bar_is_still_forming(specs, ctx, alpaca):
     out = call(specs["crypto_bars"], ctx, tickers=["BTC/USD", "ETH/USD"], timeframe="1d", lookback="P1D")
     assert len(out.rows) == 4  # the rows are unchanged
     assert out.notes == [
-        "The 1d bar from 2026-10-02T00:00:00Z (BTC/USD, ETH/USD) is still forming: it holds trades up to now "
-        "(2026-10-02T20:00:00Z) only, not a whole 1d."
+        "The 1d bar from 2026-10-02T00:00:00Z (BTC/USD, ETH/USD) is the current one: its period runs to "
+        "2026-10-03T00:00:00Z, after now (2026-10-02T20:00:00Z), so it holds the trades so far, and any later "
+        "trade in its period would change it."
     ]
+
+
+def test_the_forming_note_counts_the_pairs_it_does_not_name(specs, ctx, alpaca):
+    pairs = ["AVAX/USD", "BTC/USD", "DOGE/USD", "ETH/USD", "LTC/USD", "SOL/USD"]
+    alpaca.add("/v1beta3/crypto/us/bars", {"bars": {p: [_daily("2026-10-02T00:00:00Z", 1)] for p in pairs}})
+    out = call(specs["crypto_bars"], ctx, tickers=pairs, timeframe="1d", lookback="P1D")
+    assert "(AVAX/USD, BTC/USD, DOGE/USD, ETH/USD, LTC/USD and 1 more pair(s))" in out.notes[-1]
+
+
+def test_crypto_bars_name_the_stretch_from_start_no_bar_covers(specs, ctx, alpaca):
+    # Alpaca's 4h bars start at 00:00Z, 04:00Z, ...: from 02:00Z the first bar is the one at 04:00Z
+    alpaca.add("/v1beta3/crypto/us/bars", {"bars": {"BTC/USD": [_daily("2026-10-01T04:00:00Z", 1)]}})
+    out = call(
+        specs["crypto_bars"],
+        ctx,
+        tickers=["BTC/USD"],
+        timeframe="4h",
+        start="2026-10-01T02:00:00Z",
+        end="2026-10-01T08:00:00Z",
+    )
+    assert out.notes[0] == (
+        "Alpaca leaves out the 4h bar from 2026-10-01T00:00:00Z, which starts before start "
+        "(2026-10-01T02:00:00Z): no bar covers start to 2026-10-01T04:00:00Z. A start of 2026-10-01T00:00:00Z "
+        "takes in that whole bar."
+    )
 
 
 @pytest.mark.parametrize(
@@ -138,6 +164,7 @@ def test_crypto_weekly_bar_past_end_is_rebuilt_from_its_utc_days_to_end(specs, a
     closes = {"05": 85755.2, "06": 85551.35, "07": 83280.89, "08": 81692.51}
     days = [_daily(f"2026-10-{d}T00:00:00Z", c) for d, c in closes.items()]
     alpaca.add("/v1beta3/crypto/us/bars", {"bars": {"BTC/USD": weeks}}, match={"timeframe": "1Week"})
+    alpaca.add("/v1beta3/crypto/us/trades", {"trades": {"BTC/USD": [{"t": "2026-10-09T00:00:01Z", "p": 1}]}})
     alpaca.add("/v1beta3/crypto/us/bars", {"bars": {"BTC/USD": days}}, match={"timeframe": "1Day"})
     out = call(
         specs["crypto_bars"],
@@ -148,6 +175,12 @@ def test_crypto_weekly_bar_past_end_is_rebuilt_from_its_utc_days_to_end(specs, a
         end="2026-10-08",
     )
     assert alpaca.params(1) == {
+        "symbols": "BTC/USD",
+        "start": "2026-10-08T23:59:59.999999Z",
+        "end": "2026-10-12T00:00:00Z",
+        "limit": "1000",
+    }
+    assert alpaca.params(2) == {
         "symbols": "BTC/USD",
         "timeframe": "1Day",
         "start": "2026-10-05T00:00:00Z",
@@ -163,8 +196,8 @@ def test_crypto_weekly_bar_past_end_is_rebuilt_from_its_utc_days_to_end(specs, a
         "end 2026-10-08 is a date: the window includes that whole day, to midnight UTC "
         "(2026-10-08T23:59:59.999999Z).",
         "The 1w bar from 2026-10-05T00:00:00Z (BTC/USD) runs to 2026-10-12T00:00:00Z, past end "
-        "(2026-10-08T23:59:59.999999Z), and Alpaca's bar holds the trades after end: it is rebuilt from the 1d "
-        "bars of 2026-10-05 through 2026-10-08 (UTC dates), so it covers those days only; its vwap is null "
+        "(2026-10-08T23:59:59.999999Z), and trades after end fall in it: it is rebuilt from the 1d bars of "
+        "2026-10-05 through 2026-10-08 (UTC dates), so it covers those days only; its vwap is null "
         "(insufficient_data), which the 1d bars do not give exactly.",
     ]
 
