@@ -434,9 +434,12 @@ def test_a_right_column_with_role_available_is_matched_point_in_time(store, ctx)
     ]
     assert all(r["knowledge_time"] is None or r["knowledge_time"] <= r["t"] for r in rows)
     assert any(
-        n.startswith(f"Point in time: matched on when each row of {right} became known") for n in out.notes
+        n.startswith(
+            f"Point in time: each row of {right} is matched from when it became usable, the later of"
+        )
+        for n in out.notes
     )
-    assert any("1 of 5 left rows found no right row (known at or before their time)" in n for n in out.notes)
+    assert any("1 of 5 left rows found no right row (usable at or before their time)" in n for n in out.notes)
     assert out.provenance.request["match_on"] == "available"
     assert unexplained_dynamic(rows, out.absent) == []
 
@@ -480,7 +483,7 @@ def test_point_in_time_forward_takes_the_first_update_known_at_or_after(store, c
         (3.0, utc(2026, 1, 7)),
         (None, None),
     ]
-    assert any("first update known at or after its time" in n for n in out.notes)
+    assert any("first update usable at or after its time" in n for n in out.notes)
 
 
 def test_point_in_time_tolerance_is_measured_to_when_the_row_became_known(store, ctx):
@@ -490,14 +493,14 @@ def test_point_in_time_tolerance_is_measured_to_when_the_row_became_known(store,
     )
     # 15:00 on Jan 8 is 17 hours after Jan 6 became known (22:00 on Jan 7).
     assert [r["value"] for r in out.table.to_pylist()] == [None, 1.0, 2.0, None, 3.0]
-    assert any("the tolerance is measured to knowledge_time" in n for n in out.notes)
+    assert any("the tolerance is measured to when it became usable" in n for n in out.notes)
 
 
 def test_point_in_time_matches_within_each_series(store, ctx):
     """A series whose latest day is later must not hide another series' rows."""
     rows = [
         ("A", utc(2026, 1, 5), utc(2026, 1, 6, 22), 1.0),
-        ("B", utc(2026, 1, 8), utc(2026, 1, 6, 21), 9.0),
+        ("B", utc(2026, 1, 6), utc(2026, 1, 6, 21), 9.0),
     ]
     right = known_series(store, rows)
     table = pa.table({"series_id": ["A", "B"], "t": pa.array([LEFT_T[1]] * 2, TS)})
@@ -617,6 +620,83 @@ def test_forward_says_how_much_older_the_update_is_than_the_latest_by_time_when_
     assert [r["matched_t"] for r in out.table.to_pylist()] == [utc(2025, 11, 1), utc(2025, 12, 1), None]
     assert (
         "2 of 2 matched left rows got an older right row than the latest event_time at or before when the "
-        f"matched row became known, which {right} has only as known after it: older by a median of 31 days and "
+        f"matched row became usable, which {right} has only as known after it: older by a median of 31 days and "
         "at most 61 days (left 2026-01-26T05:00Z: event_time 2025-11-01 matched, 2026-01-01 the latest)."
     ) in out.notes
+
+
+#: The CPI release schedule as published in advance: every release date known
+#: on 2025-12-01, long before it comes.
+CPI_DAYS = [utc(2026, m, d, 13, 30) for m, d in ((1, 13), (2, 11), (3, 11), (4, 10), (5, 12), (6, 10))]
+
+
+def test_a_schedule_known_in_advance_matches_no_row_dated_after_the_left_time(store, ctx):
+    """Review of N2: matched on when each row became known alone, a schedule
+    known in advance gave a bar of March 20 the June release (the latest date
+    known), a row dated after the bar. A row is usable from the later of its
+    time and when it became known, so each bar gets the last release at or
+    before it, as the time column gives."""
+    right = known_series(store, [(d, utc(2025, 12, 1), float(i)) for i, d in enumerate(CPI_DAYS)])
+    left = daily_left(store, [utc(2026, 3, 20, 20), utc(2026, 5, 1, 20), utc(2026, 7, 1, 20)])
+    out = run(SPEC, ctx, left_result_id=left, right_result_id=right, right_columns=["value"])
+    rows = out.table.to_pylist()
+    assert [r["matched_t"] for r in rows] == [CPI_DAYS[2], CPI_DAYS[3], CPI_DAYS[5]]
+    assert all(r["matched_t"] <= r["t"] for r in rows)
+    by_time = run(
+        SPEC, ctx, left_result_id=left, right_result_id=right, right_columns=["value"], match_on="time"
+    )
+    assert out.table.to_pylist() == by_time.table.to_pylist()
+    assert not any("older right row" in n or "holds one version" in n for n in out.notes)
+    ahead = run(
+        SPEC, ctx, left_result_id=left, right_result_id=right, right_columns=["value"], direction="forward"
+    )
+    assert [r["matched_t"] for r in ahead.table.to_pylist()] == [CPI_DAYS[3], CPI_DAYS[4], None]
+
+
+def test_an_events_calendar_gets_the_last_print_known_not_the_next_scheduled_row(store, ctx):
+    """Review of N2 (nasdaq.economic_events, Initial Jobless Claims): a print
+    is known hours after its release, the next weeks are scheduled days
+    ahead. The bar of October 12 got the October 15 scheduled row (no actual)
+    instead of the October 8 print."""
+    rows = [
+        (utc(2026, 10, 1, 12, 30), utc(2026, 10, 2, 2, 15), 200000.0),
+        (utc(2026, 10, 8, 12, 30), utc(2026, 10, 9, 2, 15), 197000.0),
+        (utc(2026, 10, 15, 12, 30), utc(2026, 10, 9, 20, 21), None),
+        (utc(2026, 10, 22, 12, 30), utc(2026, 10, 9, 20, 21), None),
+    ]
+    right = known_series(store, rows)
+    left = daily_left(store, [utc(2026, 10, 8, 14), utc(2026, 10, 12, 8), utc(2026, 10, 16, 14)])
+    out = run(SPEC, ctx, left_result_id=left, right_result_id=right, right_columns=["value"])
+    assert [(r["value"], r["matched_t"]) for r in out.table.to_pylist()] == [
+        (200000.0, rows[0][0]),  # the October 8 print was not known until 02:15 the next day
+        (197000.0, rows[1][0]),
+        (None, rows[2][0]),  # scheduled, and its time has come: the row as this result holds it
+    ]
+    assert any(n.startswith("1 of 3 matched left rows got an older right row") for n in out.notes)
+    assert not any("holds one version" in n for n in out.notes)
+
+
+def test_an_earnings_calendar_matches_each_tickers_last_report_at_or_before(store, ctx):
+    """Every row of an earnings calendar is known before its report date; by
+    ticker, a bar gets the last report at or before it, never the next."""
+    known = utc(2026, 7, 1)
+    rows = [
+        ("AAPL", utc(2026, 7, 30), known, 1.6),
+        ("AAPL", utc(2026, 10, 29), known, None),
+        ("MSFT", utc(2026, 7, 28), known, 3.5),
+        ("MSFT", utc(2026, 10, 27), known, None),
+    ]
+    right = known_series(store, rows)
+    table = pa.table(
+        {
+            "series_id": ["AAPL", "MSFT", "AAPL"],
+            "t": pa.array([utc(2026, 9, 15, 20), utc(2026, 10, 28, 20), utc(2026, 7, 2)], TS),
+        }
+    )
+    left = store.put_dynamic(table, time_column="t", group_column="series_id")
+    out = run(SPEC, ctx, left_result_id=left, right_result_id=right, right_columns=["value"], by="series_id")
+    assert [(r["series_id"], r["matched_t"]) for r in out.table.to_pylist()] == [
+        ("AAPL", None),
+        ("AAPL", utc(2026, 7, 30)),
+        ("MSFT", utc(2026, 10, 27)),
+    ]

@@ -69,9 +69,11 @@ class AlignArgs(BaseModel):
         "available",
         description="What right rows are matched on when the right result has a column with role available "
         "(when each row became known, e.g. a dataset's knowledge_time). available (default): point in time, "
-        "each left row gets the right row with the latest time among those known at or before the left time "
-        "(backward), or the first update known at or after it (forward), so no value reaches a time before "
-        "it was published; tolerance is measured to when the row became known. A note says how much older the "
+        "a right row is usable from the later of its time and when it became known, and each left row gets the "
+        "right row with the latest time at or before the left time among those known by then (backward), or "
+        "the first update usable at or after it (forward), so no value reaches a time before it was published "
+        "or a time before its own (a calendar row known in advance waits for its date); tolerance is measured "
+        "to when the row became usable. A note says how much older the "
         "matches are than the latest right time by the time column; a result holding one version of each row "
         "(its latest) has a revised row only as known from its revision, so a match can be older than the value "
         "known then (a note says so when the result shows revisions). time: the right's time "
@@ -162,7 +164,7 @@ async def handler(ctx: ToolContext, args: AlignArgs) -> ToolOutput:
         out_names.append(name)
     notes = list(left.notes) + list(right.notes)
     # Point in time: a right column with role available (when each row became
-    # known) is the clock matched on, unless match_on=time.
+    # known) joins the clock matched on, unless match_on=time.
     avail = right.available
     by_clock = avail is not None and args.match_on == "available"
     with ctx.results.open([left.rid, right.rid]) as session:
@@ -175,17 +177,21 @@ async def handler(ctx: ToolContext, args: AlignArgs) -> ToolOutput:
                     "to match within each series, or keep one series with results_query first.",
                 )
         # __rt: the right row's time; __rk: the clock matched on (its time, or
-        # when it became known); __ra: when it became known, to count look-ahead.
+        # the later of its time and when it became known: a row is usable once
+        # its time has come and it is known, so a row known before its time, a
+        # calendar's, waits for it); __ra: when it became known, to count look-ahead.
         where = f"{qi(right.time)} IS NOT NULL" + (f" AND {qi(avail)} IS NOT NULL" if by_clock else "")
-        clocks = f"{right.ts()} AS __rt, {right.ts(column=avail) if by_clock else right.ts()} AS __rk"
+        clock = f"greatest({right.ts()}, {right.ts(column=avail)})" if by_clock else right.ts()
+        clocks = f"{right.ts()} AS __rt, {clock} AS __rk"
         if avail is not None and not by_clock:
             clocks += f", {right.ts(column=avail)} AS __ra"
         src = known = f"SELECT *, {clocks} FROM {right.table} WHERE {where}"
         if by_clock:
-            # Keep only the rows that were the latest known of their series when
-            # they became known (the latest time known then, a revision of an
+            # Keep only the rows that were the latest usable of their series when
+            # they became usable (the latest time usable then, a revision of an
             # older time being no update): an as-of match on __rk then gives the
-            # latest time known at the left time, in its latest version then.
+            # latest time at or before the left time known then, in its latest
+            # version then.
             series = [qi(br)] if br else []
             src = (
                 f"SELECT * FROM ({src}) QUALIFY __rt >= max(__rt) OVER ("
@@ -217,7 +223,7 @@ async def handler(ctx: ToolContext, args: AlignArgs) -> ToolOutput:
         if by_clock:
             # __newest: the latest right time at or before the clock the match
             # was made at (the left time; forward: when the matched row became
-            # known) by the time column alone. Later than the match, it is a
+            # usable) by the time column alone. Later than the match, it is a
             # row this result has only as known after that clock.
             at = lts if args.direction == "backward" else f"CASE WHEN {within} THEN r.__rk END"
             times = f"SELECT {f'{qi(br)}, ' if br else ''}__rt FROM ({known})"
@@ -277,22 +283,22 @@ async def handler(ctx: ToolContext, args: AlignArgs) -> ToolOutput:
     unmatched = table.column(out_names[-1]).null_count
     notes.append(
         f"{unmatched} of {table.num_rows} left rows found no right row "
-        f"({'known ' if by_clock else ''}{'at or before' if args.direction == 'backward' else 'at or after'} "
+        f"({'usable ' if by_clock else ''}{'at or before' if args.direction == 'backward' else 'at or after'} "
         f"their time{f', within {args.tolerance}' if args.tolerance else ''}{_same(bl, br)})."
     )
     if by_clock:
         how = (
-            f"each left row gets the right row with the latest {right.time} known at or before its time, so "
-            "none was published after it"
+            f"each left row gets the right row with the latest {right.time} at or before its time among those "
+            "known by then, so none was published after it or is dated after it"
             if args.direction == "backward"
-            else f"each left row gets the first update known at or after its time: the right row with the "
-            f"latest {right.time} known then"
+            else f"each left row gets the first update usable at or after its time: the right row with the "
+            f"latest {right.time} usable then"
         )
         notes.append(
-            f"Point in time: matched on when each row of {right.rid} became known ({avail}), not on its time "
-            f"column {right.time}: {how}"
-            + (f"; the tolerance is measured to {avail}" if args.tolerance else "")
-            + f". match_on=time matches on {right.time} instead."
+            f"Point in time: each row of {right.rid} is matched from when it became usable, the later of its "
+            f"time column {right.time} and when it became known ({avail}): {how}"
+            + ("; the tolerance is measured to when it became usable" if args.tolerance else "")
+            + f". match_on=time matches on {right.time} alone instead."
         )
         if unknown:
             notes.append(
@@ -302,7 +308,7 @@ async def handler(ctx: ToolContext, args: AlignArgs) -> ToolOutput:
         if older:
             older.sort(key=lambda o: o[0])
             gap, t, m, n = older[-1]
-            clock = "their time" if args.direction == "backward" else "when the matched row became known"
+            clock = "their time" if args.direction == "backward" else "when the matched row became usable"
             notes.append(
                 f"{len(older)} of {table.num_rows - unmatched} matched left rows got an older right row than the "
                 f"latest {right.time} at or before {clock}, which {right.rid} has only as known after it: older by "
@@ -312,7 +318,7 @@ async def handler(ctx: ToolContext, args: AlignArgs) -> ToolOutput:
         if revised:
             notes.append(
                 f"{right.rid} holds one version of each {right.time}{f' per {br}' if br else ''}, and at least "
-                f"{revised:,} of its {total:,} rows are revisions (known only after a later {right.time} was): a "
+                f"{revised:,} of its {total:,} rows are revisions (usable only after a later {right.time} was): a "
                 "revised row's earlier releases are not there, so where a left row got an older right row, a newer one may have been known at its time in "
                 "a version this result does not hold, the likelier the larger the gap. A result with every version "
                 "of each row matches exactly."
@@ -379,9 +385,9 @@ SPEC = ToolSpec(
         "within the same `by` value (e.g. ticker; when the names differ, by_left and by_right, e.g. bars' ticker "
         "and returns' series). Output: the left columns, the chosen right columns (names "
         "that collide get the suffix, default _right) and matched_t, the matched right row's time; unmatched "
-        "right values are None (no_match). Point in time: a right column with role available (when each row "
-        "became known, e.g. a dataset's knowledge_time) is matched on, so a left row only gets a value known "
-        "by its time (match_on=time: the right's time column, look-ahead counted in a note). Use it to line up "
+        "right values are None (no_match). Point in time: given a right column with role available (when each row "
+        "became known, e.g. a dataset's knowledge_time), a right row counts from the later of its time and that "
+        "(match_on=time: the time column alone, look-ahead counted in a note). Use it to line up "
         "series of different frequencies. Large outputs are stored and you get a result_id."
     ),
     readme="As-of join of two results (backward or forward, tolerance, by column; point in time on a column "

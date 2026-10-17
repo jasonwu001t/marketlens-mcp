@@ -15,13 +15,15 @@ import pyarrow as pa
 import pyarrow.csv as pacsv
 import pyarrow.parquet as pq
 from pydantic import BaseModel, ConfigDict, Field, field_validator
+from sqlglot import exp
+from sqlglot.lineage import lineage
 
 from marketlens_schema import QUERY_ROW_SCHEMA_NAME, Delay, Provenance
 
 from ..manifest import DYNAMIC_MODELS
 from ..offload import estimate_tokens
 from ..plugin_api import ToolContext, ToolError, ToolOutput, ToolSpec
-from ..results_api import RESULT_ID_RE, QueryRefused
+from ..results_api import RESULT_ID_RE, QueryRefused, ResultInfo
 from .arrow import duckdb_type, json_safe, sql_ident, table_rows
 from .store import FileResultStore, QueryOutcome
 
@@ -73,11 +75,53 @@ class QueryArgs(BaseModel):
     )
 
 
-def _inherited(store: FileResultStore, out: QueryOutcome) -> dict:
-    """What a stored answer keeps of the results it read: the role of every
-    column still there with the same name and type as in any of them, whatever
-    its time column, so analytics_align stays point in time on the answer (a
-    column of when each row became known). Over one parent, also its time and
+def _is_clock(sql: str, name: str, parents: list[ResultInfo]) -> bool:
+    """Whether the answer's column ``name`` still says when each of its rows
+    became known: by its lineage (sqlglot's, through subqueries, CTEs and set
+    operations), a column with role available of the results read, passed
+    through or taken as max() (an aggregate) or greatest() of such columns,
+    never earlier than any clock it is built from, and fed by every result read
+    that has one (a join takes the later of both sides' clocks). A clock the
+    query computes otherwise (min() of a week's, a time_bucket of it) or that
+    sqlglot cannot trace is not."""
+    clocks = {(p.result_id, c.name.lower()) for p in parents for c in p.columns if c.role == "available"}
+    schema = {p.result_id: {c.name: c.type for c in p.columns} for p in parents}
+    try:
+        node = lineage(name, sql, schema=schema, dialect="duckdb")
+    except Exception:  # a query sqlglot cannot trace keeps no role; the answer is stored all the same
+        return False
+    fed = set()
+    for n in node.walk():
+        if not n.downstream:
+            source = n.source.name.lower() if isinstance(n.source, exp.Table) else None
+            if (source, exp.to_column(n.name, dialect="duckdb").name.lower()) not in clocks:
+                return False
+            fed.add(source)
+            continue
+        e = n.expression.unalias()
+        if not isinstance(e, exp.Column) and not (
+            isinstance(e, exp.Max | exp.Greatest)
+            and all(isinstance(a, exp.Column) for a in e.iter_expressions())
+        ):
+            return False
+    return fed >= {rid for rid, _ in clocks}
+
+
+def _clocks(store: FileResultStore, out: QueryOutcome) -> dict[str, str]:
+    """The answer's columns that keep role available (when each row became
+    known), each with its role: a column with the name and type of such a
+    column of a result read that still is one (``_is_clock``)."""
+    types = {f.name: duckdb_type(f.type) for f in out.table.schema}
+    parents = [store.info(rid) for rid in out.result_ids]
+    named = {c.name: c.role for p in parents for c in p.columns if c.role and types.get(c.name) == c.type}
+    return {n: r for n, r in named.items() if _is_clock(out.executed_sql, n, parents)}
+
+
+def _inherited(store: FileResultStore, out: QueryOutcome, roles: dict[str, str]) -> dict:
+    """What a stored answer keeps of the results it read: ``roles``, the role
+    of each column that still says when each row became known (``_clocks``),
+    whatever its time column, so analytics_align stays point in time on the
+    answer. Over one parent, also its time and
     series columns and its column units, with the
     model each such column came from (the one the parent recorded for it, else
     the parent's, unless the parent is itself a query answer or aligned result,
@@ -86,7 +130,6 @@ def _inherited(store: FileResultStore, out: QueryOutcome) -> dict:
     chains into analytics as the parent would, after the parent is gone too."""
     types = {f.name: duckdb_type(f.type) for f in out.table.schema}
     parents = [store.info(rid) for rid in out.result_ids]
-    roles = {c.name: c.role for p in parents for c in p.columns if c.role and types.get(c.name) == c.type}
     kept: dict = {"column_roles": roles} if roles else {}
     if len(parents) != 1:
         return kept
@@ -104,26 +147,33 @@ def _inherited(store: FileResultStore, out: QueryOutcome) -> dict:
     }
 
 
-def _lost_clocks(store: FileResultStore, out: QueryOutcome) -> str | None:
-    """A note naming each column of when a row became known (role available)
+def _lost_clocks(store: FileResultStore, out: QueryOutcome, roles: dict[str, str]) -> list[str]:
+    """Notes naming each column of when a row became known (role available)
     of the results read that a stored answer leaves out (or changes the type
-    of): without it, analytics_align matches the answer on its time column."""
+    of), or keeps but computes (not in ``roles``): without one, analytics_align
+    matches the answer on its time column."""
     types = {f.name: duckdb_type(f.type) for f in out.table.schema}
-    lost = list(
-        dict.fromkeys(
-            f"{c.name} of {rid}"
-            for rid in out.result_ids
-            for c in store.info(rid).columns
-            if c.role == "available" and types.get(c.name) != c.type
+    clocks = [(rid, c) for rid in out.result_ids for c in store.info(rid).columns if c.role == "available"]
+    lost = list(dict.fromkeys(f"{c.name} of {rid}" for rid, c in clocks if types.get(c.name) != c.type))
+    computed = list(
+        dict.fromkeys(c.name for _, c in clocks if types.get(c.name) == c.type and c.name not in roles)
+    )
+    notes = []
+    if lost:
+        notes.append(
+            f"The answer leaves out {', '.join(lost)} (role available: when each row became known), so "
+            "analytics_align matches it on its time column, which can pair a left row with a value published after "
+            "it; keep the column, with its name and type, to match point in time."
         )
-    )
-    if not lost:
-        return None
-    return (
-        f"The answer leaves out {', '.join(lost)} (role available: when each row became known), so "
-        "analytics_align matches it on its time column, which can pair a left row with a value published after "
-        "it; keep the column, with its name and type, to match point in time."
-    )
+    if computed:
+        notes.append(
+            f"The answer's {', '.join(computed)} keeps no role available (when each row became known): a query "
+            "keeps it only on such a column passed through, or on max() or greatest() of such columns from every "
+            "result read that has one, never earlier than any row's (min() of a week's, say, is earlier than some "
+            "of the week's values). analytics_align matches the answer on its time column, which can pair a left "
+            "row with a value published after it."
+        )
+    return notes
 
 
 def _incomplete_parents(store: FileResultStore, out: QueryOutcome) -> str | None:
@@ -212,8 +262,9 @@ async def results_query(ctx: ToolContext, args: QueryArgs) -> ToolOutput:
                 f"The answer ({out.row_count} rows, {size:,} bytes as JSON) is larger than {limit}, so it was "
                 "stored as a new result: query it, or select fewer columns or rows to see it inline."
             )
-    if keep and (lost := _lost_clocks(store, out)):
-        notes.append(lost)
+    roles = _clocks(store, out) if keep else {}
+    if keep:
+        notes.extend(_lost_clocks(store, out, roles))
     request = {"sql": args.sql[:4000], "max_rows": args.max_rows, "store": args.store}
     prov = _provenance(ctx, "duckdb:results_query", request, list(out.result_ids))
     if truncation:
@@ -226,7 +277,7 @@ async def results_query(ctx: ToolContext, args: QueryArgs) -> ToolOutput:
             provenance=prov,
             risk=out.risk,
             parents=list(out.result_ids),
-            **_inherited(store, out),
+            **_inherited(store, out, roles),
         )
         return ToolOutput(
             model=QUERY_ROW_SCHEMA_NAME, provenance=prov, stored=info, notes=notes, risk=out.risk
@@ -518,8 +569,8 @@ SPECS: tuple[ToolSpec, ...] = (
         "(24,000 bytes of JSON by default) or about 6,000 tokens, or store=true, is kept whole as a new result "
         "(max_rows bounds only an inline answer; fetch.max_rows, 50,000 rows by default, a stored one; an answer "
         "cut, or over a cut result, says truncated) and you get its result_id; a query of one result keeps its "
-        "time and series columns when they are unchanged, and of any result its columns' roles, so it chains "
-        "into analytics. Exact decimals come back as strings (CAST to DOUBLE for a number); whole-number "
+        "time and series columns when they are unchanged, and a clock column's role passed through (or max), so "
+        "it chains into analytics. Exact decimals come back as strings (CAST to DOUBLE for a number); whole-number "
         "sums are numbers. Files, settings, other sessions and every write are refused.",
         "Read-only SQL over this session's results (one SELECT, forced LIMIT)",
         QueryArgs,

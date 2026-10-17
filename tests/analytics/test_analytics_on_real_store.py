@@ -318,7 +318,8 @@ def test_a_stored_point_in_time_result_is_aligned_on_when_its_rows_became_known(
         )
         assert late.rows == [{"late": 0, "matched": 248}]
         assert any(
-            n.startswith(f"Point in time: matched on when each row of {rid} became known") for n in out.notes
+            n.startswith(f"Point in time: each row of {rid} is matched from when it became usable")
+            for n in out.notes
         )
         # The aligned result's knowledge_time is a carried column, not its own clock.
         assert {c.name: c.role for c in store.info(out.result_id).columns}["knowledge_time"] is None
@@ -413,5 +414,89 @@ def test_a_data_models_knowledge_time_is_matched_point_in_time_through_a_query(r
         (329.0, "2026-09-01"),
     ]
     assert any(
-        n.startswith(f"Point in time: matched on when each row of {as_t} became known") for n in out.notes
+        n.startswith(f"Point in time: each row of {as_t} is matched from when it became usable")
+        for n in out.notes
     )
+
+
+def test_a_release_schedule_is_matched_from_each_release_not_from_when_it_was_announced(real):
+    """Review of N2: ReleaseScheduleEntry's knowledge_time states x-role
+    available, and every release of the year is known in advance; matched on
+    that alone, the bars of March 20 and May 1 both got the June release. A row
+    counts from the later of its time and when it became known, so each bar
+    gets the last release at or before it, as before the role."""
+    from marketlens_schema.data import ReleaseScheduleEntry
+
+    store, ctx = real
+    days = [(1, 13), (2, 11), (3, 11), (4, 10), (5, 12), (6, 10)]
+    schedule = [
+        ReleaseScheduleEntry(
+            release="cpi",
+            reference_month=dt.date(2026, m - 1, 1) if m > 1 else dt.date(2025, 12, 1),
+            start_date=dt.date(2026, m, 1),
+            end_date=dt.date(2026, m, 28),
+            scheduled_at=utc(2026, m, d, 13, 30),
+            knowledge_time=utc(2025, 12, 1),
+        )
+        for m, d in days
+    ]
+    rid = store.put(
+        table_of(ReleaseScheduleEntry, schedule),
+        tool="bls_schedule",
+        model=ReleaseScheduleEntry.schema_name,
+        provenance=Provenance(provider="bls", route="GET /schedule", fetched_at=M0),
+    ).result_id
+    assert {c.name: c.role for c in store.info(rid).columns}["knowledge_time"] == "available"
+    left = put_bars(store, bars("SPY", [100.0] * 2, times=[utc(2026, 3, 20, 20), utc(2026, 5, 1, 20)]))
+    for match_on in ("available", "time"):
+        out = call(
+            ALIGN,
+            ctx,
+            left_result_id=left,
+            right_result_id=rid,
+            right_columns=["reference_month"],
+            match_on=match_on,
+        )
+        assert [(r["matched_t"][:10], r["reference_month"]) for r in out.rows] == [
+            ("2026-03-11", "2026-02-01"),
+            ("2026-04-10", "2026-03-01"),
+        ], match_on
+
+
+def test_a_query_joining_bars_to_a_dataset_is_matched_no_later_than_each_bar(real):
+    """Review of N2: a stored join of bars with a dataset's rows keeps the
+    dataset's knowledge_time, with its role, beside the bars' own time. Matched
+    on knowledge_time alone, every joined row was known before the first bar,
+    so a left row got the last bar of the join, dated after it."""
+    store, ctx = real
+    (query,) = [s for s in RESULTS_SPECS if s.name == "results_query"]
+    spy = put_bars(store, bars("SPY", [100.0 + i for i in range(10)], start=utc(2026, 9, 1, 20)))
+    ts = pa.timestamp("us", tz="UTC")
+    schema = pa.schema(
+        [
+            pa.field("event_time", ts, metadata={b"unit": b"UTC"}),
+            pa.field("knowledge_time", ts, metadata={b"unit": b"UTC", b"role": b"available"}),
+            pa.field("value", pa.float64(), metadata={b"unit": b"percent"}),
+        ]
+    )
+    table = pa.table([[utc(2026, 7, 1)], [utc(2026, 8, 14, 12, 30)], [2.7]], schema=schema)
+    macro = store.put(
+        table,
+        tool="datastore_query",
+        model="marketlens.QueryRow",
+        provenance=Provenance(provider="plugin", route="GET /rows", fetched_at=M0),
+        time_column="event_time",
+    ).result_id
+    joined = call(
+        query,
+        ctx,
+        sql=f"SELECT b.t, b.close, m.value, m.knowledge_time FROM {spy} b ASOF JOIN {macro} m ON b.t >= m.event_time",
+        store=True,
+    ).result_id
+    assert {c.name: c.role for c in store.info(joined).columns}["knowledge_time"] == "available"
+    left = put_bars(store, bars("QQQ", [50.0] * 2, times=[utc(2026, 9, 3, 12), utc(2026, 9, 7, 12)]))
+    out = call(ALIGN, ctx, left_result_id=left, right_result_id=joined, right_columns=["close", "value"])
+    assert [(r["matched_t"][:13], r["close_right"]) for r in out.rows] == [
+        ("2026-09-02T20", 101.0),
+        ("2026-09-06T20", 105.0),
+    ]

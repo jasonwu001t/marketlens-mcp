@@ -686,6 +686,49 @@ def test_a_columns_role_survives_a_join_and_a_new_time_column_and_a_dropped_one_
     assert isinstance(inline, InlineResult) and not any("leaves out" in n for n in inline.notes)
 
 
+def test_a_clock_the_query_computes_keeps_no_role(setup):
+    """Review of N2: the role was kept on any column with the name and type of
+    one, so min(knowledge_time) of a week, aliased back, said when the week's
+    rows became known, and analytics_align matched a bar to an average of days
+    published after it. A clock keeps its role only passed through (through
+    a CTE too), or as max() or greatest() of clocks, with every result read
+    that has one feeding it."""
+    ctx, store, *_ = setup
+    known, other = _known_result(store), _known_result(store)
+    k, o = known.result_id, other.result_id
+
+    def role(sql):
+        out = call(ctx, "results_query", sql=sql, store=True)
+        return {c.name: c.role for c in store.info(out.result_id).columns}["knowledge_time"], out.notes
+
+    week = "time_bucket(INTERVAL 7 DAY, event_time) AS event_time, avg(value) AS value"
+    computed = (
+        "The answer's knowledge_time keeps no role available (when each row became known): a query keeps it only "
+        "on such a column passed through, or on max() or greatest() of such columns from every result read that "
+        "has one, never earlier than any row's (min() of a week's, say, is earlier than some of the week's "
+        "values). analytics_align matches the answer on its time column, which can pair a left row with a value "
+        "published after it."
+    )
+    for sql in (
+        f"SELECT {week}, min(knowledge_time) AS knowledge_time FROM {k} GROUP BY ALL",
+        f"SELECT event_time, time_bucket(INTERVAL 1 DAY, knowledge_time) AS knowledge_time FROM {k}",
+        f"SELECT event_time, max(knowledge_time) OVER () AS knowledge_time FROM {k}",
+        f"WITH w AS (SELECT {week}, min(knowledge_time) AS knowledge_time FROM {k} GROUP BY ALL) SELECT * FROM w",
+        # A join keeping one side's clock: the other side's values may be known later.
+        f"SELECT a.event_time, a.value, b.value AS b_value, a.knowledge_time FROM {k} a JOIN {o} b USING (event_time)",
+    ):
+        kept, notes = role(sql)
+        assert kept is None and notes[-1] == computed, sql
+    for sql in (
+        f"SELECT {week}, max(knowledge_time) AS knowledge_time FROM {k} GROUP BY ALL",
+        f"WITH w AS (SELECT * FROM {k} WHERE value > 1) SELECT event_time, knowledge_time FROM w",
+        f"SELECT event_time, a.value, b.value AS b_value, greatest(a.knowledge_time, b.knowledge_time) "
+        f"AS knowledge_time FROM {k} a JOIN {o} b USING (event_time)",
+    ):
+        kept, notes = role(sql)
+        assert kept == "available" and computed not in notes, sql
+
+
 def test_a_whole_answer_that_runs_out_of_time_stores_the_rows_read_cut(setup, monkeypatch):
     """Review of N5: storing an answer too large to show runs it again
     without max_rows; when that run is stopped at the time limit, the rows the

@@ -26,7 +26,8 @@ CONVENTIONS (schema 1.x)
   ``UNITS``). Percentages are fractions: 0.0125 means 1.25 %.
 * A timestamp field holding when each row became known (published or first
   available), beside the time the row describes, says ``x-role: available``
-  in the JSON Schema; analytics_align matches on it (point in time).
+  in the JSON Schema; analytics_align matches a row from the later of its
+  time and that one (point in time).
 * ABSENCE: a value the source does not give is ``None``, never 0, and every
   ``None`` is explained, either per row in the row's ``absent`` map
   (field -> AbsenceCode) or for the whole response in the response-level
