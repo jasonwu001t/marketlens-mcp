@@ -8,6 +8,49 @@ Alpha (0.2.0, unreleased). The tool names, the canonical schema (1.1.0) and the 
 
 ## How it works
 
+```mermaid
+flowchart TB
+  client["MCP client<br/>Claude Desktop, Claude Code, any MCP client"]
+  subgraph server["marketlens-mcp process"]
+    direction TB
+    transport["transport.py<br/>stdio, or streamable HTTP on 127.0.0.1 with a bearer token"]
+    policy["config.py + policy.py<br/>config.yaml, capabilities on/off"]
+    registry["registry.py + manifest.py<br/>every tool: name, capability, route, models"]
+    pipeline["pipeline.py<br/>validate args, run the handler, canonical rows"]
+    offload["offload.py<br/>inline, or stored with a result_id"]
+    trust["trust.py<br/>_marketlens envelope, provenance, notes"]
+    subgraph providers["providers (one plugin API)"]
+      alpaca["alpaca/<br/>market, reference, news,<br/>portfolio, provider.docs"]
+      data["data/ (optional extra)<br/>macro, filings, fed_treasury,<br/>holidays, calendars"]
+      plugins["installed plugins<br/>marketlens.plugins entry points"]
+    end
+    store[("results/<br/>DuckDB + Parquet result store<br/>per session, 24 h")]
+    analytics["analytics_* and results_* tools<br/>guarded read-only SQL"]
+  end
+  alpacaapi["Alpaca market-data API<br/>Alpaca trading API (reads only)<br/>Alpaca docs MCP"]
+  omni[("marketlens-data (omni)<br/>local point-in-time store")]
+  publishers["FRED, BLS, BEA, SEC EDGAR, Federal Reserve,<br/>NY Fed, Treasury, FiscalData, NYSE, SIFMA, OPM, Nasdaq"]
+  other["the plugin's own upstream"]
+
+  client <--> transport
+  transport --> registry
+  policy --> registry
+  registry --> pipeline
+  pipeline --> alpaca & data & plugins
+  pipeline --> offload
+  offload <--> store
+  analytics <--> store
+  offload --> trust
+  trust --> transport
+  alpaca --> alpacaapi
+  data --> omni
+  omni --> publishers
+  plugins --> other
+```
+
+<details>
+<summary>The same picture as text</summary>
+
 ```text
   MCP client (Claude Desktop, Claude Code, any MCP client)
         |  stdio (default), or streamable HTTP on 127.0.0.1 with a bearer token
@@ -39,6 +82,8 @@ Alpha (0.2.0, unreleased). The tool names, the canonical schema (1.1.0) and the 
                                   Parquet store (FRED, BLS, BEA,
                                   SEC EDGAR, Fed, Treasury, ...)
 ```
+
+</details>
 
 A tool call, end to end:
 
@@ -76,6 +121,28 @@ Package layout:
 | Nasdaq calendars (unofficial endpoint) | `data` extra | keyless | `calendars` (off) |
 | Your own computations | local DuckDB | none | `analytics`, `results` |
 
+### Upstream APIs
+
+Every request a tool can make goes to one of these. Nothing else is called: no telemetry, no update check.
+
+| Upstream | Base URL | Endpoints used | Auth | Tools |
+|---|---|---|---|---|
+| Alpaca Market Data API | `https://data.alpaca.markets` | `/v2/stocks/{bars,quotes,trades,snapshots}` and their `/latest` forms, `/v2/stocks/meta/{exchanges,conditions/*}`; `/v1beta1/options/{bars,trades,snapshots,quotes/latest,trades/latest}`, `/v1beta1/options/meta/{exchanges,conditions/*}`; `/v1beta3/crypto/{loc}/{bars,quotes,trades,snapshots,latest/*}`; `/v1beta1/fixed_income/latest/quotes`; `/v1beta1/news`; `/v1beta1/screener/{stocks/most-actives,{market_type}/movers}`; `/v1/corporate-actions` | `ALPACA_API_KEY` / `ALPACA_SECRET_KEY` as headers | `market_*`, `options_*`, `crypto_*`, `fixed_income_*`, `news_search`, `reference_{stock,option}_exchanges`, `reference_condition_codes`, `reference_corporate_actions` |
+| Alpaca Trading API | `https://paper-api.alpaca.markets` (paper) or `https://api.alpaca.markets` (live) | `/v2/assets`, `/v2/calendar`, `/v2/clock`, `/v2/corporate_actions/announcements`, `/v2/options/contracts`; with `portfolio` on: `/v2/account`, `/v2/account/configurations`, `/v2/account/activities`, `/v2/account/portfolio/history`, `/v2/positions`, `/v2/orders`, `/v2/watchlists`, `/v1/locates` (GET only) | same keys | `reference_asset(s)`, `reference_calendar`, `reference_clock`, `reference_corporate_action_announcement(s)`, `reference_option_contract(s)`, `portfolio_*` |
+| Alpaca documentation MCP | `https://docs.alpaca.markets/mcp` | its `search`, `fetch`, `list-endpoints`, `get-endpoint`, `search-endpoints` tools | none | `provider_docs_*` (off by default) |
+| FRED / ALFRED (St. Louis Fed) | `https://api.stlouisfed.org/fred` | `/series/observations`, `/series/vintagedates` | `FRED_API_KEY` | `macro_series` |
+| BLS | `https://api.bls.gov/publicAPI/v2/timeseries/data/`; `https://www.bls.gov` | the time-series API; `/schedule/news_release/{cpi,empsit}.htm`; the release archive `/bls/news-release/{release}.htm` | `BLS_API_KEY` (optional) | `macro_bls_series`, `macro_release_schedule` |
+| BEA | `https://apps.bea.gov/api/data/` | NIPA `GetData` | `BEA_API_KEY` | `macro_bea_table` |
+| U.S. SEC EDGAR | `https://data.sec.gov`, `https://www.sec.gov` | `/submissions/CIK##########.json`; `/api/xbrl/companyfacts/CIK##########.json`; `/Archives/edgar/data/{cik}/...` (Forms 3/4/5/144, 13F-HR, N-PORT, 8-K EX-99.1); `/files/company_tickers.json`, `/files/company_tickers_mf.json`; the company Atom feed `/cgi-bin/browse-edgar?action=getcompany&...&output=atom` | `SEC_CONTACT_EMAIL` in the User-Agent | `sec_*` |
+| Federal Reserve Board | `https://www.federalreserve.gov` | `/monetarypolicy/fomccalendars.htm`; statements `/newsevents/pressreleases/monetaryYYYYMMDDa.htm` | none | `fed_fomc_meetings`, `fed_fomc_statements` |
+| New York Fed | `https://markets.newyorkfed.org` | `/api/rates/all/search.json` | none | `fed_reference_rates` |
+| U.S. Treasury | `https://home.treasury.gov` | `/resource-center/data-chart-center/interest-rates/` (`daily-treasury-rates.csv`) | none | `treasury_yield_curve` |
+| Treasury FiscalData | `https://api.fiscaldata.treasury.gov/services/api/fiscal_service` | `/v1/accounting/od/auctions_query`, `/v2/accounting/od/debt_to_penny`, `/v1/accounting/dts/operating_cash_balance` | none | `treasury_auctions`, `treasury_debt`, `treasury_tga` |
+| NYSE, SIFMA, OPM | `https://www.nyse.com`, `https://www.sifma.org`, `https://www.opm.gov` | `/markets/hours-calendars`; `/resources/guides-playbooks/holiday-schedule` and `/us-holiday-archive`; `/policy-data-oversight/pay-leave/federal-holidays/` | none | `calendar_us_holidays` |
+| Nasdaq (unofficial) | `https://api.nasdaq.com` | `/api/calendar/economicevents`, `/api/calendar/earnings`, `/api/company/{symbol}/earnings-surprise` | none | `calendar_economic`, `calendar_earnings`, `calendar_earnings_history` (off by default) |
+
+The tool table below names each tool's exact route.
+
 What each source needs and how each tool reads it is in [Capabilities and defaults](#capabilities-and-defaults), [Keys](#keys) and the [tool table](#tools). To add a source, see [Adding a data source](#adding-a-data-source).
 
 ## Install
@@ -98,18 +165,54 @@ pip install "marketlens-mcp[data]"
 
 ## Dependencies
 
-| Package | Why |
-|---|---|
-| `fastmcp` (pinned) | The MCP server and its stdio / streamable-HTTP transports |
-| `pydantic` 2.12+ | Tool input models and the canonical output models (`marketlens_schema`) |
-| `httpx` | Every upstream HTTP call |
-| `duckdb` 1.5+ | The result store's query engine, the SQL guard's sandbox, the analytics |
-| `pyarrow` | Rows in canonical types, Parquet files in the result store |
-| `sqlglot` | Parsing model-written SQL before `results_query` runs it |
-| `pyyaml` | The config file |
-| `tzdata` (Windows only) | Time zones |
-| `marketlens-data` (the `data` extra, Python 3.13+) | Fetching official publishers and keeping them point in time; it brings its own (pandas, DuckDB, the publishers' parsers) |
-| `pytest`, `pytest-asyncio`, `ruff` (the `dev` extra) | Tests and lint |
+Direct dependencies (`pyproject.toml`):
+
+| Package | Constraint | Why |
+|---|---|---|
+| `fastmcp` | `==3.4.7` (pinned) | The MCP server and its stdio / streamable-HTTP transports; brings the `mcp` SDK, Starlette and Uvicorn |
+| `pydantic` | `>=2.12,<3` | Tool input models and the canonical output models (`marketlens_schema`) |
+| `httpx` | `>=0.28.1,<1` | Every upstream HTTP call |
+| `duckdb` | `>=1.5.5,<2` | The result store's query engine, the SQL guard's sandbox, the analytics |
+| `pyarrow` | `>=25.0` | Rows in canonical types, Parquet files in the result store |
+| `sqlglot` | `>=30.21,<31` | Parsing model-written SQL before `results_query` runs it |
+| `pyyaml` | `>=6.0.3,<7` | The config file |
+| `tzdata` | `>=2025.2`, Windows only | Time zones |
+| `marketlens-data` | `>=0.1,<0.2`, the `data` extra (Python 3.13+) | Fetching official publishers and keeping them point in time; it brings its own (pandas, DuckDB, the publishers' parsers) |
+| `pytest`, `pytest-asyncio`, `ruff` | the `dev` extra | Tests and lint |
+
+<details>
+<summary>The full resolved set (69 packages, Python 3.13, without extras)</summary>
+
+```text
+aiofile==3.12.3            annotated-types==0.8.0     anyio==4.15.1
+attrs==26.1.0              authlib==1.8.0             beartype==0.22.9
+cachetools==7.2.1          caio==0.12.9               certifi==2026.7.22
+cffi==2.1.1                click==8.5.0               cryptography==50.0.2
+cyclopts==5.2.0            dnspython==2.8.0           docstring-parser==0.18.0
+duckdb==1.5.6              email-validator==2.3.0     exceptiongroup==1.3.1
+fastmcp==3.4.7             fastmcp-slim==3.4.7        griffelib==2.3.2
+h11==0.16.0                httpcore==1.0.9            httpx==0.28.1
+httpx-sse==0.4.3           idna==3.20                 jaraco-classes==3.4.0
+jaraco-context==6.1.2      jaraco-functools==4.6.0    joserfc==1.7.5
+jsonref==1.1.0             jsonschema==4.26.0         jsonschema-path==0.5.0
+jsonschema-specifications==2025.9.1                   keyring==25.7.0
+markdown-it-py==4.2.0      mcp==1.30.0                mdurl==0.1.2
+more-itertools==11.1.0     openapi-pydantic==0.6.0    opentelemetry-api==1.45.1
+packaging==26.3            pathable==0.6.0            platformdirs==4.12.3
+py-key-value-aio==0.4.6    pyarrow==25.0.1            pycparser==3.0
+pydantic==2.13.5           pydantic-core==2.46.5      pydantic-settings==2.15.0
+pygments==2.21.0           pyjwt==2.15.1              pyperclip==1.11.0
+python-dotenv==1.2.4       python-multipart==0.0.32   pyyaml==6.0.3
+referencing==0.37.0        rich==15.0.0               rich-rst==2.2.0
+rpds-py==2026.9.1          sqlglot==30.21.0           sse-starlette==3.5.0
+starlette==1.7.0           typing-extensions==4.16.0  typing-inspection==0.4.4
+uncalled-for==0.4.0        uvicorn==0.54.0            watchfiles==1.3.0
+websockets==17.2
+```
+
+Most of these arrive through `fastmcp` and the `mcp` SDK (the HTTP transport, auth helpers, CLI formatting). `uv pip list` or `pip list` in your environment prints your own resolution.
+
+</details>
 
 Outside Python you need:
 
