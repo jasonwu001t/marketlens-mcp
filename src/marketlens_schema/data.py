@@ -227,7 +227,9 @@ class EarningsFigure(CanonicalModel):
 
 
 class InsiderTransaction(CanonicalModel):
-    """One transaction of a Form 4, or one Form 144 notice of an intended sale."""
+    """One transaction of a Form 4, or one line of a Form 144 notice of an intended sale: a
+    line per securitiesInformation block the notice lists, each a class of security and a
+    broker (a broker can recur)."""
 
     schema_name: ClassVar[str] = "marketlens.InsiderTransaction"
     time_column: ClassVar[str | None] = "transaction_date"
@@ -246,7 +248,9 @@ class InsiderTransaction(CanonicalModel):
     is_director: bool
     is_officer: bool
     is_ten_percent_owner: bool
-    has_10b5_1: bool = Field(description="Under a pre-arranged 10b5-1 plan")
+    has_10b5_1: bool = Field(
+        description="Under a pre-arranged 10b5-1 plan (a Form 144: it gives the plan's adoption date)"
+    )
     is_derivative: bool = Field(description="Options/RSU table (True) or common stock table (False)")
     security_title: str | None = None
     transaction_date: Date = Field(description="Executed (Form 4) or intended sale date (Form 144)")
@@ -255,8 +259,12 @@ class InsiderTransaction(CanonicalModel):
     )
     acquired_disposed: str | None = Field(default=None, description="A or D")
     shares: float | None = _unit("shares", default=None)
-    price_per_share: float | None = _unit("price", default=None, description="USD")
-    value_usd: float | None = _unit("USD", default=None, description="shares x price, or the 144 value")
+    price_per_share: float | None = _unit(
+        "price", default=None, description="USD; none on a Form 144, which states no price"
+    )
+    value_usd: float | None = _unit(
+        "USD", default=None, description="shares x price, or a Form 144 line's aggregate market value"
+    )
     shares_owned_after: float | None = _unit("shares", default=None)
     knowledge_time: UtcDatetime = _known()
 

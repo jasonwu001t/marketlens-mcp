@@ -98,6 +98,7 @@
    "absent": {
     "acquired_disposed": "not_applicable",
     "insider_cik": "not_provided_by_source",
+    "price_per_share": "not_applicable",
     "shares_owned_after": "not_applicable"
    },
    "accession_number": "0009999901-26-000004",
@@ -115,7 +116,7 @@
    "knowledge_time": "2026-02-20T15:00:00Z",
    "line": 1,
    "officer_title": "Director",
-   "price_per_share": 50.5,
+   "price_per_share": null,
    "security_title": "Common",
    "shares": 2000.0,
    "shares_owned_after": null,

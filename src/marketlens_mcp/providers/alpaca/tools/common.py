@@ -86,15 +86,24 @@ def _one_occ(v: str) -> str:
 
 
 def check_option_filters(
-    strike_min: float | None, strike_max: float | None, expiration_from: Any, expiration_to: Any
+    strike_min: float | None,
+    strike_max: float | None,
+    expiration_from: Any,
+    expiration_to: Any,
+    expiration: Any = None,
 ) -> None:
-    """Refuse an inverted strike or expiration range, which no contract can match."""
+    """Refuse an inverted strike or expiration range, or an exact expiration
+    outside the expiration range, which no contract can match."""
     if strike_min is not None and strike_max is not None and strike_min > strike_max:
         raise ValueError(f"strike_min ({strike_min:g}) must not be above strike_max ({strike_max:g})")
     if expiration_from is not None and expiration_to is not None and expiration_from > expiration_to:
         raise ValueError(
             f"expiration_from ({expiration_from}) must not be after expiration_to ({expiration_to})"
         )
+    if expiration is not None and expiration_from is not None and expiration < expiration_from:
+        raise ValueError(f"expiration ({expiration}) must not be before expiration_from ({expiration_from})")
+    if expiration is not None and expiration_to is not None and expiration > expiration_to:
+        raise ValueError(f"expiration ({expiration}) must not be after expiration_to ({expiration_to})")
 
 
 #: One stock ticker, normalised (brk.b -> BRK-B).

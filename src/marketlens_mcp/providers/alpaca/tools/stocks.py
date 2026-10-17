@@ -16,6 +16,7 @@ from marketlens_schema.market import Bar, MostActive, Mover, Quote, Snapshot, Tr
 from .. import mappers
 from ..client import AlpacaClient
 from ..convert import NEW_YORK, alpaca_symbol, iso_z, parse_ts, timeframe_to_alpaca, to_ticker
+from .bars import LAST_BAR_DOC, cap_last_bars, first_bar_note
 from .common import (
     BARS_LOOKBACK_DOC,
     CONTINUE_DOC,
@@ -209,10 +210,22 @@ async def market_bars(ctx: ToolContext, args: BarsIn) -> ToolOutput:
             mapper=rows,
             start_token=args.page_token,
         )
+        bars, capped = await cap_last_bars(
+            ctx,
+            api,
+            win,
+            page.rows,
+            args.timeframe,
+            path="/v2/stocks/bars",
+            params=params,
+            key="ticker",
+            zone=NEW_YORK,
+            symbol=alpaca_symbol,
+        )
     return output(
         ctx,
         Bar,
-        page.rows,
+        bars,
         route="GET /v2/stocks/bars",
         operation="StockBars",
         request=request_of(args, **win.fields(), feed=feed),
@@ -220,7 +233,12 @@ async def market_bars(ctx: ToolContext, args: BarsIn) -> ToolOutput:
         delay=delay,
         as_of=win.as_of,
         page=page,
-        notes=[*win.notes, *missing_in_window_note(args.tickers, page, args.page_token)],
+        notes=[
+            *win.notes,
+            *first_bar_note(win, args.timeframe, NEW_YORK),
+            *missing_in_window_note(args.tickers, page, args.page_token),
+            *capped,
+        ],
         skips=skips,
     )
 
@@ -683,7 +701,7 @@ SPECS = (
         description="Historical OHLCV bars for US stocks (prices in USD, volume in shares), one row per ticker "
         "and bar start (UTC). timeframe Nmin/Nh/1d/1w/Nmo (default 1d); window by start/end or lookback "
         "(default P5D intraday, P1Y daily); adjustment default all (split and dividend adjusted, what return "
-        "analytics need; raw = as traded). The feed is the configured stock_feed." + _SIZE,
+        "analytics need; raw = as traded). The feed is the configured stock_feed." + LAST_BAR_DOC + _SIZE,
         readme="OHLCV bars for stocks",
         input_model=BarsIn,
         output_model=Bar,

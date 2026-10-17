@@ -4,7 +4,6 @@ the data location is ``providers.alpaca.crypto_location`` (default us)."""
 from __future__ import annotations
 
 from collections import Counter
-from datetime import datetime, timedelta
 from typing import Literal
 
 from pydantic import Field, model_validator
@@ -16,6 +15,7 @@ from marketlens_schema.market import Bar, OrderBookLevel, Quote, Snapshot, Trade
 from .. import mappers
 from ..client import AlpacaClient
 from ..convert import iso_z, timeframe_to_alpaca, to_ticker
+from .bars import LAST_BAR_DOC, cap_last_bars, first_bar_note
 from .common import (
     BARS_LOOKBACK_DOC,
     CONTINUE_DOC,
@@ -134,37 +134,6 @@ def no_trades_note(rows: list[Bar]) -> list[str]:
     ]
 
 
-def _bar_end(t: datetime, timeframe: str) -> datetime:
-    """When a bar of ``timeframe`` starting at ``t`` closes."""
-    n, unit = int(timeframe.rstrip("minhdwo")), timeframe.lstrip("0123456789")
-    if unit == "mo":
-        months = t.month - 1 + n
-        return t.replace(year=t.year + months // 12, month=months % 12 + 1)
-    return (
-        t
-        + {
-            "min": timedelta(minutes=n),
-            "h": timedelta(hours=n),
-            "d": timedelta(days=n),
-            "w": timedelta(weeks=n),
-        }[unit]
-    )
-
-
-def forming_bar_note(rows: list[Bar], timeframe: str, now: datetime) -> list[str]:
-    """Crypto trades around the clock, so the newest bar is often the one still
-    forming: it holds the trades up to now only. Name its pairs."""
-    forming = [r for r in rows if _bar_end(r.t, timeframe) > now]
-    if not forming:
-        return []
-    pairs = sorted({r.ticker for r in forming})
-    start = min(r.t for r in forming)
-    return [
-        f"The {timeframe} bar from {iso_z(start)} ({named(pairs, ' pair(s)')}) is still forming: it holds "
-        f"trades up to now ({iso_z(now)}) only, not a whole {timeframe}."
-    ]
-
-
 def _mapper(kind: str, ticker: str, timeframe: str = "1min"):
     ccy = quote_currency(ticker)
     if kind == "bars":
@@ -205,6 +174,7 @@ async def _history(
             "sort": args.sort,
         }
         limit = getattr(args, "limit", None)
+        capped: list[str] = []
         if limit is None:
             page = await fetch_grouped(
                 ctx,
@@ -215,6 +185,19 @@ async def _history(
                 mapper=rows,
                 start_token=args.page_token,
             )
+            kept = page.rows
+            if kind == "bars":
+                kept, capped = await cap_last_bars(
+                    ctx,
+                    api,
+                    win,
+                    kept,
+                    timeframe,
+                    path=f"{BASE.format(loc=loc)}/bars",
+                    params=params,
+                    key="ticker",
+                    unit=" pair(s)",
+                )
         else:
 
             async def first_of_each() -> list:
@@ -231,10 +214,11 @@ async def _history(
                 return out
 
             page = await fetch_once(ctx, first_of_each)
+            kept = page.rows
     return output(
         ctx,
         model,
-        page.rows,
+        kept,
         route=f"GET {BASE}/{kind}",
         operation=operation,
         request=request_of(args, **win.fields(), location=loc),
@@ -245,12 +229,10 @@ async def _history(
         absent=_absent(kind),
         notes=[
             *win.notes,
+            *(first_bar_note(win, timeframe) if kind == "bars" else []),
             *missing_in_window_note(args.tickers, page, args.page_token),
-            *(
-                no_trades_note(page.rows) + forming_bar_note(page.rows, timeframe, ctx.now())
-                if kind == "bars"
-                else []
-            ),
+            *(no_trades_note(kept) if kind == "bars" else []),
+            *capped,
         ],
         skips=skips,
     )
@@ -416,7 +398,7 @@ SPECS = (
         title="Crypto bars",
         description="Historical OHLCV bars for crypto pairs (prices in the quote currency, volume in base "
         "units), one row per pair and bar start (UTC). timeframe default 1h; window by start/end or lookback "
-        "(default P1D). " + NO_TRADES_DOC + _SIZE,
+        "(default P1D). " + NO_TRADES_DOC + LAST_BAR_DOC + _SIZE,
         readme="OHLCV bars for crypto pairs",
         input_model=BarsIn,
         output_model=Bar,
