@@ -284,7 +284,8 @@ async def news_official(ctx: ToolContext, args: OfficialNewsIn) -> ToolOutput:
         route=ROUTE,
         operation="feeds",
         dataset=",".join(r.feed.id for r in answered),
-        fetched_at=ctx.now(),
+        # the oldest read among the feeds answered: a cached feed was read up to cache_seconds ago
+        fetched_at=min((r.fetched_at for r in answered if r.fetched_at), default=ctx.now()),
         as_of=win.as_of,
         request=request_of(args, **win.fields()),
         pages_fetched=len(answered) - len(from_cache),

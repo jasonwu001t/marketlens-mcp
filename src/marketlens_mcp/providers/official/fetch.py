@@ -110,6 +110,7 @@ class Fetched:
     items: tuple[RawItem, ...] = ()
     error: str | None = None
     cached: bool = False
+    fetched_at: datetime | None = None  # when the items were read from the publisher
 
 
 @functools.cache
@@ -279,7 +280,7 @@ async def fetch_all(ctx: ToolContext, feeds: Sequence[Feed], contacts: Mapping[s
             keep = max(settings.cache_seconds, BY_PUBLISHER[feed.publisher].crawl_delay)
             hit = _CACHE.get(feed.url)
             if hit is not None and 0 <= (now - hit[0]).total_seconds() < keep:
-                return Fetched(feed, hit[1], cached=True)
+                return Fetched(feed, hit[1], cached=True, fetched_at=hit[0])
             agent = user_agent(contacts.get(feed.publisher))
             async with gate:
                 asked.add(feed.id)
@@ -293,7 +294,7 @@ async def fetch_all(ctx: ToolContext, feeds: Sequence[Feed], contacts: Mapping[s
                     return Fetched(feed, error=f"could not be read ({type(e).__name__})")
             if keep:
                 _CACHE[feed.url] = (now, items)
-            return Fetched(feed, items)
+            return Fetched(feed, items, fetched_at=now)
 
         tasks = [asyncio.create_task(one(f)) for f in feeds]
         _done, late = await asyncio.wait(tasks, timeout=deadline)

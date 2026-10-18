@@ -156,6 +156,8 @@ FEEDS: tuple[Feed, ...] = (
     Feed("fed.speeches", "federal_reserve", "https://www.federalreserve.gov/feeds/speeches.xml", "Speeches"),
     Feed("fed.testimony", "federal_reserve", "https://www.federalreserve.gov/feeds/testimony.xml", "Testimony"),
     Feed("sec.press", "sec", "https://www.sec.gov/news/pressreleases.rss", "Press releases"),
+    # dc:creator is read if present, but the live feed leaves it blank (the speaker is
+    # named only in the description), so rows usually carry no author
     Feed("sec.speeches", "sec", "https://www.sec.gov/news/speeches-statements.rss", "Speeches and statements"),
     # dc:creator holds the release number (LR-NNNNN), not an author
     Feed("sec.litigation", "sec", "https://www.sec.gov/enforcement-litigation/litigation-releases/rss",

@@ -290,8 +290,19 @@ _MONTHS = {
 }
 
 
+#: The earliest date a feed item can carry. Earlier values are "no date" sentinels, not
+#: dates: the Fed's testimony feed dates some items 30 Dec 1899 (the spreadsheet zero day).
+EARLIEST = datetime(1970, 1, 1, tzinfo=UTC)
+
+
 def parse_date(value: str | None) -> datetime | None:
-    """A feed's date as a UTC instant, or None when it does not parse."""
+    """A feed's date as a UTC instant, or None when it does not parse or is a sentinel
+    before 1970."""
+    got = _parse_date(value)
+    return got if got is not None and got >= EARLIEST else None
+
+
+def _parse_date(value: str | None) -> datetime | None:
     s = " ".join((value or "").split())
     if not s:
         return None

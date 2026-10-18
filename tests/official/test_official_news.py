@@ -334,6 +334,8 @@ def test_the_cache_serves_a_repeat_within_its_ttl(publishers):
     assert again.provenance.cached is True and again.provenance.pages_fetched == 0
     assert first.provenance.cached is False and first.provenance.pages_fetched == 1
     assert [r.news_id for r in again.rows] == [r.news_id for r in first.rows]
+    # a cached answer is as old as the read that filled the cache, not the call
+    assert first.provenance.fetched_at == NOW and again.provenance.fetched_at == NOW
     assert again.notes == [
         "1 of 1 feed(s) came from this server's cache, fetched within the last few minutes: ecb.press."
     ]

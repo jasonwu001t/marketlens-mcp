@@ -68,6 +68,10 @@ def test_dates_parse_to_utc(text, expected):
         "32 Oct 2026",
         "14 Foo 2026",
         "2026-10-14T25:00:00Z",
+        # "no date" sentinels: the Fed's testimony feed carries the first one
+        "Sat, 30 Dec 1899 15:00:00 GMT",
+        "1900-01-01T00:00:00Z",
+        "1969-12-31T23:59:59Z",
     ],
 )
 def test_dates_that_do_not_parse(text):
