@@ -113,7 +113,7 @@ Package layout:
 |---|---|---|---|
 | Alpaca market-data API (stocks, options, crypto, fixed income, news, screeners) | built-in `alpaca` provider | `ALPACA_API_KEY`, `ALPACA_SECRET_KEY` | `market`, `reference`, `news` |
 | Alpaca trading API (assets, calendar, clock, corporate-action announcements, option contracts; account reads) | built-in `alpaca` provider | same | `reference`, `portfolio` (off) |
-| Alpaca documentation MCP (`docs.alpaca.markets/mcp`) | built-in `alpaca-docs` | same | `provider.docs` (off) |
+| Alpaca documentation MCP (`docs.alpaca.markets/mcp`) | built-in `alpaca-docs` | none | `provider.docs` (off) |
 | FRED/ALFRED, BLS, BEA | `data` extra (marketlens-data) | `FRED_API_KEY`, `BEA_API_KEY`, `BLS_API_KEY` (optional) | `macro` |
 | SEC EDGAR (submissions, XBRL company facts, Archives) | `data` extra | `SEC_CONTACT_EMAIL` (recommended) | `filings` |
 | Federal Reserve (FOMC), NY Fed, U.S. Treasury, FiscalData | `data` extra | keyless | `fed_treasury` |
@@ -128,7 +128,7 @@ Every request a tool can make goes to one of these. Nothing else is called: no t
 | Upstream | Base URL | Endpoints used | Auth | Tools |
 |---|---|---|---|---|
 | Alpaca Market Data API | `https://data.alpaca.markets` | `/v2/stocks/{bars,quotes,trades,snapshots}` and their `/latest` forms, `/v2/stocks/meta/{exchanges,conditions/*}`; `/v1beta1/options/{bars,trades,snapshots,quotes/latest,trades/latest}`, `/v1beta1/options/meta/{exchanges,conditions/*}`; `/v1beta3/crypto/{loc}/{bars,quotes,trades,snapshots,latest/*}`; `/v1beta1/fixed_income/latest/quotes`; `/v1beta1/news`; `/v1beta1/screener/{stocks/most-actives,{market_type}/movers}`; `/v1/corporate-actions` | `ALPACA_API_KEY` / `ALPACA_SECRET_KEY` as headers | `market_*`, `options_*`, `crypto_*`, `fixed_income_*`, `news_search`, `reference_{stock,option}_exchanges`, `reference_condition_codes`, `reference_corporate_actions` |
-| Alpaca Trading API | `https://paper-api.alpaca.markets` (paper) or `https://api.alpaca.markets` (live) | `/v2/assets`, `/v2/calendar`, `/v2/clock`, `/v2/corporate_actions/announcements`, `/v2/options/contracts`; with `portfolio` on: `/v2/account`, `/v2/account/configurations`, `/v2/account/activities`, `/v2/account/portfolio/history`, `/v2/positions`, `/v2/orders`, `/v2/watchlists`, `/v1/locates` (GET only) | same keys | `reference_asset(s)`, `reference_calendar`, `reference_clock`, `reference_corporate_action_announcement(s)`, `reference_option_contract(s)`, `portfolio_*` |
+| Alpaca Trading API | `https://paper-api.alpaca.markets` (paper) or `https://api.alpaca.markets` (live) | `/v2/assets`, `/v2/calendar`, `/v2/clock`, `/v2/corporate_actions/announcements`, `/v2/options/contracts`; with `portfolio` on: `/v2/account`, `/v2/account/configurations`, `/v2/account/activities`, `/v2/account/portfolio/history`, `/v2/positions`, `/v2/orders`, `/v2/watchlists`, `/v1/locates` (GET only) | same keys | `reference_asset(s)`, `reference_calendar`, `reference_clock`, `reference_corporate_action_announcement(s)`, `reference_option_contract(s)`, `options_chain` (its open interest), `calendar_us_holidays` (the NYSE cross-check, always on the paper URL), `portfolio_*` |
 | Alpaca documentation MCP | `https://docs.alpaca.markets/mcp` | its `search`, `fetch`, `list-endpoints`, `get-endpoint`, `search-endpoints` tools | none | `provider_docs_*` (off by default) |
 | FRED / ALFRED (St. Louis Fed) | `https://api.stlouisfed.org/fred` | `/series/observations`, `/series/vintagedates` | `FRED_API_KEY` | `macro_series` |
 | BLS | `https://api.bls.gov/publicAPI/v2/timeseries/data/`; `https://www.bls.gov` | the time-series API; `/schedule/news_release/{cpi,empsit}.htm`; the release archive `/bls/news-release/{release}.htm` | `BLS_API_KEY` (optional) | `macro_bls_series`, `macro_release_schedule` |
@@ -147,15 +147,25 @@ What each source needs and how each tool reads it is in [Capabilities and defaul
 
 ## Install
 
+marketlens-mcp is not on PyPI yet (0.2.0 is unreleased), so install it from this repository:
+
 ```sh
-uvx marketlens-mcp            # run without installing (recommended for MCP clients)
-pipx install marketlens-mcp   # or a user-wide install
-pip install marketlens-mcp    # or into an environment you manage
+uvx --from git+https://github.com/jasonwu001t/marketlens-mcp marketlens-mcp   # run without installing (recommended for MCP clients)
+pipx install git+https://github.com/jasonwu001t/marketlens-mcp                # or a user-wide install
+pip install git+https://github.com/jasonwu001t/marketlens-mcp                 # or into an environment you manage
 ```
 
 Python 3.11 or newer. Linux and macOS are tested; Windows is not yet supported in this release. The bare command serves MCP over stdio.
 
-With the official-data tools (the `data` extra, Python 3.13 or newer; see [Official data](#official-data-the-data-extra)):
+The official-data tools (the `data` extra; see [Official data](#official-data-the-data-extra)) need marketlens-data, which is not published yet either. Until it is, install it from a checkout of its source into the same environment:
+
+```sh
+uvx --from git+https://github.com/jasonwu001t/marketlens-mcp --with /path/to/marketlens-data marketlens-mcp
+pipx inject marketlens-mcp /path/to/marketlens-data
+pip install /path/to/marketlens-data
+```
+
+Once both are on PyPI, the extra installs them together:
 
 ```sh
 uvx --from "marketlens-mcp[data]" marketlens-mcp
@@ -177,7 +187,7 @@ Direct dependencies (`pyproject.toml`):
 | `sqlglot` | `>=30.21,<31` | Parsing model-written SQL before `results_query` runs it |
 | `pyyaml` | `>=6.0.3,<7` | The config file |
 | `tzdata` | `>=2025.2`, Windows only | Time zones |
-| `marketlens-data` | `>=0.1,<0.2`, the `data` extra (Python 3.13+) | Fetching official publishers and keeping them point in time; it brings its own (pandas, DuckDB, the publishers' parsers) |
+| `marketlens-data` | `>=0.1,<0.2`, the `data` extra (not on PyPI yet; see [Install](#install)) | Fetching official publishers and keeping them point in time; it brings its own (pandas, DuckDB, the publishers' parsers) |
 | `pytest`, `pytest-asyncio`, `ruff` | the `dev` extra | Tests and lint |
 
 <details>
@@ -229,7 +239,7 @@ Claude Desktop (`claude_desktop_config.json`):
   "mcpServers": {
     "marketlens": {
       "command": "uvx",
-      "args": ["marketlens-mcp"],
+      "args": ["--from", "git+https://github.com/jasonwu001t/marketlens-mcp", "marketlens-mcp"],
       "env": {
         "ALPACA_API_KEY": "your key id",
         "ALPACA_SECRET_KEY": "your secret key"
@@ -239,14 +249,14 @@ Claude Desktop (`claude_desktop_config.json`):
 }
 ```
 
-With the `data` extra, run it from the extra and add the official sources' keys (each one only for the tools that need it; see [the keys](#keys)):
+With the `data` extra, run it from the extra (until marketlens-data is on PyPI, with its checkout beside marketlens-mcp; see [Install](#install)) and add the official sources' keys (each one only for the tools that need it; see [the keys](#keys)):
 
 ```json
 {
   "mcpServers": {
     "marketlens": {
       "command": "uvx",
-      "args": ["--from", "marketlens-mcp[data]", "marketlens-mcp"],
+      "args": ["--from", "git+https://github.com/jasonwu001t/marketlens-mcp", "--with", "/path/to/marketlens-data", "marketlens-mcp"],
       "env": {
         "ALPACA_API_KEY": "your key id",
         "ALPACA_SECRET_KEY": "your secret key",
@@ -265,7 +275,7 @@ With the `data` extra, run it from the extra and add the official sources' keys 
 Claude Code:
 
 ```sh
-claude mcp add marketlens -e ALPACA_API_KEY=... -e ALPACA_SECRET_KEY=... -- uvx marketlens-mcp
+claude mcp add marketlens -e ALPACA_API_KEY=... -e ALPACA_SECRET_KEY=... -- uvx --from git+https://github.com/jasonwu001t/marketlens-mcp marketlens-mcp
 ```
 
 Any other client: run `marketlens-mcp` (stdio), or `marketlens-mcp serve --transport http` for streamable HTTP on `http://127.0.0.1:8765/mcp` with a bearer token (see [Security and privacy](#security-and-privacy)).
@@ -292,7 +302,7 @@ Each tool belongs to one capability. Turn capabilities on or off in the config f
 | `holidays` | on | US market holidays and early closes from their publishers: NYSE (stocks), SIFMA (bonds), OPM (federal). Keyless. Needs the `data` extra. |
 | `calendars` | off | Nasdaq's economic calendar (PMI and other actual and consensus figures), earnings calendar and history. Off by default: the Nasdaq endpoint is unofficial and may change or refuse without notice. Needs the `data` extra. |
 
-The last five are declared whether or not the `data` extra is installed (a config file naming them is always valid); their tools are listed only where it is. Plugins may declare more capabilities; see [Plugins and providers](#plugins-and-providers).
+The last five are declared whether or not the `data` extra is installed (a config file naming them is always valid); their tools are listed only where it is. Plugins may declare more capabilities; see [Another vendor, or your own data](#another-vendor-or-your-own-data).
 
 **Read-only.** marketlens-mcp has no tool that places, replaces or cancels orders, closes positions, exercises options, changes account settings, or edits broker watchlists. Those tools do not exist in the package, so no configuration can enable them.
 
@@ -379,7 +389,7 @@ FROM r_8c1f0a9d3e a ASOF JOIN r_51b0c2d4e6 b ON a.t >= b.t
 
 `results_query` accepts exactly one `SELECT` or `WITH ... SELECT` statement. It refuses writes, `PRAGMA`, `SET`, `ATTACH`, `COPY`, `INSTALL`, `LOAD`, file-reading functions and any table that is not a result of the same session; it runs in a fresh in-memory DuckDB that loaded only the referenced results and then disabled file access and locked its configuration. It refuses `PIVOT` and `UNPIVOT` (pivot with one `max(x) FILTER (WHERE ...)` per column instead) and reads at most 8 results in one query. It returns at most `max_rows` rows (default 50, at most 200; a larger `max_rows` or `LIMIT` is lowered, with a note), stops after 10 seconds, and stores its own answer as a new result when it is larger than 24,000 bytes of JSON (`results.query_max_bytes`) or about 6,000 tokens (or when you pass `store=true`). Whole-number sums come back as numbers; exact decimals come back as strings, to keep every digit.
 
-Upstream fetches stop at 50,000 rows or 20 pages and say so, with the token to continue when the source gives one (otherwise the note asks for a narrower request). Results live 24 hours in a per-session folder of your cache directory (`$MARKETLENS_CACHE_DIR`, else `~/Library/Caches/marketlens`, `%LOCALAPPDATA%\marketlens\Cache` or `~/.cache/marketlens`), capped at 5 GB with oldest-first eviction. No tool ever shows a filesystem path. `marketlens-mcp results list` shows the store's size; `results purge --yes` empties it.
+Upstream fetches stop at 50,000 rows or 20 pages and say so, with the token to continue when the source gives one (otherwise the note asks for a narrower request). Results live 24 hours in a per-session folder of your cache directory (`$MARKETLENS_CACHE_DIR`, else `~/Library/Caches/marketlens`, `%LOCALAPPDATA%\marketlens\Cache`, or `$XDG_CACHE_HOME/marketlens` else `~/.cache/marketlens`), capped at 5 GB with oldest-first eviction. No tool ever shows a filesystem path. `marketlens-mcp results list` shows the store's size; `results purge --yes` empties it.
 
 ## Analytics
 
@@ -387,7 +397,7 @@ The `analytics_*` tools take result handles and compute in DuckDB: simple and lo
 
 ## Official data (the data extra)
 
-`pip install "marketlens-mcp[data]"` (Python 3.13 or newer) adds a built-in provider over [marketlens-data](https://pypi.org/project/marketlens-data/) (import name `omni`), which fetches each publisher's own data and keeps it, point in time, in a local DuckDB + Parquet store. 25 tools under five capabilities:
+The `data` extra (marketlens-data installed beside marketlens-mcp; it is not on PyPI yet, see [Install](#install)) adds a built-in provider over marketlens-data (import name `omni`), which fetches each publisher's own data and keeps it, point in time, in a local DuckDB + Parquet store. 25 tools under five capabilities:
 
 - `macro`: FRED/ALFRED series with every vintage (`macro_series`), BLS series (`macro_bls_series`), BEA NIPA tables (`macro_bea_table`; BEA states each value's multiplier separately and marketlens-data does not store it, so a value whose `units` is `Level` is not in ones: NIPA dollar levels are usually millions of dollars, and the answer says so), BLS release schedules for the CPI and the jobs report (`macro_release_schedule`), and the FRED series catalogue (`macro_series_catalog`).
 - `filings`: SEC EDGAR filings (`sec_filings`), XBRL facts with restatements (`sec_xbrl_facts`), 23 point-in-time fundamentals computed from them (`sec_fundamentals`), 8-K Item 2.02 earnings releases (`sec_earnings_releases`) and the EPS their press releases state (`sec_earnings_figures`), Form 4 and 144 insider transactions (`sec_insider_trades`), 13F holdings (`sec_13f_holdings`), fund N-PORT reports and holdings (`sec_fund_nport`, `sec_fund_holdings`).
@@ -608,7 +618,7 @@ Plugins load only when you name them in `plugins.enabled`; `marketlens-mcp plugi
 ```sh
 make venv install   # .venv with the package and dev tools (uv)
 make test           # pytest (no network, no keys)
-make install-data   # add the data extra (Python 3.13); MARKETLENS_DATA_SRC=../omni for a checkout
+make install-data   # add the data extra; MARKETLENS_DATA_SRC=../omni (a checkout) until marketlens-data is on PyPI
 make test-data      # the data provider's tests (skipped without the extra)
 make lint           # ruff check + format check
 make readme schema  # regenerate the tool table and schema/
