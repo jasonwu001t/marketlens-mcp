@@ -112,7 +112,7 @@ Package layout:
 | Source | Reached through | Key | Capabilities |
 |---|---|---|---|
 | Alpaca market-data API (stocks, options, crypto, fixed income, news, screeners) | built-in `alpaca` provider | `ALPACA_API_KEY`, `ALPACA_SECRET_KEY` | `market`, `reference`, `news` |
-| Alpaca trading API (assets, calendar, clock, corporate-action announcements, option contracts; account reads) | built-in `alpaca` provider | same | `reference`, `portfolio` (off); also `market` (`options_chain`'s open interest) and, through the `data` extra, `holidays` (the optional NYSE cross-check) |
+| Alpaca trading API (assets, calendar, clock, corporate-action announcements, option contracts; account reads) | built-in `alpaca` provider | same | `reference`, `portfolio` (off); also `market` (`options_chain`'s open interest, `market_movers`' asset names) and, through the `data` extra, `holidays` (the optional NYSE cross-check, paper-account keys only) |
 | Alpaca documentation MCP (`docs.alpaca.markets/mcp`) | built-in `alpaca-docs` | none | `provider.docs` (off) |
 | FRED/ALFRED, BLS, BEA | `data` extra (marketlens-data) | `FRED_API_KEY`, `BEA_API_KEY`, `BLS_API_KEY` (optional) | `macro` |
 | SEC EDGAR (submissions, XBRL company facts, Archives) | `data` extra | `SEC_CONTACT_EMAIL` (recommended) | `filings` |
@@ -128,7 +128,7 @@ Every request a tool can make goes to one of these. Nothing else is called: no t
 | Upstream | Base URL | Endpoints used | Auth | Tools |
 |---|---|---|---|---|
 | Alpaca Market Data API | `https://data.alpaca.markets` | `/v2/stocks/{bars,quotes,trades,snapshots}` and their `/latest` forms, `/v2/stocks/meta/{exchanges,conditions/*}`; `/v1beta1/options/{bars,trades,snapshots,quotes/latest,trades/latest}`, `/v1beta1/options/meta/{exchanges,conditions/*}`; `/v1beta3/crypto/{loc}/{bars,quotes,trades,snapshots,latest/*}`; `/v1beta1/fixed_income/latest/quotes`; `/v1beta1/news`; `/v1beta1/screener/{stocks/most-actives,{market_type}/movers}`; `/v1/corporate-actions` | `ALPACA_API_KEY` / `ALPACA_SECRET_KEY` as headers | `market_*`, `options_*`, `crypto_*`, `fixed_income_*`, `news_search`, `reference_{stock,option}_exchanges`, `reference_condition_codes`, `reference_corporate_actions` |
-| Alpaca Trading API | `https://paper-api.alpaca.markets` (paper) or `https://api.alpaca.markets` (live) | `/v2/assets`, `/v2/calendar`, `/v2/clock`, `/v2/corporate_actions/announcements`, `/v2/options/contracts`; with `portfolio` on: `/v2/account`, `/v2/account/configurations`, `/v2/account/activities`, `/v2/account/portfolio/history`, `/v2/positions`, `/v2/orders`, `/v2/watchlists`, `/v1/locates` (GET only) | same keys | `reference_asset(s)`, `reference_calendar`, `reference_clock`, `reference_corporate_action_announcement(s)`, `reference_option_contract(s)`, `options_chain` (its open interest), `calendar_us_holidays` (the NYSE cross-check, always on the paper URL), `portfolio_*` |
+| Alpaca Trading API | `https://paper-api.alpaca.markets` (paper) or `https://api.alpaca.markets` (live) | `/v2/assets`, `/v2/calendar`, `/v2/clock`, `/v2/corporate_actions/announcements`, `/v2/options/contracts`; with `portfolio` on: `/v2/account`, `/v2/account/configurations`, `/v2/account/activities`, `/v2/account/portfolio/history`, `/v2/positions`, `/v2/orders`, `/v2/watchlists`, `/v1/locates` (GET only) | same keys | `reference_asset(s)`, `reference_calendar`, `reference_clock`, `reference_corporate_action_announcement(s)`, `reference_option_contract(s)`, `options_chain` (its open interest), `market_movers` (asset names, with `exclude_warrants_rights_units`), `calendar_us_holidays` (the NYSE cross-check, always on the paper URL), `portfolio_*` |
 | Alpaca documentation MCP | `https://docs.alpaca.markets/mcp` | its `search`, `fetch`, `list-endpoints`, `get-endpoint`, `search-endpoints` tools | none | `provider_docs_*` (off by default) |
 | FRED / ALFRED (St. Louis Fed) | `https://api.stlouisfed.org/fred` | `/series/observations`, `/series/vintagedates` | `FRED_API_KEY` | `macro_series` |
 | BLS | `https://api.bls.gov/publicAPI/v2/timeseries/data/`; `https://www.bls.gov` | the time-series API; `/schedule/news_release/{cpi,empsit}.htm`; the release archive `/bls/news-release/{release}.htm` | `BLS_API_KEY` (optional) | `macro_bls_series`, `macro_release_schedule` |
@@ -141,7 +141,7 @@ Every request a tool can make goes to one of these. Nothing else is called: no t
 | NYSE, SIFMA, OPM | `https://www.nyse.com`, `https://www.sifma.org`, `https://www.opm.gov` | `/markets/hours-calendars`; `/resources/guides-playbooks/holiday-schedule` and `/us-holiday-archive`; `/policy-data-oversight/pay-leave/federal-holidays/` | none | `calendar_us_holidays` |
 | Nasdaq (unofficial) | `https://api.nasdaq.com` | `/api/calendar/economicevents`, `/api/calendar/earnings`, `/api/company/{symbol}/earnings-surprise` | none | `calendar_economic`, `calendar_earnings`, `calendar_earnings_history` (off by default) |
 
-The tool table below names each tool's exact route.
+The tool table below names each tool's main route; the second reads of `options_chain`, `market_movers` and `calendar_us_holidays` are in the rows above.
 
 What each source needs and how each tool reads it is in [Capabilities and defaults](#capabilities-and-defaults), [Keys](#keys) and the [tool table](#tools). To add a source, see [Adding a data source](#adding-a-data-source).
 
@@ -157,7 +157,7 @@ pip install git+https://github.com/jasonwu001t/marketlens-mcp                 # 
 
 Python 3.11 or newer. Linux and macOS are tested; Windows is not yet supported in this release. The bare command serves MCP over stdio.
 
-The official-data tools (the `data` extra; see [Official data](#official-data-the-data-extra)) need marketlens-data, which is not published yet either. Until it is, install it from a checkout of its source into the same environment:
+The official-data tools (the `data` extra; see [Official data](#official-data-the-data-extra)) need marketlens-data, which is not published yet either, and its source repository is not public yet, so for now only someone who already has a checkout of it can add them. With a checkout, install it into the same environment:
 
 ```sh
 uvx --from git+https://github.com/jasonwu001t/marketlens-mcp --with /path/to/marketlens-data marketlens-mcp
@@ -311,7 +311,7 @@ The last five are declared whether or not the `data` extra is installed (a confi
 Settings live in a YAML file:
 
 - `$MARKETLENS_CONFIG` if set (the file must exist), else
-- `$XDG_CONFIG_HOME/marketlens/config.yaml` if `XDG_CONFIG_HOME` is set, else
+- `$XDG_CONFIG_HOME/marketlens/config.yaml` if `XDG_CONFIG_HOME` is set to an absolute path, else
 - `~/.config/marketlens/config.yaml` (on every platform).
 
 No file means every default. `marketlens-mcp config init` writes the commented default file, `config path` prints where it is, `config show` prints the effective settings. The server reads the file once at start: restart it after editing. Unknown settings, wrong types and out-of-range values refuse to start with a one-line reason.
@@ -389,7 +389,7 @@ FROM r_8c1f0a9d3e a ASOF JOIN r_51b0c2d4e6 b ON a.t >= b.t
 
 `results_query` accepts exactly one `SELECT` or `WITH ... SELECT` statement. It refuses writes, `PRAGMA`, `SET`, `ATTACH`, `COPY`, `INSTALL`, `LOAD`, file-reading functions and any table that is not a result of the same session; it runs in a fresh in-memory DuckDB that loaded only the referenced results and then disabled file access and locked its configuration. It refuses `PIVOT` and `UNPIVOT` (pivot with one `max(x) FILTER (WHERE ...)` per column instead) and reads at most 8 results in one query. It returns at most `max_rows` rows (default 50, at most 200; a larger `max_rows` or `LIMIT` is lowered, with a note), stops after 10 seconds, and stores its own answer as a new result when it is larger than 24,000 bytes of JSON (`results.query_max_bytes`) or about 6,000 tokens (or when you pass `store=true`). Whole-number sums come back as numbers; exact decimals come back as strings, to keep every digit.
 
-Upstream fetches stop at 50,000 rows or 20 pages and say so, with the token to continue when the source gives one (otherwise the note asks for a narrower request). Results live 24 hours in a per-session folder of your cache directory (`$MARKETLENS_CACHE_DIR`, else `~/Library/Caches/marketlens`, `%LOCALAPPDATA%\marketlens\Cache`, or `$XDG_CACHE_HOME/marketlens` else `~/.cache/marketlens`), capped at 5 GB with oldest-first eviction. No tool ever shows a filesystem path. `marketlens-mcp results list` shows the store's size; `results purge --yes` empties it.
+Upstream fetches stop at 50,000 rows or 20 pages and say so, with the token to continue when the source gives one (otherwise the note asks for a narrower request). Results live 24 hours in a per-session folder of your cache directory (`$MARKETLENS_CACHE_DIR`, else `~/Library/Caches/marketlens`, `%LOCALAPPDATA%\marketlens\Cache`, or `$XDG_CACHE_HOME/marketlens` when that is absolute, else `~/.cache/marketlens`), capped at 5 GB with oldest-first eviction. No tool ever shows a filesystem path. `marketlens-mcp results list` shows the store's size; `results purge --yes` empties it.
 
 ## Analytics
 
@@ -417,7 +417,7 @@ Each source names its own key; set the ones you need in the env block of the ser
 | SEC EDGAR | `SEC_CONTACT_EMAIL` | optional, strongly recommended | your contact address, sent in the User-Agent as SEC's fair-access rule asks; without it a placeholder contact is sent, which SEC may throttle or block: https://www.sec.gov/os/accessing-edgar-data | the nine `sec_` tools |
 | Federal Reserve, NY Fed, Treasury, FiscalData | none | | keyless | `fed_`, `treasury_` tools, `macro_release_schedule` |
 | Nasdaq | none | | keyless; an unofficial endpoint | `calendar_economic`, `calendar_earnings`, `calendar_earnings_history` |
-| NYSE, SIFMA, OPM | none (`ALPACA_API_KEY`, `ALPACA_SECRET_KEY` optional) | no | keyless; with the Alpaca keys, NYSE's dates are cross-checked against Alpaca's trading calendar, and without them the answer says they were not | `calendar_us_holidays` |
+| NYSE, SIFMA, OPM | none (`ALPACA_API_KEY`, `ALPACA_SECRET_KEY` optional) | no | keyless; with paper-account Alpaca keys, NYSE's dates are cross-checked against Alpaca's paper trading calendar, and without keys the answer says they were not (live-account keys make the NYSE fetch fail) | `calendar_us_holidays` |
 | EIA | `EIA_API_KEY` | not used yet | free | planned (a later release) |
 | Census | `CENSUS_API_KEY` | not used yet | | planned (a later release) |
 
@@ -425,7 +425,7 @@ A tool whose key is missing answers with the variable to set and where to get it
 
 ### Where the data lives, and the two modes
 
-The store is a folder of your own: `providers.data.data_dir` if you set it, else `OMNI_DATA_DIR`, else the per-user data folder (`~/Library/Application Support/marketlens-data` on macOS, `%LOCALAPPDATA%\marketlens-data` on Windows, `$XDG_DATA_HOME/marketlens-data` or `~/.local/share/marketlens-data` elsewhere), created owner-only. marketlens never lets marketlens-data read a `.env` file.
+The store is a folder of your own: `providers.data.data_dir` if you set it, else `OMNI_DATA_DIR`, else the per-user data folder (`~/Library/Application Support/marketlens-data` on macOS, `%LOCALAPPDATA%\marketlens-data` on Windows, `$XDG_DATA_HOME/marketlens-data` when that is absolute, else `~/.local/share/marketlens-data`, elsewhere), created owner-only. marketlens never lets marketlens-data read a `.env` file.
 
 - `mode: auto` (the default): a slice (one series, one company, one date) older than `ttl_hours` is fetched from the publisher and stored, then the answer is read from the store. A second question within the TTL makes no request (`cached: true` in the provenance).
 - `mode: local`: only what is stored is read; nothing is fetched and no key is needed. An empty answer says so.
