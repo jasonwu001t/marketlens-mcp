@@ -115,7 +115,7 @@ def test_r2_unknown_nested_key(tmp_path):
     msg = refusal(tmp_path, "providers:\n  polygon: {}\n")
     assert (
         msg
-        == f"marketlens config {shown(tmp_path)}: unknown setting 'providers.polygon'. Known settings here: alpaca, data."
+        == f"marketlens config {shown(tmp_path)}: unknown setting 'providers.polygon'. Known settings here: alpaca, data, official."
     )
 
 

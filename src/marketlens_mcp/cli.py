@@ -382,8 +382,16 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     print(
         f"version: marketlens-mcp {__version__}, schema {SCHEMA_VERSION}, plugin API {PLUGIN_API_VERSION[0]}.{PLUGIN_API_VERSION[1]}"
     )
-    for line in _env_lines(sorted({n for e in enabled_entries(rt) for n in e.env}), os.environ):
+    from .providers.official import tool as official
+
+    enabled = enabled_entries(rt)
+    official_on = any(e.spec.name == "news_official" for e in enabled)
+    # news_official does not refuse without SEC_CONTACT_EMAIL (it skips SEC and BLS): its own line says so
+    names = sorted({n for e in enabled if e.spec.name != "news_official" for n in e.env})
+    for line in _env_lines(names, os.environ):
         print(line)
+    if official_on:
+        print(official.doctor_line(os.environ))
     cache = rt.store_root.cache_dir
     try:
         paths.ensure_private_dir(rt.store_root.results_dir)

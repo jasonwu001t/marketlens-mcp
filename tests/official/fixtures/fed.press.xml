@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<rss version="2.0">
+    <channel>
+        <title>FRB: Press Releases</title>
+        <link>https://www.federalreserve.gov/feeds/press_all.html</link>
+        <description>Synthetic test feed in the shape of the Board's press releases</description>
+        <language>en</language>
+        <item>
+            <title>Board announces a synthetic enforcement action against Example Bank</title>
+            <link>https://www.federalreserve.gov/newsevents/pressreleases/enforcement20261016a.htm</link>
+            <guid>https://www.federalreserve.gov/newsevents/pressreleases/enforcement20261016a.htm</guid>
+            <description>Board announces a synthetic enforcement action against Example Bank</description>
+            <category>Enforcement Actions</category>
+            <pubDate>Fri, 16 Oct 2026 15:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title>Federal Reserve issues a synthetic FOMC statement for testing</title>
+            <link>https://www.federalreserve.gov/newsevents/pressreleases/monetary20261014a.htm</link>
+            <guid>https://www.federalreserve.gov/newsevents/pressreleases/monetary20261014a.htm</guid>
+            <description>Federal Reserve issues a synthetic FOMC statement for testing</description>
+            <category>Monetary Policy</category>
+            <pubDate>Wed, 14 Oct 2026 18:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title>Agencies request comment on a synthetic interest rate risk proposal</title>
+            <link>https://www.federalreserve.gov/newsevents/pressreleases/bcreg20261009a.htm</link>
+            <guid>https://www.federalreserve.gov/newsevents/pressreleases/bcreg20261009a.htm</guid>
+            <description>Agencies request comment on a synthetic interest rate risk proposal</description>
+            <category>Banking and Consumer Regulatory Policy</category>
+            <pubDate>Fri, 9 Oct 2026 14:00:00 GMT</pubDate>
+        </item>
+    </channel>
+</rss>

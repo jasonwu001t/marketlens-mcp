@@ -87,7 +87,7 @@
         }
       ],
       "default": null,
-      "description": "The outlet that published it (Alpaca's `source`)",
+      "description": "The outlet or publisher that issued it (the provider's own name or id for its source)",
       "title": "Publisher"
     },
     "summary": {

@@ -1,6 +1,6 @@
 # marketlens-mcp
 
-A read-only [Model Context Protocol](https://modelcontextprotocol.io) server for market data and analytics. It answers in one vendor-neutral schema whatever the data provider (Alpaca is built in; other providers plug in), keeps large results out of the model's context window in a local DuckDB result store that the model queries with read-only SQL, computes common analytics (returns, volatility, correlation, drawdown, beta, ...) on those stored results, and lets you choose which capabilities it may use. With the optional `data` extra it also answers from official sources, point in time: FRED, BLS and BEA series (CPI, the unemployment rate, payrolls, GDP), SEC EDGAR filings, XBRL facts, fundamentals, earnings releases, insider trades, 13F and fund holdings, the FOMC, NY Fed reference rates and the Treasury's yield curve, auctions, debt and cash, plus market calendars. It works with any MCP client and your own provider keys.
+A read-only [Model Context Protocol](https://modelcontextprotocol.io) server for market data and analytics. It answers in one vendor-neutral schema whatever the data provider (Alpaca is built in; other providers plug in), keeps large results out of the model's context window in a local DuckDB result store that the model queries with read-only SQL, computes common analytics (returns, volatility, correlation, drawdown, beta, ...) on those stored results, and lets you choose which capabilities it may use. With the optional `data` extra it also answers from official sources, point in time: FRED, BLS and BEA series (CPI, the unemployment rate, payrolls, GDP), SEC EDGAR filings, XBRL facts, fundamentals, earnings releases, insider trades, 13F and fund holdings, the FOMC, NY Fed reference rates and the Treasury's yield curve, auctions, debt and cash, plus market calendars. Built in and keyless, it also reads official headlines (press releases, speeches, testimony, enforcement and data-release notices) from the Federal Reserve Board, SEC, BLS, BEA, CFTC and ECB feeds. It works with any MCP client and your own provider keys.
 
 ## Status
 
@@ -22,6 +22,7 @@ flowchart TB
     subgraph providers["providers (one plugin API)"]
       alpaca["alpaca/<br/>market, reference, news,<br/>portfolio, provider.docs"]
       data["data/ (optional extra)<br/>macro, filings, fed_treasury,<br/>holidays, calendars"]
+      official["official/<br/>news (news_official)"]
       plugins["installed plugins<br/>marketlens.plugins entry points"]
     end
     store[("results/<br/>DuckDB + Parquet result store<br/>per session, 24 h")]
@@ -30,13 +31,14 @@ flowchart TB
   alpacaapi["Alpaca market-data API<br/>Alpaca trading API (reads only)<br/>Alpaca docs MCP"]
   omni[("marketlens-data (omni)<br/>local point-in-time store")]
   publishers["FRED, BLS, BEA, SEC EDGAR, Federal Reserve,<br/>NY Fed, Treasury, FiscalData, NYSE, SIFMA, OPM, Nasdaq"]
+  feeds["Fed, SEC, BLS, BEA, CFTC, ECB<br/>RSS/Atom feeds (fixed allow-list)"]
   other["the plugin's own upstream"]
 
   client <--> transport
   transport --> registry
   policy --> registry
   registry --> pipeline
-  pipeline --> alpaca & data & plugins
+  pipeline --> alpaca & data & official & plugins
   pipeline --> offload
   offload <--> store
   analytics <--> store
@@ -45,6 +47,7 @@ flowchart TB
   alpaca --> alpacaapi
   data --> omni
   omni --> publishers
+  official --> feeds
   plugins --> other
 ```
 
@@ -64,6 +67,7 @@ flowchart TB
  |                             rows + provenance -> offload.py (inline/stored)   |
  |                                                                               |
  |  providers (registered through the same plugin API as third-party plugins)   |
+ |   official/ (built in): news_official -> Fed, SEC, BLS, BEA, CFTC, ECB feeds  |
  |   +- alpaca/ -------------+  +- data/ (optional extra) -+  +- plugins -------+ |
  |   | market, reference,    |  | macro, filings,          |  | entry points in | |
  |   | news, portfolio,      |  | fed_treasury, holidays,  |  | marketlens.     | |
@@ -104,6 +108,7 @@ Package layout:
 | `src/marketlens_mcp/analytics/` | The `analytics_*` tools |
 | `src/marketlens_mcp/providers/alpaca/` | The Alpaca provider (bundled OpenAPI specs, endpoint mapping, parity list) |
 | `src/marketlens_mcp/providers/data/` | The official-data provider over marketlens-data (`sources.py` keys, `parity.py` dataset coverage, `tools/`) |
+| `src/marketlens_mcp/providers/official/` | The official-feeds provider: `news_official` over a fixed allow-list of government and central-bank RSS/Atom feeds (`feeds.py` the list and why each feed is in or out, `parse.py`, `fetch.py`, `tool.py`) |
 | `src/marketlens_schema/` | The vendor-neutral canonical models (pydantic only; usable without the server) |
 | `schema/` | Generated JSON Schemas of the canonical models (`make schema`) |
 
@@ -114,12 +119,28 @@ Package layout:
 | Alpaca market-data API (stocks, options, crypto, fixed income, news, screeners) | built-in `alpaca` provider | `ALPACA_API_KEY`, `ALPACA_SECRET_KEY` | `market`, `reference`, `news` |
 | Alpaca trading API (assets, calendar, clock, corporate-action announcements, option contracts; account reads) | built-in `alpaca` provider | same | `reference`, `portfolio` (off); also `market` (`options_chain`'s open interest, `market_movers`' asset names) and, through the `data` extra, `holidays` (the optional NYSE cross-check, paper-account keys only) |
 | Alpaca documentation MCP (`docs.alpaca.markets/mcp`) | built-in `alpaca-docs` | none | `provider.docs` (off) |
+| Official RSS/Atom feeds of the Federal Reserve Board, SEC, BLS, BEA, CFTC and ECB (press releases, speeches, testimony, enforcement and data-release notices) | built-in `official` provider | none; `SEC_CONTACT_EMAIL` for the SEC and BLS feeds | `news` |
 | FRED/ALFRED, BLS, BEA | `data` extra (marketlens-data) | `FRED_API_KEY`, `BEA_API_KEY`, `BLS_API_KEY` (optional) | `macro` |
 | SEC EDGAR (submissions, XBRL company facts, Archives) | `data` extra | `SEC_CONTACT_EMAIL` (recommended) | `filings` |
 | Federal Reserve (FOMC), NY Fed, U.S. Treasury, FiscalData | `data` extra | keyless | `fed_treasury` |
 | NYSE, SIFMA, OPM holiday calendars | `data` extra | keyless | `holidays` |
 | Nasdaq calendars (unofficial endpoint) | `data` extra | keyless | `calendars` (off) |
 | Your own computations | local DuckDB | none | `analytics`, `results` |
+
+### Official feeds
+
+`news_official` reads only these 18 feeds, live (no history: each feed holds its newest items), GET only; a feed read in the last `providers.official.cache_seconds` (300 s by default) is answered from memory. Their list, and why each candidate left out is out, is in `src/marketlens_mcp/providers/official/feeds.py`: BEA's richer `apps.bea.gov` feed and EDGAR's `/cgi-bin` feeds are disallowed by robots.txt, the Treasury publishes no press-release feed (and TreasuryDirect's robots.txt excludes generic agents), the Fed's H.15 feed is stale, and publisher and vendor feeds (WSJ, CNBC, the FT and the like) limit their use to personal reading or forbid automated and AI use. There is no setting or argument that adds a URL.
+
+| Publisher | Feeds (the `news_id` prefix) | Reuse and attribution |
+|---|---|---|
+| Federal Reserve Board | `fed.monetary`, `fed.press`, `fed.speeches`, `fed.testimony` | US federal work, public domain; the Board asks to be cited as the source. |
+| SEC (needs `SEC_CONTACT_EMAIL`) | `sec.press`, `sec.speeches`, `sec.litigation` | US federal work, public domain; fair access: a declared User-Agent with a contact, at most 10 requests a second. |
+| BLS (needs `SEC_CONTACT_EMAIL`) | `bls.latest`, `bls.cpi`, `bls.empsit`, `bls.ppi`, `bls.jolts`, `bls.eci` | US federal work, public domain; BLS asks to be cited as the source. |
+| BEA | `bea.news` | US federal work, public domain. |
+| CFTC | `cftc.press`, `cftc.enforcement`, `cftc.speeches` | US federal work, public domain; the CFTC asks to be acknowledged (its robots.txt: no AI training). |
+| ECB | `ecb.press` | Free to reuse if reproduced accurately with the ECB cited as the source; whoever sells it must say it is available free. |
+
+An FOMC statement is in both `fed.monetary` and `fed.press`; a release found in two feeds is kept once, under the first in this order.
 
 ### Upstream APIs
 
@@ -140,6 +161,7 @@ Every request a tool can make goes to one of these. Nothing else is called: no t
 | Treasury FiscalData | `https://api.fiscaldata.treasury.gov/services/api/fiscal_service` | `/v1/accounting/od/auctions_query`, `/v2/accounting/od/debt_to_penny`, `/v1/accounting/dts/operating_cash_balance` | none | `treasury_auctions`, `treasury_debt`, `treasury_tga` |
 | NYSE, SIFMA, OPM | `https://www.nyse.com`, `https://www.sifma.org`, `https://www.opm.gov` | `/markets/hours-calendars`; `/resources/guides-playbooks/holiday-schedule` and `/us-holiday-archive`; `/policy-data-oversight/pay-leave/federal-holidays/` | none | `calendar_us_holidays` |
 | Nasdaq (unofficial) | `https://api.nasdaq.com` | `/api/calendar/economicevents`, `/api/calendar/earnings`, `/api/company/{symbol}/earnings-surprise` | none | `calendar_economic`, `calendar_earnings`, `calendar_earnings_history` (off by default) |
+| Official feeds (Federal Reserve Board, SEC, BLS, BEA, CFTC, ECB) | `https://www.federalreserve.gov`, `https://www.sec.gov`, `https://www.bls.gov`, `https://www.bea.gov`, `https://www.cftc.gov`, `https://www.ecb.europa.eu` | `/feeds/{press_monetary,press_all,speeches,testimony}.xml`; `/news/{pressreleases,speeches-statements}.rss`, `/enforcement-litigation/litigation-releases/rss`; `/feed/{bls_latest,cpi,empsit,ppi,jolts,eci}.rss`; `/news/rss`; `/RSS/{RSSGP/rssgp,RSSENF/rssenf,RSSST/rssst}.xml`; `/rss/press.html` ([the list](#official-feeds)) | none; for SEC and BLS, `SEC_CONTACT_EMAIL` in the User-Agent (without it those feeds are skipped) | `news_official` |
 
 The tool table below names each tool's main route; the second reads of `options_chain`, `market_movers` and `calendar_us_holidays` are in the rows above.
 
@@ -242,12 +264,15 @@ Claude Desktop (`claude_desktop_config.json`):
       "args": ["--from", "git+https://github.com/jasonwu001t/marketlens-mcp", "marketlens-mcp"],
       "env": {
         "ALPACA_API_KEY": "your key id",
-        "ALPACA_SECRET_KEY": "your secret key"
+        "ALPACA_SECRET_KEY": "your secret key",
+        "SEC_CONTACT_EMAIL": "you@example.com"
       }
     }
   }
 }
 ```
+
+`SEC_CONTACT_EMAIL` is optional, and needs no extra: the built-in `news_official` reads its SEC and BLS feeds (9 of its 18; see [Official feeds](#official-feeds)) only when it is set to an email address, which it sends in the User-Agent to SEC and BLS alone. Without it those feeds are skipped with a note; no placeholder contact is ever sent.
 
 With the `data` extra, run it from the extra (`"--from", "marketlens-mcp[data]"`) once both packages are on PyPI; until then, add the marketlens-data checkout with `--with`, as below (see [Install](#install)). Either way, add the official sources' keys (each one only for the tools that need it; see [the keys](#keys)):
 
@@ -270,7 +295,7 @@ With the `data` extra, run it from the extra (`"--from", "marketlens-mcp[data]"`
 }
 ```
 
-`SEC_CONTACT_EMAIL` is optional but strongly recommended: SEC EDGAR's fair-access rule asks every client to name a contact. Without it marketlens-data sends a placeholder contact and logs a warning, every `sec_` answer carries a note saying so, and SEC may throttle or block such requests. `marketlens-mcp doctor` says whether it is set, never its value.
+`SEC_CONTACT_EMAIL` is optional but strongly recommended: SEC EDGAR's fair-access rule asks every client to name a contact. Without it marketlens-data sends a placeholder contact and logs a warning, every `sec_` answer carries a note saying so, and SEC may throttle or block such requests (`news_official`, as above, skips its SEC and BLS feeds instead). `marketlens-mcp doctor` says whether it is set, never its value.
 
 Claude Code:
 
@@ -290,7 +315,7 @@ Each tool belongs to one capability. Turn capabilities on or off in the config f
 |---|---|---|
 | `market` | on | Stock, option, crypto and fixed-income bars, quotes, trades, snapshots, latest values, option chains with greeks, crypto order books, screeners. |
 | `reference` | on | Assets, option contracts and exchanges, market calendar and clock, corporate actions and announcements. |
-| `news` | on | News articles. Third-party text: every response is marked untrusted. |
+| `news` | on | News articles from Alpaca (`news_search`) and official headlines from the Federal Reserve Board, SEC, BLS, BEA, CFTC and ECB feeds (`news_official`, keyless). Third-party text: every response is marked untrusted. |
 | `analytics` | on | Returns, rolling volatility, correlation, resample, as-of align, drawdown and beta, computed locally on result handles. |
 | `portfolio` | off | Brokerage account reads: account, positions, orders, activities, portfolio history, account configuration, broker watchlists and locates (the paper account unless `portfolio.environment: live`). Off by default: what the model reads leaves your machine with the model's requests. |
 | `results` | always on | Query, describe, sample, list and drop results stored by this session. |
@@ -351,6 +376,9 @@ providers:
     ttl_hours: 12         # how long a fetched slice is reused before it is fetched again
     calendar_ttl_minutes: 60
     call_timeout_seconds: 120
+  official:
+    cache_seconds: 300    # reuse a fetched feed this long (0: fetch every time; the ECB's 5 s Crawl-delay holds)
+    timeout_seconds: 20   # per feed request; a call stops 10 s after it
 results:
   inline_max_rows: 200
   inline_max_tokens: 6000
@@ -415,6 +443,7 @@ Each source names its own key; set the ones you need in the env block of the ser
 | BLS | `BLS_API_KEY` | no | free; raises BLS's daily limit and years per request: https://data.bls.gov/registrationEngine/ | `macro_bls_series` |
 | BEA | `BEA_API_KEY` | yes | free: https://apps.bea.gov/API/signup/ | `macro_bea_table` |
 | SEC EDGAR | `SEC_CONTACT_EMAIL` | optional, strongly recommended | your contact address, sent in the User-Agent as SEC's fair-access rule asks; without it a placeholder contact is sent, which SEC may throttle or block: https://www.sec.gov/os/accessing-edgar-data | the nine `sec_` tools |
+| Official feeds of SEC and BLS (built in, not the data extra) | `SEC_CONTACT_EMAIL` | optional | the same address, sent in the User-Agent to SEC and BLS only (both refuse undeclared automated clients); without it, or when it is not an email address, their nine feeds are skipped with a note and no placeholder is ever sent; the Fed, BEA, CFTC and ECB feeds need nothing | `news_official` |
 | Federal Reserve, NY Fed, Treasury, FiscalData | none | | keyless | `fed_`, `treasury_` tools, `macro_release_schedule` |
 | Nasdaq | none | | keyless; an unofficial endpoint | `calendar_economic`, `calendar_earnings`, `calendar_earnings_history` |
 | NYSE, SIFMA, OPM | none (`ALPACA_API_KEY`, `ALPACA_SECRET_KEY` optional) | no | keyless; with paper-account Alpaca keys, NYSE's dates are cross-checked against Alpaca's paper trading calendar, and without keys the answer says they were not (live-account keys make the NYSE fetch fail) | `calendar_us_holidays` |
@@ -496,6 +525,7 @@ Generated from the built-in tool manifest (`make readme`). `marketlens-mcp tools
 | `reference_option_contracts` | reference (on) | `GET /v2/options/contracts (trading API)` (alpaca) | marketlens.OptionContract | ALPACA_API_KEY, ALPACA_SECRET_KEY, APCA_API_KEY_ID, APCA_API_SECRET_KEY | Option contract reference data |
 | `reference_option_exchanges` | reference (on) | `GET /v1beta1/options/meta/exchanges (market data API)` (alpaca) | marketlens.OptionExchange | ALPACA_API_KEY, ALPACA_SECRET_KEY, APCA_API_KEY_ID, APCA_API_SECRET_KEY | Option exchange codes |
 | `reference_stock_exchanges` | reference (on) | `GET /v2/stocks/meta/exchanges (market data API)` (alpaca) | marketlens.StockExchange | ALPACA_API_KEY, ALPACA_SECRET_KEY, APCA_API_KEY_ID, APCA_API_SECRET_KEY | Stock exchange codes |
+| `news_official` | news (on) | `GET RSS/Atom feeds (Fed, SEC, BLS, BEA, CFTC, ECB; fixed allow-list)` (official) | marketlens.NewsItem | SEC_CONTACT_EMAIL | untrusted text |
 | `news_search` | news (on) | `GET /v1beta1/news (market data API)` (alpaca) | marketlens.NewsItem | ALPACA_API_KEY, ALPACA_SECRET_KEY, APCA_API_KEY_ID, APCA_API_SECRET_KEY | untrusted text |
 | `analytics_align` | analytics (on) | `duckdb:analytics_align` (local) | marketlens.Aligned | - | As-of join of two results (backward or forward, tolerance, by column); adds matched_t. |
 | `analytics_beta` | analytics (on) | `duckdb:analytics_beta` (local) | marketlens.BetaResult | - | Beta, alpha and R squared versus a one-series benchmark; rolling with window. |
@@ -562,7 +592,7 @@ Every response uses the vendor-neutral models in `marketlens_schema` (pydantic o
 ## Security and privacy
 
 - **Read-only**: no tool writes to your brokerage account or any provider; the only file a tool can write is an export into the folder you configure, and only with `results.export` on.
-- **What leaves your machine**: the requests tools make to the provider you configured, and whatever the model reads, which goes to your model provider with the conversation. Brokerage reads are off by default for that reason. The data tools call the publishers directly from your machine; the store is local.
+- **What leaves your machine**: the requests tools make to the provider you configured, and whatever the model reads, which goes to your model provider with the conversation. Brokerage reads are off by default for that reason. The data tools call the publishers directly from your machine; the store is local. `news_official` sends GET requests to its fixed list of government and central-bank feeds only, with your `SEC_CONTACT_EMAIL` to SEC and BLS alone.
 - **Untrusted text**: every result is wrapped in a `_marketlens` envelope that tells the model to treat it as data; news and documentation text carry a stronger notice.
 - **No telemetry**: marketlens-mcp sends nothing anywhere except the upstream calls tools make. The FastMCP banner and its update check are off.
 - **HTTP**: `serve --transport http` listens only on `127.0.0.1` or `::1`, requires `MARKETLENS_HTTP_TOKEN` (at least 32 characters) as a bearer token on every request, and checks the Host and Origin headers.
@@ -578,6 +608,7 @@ Pick the path by where the data comes from:
 |---|---|---|---|
 | An Alpaca endpoint that is not mapped yet | extend the built-in provider | `src/marketlens_mcp/providers/alpaca/` | [ADDING_A_CAPABILITY.md](ADDING_A_CAPABILITY.md) steps 1-6 |
 | A dataset marketlens-data already collects (or a new one you add there) | an official-data tool | `src/marketlens_mcp/providers/data/tools/` | [ADDING_A_CAPABILITY.md, "Adding an official-data tool"](ADDING_A_CAPABILITY.md#adding-an-official-data-tool-the-data-extra) |
+| An official government or central-bank feed | an entry in the fixed allow-list of the built-in `official` provider | `src/marketlens_mcp/providers/official/feeds.py` | [ADDING_A_CAPABILITY.md, "Official feeds"](ADDING_A_CAPABILITY.md#official-feeds-a-built-in-provider-not-a-plugin) |
 | Another vendor's market data (a broker, a data API, a local database) | a provider plugin on the existing canonical models | your own package | [WRITING_A_PLUGIN.md, "Writing a provider"](WRITING_A_PLUGIN.md#writing-a-provider) |
 | Something that is not market data (your own research store, an internal API) | a plugin with its own capability and models | your own package | [WRITING_A_PLUGIN.md](WRITING_A_PLUGIN.md) |
 

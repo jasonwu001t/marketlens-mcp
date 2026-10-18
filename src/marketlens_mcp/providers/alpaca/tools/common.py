@@ -198,6 +198,7 @@ def window(
     day_zone: tzinfo = UTC,
     lag: timedelta = timedelta(0),
     lagging: str = "",
+    upstream: str = "Alpaca",
 ) -> Window:
     """With a timeframe of a day or longer, a start from lookback is floored to
     00:00 UTC so the first day's bar (stamped at midnight New York, 04:00 or
@@ -209,7 +210,8 @@ def window(
     An end later than the newest data the feed serves (now, or ``lag`` before
     now for a delayed feed, named by ``lagging``) is cut to it, and a lookback
     without an end reaches back from it. Each adjustment is said in a note; a
-    start not before it is refused by name."""
+    start not before it is refused by name (``upstream`` names the source in
+    that refusal: the official feeds share this window)."""
     now = ctx.now()
     latest = now - lag
     notes: list[str] = []
@@ -224,7 +226,7 @@ def window(
                 f"end {end.strip()} is a date: the window includes that whole day, to midnight "
                 f"{_zone_name(day_zone)} ({convert.iso_z(end_dt)})."
             )
-    source = f"the {lagging}" if lag and lagging else "Alpaca"
+    source = f"the {lagging}" if lag and lagging else upstream
     if end and end_dt is not None and end_dt > latest:
         if lag:
             notes.append(

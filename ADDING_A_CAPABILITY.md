@@ -105,6 +105,15 @@ The `data` provider (`src/marketlens_mcp/providers/data/`) reads publishers thro
 4. **Account for it** in `parity.PARITY` (Mapped), and the key in `sources.SOURCES` if the source is new (doctor prints its line).
 5. **Test it** in `tests/data/test_<module>.py` with a synthetic fixture in the publisher's own shape, served by the fake publisher of `tests/data/data_harness.py` behind marketlens-data's HTTP client, and a golden file (`MARKETLENS_UPDATE_GOLDEN=1`, then read it). `make test-data` runs them; they need the extra installed.
 
+## Official feeds: a built-in provider, not a plugin
+
+`news_official` (`src/marketlens_mcp/providers/official/`) reads the press, speech, testimony, enforcement and data-release feeds of the Federal Reserve Board, SEC, BLS, BEA, CFTC and ECB. It is a built-in provider, not a plugin, because these are public publishers, not commercial vendors: their feeds need no key or account, their text is public domain or free to reuse with a citation, and the provider is read-only over a fixed allow-list (`feeds.py`) that no setting or argument can extend. A commercial publisher's or vendor's feed is never added here: it could only be a plugin, under its own terms. To add an official feed:
+
+1. Check it once, live, with a declared User-Agent (`marketlens-mcp/<version>` and a contact): it must answer 200 with a current RSS 2.0 or Atom document, and the publisher's robots.txt must allow its path. Read the publisher's reuse terms.
+2. Add a `Feed` to `FEEDS` (and a `Publisher` if it is new, with its domain, whether it needs `SEC_CONTACT_EMAIL`, and its terms in one line), with a comment saying why it is in; a candidate you leave out goes in the module docstring with why it is out.
+3. Write a synthetic fixture in the feed's shape (`tests/official/fixtures/<feed id>.<kind>`, invented items, never a recording), regenerate the golden files with `MARKETLENS_UPDATE_GOLDEN=1` and read them line by line.
+4. Update the feed list in README.md ([Official feeds](README.md#official-feeds) and the Upstream APIs row) and CHANGELOG.md.
+
 ## Adding a provider instead
 
 A different vendor (another broker, a data API, a local database) is a plugin, not a change to this provider: map its responses onto the existing canonical models, prefix its tools with its own name, set `provenance.provider` to the vendor, keep its own exclusion list and parity test against the vendor's API. See [WRITING_A_PLUGIN.md](WRITING_A_PLUGIN.md).
