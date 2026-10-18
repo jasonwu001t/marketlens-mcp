@@ -7,7 +7,7 @@
  },
  "model": "marketlens.NewsItem",
  "notes": [
-  "Kept 1 item(s) once that appeared in more than one feed, under the first feed of the allow-list (fed.press 1 left out).",
+  "Left out 1 repeat(s) of item(s) listed more than once, in one feed or in several; each is kept once, under the first feed of the allow-list (fed.press 1).",
   "Skipped 1 item(s) with no date that parses (cftc.press 1).",
   "Left out 1 link(s) that were not https on the publisher's own domain (cftc.enforcement 1); their url is null (withheld)."
  ],
@@ -122,6 +122,23 @@
   {
    "absent": {
     "author": "not_provided_by_source",
+    "summary": "not_provided_by_source",
+    "updated_at": "not_provided_by_source"
+   },
+   "author": null,
+   "content": null,
+   "created_at": "2026-10-15T16:30:00Z",
+   "headline": "CFTC Publishes a Synthetic Staff Letter on Test Swaps",
+   "news_id": "cftc.press:cbaa9c435515ed87",
+   "publisher": "cftc",
+   "summary": null,
+   "tickers": [],
+   "updated_at": null,
+   "url": "https://www.cftc.gov/PressRoom/PressReleases/9902-26"
+  },
+  {
+   "absent": {
+    "author": "not_provided_by_source",
     "updated_at": "not_provided_by_source"
    },
    "author": null,
@@ -153,9 +170,10 @@
   },
   {
    "absent": {
+    "author": "not_provided_by_source",
     "updated_at": "not_provided_by_source"
    },
-   "author": "Sample",
+   "author": null,
    "content": null,
    "created_at": "2026-10-15T02:55:00Z",
    "headline": "Sample, Synthetic Remarks on the Outlook and Interest Rates",
@@ -279,6 +297,22 @@
    "tickers": [],
    "updated_at": null,
    "url": null
+  },
+  {
+   "absent": {
+    "author": "not_provided_by_source",
+    "updated_at": "not_provided_by_source"
+   },
+   "author": null,
+   "content": null,
+   "created_at": "2026-10-13T14:00:00Z",
+   "headline": "Supervision, Synthetic Oversight Panels",
+   "news_id": "fed.testimony:ff86c0668f05665a",
+   "publisher": "federal_reserve",
+   "summary": "Testimony Before a synthetic Subcommittee of the House",
+   "tickers": [],
+   "updated_at": null,
+   "url": "https://www.federalreserve.gov/newsevents/testimony/sample20261013a.htm"
   },
   {
    "absent": {

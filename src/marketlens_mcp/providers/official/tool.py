@@ -5,10 +5,10 @@ third-party text: the spec's output risk is ``external_text``."""
 from __future__ import annotations
 
 import hashlib
-import re
 from collections import Counter
 from collections.abc import Mapping
 from typing import Literal
+from urllib.parse import urljoin
 
 from pydantic import Field, field_validator
 
@@ -27,7 +27,7 @@ from ..alpaca.tools.common import (
     request_of,
     window,
 )
-from ..alpaca.tools.news import matcher
+from ..alpaca.tools.news import matcher, query_words
 from ..data.sources import is_email
 from .feeds import BY_PUBLISHER, FEED_IDS, FEEDS, PUBLISHER_IDS, PUBLISHERS, Feed, select
 from .fetch import fetch_all
@@ -88,19 +88,13 @@ class OfficialNewsIn(Inputs):
     @field_validator("query")
     @classmethod
     def _words(cls, v: str | None) -> str | None:
-        if v is not None and not re.search(r"\w", v):
-            raise ValueError("query needs at least one word")
-        return None if v is None else " ".join(v.split())
+        return query_words(v)
 
 
 def contact_of(value: str | None) -> str | None:
     """SEC_CONTACT_EMAIL when it is an email address fit for a header, else None."""
     s = (value or "").strip()
     return s if is_email(s) and s.isascii() and s.isprintable() else None
-
-
-#: The doctor's text for SEC_CONTACT_EMAIL when it is unset and news_official is listed.
-CONTACT_UNSET = "optional: news_official skips its SEC and BLS feeds without it"
 
 
 def doctor_line(environ: Mapping[str, str]) -> str:
@@ -121,16 +115,22 @@ def news_id(feed: Feed, item: RawItem) -> str:
     return f"{feed.id}:{hashlib.sha1(key.encode()).hexdigest()[:16]}"  # noqa: S324 - an id, not security
 
 
-_SPEAKER = re.compile(r"^([A-Z][A-Za-z.'\-]+(?: [A-Z][A-Za-z.'\-]+){0,3}), \S")
-
-
 def author_of(feed: Feed, item: RawItem) -> str | None:
-    if feed.author_from == "creator":
-        return item.author
-    if feed.author_from == "title" and item.title:
-        m = _SPEAKER.match(item.title)
-        return m[1] if m else None
-    return None
+    """dc:creator or the Atom author's name, where the feed puts an author there."""
+    return item.author if feed.author_from == "creator" else None
+
+
+def dedupe_keys(feed: Feed, item: RawItem, nid: str, url: str | None) -> list[tuple[str, ...]]:
+    """The keys under which an item counts as already seen: its news_id (so
+    news_id is unique in a result), and its url (checked to be on the
+    publisher's own domain), else its guid, which is any text the feed sends,
+    so it only ever matches within the same publisher."""
+    keys: list[tuple[str, ...]] = [("id", nid)]
+    if url:
+        keys.append(("url", url))
+    elif item.guid:
+        keys.append(("guid", feed.publisher, item.guid))
+    return keys
 
 
 def counted(counts: Counter[str]) -> str:
@@ -138,7 +138,7 @@ def counted(counts: Counter[str]) -> str:
 
 
 async def news_official(ctx: ToolContext, args: OfficialNewsIn) -> ToolOutput:
-    win = window(ctx, args.start, args.end, args.lookback, "P7D", upstream="the feeds")
+    win = window(ctx, args.start, args.end, args.lookback, "P7D", upstream="each feed")
     chosen = select(args.publishers, args.feeds)
     notes = list(win.notes)
     try:
@@ -148,12 +148,13 @@ async def news_official(ctx: ToolContext, args: OfficialNewsIn) -> ToolOutput:
     contact = contact_of(configured)
     why = "is not an email address" if configured else "is not set"
     skipped = [f for f in chosen if f.publisher in NEEDS_CONTACT] if contact is None else []
+    skip_note = (
+        f"SEC_CONTACT_EMAIL {why}, so the SEC and BLS feeds were skipped "
+        f"({', '.join(f.id for f in skipped)}): both refuse automated clients that do not name a contact "
+        "in their User-Agent."
+    )
     if skipped:
-        notes.append(
-            f"SEC_CONTACT_EMAIL {why}, so the SEC and BLS feeds were skipped "
-            f"({', '.join(f.id for f in skipped)}): both refuse automated clients that do not name a contact "
-            f"in their User-Agent. {CONTACT_HINT}"
-        )
+        notes.append(f"{skip_note} {CONTACT_HINT}")
     wanted = [f for f in chosen if f not in skipped]
     if not wanted:
         raise ToolError(
@@ -169,38 +170,46 @@ async def news_official(ctx: ToolContext, args: OfficialNewsIn) -> ToolOutput:
     if not answered:
         raise ToolError(
             "official_unavailable",
-            "Every feed asked for failed: " + "; ".join(f"{r.feed.id} {r.error}" for r in failed) + ".",
-            hint="Retry in a few minutes.",
+            "Every feed asked for failed: "
+            + "; ".join(f"{r.feed.id} {r.error}" for r in failed)
+            + "."
+            + (f" {skip_note}" if skipped else ""),
+            hint="Retry in a few minutes." + (f" {CONTACT_HINT}" if skipped else ""),
             retryable=True,
         )
 
+    # Window first, so every count below is about items the window holds.
+    start, end = win.start, win.as_of
     rows: list[NewsItem] = []
-    seen: set[str] = set()
-    duplicates, undated, untitled, links_left_out = Counter(), Counter(), Counter(), Counter()
+    undated, untitled = Counter(), Counter()
+    # dedupe key -> the news_id kept under it; news_id -> the feeds whose repeats were left out
+    owner: dict[tuple[str, ...], str] = {}
+    repeats: dict[str, Counter[str]] = {}
     for result in answered:
         feed = result.feed
         publisher = BY_PUBLISHER[feed.publisher]
         for item in result.items:
             if item.created is None:
-                undated[feed.id] += 1
+                undated[feed.id] += 1  # its date is unknown, so it cannot be placed in the window
+                continue
+            if not start <= item.created <= end:
                 continue
             if not item.title:
                 untitled[feed.id] += 1
                 continue
-            url, refused = own_url(item.link, feed.url, publisher.domain)
-            if refused:
-                links_left_out[feed.id] += 1
-            key = url or item.guid
-            if key is not None and key in seen:
-                duplicates[feed.id] += 1
+            url, refused = own_url(item.link, urljoin(feed.url, item.base or ""), publisher.domain)
+            nid = news_id(feed, item)
+            keys = dedupe_keys(feed, item, nid, url)
+            kept = next((owner[k] for k in keys if k in owner), None)
+            if kept is not None:
+                repeats.setdefault(kept, Counter())[feed.id] += 1
                 continue
-            if key is not None:
-                seen.add(key)
+            owner.update(dict.fromkeys(keys, nid))
             rows.append(
                 build_row(
                     NewsItem,
                     {
-                        "news_id": news_id(feed, item),
+                        "news_id": nid,
                         "headline": item.title,
                         "summary": item.summary,
                         "author": author_of(feed, item),
@@ -220,16 +229,20 @@ async def news_official(ctx: ToolContext, args: OfficialNewsIn) -> ToolOutput:
                 )
             )
 
-    start, end = win.start, win.as_of
-    rows = [r for r in rows if start <= r.created_at <= end]
-    read = len(rows)
+    in_window = len(rows)
     if args.query:
         match = matcher(args.query)
         rows = [r for r in rows if match(r)]
+    matched = len(rows)
     rows.sort(key=lambda r: (r.created_at, r.news_id), reverse=args.sort == "desc")
     cut = len(rows) > ctx.limits.max_rows
     rows = rows[: ctx.limits.max_rows]
     cut_note = f"Stopped at {ctx.limits.max_rows} rows (fetch.max_rows); narrow the window or the feeds."
+    # The repeat and withheld-link notes count the rows the answer holds.
+    duplicates = sum((repeats.get(r.news_id, Counter()) for r in rows), Counter())
+    links_left_out = Counter(
+        r.news_id.partition(":")[0] for r in rows if r.absent and r.absent.get("url") == AbsenceCode.WITHHELD
+    )
 
     if failed:
         notes.append(
@@ -239,8 +252,8 @@ async def news_official(ctx: ToolContext, args: OfficialNewsIn) -> ToolOutput:
         )
     if duplicates:
         notes.append(
-            f"Kept {sum(duplicates.values())} item(s) once that appeared in more than one feed, under the first "
-            f"feed of the allow-list ({counted(duplicates)} left out)."
+            f"Left out {sum(duplicates.values())} repeat(s) of item(s) listed more than once, in one feed or in "
+            f"several; each is kept once, under the first feed of the allow-list ({counted(duplicates)})."
         )
     if undated:
         notes.append(
@@ -255,7 +268,7 @@ async def news_official(ctx: ToolContext, args: OfficialNewsIn) -> ToolOutput:
         )
     if args.query:
         notes.append(
-            f"query {args.query!r}: {len(rows)} of the {read} item(s) in the window had every word in their "
+            f"query {args.query!r}: {matched} of the {in_window} item(s) in the window had every word in their "
             "headline or summary."
         )
     if cut:

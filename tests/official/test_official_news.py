@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import asyncio
 import re
+import time
 from datetime import timedelta
 from pathlib import Path
 
@@ -16,7 +17,7 @@ from official_harness import CONTACT, NOW, SPEC, call, check_golden, context, fi
 from marketlens_mcp import __version__, builtins, pipeline, registry
 from marketlens_mcp import config as cfg
 from marketlens_mcp.plugin_api import FetchLimits, ToolError
-from marketlens_mcp.providers.official import feeds, fetch
+from marketlens_mcp.providers.official import feeds, fetch, parse
 from marketlens_mcp.providers.official.tool import doctor_line
 from marketlens_mcp.testing import make_context, temp_store
 
@@ -81,9 +82,12 @@ def test_rows_are_mapped_from_each_feed_shape(publishers):
     lit = row_by_headline(out, "Synthetic Defendant One")
     assert lit.author is None  # dc:creator holds the release number
     assert lit.url == "https://www.sec.gov/enforcement-litigation/litigation-releases/lr-99901"
+    # the Board's feeds name no author; a title's "Word, ..." is not read as a speaker
     speech = row_by_headline(out, "Synthetic Remarks on the Outlook")
-    assert speech.author == "Sample" and speech.summary.endswith("Münster-on-Test, Testland")
+    assert speech.author is None and speech.absent["author"] == "not_provided_by_source"
+    assert speech.summary.endswith("Münster-on-Test, Testland")
     assert row_by_headline(out, "Opening remarks by several governors").author is None
+    assert row_by_headline(out, "Supervision, Synthetic Oversight Panels").author is None
     assert row_by_headline(out, "Synthetic Symposium").author == "Chairman Example A. Sample"
     assert row_by_headline(out, "Seeks Comment").author is None  # a web editor's user name
     cpi = row_by_headline(out, "Synthetic CPI rises 9.9% in September")
@@ -94,6 +98,11 @@ def test_rows_are_mapped_from_each_feed_shape(publishers):
     latest = row_by_headline(out, "Latest Numbers")
     assert latest.summary == (
         "Synthetic Price Index (SPI): +9.9% in Sep 2026 News Release Synthetic Jobless Rate: 9.9% in Sep 2026"
+    )
+    # a path-relative link resolves against the document's xml:base, not the feed's URL
+    assert (
+        row_by_headline(out, "Synthetic Staff Letter").url
+        == "https://www.cftc.gov/PressRoom/PressReleases/9902-26"
     )
     bea = row_by_headline(out, "Synthetic Gross Domestic Product")
     assert bea.url == "https://www.bea.gov/news/2026/synthetic-gdp-second-quarter-2026-third-estimate"
@@ -119,7 +128,8 @@ def test_an_off_domain_link_is_withheld(publishers):
 def test_an_undated_item_is_skipped_and_counted(publishers):
     out = call(feeds=["cftc.press"])
     assert [r.headline for r in out.rows] == [
-        "CFTC Seeks Comment on a Synthetic Proposal Concerning Test Contracts"
+        "CFTC Seeks Comment on a Synthetic Proposal Concerning Test Contracts",
+        "CFTC Publishes a Synthetic Staff Letter on Test Swaps",
     ]
     assert out.notes == ["Skipped 1 item(s) with no date that parses (cftc.press 1)."]
 
@@ -129,8 +139,8 @@ def test_an_item_in_two_feeds_is_kept_once_under_the_first(publishers):
     fomc = [r for r in out.rows if "FOMC" in r.headline]
     assert len(fomc) == 1 and fomc[0].news_id.startswith("fed.monetary:")
     assert out.notes == [
-        "Kept 1 item(s) once that appeared in more than one feed, under the first feed of the allow-list "
-        "(fed.press 1 left out)."
+        "Left out 1 repeat(s) of item(s) listed more than once, in one feed or in several; each is kept once, "
+        "under the first feed of the allow-list (fed.press 1)."
     ]
     alone = call(feeds=["fed.press"])
     assert [r for r in alone.rows if "FOMC" in r.headline][0].news_id.startswith("fed.press:")
@@ -147,6 +157,7 @@ def test_window_query_and_sort(publishers):
     assert [r.created_at.isoformat() for r in out.rows] == [
         "2026-10-09T14:00:00+00:00",
         "2026-10-12T13:30:00+00:00",
+        "2026-10-13T14:00:00+00:00",
         "2026-10-14T18:00:00+00:00",
     ]
     assert out.notes[0].startswith("end 2026-10-14 is a date: the window includes that whole day")
@@ -155,7 +166,7 @@ def test_window_query_and_sort(publishers):
         "Agencies request comment on a synthetic interest rate risk proposal"
     ]
     assert (
-        "query 'Interest RATE': 1 of the 8 item(s) in the window had every word in their headline or summary."
+        "query 'Interest RATE': 1 of the 9 item(s) in the window had every word in their headline or summary."
         in found.notes
     )
     assert found.provenance.request["query"] == "Interest RATE"
@@ -164,8 +175,12 @@ def test_window_query_and_sort(publishers):
 def test_start_and_lookback_together_are_refused(publishers):
     with pytest.raises(ToolError, match="Pass start or lookback, not both"):
         call(start="2026-10-01", lookback="P1D")
-    with pytest.raises(ToolError, match="newest data the feeds serve"):
+    with pytest.raises(ToolError) as e:
         call(start="2026-10-17")
+    assert e.value.message == (
+        "start (2026-10-17T00:00:00Z) is not before the newest data each feed serves (2026-10-16T20:00:00Z); "
+        "pass an earlier start."
+    )
     assert publishers.requests == []
 
 
@@ -225,16 +240,23 @@ def test_every_feed_failing_is_an_error(publishers):
     )
 
 
-def test_a_timeout_is_retried_once(publishers, _no_sleep):
+def test_a_timeout_or_a_lost_connection_fails_the_feed_at_once(publishers, _no_sleep):
+    """As the Alpaca client: no retry on a timeout or a connection failure (only on a 5xx)."""
+
     def timeout(request):
         raise httpx.ConnectTimeout("synthetic", request=request)
 
+    def refused(request):
+        raise httpx.ConnectError("synthetic", request=request)
+
     publishers.set(URL["ecb.press"], timeout, httpx.Response(200, content=fixture_bytes("ecb.press")))
-    out = call(feeds=["ecb.press"])
-    assert len(out.rows) == 1 and _no_sleep == [1.0]
-    publishers.set(URL["bea.news"], timeout)
-    with pytest.raises(ToolError, match="bea.news did not answer within 20 seconds, twice"):
-        call(feeds=["bea.news"])
+    publishers.set(URL["bea.news"], refused, httpx.Response(200, content=fixture_bytes("bea.news")))
+    out = call(feeds=["ecb.press", "bea.news", "fed.press"])
+    assert out.notes[-1] == (
+        "Partial result: bea.news could not be reached (ConnectError); ecb.press did not answer within 20 "
+        "seconds. The other feeds answered."
+    )
+    assert _no_sleep == [] and publishers.urls().count(URL["ecb.press"]) == 1
 
 
 def test_a_declaration_in_a_feed_is_refused(publishers):
@@ -317,9 +339,29 @@ def test_the_cache_serves_a_repeat_within_its_ttl(publishers):
     ]
     call(context(now=NOW + timedelta(seconds=300)), feeds=["ecb.press"])
     assert len(publishers.requests) == 2  # expired
-    call(context(settings={"cache_seconds": 0}), feeds=["ecb.press"])
-    call(context(settings={"cache_seconds": 0}), feeds=["ecb.press"])
+    call(context(settings={"cache_seconds": 0}), feeds=["fed.press"])
+    call(context(settings={"cache_seconds": 0}), feeds=["fed.press"])
     assert len(publishers.requests) == 4  # cache off
+
+
+def test_the_ecbs_crawl_delay_holds_with_the_cache_off(publishers, monkeypatch):
+    """robots.txt asks for 5 s between requests: a repeat within 5 s is answered
+    from the cache whatever cache_seconds says, and the host allows 12 a minute."""
+    rates = {}
+    real = fetch._answer
+
+    async def spy(ctx, http, url, agent, timeout, rate):
+        rates[url] = rate
+        return await real(ctx, http, url, agent, timeout, rate)
+
+    monkeypatch.setattr(fetch, "_answer", spy)
+    off = {"cache_seconds": 0}
+    call(context(settings=off), feeds=["ecb.press", "fed.press"])
+    again = call(context(now=NOW + timedelta(seconds=4), settings=off), feeds=["ecb.press"])
+    assert again.provenance.cached is True
+    call(context(now=NOW + timedelta(seconds=5), settings=off), feeds=["ecb.press"])
+    assert sorted(publishers.urls()) == [URL["ecb.press"], URL["ecb.press"], URL["fed.press"]]
+    assert rates == {URL["ecb.press"]: 12, URL["fed.press"]: fetch.PER_MINUTE}
 
 
 def test_a_failed_feed_is_not_cached(publishers):
@@ -432,17 +474,205 @@ def test_doctor_prints_the_contact_and_the_feeds(capsys, monkeypatch, tmp_path):
     monkeypatch.setenv("SEC_CONTACT_EMAIL", "")
     cli.main(["doctor"])
     out = capsys.readouterr().out
-    assert (
-        "environment SEC_CONTACT_EMAIL: unset (optional: news_official skips its SEC and BLS feeds without it)\n"
-    ) in out
+    # one line on the contact: news_official skips SEC and BLS without it (it does not refuse)
     assert "\nofficial feeds: 9 of 18 ready; SEC_CONTACT_EMAIL is not set" in out
+    assert "environment SEC_CONTACT_EMAIL" not in out
     monkeypatch.setenv("SEC_CONTACT_EMAIL", CONTACT)
     cli.main(["doctor"])
     out = capsys.readouterr().out
-    assert "environment SEC_CONTACT_EMAIL: set\n" in out and "official feeds: all 18 ready" in out
+    assert "official feeds: all 18 ready" in out and "environment SEC_CONTACT_EMAIL" not in out
     assert CONTACT not in out
     config = tmp_path / "xdg" / "marketlens" / "config.yaml"
     config.parent.mkdir(parents=True)
     config.write_text("capabilities:\n  news: false\n", encoding="utf-8")
     cli.main(["doctor"])
     assert "official feeds" not in capsys.readouterr().out  # news off: news_official is not listed
+
+
+# --- edge cases: links, ids, counts, failures ------------------------------------------------------
+
+
+def rss(*items: str, base: str | None = None) -> bytes:
+    """A synthetic RSS 2.0 document of the given <item> bodies."""
+    attr = f' xml:base="{base}"' if base else ""
+    body = "".join(f"<item>{i}</item>" for i in items)
+    return f'<?xml version="1.0" encoding="utf-8"?><rss version="2.0"{attr}><channel>{body}</channel></rss>'.encode()
+
+
+def item(
+    title: str, link: str | None, date: str = "Thu, 15 Oct 2026 12:00:00 GMT", guid: str | None = None
+) -> str:
+    parts = [f"<title>{title}</title>", f"<pubDate>{date}</pubDate>"]
+    if link is not None:
+        parts.append(f"<link>{link}</link>")
+    if guid is not None:
+        parts.append(f"<guid>{guid}</guid>")
+    return "".join(parts)
+
+
+FED = "https://www.federalreserve.gov/newsevents/pressreleases/"
+OLD = "Thu, 01 Jan 2026 12:00:00 GMT"
+
+
+def test_a_link_with_a_backslash_is_withheld(publishers):
+    """Browsers read a backslash as a slash in an https URL: this link opens evil.example."""
+    publishers.set(
+        URL["fed.press"],
+        httpx.Response(200, content=rss(item("Tricky", "https://evil.example\\.federalreserve.gov/x"))),
+    )
+    (row,) = call(feeds=["fed.press"]).rows
+    assert row.url is None and row.absent["url"] == "withheld"
+
+
+def test_the_notes_count_only_what_the_window_holds(publishers):
+    publishers.set(
+        URL["fed.monetary"], httpx.Response(200, content=rss(item("Old FOMC", FED + "fomc.htm", OLD)))
+    )
+    publishers.set(
+        URL["fed.press"],
+        httpx.Response(
+            200,
+            content=rss(
+                item("Old FOMC", FED + "fomc.htm", OLD),
+                item("Old off-site", "https://www.example.com/x", OLD),
+                item("New", FED + "new.htm"),
+            ),
+        ),
+    )
+    uncached = context(settings={"cache_seconds": 0})
+    out = call(uncached, feeds=["fed.monetary", "fed.press"])
+    assert [r.headline for r in out.rows] == ["New"] and out.notes == []
+    wide = call(uncached, feeds=["fed.monetary", "fed.press"], lookback="P365D")
+    assert [r.headline for r in wide.rows] == ["New", "Old off-site", "Old FOMC"]
+    assert wide.notes == [
+        "Left out 1 repeat(s) of item(s) listed more than once, in one feed or in several; each is kept once, "
+        "under the first feed of the allow-list (fed.press 1).",
+        "Left out 1 link(s) that were not https on the publisher's own domain (fed.press 1); their url is null "
+        "(withheld).",
+    ]
+    # a row the query leaves out takes its notes with it
+    assert call(uncached, feeds=["fed.monetary", "fed.press"], lookback="P365D", query="new").notes == [
+        "query 'new': 1 of the 3 item(s) in the window had every word in their headline or summary."
+    ]
+
+
+def test_an_item_listed_twice_in_one_feed_is_kept_once(publishers):
+    publishers.set(
+        URL["fed.press"],
+        httpx.Response(200, content=rss(item("One", FED + "1.htm"), item("One", FED + "1.htm"))),
+    )
+    out = call(feeds=["fed.press"])
+    assert [r.headline for r in out.rows] == ["One"]
+    assert out.notes == [
+        "Left out 1 repeat(s) of item(s) listed more than once, in one feed or in several; each is kept once, "
+        "under the first feed of the allow-list (fed.press 1)."
+    ]
+
+
+def test_news_id_is_unique_when_a_feed_repeats_a_guid(publishers):
+    publishers.set(
+        URL["fed.press"],
+        httpx.Response(
+            200,
+            content=rss(item("One", FED + "1.htm", guid="G1"), item("One again", FED + "1b.htm", guid="G1")),
+        ),
+    )
+    out = call(feeds=["fed.press"])
+    assert [r.headline for r in out.rows] == ["One"]
+    assert len({r.news_id for r in out.rows}) == len(out.rows)
+
+
+def test_a_guid_cannot_hide_another_publishers_item(publishers):
+    """The url is checked to be on the publisher's domain; a guid is any text,
+    so it only dedupes within its own publisher."""
+    sec_url = "https://www.sec.gov/newsroom/press-releases/2026-999"
+    publishers.set(
+        URL["fed.monetary"], httpx.Response(200, content=rss(item("Fed item", None, guid=sec_url)))
+    )
+    publishers.set(
+        URL["sec.press"], httpx.Response(200, content=rss(item("SEC item", sec_url, guid=sec_url)))
+    )
+    out = call(feeds=["fed.monetary", "sec.press"])
+    assert sorted(r.headline for r in out.rows) == ["Fed item", "SEC item"] and out.notes == []
+
+
+def test_the_query_note_counts_the_matches_before_the_row_cap(publishers):
+    publishers.set(
+        URL["fed.press"],
+        httpx.Response(200, content=rss(*(item(f"Rate {i}", f"{FED}{i}.htm") for i in range(10)))),
+    )
+    ctx = make_context(env={"SEC_CONTACT_EMAIL": CONTACT}, now=NOW, limits=FetchLimits(max_rows=3))
+    out = call(ctx, feeds=["fed.press"], query="rate")
+    assert len(out.rows) == 3 and out.provenance.truncated
+    assert (
+        out.notes[-1]
+        == "query 'rate': 10 of the 10 item(s) in the window had every word in their headline or summary."
+    )
+
+
+@pytest.mark.parametrize("encoding", ["Shift_JIS", "UTF-7", "bogus-xyz"])
+def test_a_feed_in_an_encoding_this_server_does_not_read_is_one_failed_feed(publishers, encoding):
+    doc = f'<?xml version="1.0" encoding="{encoding}"?><rss version="2.0"><channel/></rss>'.encode("ascii")
+    publishers.set(URL["fed.press"], httpx.Response(200, content=doc))
+    out = call(feeds=["fed.press", "fed.speeches"])
+    assert out.notes == [
+        "Partial result: fed.press declares an encoding this server does not read. The other feeds answered."
+    ]
+    assert out.rows
+
+
+def test_any_other_error_reading_a_feed_costs_only_that_feed(publishers, monkeypatch, tmp_path, caplog):
+    """Older CPython releases' html.parser raise AssertionError on '<![foo['."""
+    real = parse.plain
+
+    def old_parser(value):
+        if value and "<![foo[" in value:
+            raise AssertionError("unknown status keyword 'foo[' in marked section")
+        return real(value)
+
+    monkeypatch.setattr(parse, "plain", old_parser)
+    odd = item("Odd", FED + "odd.htm") + "<description>&lt;![foo[x]]&gt;</description>"
+    publishers.set(URL["fed.press"], httpx.Response(200, content=rss(odd)))
+    ctx = make_context(store=temp_store(tmp_path), env={"SEC_CONTACT_EMAIL": CONTACT}, now=NOW)
+    done = asyncio.run(pipeline.execute(SPEC, ctx, {"publishers": ["federal_reserve", "ecb"]}))
+    assert done.response.row_count > 0
+    assert (
+        "Partial result: fed.press could not be read (AssertionError). The other feeds answered."
+        in done.response.notes
+    )
+    assert "fed.press could not be read" in caplog.text
+
+
+def test_the_call_has_a_deadline(publishers, monkeypatch):
+    """A host that never answers holds the call to timeout_seconds + DEADLINE_EXTRA,
+    whatever the concurrency; what is still out then fails with a note."""
+    monkeypatch.setattr(fetch, "DEADLINE_EXTRA", 0)
+
+    async def hang(request):
+        await asyncio.sleep(60)
+
+    for feed_id in ("fed.press", "fed.speeches", "fed.testimony", "bea.news"):
+        publishers.set(URL[feed_id], hang)
+    began = time.monotonic()
+    out = call(context(settings={"timeout_seconds": 0.3}), publishers=["federal_reserve", "bea", "ecb"])
+    assert time.monotonic() - began < 5
+    assert {r.news_id.partition(":")[0] for r in out.rows} == {"fed.monetary"}
+    assert out.notes[-1] == (
+        "Partial result: fed.press did not answer within this call's limit of 0.3 seconds; fed.speeches did "
+        "not answer within this call's limit of 0.3 seconds; fed.testimony did not answer within this call's "
+        "limit of 0.3 seconds; bea.news did not answer within this call's limit of 0.3 seconds; ecb.press was "
+        "not asked: this call's limit of 0.3 seconds ran out first. The other feeds answered."
+    )
+
+
+def test_every_feed_failing_without_a_contact_names_the_skipped_feeds(publishers):
+    publishers.set(URL["ecb.press"], httpx.Response(404))
+    with pytest.raises(ToolError) as e:
+        call(context(contact=None), feeds=["ecb.press", "sec.press"])
+    assert e.value.code == "official_unavailable"
+    assert e.value.message == (
+        "Every feed asked for failed: ecb.press answered HTTP 404. SEC_CONTACT_EMAIL is not set, so the SEC and "
+        "BLS feeds were skipped (sec.press): both refuse automated clients that do not name a contact in their "
+        "User-Agent."
+    )
+    assert e.value.hint.startswith("Retry in a few minutes. Set SEC_CONTACT_EMAIL to your email address")

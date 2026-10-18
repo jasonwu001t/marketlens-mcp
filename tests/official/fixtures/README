@@ -11,7 +11,10 @@ One file per feed of the allow-list (src/marketlens_mcp/providers/official/
 feeds.py), named <feed id> plus the document's kind:
 
 * fed.*.xml: the Federal Reserve Board's RSS 2.0 (GMT dates, a category, the
-  description repeating or extending the title, HTML entities escaped twice).
+  description repeating or extending the title, HTML entities escaped twice,
+  no author element). Speech and testimony titles start "Word, ...": a
+  speaker's surname, or not (the "Supervision, ..." testimony item), which is
+  why no author is read from a title.
   fed.monetary.xml starts with a byte-order mark and uses CRLF line ends, as
   the Board's feeds do. Its FOMC item is in fed.press.xml too (dedupe).
 * sec.*.rss: SEC's RSS 2.0 with dc:creator (blank, or a litigation release
@@ -24,10 +27,11 @@ feeds.py), named <feed id> plus the document's kind:
   CPI's first entry was updated after it was published.
 * bea.news.rss: BEA's RSS 2.0 with http links (served as https) and one
   relative link.
-* cftc.*.xml: the CFTC's RSS 2.0 with empty descriptions and dc:creator
-  holding a web editor's user name (press, enforcement) or the speaker
-  (speeches); one item has a date that does not parse, one links off the
-  CFTC's domain.
+* cftc.*.xml: the CFTC's RSS 2.0 (xml:base https://www.cftc.gov/) with empty
+  descriptions and dc:creator holding a web editor's user name (press,
+  enforcement) or the speaker (speeches); one item has a date that does not
+  parse, one links off the CFTC's domain, one has a path-relative link that
+  resolves against the xml:base, not the feed's URL.
 * ecb.press.xml: the ECB's single-line RSS 2.0 without descriptions, links
   with a double slash, +0200 dates.
 

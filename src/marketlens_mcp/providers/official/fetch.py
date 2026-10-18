@@ -1,14 +1,21 @@
 """Fetching the allow-listed feeds. It can only GET.
 
 * Only the URLs of ``feeds.FEEDS``, at most CONCURRENCY at a time, each after
-  the process-wide limiter of its host (PER_MINUTE requests a minute; SEC's
-  fair-access ceiling is 10 a second).
+  the process-wide limiter of its host (PER_MINUTE requests a minute, or 60 /
+  the publisher's robots.txt Crawl-delay: 12 for the ECB; SEC's fair-access
+  ceiling is 10 a second).
 * User-Agent: ``marketlens-mcp/<version> (+<repository>)``; for SEC and BLS,
   ``marketlens-mcp/<version> <SEC_CONTACT_EMAIL>`` (SEC's fair-access form).
   Without a contact those feeds are never requested (``tool.py`` skips them).
-* Timeout ``providers.official.timeout_seconds`` (default 20). A timeout, a
-  connection failure or a 5xx is retried once after 1 s; any other answer but
-  200 fails the feed.
+* Timeout ``providers.official.timeout_seconds`` (default 20) per request,
+  and the whole call stops DEADLINE_EXTRA seconds after that: a feed still
+  unanswered then fails with a note (an MCP client may give up on a call that
+  takes a minute). As the Alpaca client: a timeout or a connection failure
+  fails the feed at once, a 5xx is retried once after 1 s. Unlike it, a 429
+  fails the feed at once instead of waiting out Retry-After: one publisher
+  asking to slow down should not hold the other feeds' answer, and the cache
+  and the limiters already keep the rate low. Any other answer but 200 fails
+  the feed.
 * httpx follows no redirect. One to https on the same publisher's hosts is
   followed by hand (at most MAX_REDIRECTS); any other fails the feed.
 * At most MAX_BYTES are read: a larger Content-Length is refused before the
@@ -16,7 +23,10 @@
   ``Accept-Encoding: identity`` and a compressed answer is refused, so the cap
   counts the bytes that are parsed.
 * A feed's items are kept in this process for ``cache_seconds`` (default
-  300) per URL, so a question repeated within five minutes asks nobody.
+  300), or the publisher's Crawl-delay if longer, per URL, so a question
+  repeated within five minutes asks nobody.
+* Whatever goes wrong reading one feed (any exception) fails that feed only,
+  with a note; the others still answer.
 """
 
 from __future__ import annotations
@@ -25,6 +35,7 @@ import asyncio
 import contextlib
 import functools
 import importlib.metadata
+import logging
 import xml.etree.ElementTree as ET
 from collections.abc import AsyncIterator, Iterator, Mapping, Sequence
 from contextvars import ContextVar
@@ -38,7 +49,7 @@ import httpx
 from marketlens_mcp import __version__
 from marketlens_mcp.plugin_api import ToolContext
 
-from .feeds import HOSTS, Feed
+from .feeds import BY_PUBLISHER, HOSTS, Feed
 from .parse import FeedRefused, RawItem, read_items
 
 TIMEOUT_SECONDS = 20
@@ -48,6 +59,8 @@ CONCURRENCY = 4
 PER_MINUTE = 60
 MAX_REDIRECTS = 3
 RETRY_AFTER = 1.0
+#: Seconds the whole call may take beyond one request's timeout.
+DEADLINE_EXTRA = 10
 ACCEPT = "application/rss+xml, application/atom+xml, application/xml;q=0.9, text/xml;q=0.8"
 
 #: Test seam: an httpx transport used instead of the network (httpx.MockTransport).
@@ -57,6 +70,7 @@ _transport: ContextVar[httpx.AsyncBaseTransport | None] = ContextVar(
 _sleep = asyncio.sleep
 #: URL -> (when it was fetched, its items). Shared by every session of the process.
 _CACHE: dict[str, tuple[datetime, tuple[RawItem, ...]]] = {}
+log = logging.getLogger("marketlens.official")
 
 
 @contextlib.contextmanager
@@ -198,25 +212,30 @@ def _redirect(url: str, response: httpx.Response, feed: Feed) -> str:
     return target.geturl()
 
 
+def per_minute(feed: Feed) -> int:
+    """The host limiter's rate for ``feed``: PER_MINUTE, or slower for a Crawl-delay."""
+    delay = BY_PUBLISHER[feed.publisher].crawl_delay
+    return min(PER_MINUTE, 60 // delay) if delay else PER_MINUTE
+
+
 async def _answer(
-    ctx: ToolContext, http: httpx.AsyncClient, url: str, agent: str, timeout: int
+    ctx: ToolContext, http: httpx.AsyncClient, url: str, agent: str, timeout: int, rate: int
 ) -> httpx.Response:
-    """One GET, retried once after a timeout, a connection failure or a 5xx."""
-    limiter = ctx.limiter(f"official:{urlsplit(url).hostname}", PER_MINUTE)
+    """One GET; a 5xx is retried once after 1 s, a timeout or a connection
+    failure is not (the Alpaca client's rule)."""
+    limiter = ctx.limiter(f"official:{urlsplit(url).hostname}", rate)
     for attempt in (1, 2):
         await limiter.acquire()
         try:
             response = await http.get(url, headers={"User-Agent": agent})
         except httpx.TimeoutException:
-            reason = f"did not answer within {timeout} seconds"
+            raise FeedFailed(f"did not answer within {timeout} seconds") from None
         except httpx.TransportError as e:
-            reason = f"could not be reached ({type(e).__name__})"
-        else:
-            if response.status_code < 500:
-                return response
-            reason = f"answered HTTP {response.status_code}"
+            raise FeedFailed(f"could not be reached ({type(e).__name__})") from None
+        if response.status_code < 500:
+            return response
         if attempt == 2:
-            raise FeedFailed(f"{reason}, twice")
+            raise FeedFailed(f"answered HTTP {response.status_code}, twice")
         await _sleep(RETRY_AFTER)
     raise AssertionError("unreachable")  # pragma: no cover
 
@@ -224,7 +243,7 @@ async def _answer(
 async def _read(ctx: ToolContext, http: httpx.AsyncClient, feed: Feed, agent: str, timeout: int) -> bytes:
     url = feed.url
     for _ in range(MAX_REDIRECTS + 1):
-        response = await _answer(ctx, http, url, agent, timeout)
+        response = await _answer(ctx, http, url, agent, timeout, per_minute(feed))
         status = response.status_code
         if 300 <= status < 400:
             url = _redirect(url, response, feed)
@@ -245,6 +264,8 @@ async def fetch_all(ctx: ToolContext, feeds: Sequence[Feed], contacts: Mapping[s
     gate = asyncio.Semaphore(CONCURRENCY)
     inner = _transport.get() or httpx.AsyncHTTPTransport()
     headers = {"Accept": ACCEPT, "Accept-Encoding": "identity"}
+    deadline = settings.timeout_seconds + DEADLINE_EXTRA
+    asked: set[str] = set()
 
     async with httpx.AsyncClient(
         transport=_Capped(inner, MAX_BYTES),
@@ -255,18 +276,37 @@ async def fetch_all(ctx: ToolContext, feeds: Sequence[Feed], contacts: Mapping[s
     ) as http:
 
         async def one(feed: Feed) -> Fetched:
+            keep = max(settings.cache_seconds, BY_PUBLISHER[feed.publisher].crawl_delay)
             hit = _CACHE.get(feed.url)
-            if hit is not None and 0 <= (now - hit[0]).total_seconds() < settings.cache_seconds:
+            if hit is not None and 0 <= (now - hit[0]).total_seconds() < keep:
                 return Fetched(feed, hit[1], cached=True)
             agent = user_agent(contacts.get(feed.publisher))
             async with gate:
+                asked.add(feed.id)
                 try:
                     raw = await _read(ctx, http, feed, agent, settings.timeout_seconds)
                     items = tuple(read_items(raw))
                 except (FeedFailed, FeedRefused, ET.ParseError) as e:
                     return Fetched(feed, error=str(e) or type(e).__name__)
-            if settings.cache_seconds:
+                except Exception as e:  # one feed's surprise never costs the others their answer
+                    log.warning("news_official: %s could not be read", feed.id, exc_info=True)
+                    return Fetched(feed, error=f"could not be read ({type(e).__name__})")
+            if keep:
                 _CACHE[feed.url] = (now, items)
             return Fetched(feed, items)
 
-        return list(await asyncio.gather(*(one(f) for f in feeds)))
+        tasks = [asyncio.create_task(one(f)) for f in feeds]
+        _done, late = await asyncio.wait(tasks, timeout=deadline)
+        for task in late:
+            task.cancel()
+        await asyncio.gather(*late, return_exceptions=True)
+        return [
+            _late(feed, feed.id in asked, deadline) if task in late else task.result()
+            for feed, task in zip(feeds, tasks, strict=True)
+        ]
+
+
+def _late(feed: Feed, asked: bool, deadline: float) -> Fetched:
+    if asked:
+        return Fetched(feed, error=f"did not answer within this call's limit of {deadline:g} seconds")
+    return Fetched(feed, error=f"was not asked: this call's limit of {deadline:g} seconds ran out first")

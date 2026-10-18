@@ -61,8 +61,8 @@ providers:
     calendar_ttl_minutes: 60
     call_timeout_seconds: 120
   official:
-    cache_seconds: 300    # reuse a fetched feed this long (0: fetch every time)
-    timeout_seconds: 20   # per feed request
+    cache_seconds: 300    # reuse a fetched feed this long (0: fetch every time; the ECB's 5 s Crawl-delay holds)
+    timeout_seconds: 20   # per feed request; a call stops 10 s after it
 
 results:
   inline_max_rows: 200

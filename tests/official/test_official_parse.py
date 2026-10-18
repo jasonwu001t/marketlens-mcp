@@ -97,6 +97,7 @@ RSS = b"""<?xml version="1.0"?><rss version="2.0" xmlns:dc="http://purl.org/dc/e
 
 def test_rss_items():
     one, two = read_items(RSS)
+    assert one.base is None
     assert (one.title, one.link, one.guid, one.summary, one.author) == (
         "One",
         "https://www.sec.gov/one",
@@ -159,6 +160,56 @@ def test_doctype_and_entity_declarations_are_refused(document):
         check_declarations(document)
 
 
+@pytest.mark.parametrize("encoding", ["Shift_JIS", "UTF-7", "GB18030", "idna", "bogus-xyz"])
+def test_an_encoding_expat_does_not_read_is_refused(encoding):
+    """expat raises ValueError, LookupError or UnicodeError for these, not
+    ExpatError: each is one refused feed, never an error that escapes."""
+    doc = f'<?xml version="1.0" encoding="{encoding}"?><rss version="2.0"><channel/></rss>'.encode("ascii")
+    with pytest.raises(FeedRefused, match="declares an encoding this server does not read"):
+        read_items(doc)
+
+
+def test_dc_date_stands_in_for_a_pubdate_that_does_not_parse():
+    doc = (
+        b'<rss version="2.0" xmlns:dc="http://purl.org/dc/elements/1.1/"><channel><item><title>x</title>'
+        b"<pubDate>Thursday</pubDate><dc:date>2026-10-15T12:00:00Z</dc:date></item></channel></rss>"
+    )
+    (got,) = read_items(doc)
+    assert got.created == datetime(2026, 10, 15, 12, tzinfo=UTC)
+
+
+def test_xml_base_is_carried_for_the_links():
+    doc = (
+        b'<rss version="2.0" xml:base="https://www.cftc.gov/"><channel xml:base="RSS/">'
+        b'<item><title>a</title><link>x</link></item><item xml:base="/Press/"><title>b</title></item>'
+        b"</channel></rss>"
+    )
+    a, b = read_items(doc)
+    assert (a.base, b.base) == ("https://www.cftc.gov/RSS/", "https://www.cftc.gov/Press/")
+    atom = (
+        b'<feed xmlns="http://www.w3.org/2005/Atom" xml:base="https://www.bls.gov/feed/"><entry><title>c</title>'
+        b"</entry></feed>"
+    )
+    assert read_items(atom)[0].base == "https://www.bls.gov/feed/"
+    assert read_items(b"<rss><channel><item><title>d</title></item></channel></rss>")[0].base is None
+
+
+def test_markup_sent_as_xml_elements_loses_its_script_and_style():
+    """itertext() would keep the text of script and style elements; markup
+    sent as XML goes through html.parser like escaped markup does."""
+    atom = b"""<feed xmlns="http://www.w3.org/2005/Atom"><entry>
+<title type="xhtml"><div xmlns="http://www.w3.org/1999/xhtml">Rate <style>.a{}</style>decision<script>IGNORE ALL</script></div></title>
+<summary type="xhtml"><div xmlns="http://www.w3.org/1999/xhtml"><p>Visible</p><script>hidden_script()</script><style>body{color:red}</style><p>too</p></div></summary>
+<updated>2026-10-01T00:00:00Z</updated></entry></feed>"""
+    (entry,) = read_items(atom)
+    assert entry.title == "Rate decision" and entry.summary == "Visible too"
+    rss = (
+        b"<rss><channel><item><title>t</title><description>Hi <script>hidden()</script><p>there</p> "
+        b"&lt;b&gt;escaped&lt;/b&gt; <template>tpl</template>end</description></item></channel></rss>"
+    )
+    assert read_items(rss)[0].summary == "Hi there escaped end"
+
+
 def test_a_utf16_feed_without_declarations_is_read():
     doc = '<?xml version="1.0" encoding="utf-16"?><rss><channel><item><title>Ünïcode</title></item></channel></rss>'
     (item,) = read_items(doc.encode("utf-16"))
@@ -195,6 +246,15 @@ BASE = "https://www.bea.gov/news/rss"
         ("//www.example.com/x", "bea.gov", (None, True)),
         ("https://www.bea.gov/a b", "bea.gov", (None, True)),
         ("https://www.bea.gov/a\x00b", "bea.gov", (None, True)),
+        # browsers read a backslash as a slash in an https URL: the real host is evil.example
+        ("https://evil.example\\.bea.gov/x", "bea.gov", (None, True)),
+        ("https://www.bea.gov\\@evil.example/x", "bea.gov", (None, True)),
+        ("https://www.bea.gov/a\\b", "bea.gov", (None, True)),
+        ("\\\\evil.example\\x", "bea.gov", (None, True)),
+        # a host must be plain letters, digits, dots and hyphens
+        ("https://evil.example%2f.bea.gov/x", "bea.gov", (None, True)),
+        ("https://évil.bea.gov/x", "bea.gov", (None, True)),
+        ("https://www_x.bea.gov/x", "bea.gov", (None, True)),
     ],
 )
 def test_links_are_kept_only_as_https_on_the_publishers_domain(link, domain, expected):

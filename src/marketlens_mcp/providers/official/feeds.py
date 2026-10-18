@@ -15,7 +15,10 @@ robots.txt allows its path for every agent):
   speeches.xml, testimony.xml (the newest testimony was three months old:
   testimony is seasonal, not a stale feed). press_monetary comes before
   press_all so that an FOMC release, which is in both, keeps the
-  ``fed.monetary`` id.
+  ``fed.monetary`` id. The Board's feeds name no author, so a speech's
+  speaker is not given: a title's words before its first comma are not
+  reliably a name (the testimony feed had "Regulation, Global Governance
+  Bodies").
 * SEC, www.sec.gov (robots.txt allows /news and /enforcement-litigation;
   only /cgi-bin and EDGAR internals are disallowed). Press releases,
   speeches and statements, litigation releases. The litigation feed answers
@@ -32,8 +35,9 @@ robots.txt allows its path for every agent):
   live for its user and trains nothing). Press releases, enforcement
   releases, speeches and testimony.
 * ECB, www.ecb.europa.eu/rss/press.html (robots.txt allows it and asks for a
-  Crawl-delay of 5 s: a call makes one request to it, and the cache keeps the
-  answer 300 s). Press releases.
+  Crawl-delay of 5 s: ``Publisher.crawl_delay``, so a repeat within 5 s is
+  answered from the cache even with cache_seconds 0, and the host's limiter
+  allows 12 requests a minute). Press releases.
 
 Out:
 
@@ -62,11 +66,10 @@ from dataclasses import dataclass
 from typing import Literal
 from urllib.parse import urlsplit
 
-#: Where a feed's author comes from: its dc:creator or Atom author name; the
-#: speaker before the first comma of the title (the Fed's "Powell, Opening
-#: Remarks"); or nowhere, because the feed's dc:creator is not an author (a
-#: web editor's user name, a release number, or the agency itself).
-AuthorFrom = Literal["creator", "title", "none"]
+#: Where a feed's author comes from: its dc:creator or Atom author name; or
+#: nowhere, because the feed's dc:creator is not an author (a web editor's
+#: user name, a release number, or the agency itself).
+AuthorFrom = Literal["creator", "none"]
 
 
 @dataclass(frozen=True)
@@ -79,6 +82,9 @@ class Publisher:
     needs_contact: bool
     #: Reuse and attribution terms, one line (README).
     terms: str
+    #: robots.txt's Crawl-delay in seconds (0: none): the feeds' cache never
+    #: expires sooner, and the host's limiter allows 60 / crawl_delay a minute.
+    crawl_delay: int = 0
 
 
 @dataclass(frozen=True)
@@ -138,6 +144,7 @@ PUBLISHERS: tuple[Publisher, ...] = (
         False,
         "Free to reuse if reproduced accurately with the ECB cited as the source; whoever sells it must say "
         "it is available free.",
+        crawl_delay=5,
     ),
 )
 
@@ -146,10 +153,8 @@ FEEDS: tuple[Feed, ...] = (
          "Monetary policy press releases"),
     Feed("fed.press", "federal_reserve", "https://www.federalreserve.gov/feeds/press_all.xml",
          "All press releases"),
-    Feed("fed.speeches", "federal_reserve", "https://www.federalreserve.gov/feeds/speeches.xml",
-         "Speeches", "title"),
-    Feed("fed.testimony", "federal_reserve", "https://www.federalreserve.gov/feeds/testimony.xml",
-         "Testimony", "title"),
+    Feed("fed.speeches", "federal_reserve", "https://www.federalreserve.gov/feeds/speeches.xml", "Speeches"),
+    Feed("fed.testimony", "federal_reserve", "https://www.federalreserve.gov/feeds/testimony.xml", "Testimony"),
     Feed("sec.press", "sec", "https://www.sec.gov/news/pressreleases.rss", "Press releases"),
     Feed("sec.speeches", "sec", "https://www.sec.gov/news/speeches-statements.rss", "Speeches and statements"),
     # dc:creator holds the release number (LR-NNNNN), not an author

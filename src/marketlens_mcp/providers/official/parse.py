@@ -3,10 +3,17 @@ only and never executed or evaluated.
 
 * A document that declares a DOCTYPE or an ENTITY is refused before it is
   parsed into a tree (an expat pass whose declaration handlers raise, so the
-  rule holds in any encoding): no entity expansion, no external entities.
+  rule holds in any encoding): no entity expansion, no external entities. A
+  document in an encoding expat does not read (Shift_JIS, UTF-7, an unknown
+  name) is refused too.
 * HTML in titles and descriptions is reduced to text with ``html.parser``
   (entities decoded, script and style dropped, whitespace collapsed), never
-  with a regular expression.
+  with a regular expression. Markup sent as XML child elements (Atom's
+  ``type="xhtml"``, unescaped tags in an RSS description) goes through the same
+  parser, rebuilt from the tree by local name, and a script, style or template
+  element is dropped with its text.
+* Links resolve against the ``xml:base`` in effect (document, channel, item),
+  which the tool joins onto the feed's URL.
 * Dates: RFC 822 (``pubDate``) with a numeric offset or a zone name of RFC 822
   (GMT, UT, Z, EST, EDT, CST, CDT, MST, MDT, PST, PDT, AST, ADT), ISO 8601
   (Atom) with Z or an offset, and dates alone (00:00 UTC). A time without a
@@ -26,6 +33,7 @@ from xml.parsers import expat
 
 ATOM = "{http://www.w3.org/2005/Atom}"
 DC = "{http://purl.org/dc/elements/1.1/}"
+XML_BASE = "{http://www.w3.org/XML/1998/namespace}base"
 
 
 class FeedRefused(ValueError):
@@ -49,8 +57,12 @@ def check_declarations(raw: bytes) -> None:
     parser.ExternalEntityRefHandler = _refuse_declaration
     try:
         parser.Parse(raw, True)
+    except FeedRefused:
+        raise
     except expat.ExpatError as e:
         raise FeedRefused(f"is not well-formed XML ({expat.ErrorString(e.code)})") from None
+    except (ValueError, LookupError):  # a multi-byte, unknown or unusable encoding
+        raise FeedRefused("declares an encoding this server does not read") from None
 
 
 @dataclass(frozen=True)
@@ -68,6 +80,8 @@ class RawItem:
     updated: datetime | None
     #: True for Atom (updated_at exists there, else the format has none).
     atom: bool
+    #: The xml:base in effect for the item (may be relative), else None.
+    base: str | None = None
 
 
 def read_items(raw: bytes) -> list[RawItem]:
@@ -76,20 +90,50 @@ def read_items(raw: bytes) -> list[RawItem]:
     root = ET.fromstring(raw)  # noqa: S314 - declarations were refused above
     if root.tag == "rss":
         channel = root.find("channel")
-        return [_rss_item(el) for el in (channel.findall("item") if channel is not None else [])]
+        if channel is None:
+            return []
+        base = _base(None, root, channel)
+        return [_rss_item(el, _base(base, el)) for el in channel.findall("item")]
     if root.tag == f"{ATOM}feed":
-        return [_atom_entry(el) for el in root.findall(f"{ATOM}entry")]
+        base = _base(None, root)
+        return [_atom_entry(el, _base(base, el)) for el in root.findall(f"{ATOM}entry")]
     raise FeedRefused("is not an RSS 2.0 or Atom feed")
+
+
+def _base(base: str | None, *elements: ET.Element) -> str | None:
+    """``base`` with each element's xml:base joined on, outermost first."""
+    for el in elements:
+        value = _bare(el.get(XML_BASE))
+        if value is not None:
+            base = urljoin(base, value) if base else value
+    return base
+
+
+def _local(tag: object) -> str:
+    return tag.rpartition("}")[2].lower() if isinstance(tag, str) else ""
+
+
+def _markup(el: ET.Element) -> str:
+    """The element's content as HTML source: its text as given, its child
+    elements as tags by local name (no attributes); a script, style or
+    template element is dropped with its text, so ``plain`` never sees it."""
+    parts = [el.text or ""]
+    for child in el:
+        name = _local(child.tag)
+        if name and name not in _SKIPPED:
+            parts.append(f"<{name}>{_markup(child)}</{name}>")
+        parts.append(child.tail or "")
+    return "".join(parts)
 
 
 def _text(el: ET.Element | None) -> str | None:
     if el is None:
         return None
-    return "".join(el.itertext())
+    return _markup(el) if len(el) else (el.text or "")
 
 
-def _rss_item(el: ET.Element) -> RawItem:
-    created = parse_date(_text(el.find("pubDate")) or _text(el.find(f"{DC}date")))
+def _rss_item(el: ET.Element, base: str | None) -> RawItem:
+    created = parse_date(_text(el.find("pubDate"))) or parse_date(_text(el.find(f"{DC}date")))
     return RawItem(
         title=plain(_text(el.find("title"))),
         link=_bare(_text(el.find("link"))),
@@ -99,6 +143,7 @@ def _rss_item(el: ET.Element) -> RawItem:
         created=created,
         updated=None,
         atom=False,
+        base=base,
     )
 
 
@@ -110,7 +155,7 @@ def _atom_link(el: ET.Element) -> str | None:
     return None
 
 
-def _atom_entry(el: ET.Element) -> RawItem:
+def _atom_entry(el: ET.Element, base: str | None) -> RawItem:
     published = parse_date(_text(el.find(f"{ATOM}published")))
     updated = parse_date(_text(el.find(f"{ATOM}updated")))
     created = published or updated
@@ -124,6 +169,7 @@ def _atom_entry(el: ET.Element) -> RawItem:
         created=created,
         updated=updated if updated is not None and created is not None and updated != created else None,
         atom=True,
+        base=base,
     )
 
 
@@ -280,15 +326,20 @@ def _rfc822(s: str) -> datetime | None:
 
 # --- links -----------------------------------------------------------------------------------
 
+_HOST = re.compile(r"[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?")
+
 
 def own_url(link: str | None, base: str, domain: str) -> tuple[str | None, bool]:
     """``(url, refused)``: the item's link as an absolute https URL on
     ``domain`` (or a subdomain), else None. ``refused`` is True when there was
     a link but it was left out. Publishers' own http links (BEA's) are served
-    as https on the same host."""
+    as https on the same host. A backslash anywhere is refused: browsers read
+    it as a slash in an https URL, so ``https://evil.example\\.sec.gov/``
+    opens evil.example although urlsplit sees a subdomain of sec.gov; and the
+    host must be plain letters, digits, dots and hyphens."""
     if not link:
         return None, False
-    if any(c.isspace() or ord(c) < 32 for c in link):
+    if any(c.isspace() or ord(c) < 32 or c == "\\" for c in link):
         return None, True
     try:
         parts = urlsplit(urljoin(base, link))
@@ -298,6 +349,7 @@ def own_url(link: str | None, base: str, domain: str) -> tuple[str | None, bool]
     host = (parts.hostname or "").lower()
     if (
         parts.scheme not in ("http", "https")
+        or not _HOST.fullmatch(host)
         or not (host == domain or host.endswith("." + domain))
         or parts.username is not None
         or port not in (None, 443 if parts.scheme == "https" else 80)

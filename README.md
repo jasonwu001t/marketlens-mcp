@@ -264,12 +264,15 @@ Claude Desktop (`claude_desktop_config.json`):
       "args": ["--from", "git+https://github.com/jasonwu001t/marketlens-mcp", "marketlens-mcp"],
       "env": {
         "ALPACA_API_KEY": "your key id",
-        "ALPACA_SECRET_KEY": "your secret key"
+        "ALPACA_SECRET_KEY": "your secret key",
+        "SEC_CONTACT_EMAIL": "you@example.com"
       }
     }
   }
 }
 ```
+
+`SEC_CONTACT_EMAIL` is optional, and needs no extra: the built-in `news_official` reads its SEC and BLS feeds (9 of its 18; see [Official feeds](#official-feeds)) only when it is set to an email address, which it sends in the User-Agent to SEC and BLS alone. Without it those feeds are skipped with a note; no placeholder contact is ever sent.
 
 With the `data` extra, run it from the extra (`"--from", "marketlens-mcp[data]"`) once both packages are on PyPI; until then, add the marketlens-data checkout with `--with`, as below (see [Install](#install)). Either way, add the official sources' keys (each one only for the tools that need it; see [the keys](#keys)):
 
@@ -292,7 +295,7 @@ With the `data` extra, run it from the extra (`"--from", "marketlens-mcp[data]"`
 }
 ```
 
-`SEC_CONTACT_EMAIL` is optional but strongly recommended: SEC EDGAR's fair-access rule asks every client to name a contact. Without it marketlens-data sends a placeholder contact and logs a warning, every `sec_` answer carries a note saying so, and SEC may throttle or block such requests. `marketlens-mcp doctor` says whether it is set, never its value.
+`SEC_CONTACT_EMAIL` is optional but strongly recommended: SEC EDGAR's fair-access rule asks every client to name a contact. Without it marketlens-data sends a placeholder contact and logs a warning, every `sec_` answer carries a note saying so, and SEC may throttle or block such requests (`news_official`, as above, skips its SEC and BLS feeds instead). `marketlens-mcp doctor` says whether it is set, never its value.
 
 Claude Code:
 
@@ -374,8 +377,8 @@ providers:
     calendar_ttl_minutes: 60
     call_timeout_seconds: 120
   official:
-    cache_seconds: 300    # reuse a fetched feed this long (0: fetch every time)
-    timeout_seconds: 20   # per feed request
+    cache_seconds: 300    # reuse a fetched feed this long (0: fetch every time; the ECB's 5 s Crawl-delay holds)
+    timeout_seconds: 20   # per feed request; a call stops 10 s after it
 results:
   inline_max_rows: 200
   inline_max_tokens: 6000
