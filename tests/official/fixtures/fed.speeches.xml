@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<rss version="2.0">
+    <channel>
+        <title>FRB: Speeches</title>
+        <link>https://www.federalreserve.gov/feeds/feeds.htm</link>
+        <description>Synthetic test feed in the shape of the Board's speeches</description>
+        <language>en</language>
+        <item>
+            <title>Sample, Synthetic Remarks on the Outlook and Interest Rates</title>
+            <link>https://www.federalreserve.gov/newsevents/speech/sample20261015a.htm</link>
+            <guid>https://www.federalreserve.gov/newsevents/speech/sample20261015a.htm</guid>
+            <description>Speech At a synthetic conference, M&amp;uuml;nster-on-Test, Testland</description>
+            <category>Speech</category>
+            <pubDate>Thu, 15 Oct 2026 02:55:00 GMT</pubDate>
+        </item>
+        <item>
+            <title>Opening remarks by several governors at a synthetic forum</title>
+            <link>https://www.federalreserve.gov/newsevents/speech/forum20261012a.htm</link>
+            <guid>https://www.federalreserve.gov/newsevents/speech/forum20261012a.htm</guid>
+            <description>Speech At a synthetic forum</description>
+            <category>Speech</category>
+            <pubDate>Mon, 12 Oct 2026 13:30:00 GMT</pubDate>
+        </item>
+    </channel>
+</rss>

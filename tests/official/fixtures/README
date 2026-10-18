@@ -1,0 +1,36 @@
+Official feed test fixtures
+===========================
+
+Every file in this folder is SYNTHETIC: written by hand for these tests in the
+shape of each publisher's real feed (element names, namespaces, date formats,
+encodings and quirks as the feeds had them on 2026-10-18), with invented
+items. None is a recording of a live response; every headline, summary, name,
+link path, release number and GUID is made up.
+
+One file per feed of the allow-list (src/marketlens_mcp/providers/official/
+feeds.py), named <feed id> plus the document's kind:
+
+* fed.*.xml: the Federal Reserve Board's RSS 2.0 (GMT dates, a category, the
+  description repeating or extending the title, HTML entities escaped twice).
+  fed.monetary.xml starts with a byte-order mark and uses CRLF line ends, as
+  the Board's feeds do. Its FOMC item is in fed.press.xml too (dedupe).
+* sec.*.rss: SEC's RSS 2.0 with dc:creator (blank, or a litigation release
+  number), UUID guids, padded titles, links ending in a newline, and a
+  description of escaped HTML with &nbsp; and a script element. One headline
+  tries to give orders (it is data).
+* bls.latest.rss: BLS's latest numbers, RSS 2.0 with xml:base and an escaped
+  HTML table. bls.<release>.atom: BLS's Atom release feeds (id, link href,
+  content, published and updated with fractional seconds and offsets); the
+  CPI's first entry was updated after it was published.
+* bea.news.rss: BEA's RSS 2.0 with http links (served as https) and one
+  relative link.
+* cftc.*.xml: the CFTC's RSS 2.0 with empty descriptions and dc:creator
+  holding a web editor's user name (press, enforcement) or the speaker
+  (speeches); one item has a date that does not parse, one links off the
+  CFTC's domain.
+* ecb.press.xml: the ECB's single-line RSS 2.0 without descriptions, links
+  with a double slash, +0200 dates.
+
+The golden outputs in ../golden/ are what news_official must produce from
+these fixtures (rows, response absent map, notes, provenance minus
+fetched_at). Regenerate with MARKETLENS_UPDATE_GOLDEN=1 and review the diff.

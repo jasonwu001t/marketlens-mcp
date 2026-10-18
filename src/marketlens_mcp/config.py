@@ -60,6 +60,9 @@ providers:
     ttl_hours: 12         # how long a fetched slice is reused before it is fetched again
     calendar_ttl_minutes: 60
     call_timeout_seconds: 120
+  official:
+    cache_seconds: 300    # reuse a fetched feed this long (0: fetch every time)
+    timeout_seconds: 20   # per feed request
 
 results:
   inline_max_rows: 200
@@ -203,6 +206,7 @@ SCHEMA: dict[str, Any] = {
             "calendar_ttl_minutes": _Int(5, 1440),
             "call_timeout_seconds": _Int(10, 600),
         },
+        "official": {"cache_seconds": _Int(0, 3600), "timeout_seconds": _Int(5, 120)},
     },
     "results": {
         "inline_max_rows": _Int(1, 1000),

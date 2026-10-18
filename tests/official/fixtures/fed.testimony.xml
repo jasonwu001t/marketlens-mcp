@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<rss version="2.0">
+    <channel>
+        <title>FRB: Testimony</title>
+        <link>https://www.federalreserve.gov/feeds/feeds.htm</link>
+        <description>Synthetic test feed in the shape of the Board's testimony</description>
+        <language>en</language>
+        <item>
+            <title>Example, Synthetic Semiannual Report to the Congress</title>
+            <link>https://www.federalreserve.gov/newsevents/testimony/example20260714a.htm</link>
+            <guid>https://www.federalreserve.gov/newsevents/testimony/example20260714a.htm</guid>
+            <description>Testimony Before a synthetic Committee of the Senate</description>
+            <category>Testimony</category>
+            <pubDate>Tue, 14 Jul 2026 12:30:00 GMT</pubDate>
+        </item>
+    </channel>
+</rss>

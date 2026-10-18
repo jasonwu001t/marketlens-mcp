@@ -87,7 +87,7 @@
         }
       ],
       "default": null,
-      "description": "The outlet that published it (Alpaca's `source`)",
+      "description": "The outlet that published it: a news source's name, or an official publisher's id (federal_reserve, sec, bls, bea, cftc, ecb)",
       "title": "Publisher"
     },
     "summary": {

@@ -1,0 +1,25 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<rss version="2.0">
+    <channel>
+        <title>FRB: Press Release - Monetary Policy</title>
+        <link>https://www.federalreserve.gov/feeds/press_monetary.html</link>
+        <description>Synthetic test feed in the shape of the Board's monetary policy press releases</description>
+        <language>en</language>
+        <item>
+            <title>Federal Reserve issues a synthetic FOMC statement for testing</title>
+            <link>https://www.federalreserve.gov/newsevents/pressreleases/monetary20261014a.htm</link>
+            <guid>https://www.federalreserve.gov/newsevents/pressreleases/monetary20261014a.htm</guid>
+            <description>Federal Reserve issues a synthetic FOMC statement for testing</description>
+            <category>Monetary Policy</category>
+            <pubDate>Wed, 14 Oct 2026 18:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title>Minutes of a synthetic Committee meeting, September 2026</title>
+            <link>https://www.federalreserve.gov/newsevents/pressreleases/monetary20261007a.htm</link>
+            <guid>https://www.federalreserve.gov/newsevents/pressreleases/monetary20261007a.htm</guid>
+            <description>Minutes of a synthetic Committee meeting, September 2026</description>
+            <category>Monetary Policy</category>
+            <pubDate>Wed, 7 Oct 2026 18:00:00 GMT</pubDate>
+        </item>
+    </channel>
+</rss>

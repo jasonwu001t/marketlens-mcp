@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rss xmlns:dc="http://purl.org/dc/elements/1.1/" version="2.0">
+  <channel>
+    <title>Litigation Releases</title>
+    <link>https://www.sec.gov/</link>
+    <description>Synthetic test feed in the shape of the Commission's litigation releases</description>
+    <language>en</language>
+    <item>
+      <title>Synthetic Defendant One and Example Holdings, LLC</title>
+      <link>https://www.sec.gov/enforcement-litigation/litigation-releases/lr-99901
+</link>
+      <description>Synthetic Defendant One and Example Holdings, LLC</description>
+      <pubDate>Tue, 13 Oct 2026 17:21:15 -0400</pubDate>
+      <dc:creator>LR-99901</dc:creator>
+      <guid isPermaLink="false">00000000-0000-4000-8000-000000000921</guid>
+    </item>
+    <item>
+      <title>Synthetic Defendant Two</title>
+      <link>https://www.sec.gov/enforcement-litigation/litigation-releases/lr-99900
+</link>
+      <description>Synthetic Defendant Two</description>
+      <pubDate>Fri, 02 Oct 2026 15:41:00 -0400</pubDate>
+      <dc:creator>LR-99900</dc:creator>
+      <guid isPermaLink="false">00000000-0000-4000-8000-000000000920</guid>
+    </item>
+  </channel>
+</rss>

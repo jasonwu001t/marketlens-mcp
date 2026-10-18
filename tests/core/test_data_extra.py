@@ -63,7 +63,7 @@ def catalog(monkeypatch, *, installed: bool):
 
 
 def test_the_provider_is_built_in_and_its_name_reserved():
-    assert builtins.BUILTIN_PLUGINS[-1] == "marketlens_mcp.providers.data:PLUGIN"
+    assert builtins.BUILTIN_PLUGINS[-2] == "marketlens_mcp.providers.data:PLUGIN"  # then official
     assert "data" in registry.BUILTIN_PLUGIN_NAMES
     assert data.PLUGIN.name == "data"
     assert data.PLUGIN.env == (
@@ -124,7 +124,7 @@ def test_the_25_tools(monkeypatch):
         assert "as_of" in spec.input_model.model_fields or name == "macro_series_catalog", name
 
 
-@pytest.mark.parametrize(("installed", "count"), [(False, 49), (True, 71)])
+@pytest.mark.parametrize(("installed", "count"), [(False, 50), (True, 72)])
 def test_tools_json_counts(monkeypatch, capsys, installed, count):
     monkeypatch.setattr(runtime, "available", lambda: installed)
     assert cli.main(["tools", "--json"]) == 0

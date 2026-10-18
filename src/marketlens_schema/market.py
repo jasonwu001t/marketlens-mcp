@@ -617,7 +617,9 @@ class NewsItem(CanonicalModel):
     )
     author: str | None = None
     publisher: str | None = Field(
-        default=None, description="The outlet that published it (Alpaca's `source`)"
+        default=None,
+        description="The outlet that published it: a news source's name, or an official publisher's id "
+        "(federal_reserve, sec, bls, bea, cftc, ecb)",
     )
     url: str | None = None
     tickers: list[Ticker] = Field(default_factory=list)

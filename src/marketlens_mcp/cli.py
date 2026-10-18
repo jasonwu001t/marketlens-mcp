@@ -339,12 +339,15 @@ def data_doctor(rt) -> tuple[list[str], int]:
     return lines, failures
 
 
-def _env_lines(names: list[str], environ: Mapping[str, str]) -> list[str]:
+def _env_lines(
+    names: list[str], environ: Mapping[str, str], optional: Mapping[str, str] | None = None
+) -> list[str]:
     """One line per variable the enabled tools read, never its value. Alpaca
     accepts its key pair under two spellings, so the pairs are one credential:
     either complete pair is enough. Any other unset variable may be optional
     (a plugin's bearer, say), so it is not called a failure: a tool that cannot
-    work without it refuses when called and names it."""
+    work without it refuses when called and names it. ``optional`` says what
+    an unset variable that no tool needs costs instead."""
     from .providers.alpaca.client import KEY_NAMES
 
     pairs = [pair for pair in KEY_NAMES if set(pair) <= set(names)]
@@ -364,7 +367,12 @@ def _env_lines(names: list[str], environ: Mapping[str, str]) -> list[str]:
     paired = {n for pair in pairs for n in pair}
     for name in names:
         if name not in paired:
-            state = "set" if environ.get(name) else "unset (a tool that needs it refuses and names it)"
+            if environ.get(name):
+                state = "set"
+            elif optional and name in optional:
+                state = f"unset ({optional[name]})"
+            else:
+                state = "unset (a tool that needs it refuses and names it)"
             lines.append(f"environment {name}: {state}")
     return lines
 
@@ -382,8 +390,15 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     print(
         f"version: marketlens-mcp {__version__}, schema {SCHEMA_VERSION}, plugin API {PLUGIN_API_VERSION[0]}.{PLUGIN_API_VERSION[1]}"
     )
-    for line in _env_lines(sorted({n for e in enabled_entries(rt) for n in e.env}), os.environ):
+    from .providers.official import tool as official
+
+    enabled = enabled_entries(rt)
+    official_on = any(e.spec.name == "news_official" for e in enabled)
+    optional = {"SEC_CONTACT_EMAIL": official.CONTACT_UNSET} if official_on else None
+    for line in _env_lines(sorted({n for e in enabled for n in e.env}), os.environ, optional):
         print(line)
+    if official_on:
+        print(official.doctor_line(os.environ))
     cache = rt.store_root.cache_dir
     try:
         paths.ensure_private_dir(rt.store_root.results_dir)
