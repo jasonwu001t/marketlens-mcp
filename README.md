@@ -112,7 +112,7 @@ Package layout:
 | Source | Reached through | Key | Capabilities |
 |---|---|---|---|
 | Alpaca market-data API (stocks, options, crypto, fixed income, news, screeners) | built-in `alpaca` provider | `ALPACA_API_KEY`, `ALPACA_SECRET_KEY` | `market`, `reference`, `news` |
-| Alpaca trading API (assets, calendar, clock, corporate-action announcements, option contracts; account reads) | built-in `alpaca` provider | same | `reference`, `portfolio` (off) |
+| Alpaca trading API (assets, calendar, clock, corporate-action announcements, option contracts; account reads) | built-in `alpaca` provider | same | `reference`, `portfolio` (off); also `market` (`options_chain`'s open interest) and, through the `data` extra, `holidays` (the optional NYSE cross-check) |
 | Alpaca documentation MCP (`docs.alpaca.markets/mcp`) | built-in `alpaca-docs` | none | `provider.docs` (off) |
 | FRED/ALFRED, BLS, BEA | `data` extra (marketlens-data) | `FRED_API_KEY`, `BEA_API_KEY`, `BLS_API_KEY` (optional) | `macro` |
 | SEC EDGAR (submissions, XBRL company facts, Archives) | `data` extra | `SEC_CONTACT_EMAIL` (recommended) | `filings` |
@@ -249,7 +249,7 @@ Claude Desktop (`claude_desktop_config.json`):
 }
 ```
 
-With the `data` extra, run it from the extra (until marketlens-data is on PyPI, with its checkout beside marketlens-mcp; see [Install](#install)) and add the official sources' keys (each one only for the tools that need it; see [the keys](#keys)):
+With the `data` extra, run it from the extra (`"--from", "marketlens-mcp[data]"`) once both packages are on PyPI; until then, add the marketlens-data checkout with `--with`, as below (see [Install](#install)). Either way, add the official sources' keys (each one only for the tools that need it; see [the keys](#keys)):
 
 ```json
 {

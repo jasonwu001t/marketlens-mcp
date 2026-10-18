@@ -2,11 +2,12 @@ Alpaca test fixtures
 ====================
 
 Every JSON file in this directory except alpaca_mcp_server_tools.json is
-SYNTHETIC ("_synthetic": true applies to all of them). They were written by
-hand in the shape of the response schemas and examples of the pinned OpenAPI
-specs (src/marketlens_mcp/providers/alpaca/specs/), with invented values. None
-is a recording of a live response, none contains an API key, account number or
-personal data of anyone. Ids are made-up UUIDs; tickers are public symbols.
+SYNTHETIC. None carries a "_synthetic" key; this README marks them all. They
+were written by hand in the shape of the response schemas and examples of the
+pinned OpenAPI specs (src/marketlens_mcp/providers/alpaca/specs/), with
+invented values. None is a recording of a live response, none contains an API
+key, account number or personal data of anyone. Ids are made-up UUIDs; tickers
+are public symbols.
 
 Naming: <operationId>[__case].json, e.g. StockBars__page1.json is the first
 page of a two-page StockBars response. Cases cover: multi-page responses and
