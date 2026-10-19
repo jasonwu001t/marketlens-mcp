@@ -325,3 +325,16 @@ def test_a_dynamic_tables_field_metadata_labels_its_units_inline_and_stored(stor
     )
     assert isinstance(marker, ResultMarker)
     assert {c.name: c.unit for c in store.info(marker.result_id).columns} == {"rate": "percent"}
+
+
+def test_queries_for_a_result_without_time_or_text_columns_run(store):
+    """The third query, a random sample, failed in results_query: sqlglot
+    wrote USING SAMPLE after the forced LIMIT, where DuckDB refuses it."""
+    t = pa.table({"v": [float(i) for i in range(40)]})
+    out = finalize(
+        store,
+        ToolOutput(model="marketlens.QueryRow", provenance=provenance(), table=t, offload="always"),
+        tool="results_query",
+    )
+    assert [q.purpose for q in out.queries] == ["Row count", "First 20 rows", "Random sample of 10 rows"]
+    assert [store.query(q.sql, max_rows=50).row_count for q in out.queries] == [1, 20, 10]

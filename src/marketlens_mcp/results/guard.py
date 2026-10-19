@@ -336,11 +336,37 @@ def check(sql: str, *, live_ids: Collection[str], gone: Callable[[str], None] | 
     return Checked(ast=root, result_ids=tuple(referenced), cte_names=ctes)
 
 
+def _place_samples(tree: exp.Expression) -> None:
+    """sqlglot writes USING SAMPLE after ORDER BY and LIMIT, where DuckDB
+    refuses it. Over one table it means that table's TABLESAMPLE (both sample
+    the rows FROM reads, before WHERE), which is written in its place; over a
+    join it is left where it is, and refused next to ORDER BY or LIMIT."""
+    for select in list(tree.find_all(exp.Select)):
+        sample = select.args.get("sample")
+        if sample is None:
+            continue
+        source = select.args.get("from_", select.args.get("from"))
+        table = source.this if isinstance(source, exp.From) else None
+        if isinstance(table, exp.Table) and not select.args.get("joins") and not table.args.get("sample"):
+            select.set("sample", None)
+            table.set("sample", sample)
+        elif any(select.args.get(k) for k in ("order", "limit", "offset", "fetch")):
+            raise QueryRefused(
+                "sql_sample",
+                "USING SAMPLE over a join cannot be combined with ORDER BY or LIMIT in results_query. Sample in a "
+                "subquery (SELECT * FROM (SELECT ... USING SAMPLE 10%) q ORDER BY ... LIMIT ...), or sample one "
+                "table with TABLESAMPLE.",
+            )
+
+
 def force_limit(ast: exp.Expression, cap: int) -> exp.Expression:
-    """Step 7: at most ``cap + 1`` rows (the extra row tells truncation)."""
+    """Step 7: at most ``cap + 1`` rows (the extra row tells truncation). A
+    query that keeps a USING SAMPLE (over a join) is wrapped: a LIMIT of its
+    own would be written after the sample."""
     limit = cap + 1
     tree = ast.copy()
-    if isinstance(tree, exp.Select) and not tree.args.get("fetch"):
+    _place_samples(tree)
+    if isinstance(tree, exp.Select) and not tree.args.get("fetch") and not tree.args.get("sample"):
         current = tree.args.get("limit")
         if current is None:
             return tree.limit(limit, copy=False)

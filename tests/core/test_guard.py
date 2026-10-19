@@ -209,3 +209,31 @@ def test_lockdown_proofs_in_a_result_session(two_sessions):
         assert session.query("SELECT current_setting('TimeZone') AS tz").to_pylist() == [{"tz": "UTC"}]
     assert not (mine.root / "x.csv").exists()
     assert not (mine.root / "x.db").exists()
+
+
+def test_using_sample_runs_with_and_without_its_own_order_and_limit(two_sessions):
+    """sqlglot writes USING SAMPLE after ORDER BY and LIMIT, where DuckDB
+    refuses it, so every USING SAMPLE query failed with a parser error. Over
+    one table it is that table's TABLESAMPLE; over a join it is wrapped, and
+    refused by name next to ORDER BY or LIMIT."""
+    mine, ids, _ = two_sessions
+    a, b = ids[0], ids[1]
+    for sql, rows in (
+        (f"SELECT * FROM {a} USING SAMPLE 10 ROWS (reservoir, 42)", 10),
+        (f"SELECT close FROM {a} USING SAMPLE 10 ROWS (reservoir, 42) ORDER BY close LIMIT 5", 5),
+        (f"SELECT * FROM {a} x WHERE x.close > 0 USING SAMPLE 50% (bernoulli, 7) LIMIT 3", 3),
+        (f"SELECT * FROM (SELECT * FROM {a} USING SAMPLE 4 ROWS (reservoir, 1) LIMIT 2) q", 2),
+        (f"SELECT x.t FROM {a} x JOIN {b} y ON x.t = y.t USING SAMPLE 6 ROWS (reservoir, 3)", 6),
+    ):
+        out = mine.query(sql, max_rows=50)
+        assert out.row_count == rows, sql
+        assert "USING SAMPLE" not in out.executed_sql or "LIMIT 51" in out.executed_sql
+    same = mine.query(
+        f"SELECT close FROM {a} USING SAMPLE 10 ROWS (reservoir, 42) ORDER BY close", max_rows=50
+    )
+    assert same.executed_sql.endswith(
+        "TABLESAMPLE RESERVOIR (10 ROWS) REPEATABLE (42) ORDER BY close LIMIT 51"
+    )
+    with pytest.raises(QueryRefused) as info:
+        mine.query(f"SELECT x.t FROM {a} x JOIN {b} y ON x.t = y.t USING SAMPLE 6 ROWS LIMIT 2", max_rows=50)
+    assert info.value.code == "sql_sample" and "subquery" in info.value.message
