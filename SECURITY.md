@@ -19,7 +19,7 @@ Only the latest release receives fixes while the project is in alpha (0.x).
 
 ## Design notes
 
-- Tools are read-only by construction: the write operations of the upstream APIs are not implemented, and tool annotations are forced read-only.
+- Tools are read-only by construction: the write operations of the upstream APIs are not implemented, and tool annotations are forced read-only, except for `results_export` (writes a file in the export folder and, with `overwrite`, replaces one) and `results_drop` (deletes a stored result), which are annotated as destructive so a client asks before running them.
 - Model-written SQL passes a parser-based guard (one SELECT, no functions that read files or settings, tables only by this session's result ids) and then runs in a fresh in-memory DuckDB with external access disabled and its configuration locked, with a forced row limit, a timeout and a memory cap. DuckDB error texts are scrubbed of paths.
 - Results are stored as owner-only files in the user's cache directory, expire after 24 hours and are capped in size.
 - marketlens-mcp sends no telemetry; the FastMCP banner's update check is disabled.

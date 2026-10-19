@@ -1,6 +1,7 @@
 """The MCP server end to end over an in-memory client: only enabled tools are
-listed, schemas are top-level and closed, annotations are read-only, every
-result is enveloped, refusals are readable, and no path leaks."""
+listed, schemas are top-level and closed, annotations are read-only (but for
+the results tools that delete or write a file), every result is enveloped,
+refusals are readable, and no path leaks."""
 
 from __future__ import annotations
 
@@ -53,6 +54,8 @@ def test_lists_only_enabled_tools_with_closed_schemas(tmp_path):
     assert set(q.inputSchema["properties"]) == {"sql", "max_rows", "store"}
     assert q.annotations.readOnlyHint is True and q.annotations.destructiveHint is False
     assert q.annotations.idempotentHint is True and q.annotations.openWorldHint is False
+    drop = tools["results_drop"].annotations
+    assert drop.readOnlyHint is False and drop.destructiveHint is True
     assert q.title == "Query stored results"
     assert q.outputSchema is None
     assert set(tools) == set(server.enabled_tool_names(rt))
