@@ -11,7 +11,7 @@ Only the latest release receives fixes while the project is in alpha (0.x).
 ## What we consider a vulnerability
 
 - Any way for a tool call to **write** upstream (orders, positions, account settings, watchlists) or to enable such a tool.
-- Any way for `results_query` (or any other tool) to read or write a **file** other than the session's own results and the configured export folder, reach the network, read another session's results, load an extension or change DuckDB settings.
+- Any way for `results_query` (or any other tool) to read or write a **file** other than the session's own results, the configured export folder and the data extra's store (the folder the data tools keep what they fetch in), reach the network, read another session's results, load an extension or change DuckDB settings.
 - A **filesystem path, secret or key** disclosed in a response, an error or a log line sent to the model.
 - Bypassing the **HTTP bearer token** or the loopback-only binding, or the Host/Origin checks.
 - Output of a tool reaching the model **without the trust envelope**, or third-party text without the untrusted-text notice.

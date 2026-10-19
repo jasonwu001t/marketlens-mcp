@@ -1,6 +1,7 @@
 """The results tools (contract 5.5): query, describe, sample, list and drop
 (capability ``results``, always on) and export (capability
-``results.export``, off by default; the only tool that writes a file)."""
+``results.export``, off by default; the only tool that writes a file outside
+the result cache and the data extra's store)."""
 
 from __future__ import annotations
 
