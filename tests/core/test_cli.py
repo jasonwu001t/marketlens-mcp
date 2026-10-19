@@ -138,6 +138,18 @@ def test_config_init_honours_marketlens_config(capsys, tmp_path, monkeypatch):
     assert target.is_file()
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX permissions")
+def test_config_init_leaves_an_existing_folder_as_it_was(capsys, tmp_path, monkeypatch):
+    """MARKETLENS_CONFIG in an existing project folder made that folder owner-only."""
+    project = tmp_path / "project"
+    project.mkdir()
+    os.chmod(project, 0o740)
+    monkeypatch.setenv("MARKETLENS_CONFIG", str(project / "marketlens.yaml"))
+    assert main("config", "init") == 0
+    assert stat.S_IMODE(project.stat().st_mode) == 0o740
+    assert stat.S_IMODE((project / "marketlens.yaml").stat().st_mode) == 0o600
+
+
 def test_schema_command(capsys, tmp_path):
     assert main("schema") == 0
     index = json.loads(capsys.readouterr().out)

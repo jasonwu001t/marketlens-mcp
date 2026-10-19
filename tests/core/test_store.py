@@ -251,6 +251,19 @@ def test_cache_and_results_dirs_are_private(tmp_path):
         assert stat.S_IMODE(d.stat().st_mode) == 0o700, d
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX permissions")
+def test_an_existing_cache_dir_keeps_its_permissions(tmp_path):
+    """MARKETLENS_CACHE_DIR pointing at an existing folder was made owner-only
+    on every put (and a folder of another user failed every put); only the
+    store's own results folder is."""
+    cache = tmp_path / "shared"
+    cache.mkdir()
+    os.chmod(cache, 0o740)
+    put_bars(StoreRoot(cache, StoreLimits()).session("s"))
+    assert stat.S_IMODE(cache.stat().st_mode) == 0o740
+    assert stat.S_IMODE((cache / "results").stat().st_mode) == 0o700
+
+
 def test_put_survives_a_busy_lock(tmp_path):
     root = StoreRoot(tmp_path / "cache", StoreLimits(), lock_timeout=0.2)
     s = root.session("s")

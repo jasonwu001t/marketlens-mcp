@@ -34,6 +34,7 @@ import pyarrow.parquet as pq
 
 from marketlens_schema import BUILTIN_MODELS, SCHEMA_VERSION, CanonicalModel, PaginationState, Provenance
 
+from .. import paths
 from ..results_api import (
     RESULT_ID_RE,
     AbsenceReason,
@@ -229,10 +230,15 @@ class StoreRoot:
                 self._sessions[session_key] = FileResultStore(self, session_key)
             return self._sessions[session_key]
 
+    def ensure_dirs(self) -> None:
+        """The results folder, owner-only, and the cache folder, owner-only when
+        it is created here (an existing one, MARKETLENS_CACHE_DIR, keeps its mode)."""
+        paths.ensure_private_dir(self.cache_dir)
+        _private_dir(self.results_dir)
+
     @contextlib.contextmanager
     def lock(self) -> Iterator[None]:
-        _private_dir(self.cache_dir)
-        _private_dir(self.results_dir)
+        self.ensure_dirs()
         with _evict.store_lock(self.results_dir, timeout=self.lock_timeout):
             yield
 
@@ -374,6 +380,7 @@ class FileResultStore:
         group_column = group_column if group_column in names else None
         columns, preview = self._summarise(table, columns, time_column, group_column)
         columns = with_null_reasons(columns, absent)
+        self._root.ensure_dirs()
         _private_dir(self._dir)
         rid = self._new_id()
         parquet = self._parquet(rid)
