@@ -248,6 +248,22 @@ def test_macro_bls_series_history_from_the_first_sync_is_at_its_latest_release(t
     assert "A later revision is a new vintage at its release, else at its fetch." in description
 
 
+def test_macro_bls_series_quarterly_golden(tmp_path, upstream, keys):
+    # The Employment Cost Index is quarterly: a quarter is dated at its first day (period Q01-Q04,
+    # frequency Q) and is in the window when any of its months is, so a start in February keeps
+    # the first quarter and drops the fourth of 2025
+    upstream.json_file(BLS, "bls.timeseries__CIS1010000000000I.json", method="POST")
+    upstream.text_file(r"www\.bls\.gov/bls/news-release/eci\.htm", "bls.release_archive__eci.html")
+    out = call("macro_bls_series", context(tmp_path), series_ids=["CIS1010000000000I"], start="2026-02-15")
+    doc = check_golden(out, "macro_bls_series__quarterly")
+    assert [(r["date"], r["period"], r["frequency"], r["value"]) for r in doc["rows"]] == [
+        ("2026-01-01", "Q01", "Q", 174.1),
+        ("2026-04-01", "Q02", "Q", 175.3),
+    ]
+    # fetched after the 07-31 ECI release (the second quarter's, listed as June): 08:30 EDT
+    assert {r["knowledge_time"] for r in doc["rows"]} == {"2026-07-31T12:30:00Z"}
+
+
 def test_macro_bls_series_without_a_key_sends_none(tmp_path, upstream):
     bls_routes(upstream)
     call("macro_bls_series", context(tmp_path), series_ids=["LNS14000000"], start="2021-01-01")

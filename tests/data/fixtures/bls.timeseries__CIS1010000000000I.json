@@ -1,0 +1,11 @@
+{
+ "_synthetic": true,
+ "status": "REQUEST_SUCCEEDED",
+ "responseTime": 35,
+ "message": [],
+ "Results": {"series": [{"seriesID": "CIS1010000000000I", "data": [
+  {"year": "2026", "period": "Q02", "periodName": "2nd Quarter", "value": "175.3", "latest": "true", "footnotes": [{}]},
+  {"year": "2026", "period": "Q01", "periodName": "1st Quarter", "value": "174.1", "footnotes": [{}]},
+  {"year": "2025", "period": "Q04", "periodName": "4th Quarter", "value": "172.9", "footnotes": [{}]}
+ ]}]}
+}
