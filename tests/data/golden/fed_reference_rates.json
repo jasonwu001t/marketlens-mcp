@@ -15,7 +15,7 @@
   "derived_from": [],
   "environment": null,
   "feed": null,
-  "knowledge_time": "2026-10-02T13:00:00Z",
+  "knowledge_time": "2026-10-02T19:00:00Z",
   "lag_days": 1.0,
   "operation": null,
   "pages_fetched": 1,
@@ -48,7 +48,7 @@
     "volume_usd": "no_data"
    },
    "date": "2026-09-30",
-   "knowledge_time": "2026-10-01T13:00:00Z",
+   "knowledge_time": "2026-10-01T19:00:00Z",
    "rate": 0.0441,
    "rate_type": "SOFR",
    "target_from": null,
@@ -61,7 +61,7 @@
     "target_to": "not_applicable"
    },
    "date": "2026-10-01",
-   "knowledge_time": "2026-10-02T13:00:00Z",
+   "knowledge_time": "2026-10-02T19:00:00Z",
    "rate": 0.0433,
    "rate_type": "SOFR",
    "target_from": null,
@@ -71,7 +71,7 @@
   {
    "absent": null,
    "date": "2026-10-01",
-   "knowledge_time": "2026-10-02T13:00:00Z",
+   "knowledge_time": "2026-10-02T19:00:00Z",
    "rate": 0.0433,
    "rate_type": "EFFR",
    "target_from": 0.0425,
@@ -84,7 +84,7 @@
     "target_to": "not_applicable"
    },
    "date": "2026-10-01",
-   "knowledge_time": "2026-10-02T13:00:00Z",
+   "knowledge_time": "2026-10-02T19:00:00Z",
    "rate": 0.0432,
    "rate_type": "OBFR",
    "target_from": null,
@@ -97,7 +97,7 @@
     "target_to": "not_applicable"
    },
    "date": "2026-10-01",
-   "knowledge_time": "2026-10-02T13:00:00Z",
+   "knowledge_time": "2026-10-02T19:00:00Z",
    "rate": 0.043,
    "rate_type": "TGCR",
    "target_from": null,
@@ -110,7 +110,7 @@
     "target_to": "not_applicable"
    },
    "date": "2026-10-01",
-   "knowledge_time": "2026-10-02T13:00:00Z",
+   "knowledge_time": "2026-10-02T19:00:00Z",
    "rate": 0.043,
    "rate_type": "BGCR",
    "target_from": null,
