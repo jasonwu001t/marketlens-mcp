@@ -237,3 +237,28 @@ def test_using_sample_runs_with_and_without_its_own_order_and_limit(two_sessions
     with pytest.raises(QueryRefused) as info:
         mine.query(f"SELECT x.t FROM {a} x JOIN {b} y ON x.t = y.t USING SAMPLE 6 ROWS LIMIT 2", max_rows=50)
     assert info.value.code == "sql_sample" and "subquery" in info.value.message
+
+
+def test_a_percent_or_with_ties_limit_is_wrapped_not_lowered(two_sessions):
+    """LIMIT 100 PERCENT (or 100%) was lowered to LIMIT 51 PERCENT, a share of
+    every row rather than a row count, so the whole answer of a cross join
+    reached Python before the cap; WITH TIES likewise returns more rows than
+    its count."""
+
+    def limited(sql, cap):
+        return guard.render(guard.force_limit(guard.check(sql, live_ids={"r_0123456789"}).ast, cap))
+
+    for sql in (
+        "SELECT * FROM r_0123456789 LIMIT 100 PERCENT",
+        "SELECT * FROM r_0123456789 LIMIT 100%",
+        "SELECT * FROM r_0123456789 ORDER BY 1 LIMIT 5 WITH TIES",
+    ):
+        rendered = limited(sql, 50)
+        assert rendered.startswith("SELECT * FROM (SELECT * FROM r_0123456789") and rendered.endswith(
+            ") AS q LIMIT 51"
+        ), rendered
+    mine, ids, _ = two_sessions
+    a = ids[0]
+    out = mine.query(f"SELECT x.close FROM {a} x, {a} y LIMIT 100 PERCENT", max_rows=5)
+    assert out.executed_sql.endswith(") AS q LIMIT 6")
+    assert out.row_count == 5 and out.truncated is True

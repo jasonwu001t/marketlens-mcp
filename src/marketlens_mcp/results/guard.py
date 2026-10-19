@@ -361,8 +361,10 @@ def _place_samples(tree: exp.Expression) -> None:
 
 def force_limit(ast: exp.Expression, cap: int) -> exp.Expression:
     """Step 7: at most ``cap + 1`` rows (the extra row tells truncation). A
-    query that keeps a USING SAMPLE (over a join) is wrapped: a LIMIT of its
-    own would be written after the sample."""
+    LIMIT is lowered in place only when it is a plain row count: LIMIT n
+    PERCENT (a share of every row, built in full) and WITH TIES are wrapped.
+    So is a query that keeps a USING SAMPLE (over a join): a LIMIT of its own
+    would be written after the sample."""
     limit = cap + 1
     tree = ast.copy()
     _place_samples(tree)
@@ -371,7 +373,12 @@ def force_limit(ast: exp.Expression, cap: int) -> exp.Expression:
         if current is None:
             return tree.limit(limit, copy=False)
         value = current.args.get("expression")
-        if isinstance(value, exp.Literal) and not value.is_string and str(value.this).isdigit():
+        if (
+            isinstance(value, exp.Literal)
+            and not value.is_string
+            and str(value.this).isdigit()
+            and not current.args.get("limit_options")
+        ):
             current.set("expression", exp.Literal.number(min(int(value.this), limit)))
             return tree
     wrapped = exp.select("*").from_(
