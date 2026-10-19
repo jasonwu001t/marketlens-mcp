@@ -105,6 +105,7 @@ All notable changes to this project are documented here. The format follows [Kee
 - `config show` reports `APCA_API_KEY_ID` and `APCA_API_SECRET_KEY` as set or unset: with only that spelling of the Alpaca key pair set, which the Alpaca tools accept, it said `ALPACA_API_KEY` and `ALPACA_SECRET_KEY` were unset and named nothing else. The README's configuration section says either pair works.
 - `doctor --network` calls Alpaca's clock with whichever key pair is complete, as the Alpaca tools do: with only `APCA_API_KEY_ID` and `APCA_API_SECRET_KEY` set it skipped the call ("ALPACA_API_KEY and ALPACA_SECRET_KEY are not both set") and exited 1, although every Alpaca tool would work. Without either pair, the skip names both spellings.
 - `doctor` without the data extra, and a data tool's `data_extra_missing` refusal, say to install marketlens-data beside marketlens-mcp and point to the README's Install section: they said to install `marketlens-mcp[data]`, which cannot resolve while neither package is on PyPI.
+- `marketlens-mcp add-capability` writes code that passes `make lint` as written (its tuples and model names were in single quotes, which `ruff format --check` rejects), and names a new Alpaca tool's fixture by its operation, `tests/alpaca/fixtures/<operationId>.json`, empty and without a `_synthetic` key, as the fixtures' README names and marks them: it wrote `<tool_name>.json` holding `{"_synthetic": true}`.
 
 ## [0.1.0] - Unreleased
 
