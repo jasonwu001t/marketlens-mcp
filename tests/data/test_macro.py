@@ -352,6 +352,7 @@ def test_macro_bea_table_needs_its_key(tmp_path, upstream):
 def test_macro_release_schedule_golden(tmp_path, upstream, frozen_clock):
     upstream.text_file(r"www\.bls\.gov/schedule/news_release/cpi\.htm", "bls.cpi_schedule.html")
     upstream.text_file(r"www\.bls\.gov/schedule/news_release/empsit\.htm", "bls.empsit_schedule.html")
+    upstream.text_file(r"www\.bls\.gov/schedule/\d{4}/\d{2}_sched_list\.htm", "bls.schedule_month_list.html")
     out = call("macro_release_schedule", context(tmp_path))
     doc = check_golden(out, "macro_release_schedule")
     assert [(r["release"], r["start_date"], r["scheduled_at"]) for r in doc["rows"]] == [
