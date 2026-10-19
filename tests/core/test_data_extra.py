@@ -154,9 +154,11 @@ def test_doctor_without_the_extra(monkeypatch, capsys):
     monkeypatch.setattr(runtime, "available", lambda: False)
     assert cli.main(["doctor"]) == 0
     out = capsys.readouterr().out
+    # 2026-10-19: it said "install marketlens-mcp[data]", which cannot work before both are on PyPI.
     assert (
-        "data extra: not installed; install marketlens-mcp[data] (Python 3.13 or later) to list the "
-        "macro, filings, fed_treasury, holidays and calendars tools\n"
+        "data extra: not installed; install marketlens-data beside marketlens-mcp (Python 3.13 or later; "
+        "see the README's Install section) to list the macro, filings, fed_treasury, holidays and "
+        "calendars tools\n"
     ) in out
     assert "data source" not in out and "data store" not in out
 

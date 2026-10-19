@@ -1,6 +1,7 @@
 """The MCP server end to end over an in-memory client: only enabled tools are
-listed, schemas are top-level and closed, annotations are read-only, every
-result is enveloped, refusals are readable, and no path leaks."""
+listed, schemas are top-level and closed, annotations are read-only (but for
+the results tools that delete or write a file), every result is enveloped,
+refusals are readable, and no path leaks."""
 
 from __future__ import annotations
 
@@ -53,6 +54,8 @@ def test_lists_only_enabled_tools_with_closed_schemas(tmp_path):
     assert set(q.inputSchema["properties"]) == {"sql", "max_rows", "store"}
     assert q.annotations.readOnlyHint is True and q.annotations.destructiveHint is False
     assert q.annotations.idempotentHint is True and q.annotations.openWorldHint is False
+    drop = tools["results_drop"].annotations
+    assert drop.readOnlyHint is False and drop.destructiveHint is True
     assert q.title == "Query stored results"
     assert q.outputSchema is None
     assert set(tools) == set(server.enabled_tool_names(rt))
@@ -176,6 +179,18 @@ def test_startup_notices(tmp_path):
     notices = server.startup_notices(rt)
     assert "portfolio.environment is live: portfolio tools read your LIVE brokerage account." in notices
     assert "plugin 'ghost' not loaded: not installed" in notices
+
+
+def test_a_broken_plugin_whose_capability_is_configured_does_not_stop_the_server(tmp_path):
+    """2026-10-19: its capability, set in the config, was refused as unknown
+    (ConfigError, exit 2), so the plugin's own error was never shown."""
+    text = "plugins:\n  enabled: [raiser, example]\ncapabilities:\n  raiser: true\n  example: true\n"
+    rt = runtime(tmp_path, text, eps=[EP("raiser", ex.RAISES), EP("example", ex.PLUGIN)])
+    assert server.startup_notices(rt) == [
+        "plugin 'raiser' not loaded: register() raised RuntimeError: boom while registering",
+        "capability 'raiser' in the config skipped: no loaded plugin declares it (not loaded: 'raiser')",
+    ]
+    assert rt.policy.is_enabled("example") and "raiser" not in rt.policy.enabled
 
 
 def test_tools_are_grouped_into_one_sub_server_per_capability(tmp_path):

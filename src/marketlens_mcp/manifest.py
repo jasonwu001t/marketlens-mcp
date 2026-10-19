@@ -4,8 +4,10 @@ it (contract 3.1).
 Input schema = ``input_model.model_json_schema()`` as top-level properties,
 ``additionalProperties: false``. Annotations are forced read-only:
 ``readOnlyHint=True, destructiveHint=False, idempotentHint=True,
-openWorldHint=(provider != "local")``. No output schema: results are
-structured content inside the trust envelope.
+openWorldHint=(provider != "local")``, except for the two built-in results
+tools that change the owner's machine (``LOCAL_WRITES``), so a client that
+skips confirmation for read-only tools still asks for them. No output schema:
+results are structured content inside the trust envelope.
 """
 
 from __future__ import annotations
@@ -24,6 +26,14 @@ from .results_api import OutputRisk
 
 DYNAMIC_MODELS = frozenset({ALIGNED_SCHEMA_NAME, QUERY_ROW_SCHEMA_NAME})
 DESCRIPTION_MAX = 1000
+#: The built-in tools that write or delete, as (readOnlyHint, destructiveHint,
+#: idempotentHint): results_export writes a file in results.export_dir and with
+#: overwrite replaces one; results_drop deletes a stored result. No plugin can
+#: register these names.
+LOCAL_WRITES: dict[str, tuple[bool, bool, bool]] = {
+    "results_export": (False, True, False),
+    "results_drop": (False, True, True),
+}
 
 
 def output_model_name(spec: ToolSpec) -> str:
@@ -86,10 +96,11 @@ def input_schema(spec: ToolSpec) -> dict[str, Any]:
 
 
 def annotations(spec: ToolSpec) -> ToolAnnotations:
+    read_only, destructive, idempotent = LOCAL_WRITES.get(spec.name, (True, False, True))
     return ToolAnnotations(
         title=spec.title,
-        readOnlyHint=True,
-        destructiveHint=False,
-        idempotentHint=True,
+        readOnlyHint=read_only,
+        destructiveHint=destructive,
+        idempotentHint=idempotent,
         openWorldHint=spec.provider != "local",
     )

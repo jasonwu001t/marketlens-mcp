@@ -81,6 +81,20 @@ def test_private_dirs_are_0700(tmp_path):
     assert stat.S_IMODE(os.stat(d).st_mode) == 0o700
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX permissions")
+def test_an_existing_folder_keeps_its_permissions(tmp_path):
+    """The owner's own folder (MARKETLENS_CONFIG's, a configured cache) was
+    made owner-only, or failed with PermissionError when another user owns it."""
+    shared = tmp_path / "shared"
+    shared.mkdir()
+    os.chmod(shared, 0o740)
+    assert paths.ensure_private_dir(shared) == shared
+    assert stat.S_IMODE(os.stat(shared).st_mode) == 0o740
+    (tmp_path / "file").write_text("x", encoding="utf-8")
+    with pytest.raises(FileExistsError):
+        paths.ensure_private_dir(tmp_path / "file")
+
+
 def test_env_defaults_to_process_environment(monkeypatch, tmp_path):
     monkeypatch.setenv("MARKETLENS_CACHE_DIR", str(tmp_path / "zz"))
     assert paths.cache_dir() == pathlib.Path(tmp_path / "zz")

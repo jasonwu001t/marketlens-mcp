@@ -114,7 +114,7 @@ def ready_queries(
         if by
         else ReadyQuery(
             purpose="Random sample of 10 rows",
-            sql=f"SELECT {star} FROM {rid} USING SAMPLE 10 ROWS (reservoir, 42)",
+            sql=f"SELECT {star} FROM {rid} TABLESAMPLE RESERVOIR (10 ROWS) REPEATABLE (42)",
         )
     )
     return [

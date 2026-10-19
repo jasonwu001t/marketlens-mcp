@@ -25,5 +25,6 @@ PLUGIN = PluginInfo(
     api_version=PLUGIN_API_VERSION,
     register=register,
     description="Alpaca market data, reference data, news and brokerage-account reads.",
-    env=("ALPACA_API_KEY", "ALPACA_SECRET_KEY", "APCA_API_KEY_ID", "APCA_API_SECRET_KEY"),
+    # No plugin-wide env: each tool's spec names the keys it reads, so the
+    # documentation tools (which send none) are not listed as needing them.
 )

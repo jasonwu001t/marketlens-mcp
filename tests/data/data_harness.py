@@ -136,11 +136,14 @@ class Upstream:
 
 def install_upstream(monkeypatch) -> Upstream:
     from omni.http import client as omni_http
+    from omni.sources import sec as omni_sec
 
     upstream = Upstream()
+    # marketlens-data reads a filing's index headers once per process: each test's EDGAR answers its own
+    monkeypatch.setattr(omni_sec, "_headers", {})
 
     class Client(omni_http.HttpClient):
-        def set_rate(self, host: str, per_second: float) -> None:  # no pacing against fixtures
+        def set_rate(self, host, per_second, *, shared=None) -> None:  # no pacing against fixtures
             pass
 
     monkeypatch.setattr(omni_http, "_client", Client(transport=httpx.MockTransport(upstream.handle)))

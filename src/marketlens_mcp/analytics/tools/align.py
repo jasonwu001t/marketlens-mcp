@@ -7,6 +7,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from marketlens_mcp.plugin_api import ToolContext, ToolOutput, ToolSpec
+from marketlens_mcp.worker import query_handler
 from marketlens_schema import ALIGNED_SCHEMA_NAME
 from marketlens_schema.base import AbsenceCode, AbsenceReason
 
@@ -71,7 +72,8 @@ def _same(bl: str | None, br: str | None) -> str:
     return f", same {bl}" if bl == br else f", same {bl} as {br}"
 
 
-async def handler(ctx: ToolContext, args: AlignArgs) -> ToolOutput:
+@query_handler
+def handler(ctx: ToolContext, args: AlignArgs) -> ToolOutput:
     left = resolve(ctx, TOOL, args.left_result_id)
     right = resolve(ctx, TOOL, args.right_result_id)
     tolerance = None

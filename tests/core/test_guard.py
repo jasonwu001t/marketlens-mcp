@@ -209,3 +209,72 @@ def test_lockdown_proofs_in_a_result_session(two_sessions):
         assert session.query("SELECT current_setting('TimeZone') AS tz").to_pylist() == [{"tz": "UTC"}]
     assert not (mine.root / "x.csv").exists()
     assert not (mine.root / "x.db").exists()
+
+
+def test_using_sample_runs_with_and_without_its_own_order_and_limit(two_sessions):
+    """sqlglot writes USING SAMPLE after ORDER BY and LIMIT, where DuckDB
+    refuses it, so every USING SAMPLE query failed with a parser error. Over
+    one table it is that table's TABLESAMPLE; over a join it is wrapped, and
+    refused by name next to ORDER BY or LIMIT."""
+    mine, ids, _ = two_sessions
+    a, b = ids[0], ids[1]
+    for sql, rows in (
+        (f"SELECT * FROM {a} USING SAMPLE 10 ROWS (reservoir, 42)", 10),
+        (f"SELECT close FROM {a} USING SAMPLE 10 ROWS (reservoir, 42) ORDER BY close LIMIT 5", 5),
+        (f"SELECT * FROM {a} x WHERE x.close > 0 USING SAMPLE 50% (bernoulli, 7) LIMIT 3", 3),
+        (f"SELECT * FROM (SELECT * FROM {a} USING SAMPLE 4 ROWS (reservoir, 1) LIMIT 2) q", 2),
+        (f"SELECT x.t FROM {a} x JOIN {b} y ON x.t = y.t USING SAMPLE 6 ROWS (reservoir, 3)", 6),
+    ):
+        out = mine.query(sql, max_rows=50)
+        assert out.row_count == rows, sql
+        assert "USING SAMPLE" not in out.executed_sql or "LIMIT 51" in out.executed_sql
+    same = mine.query(
+        f"SELECT close FROM {a} USING SAMPLE 10 ROWS (reservoir, 42) ORDER BY close", max_rows=50
+    )
+    assert same.executed_sql.endswith(
+        "TABLESAMPLE RESERVOIR (10 ROWS) REPEATABLE (42) ORDER BY close LIMIT 51"
+    )
+    with pytest.raises(QueryRefused) as info:
+        mine.query(f"SELECT x.t FROM {a} x JOIN {b} y ON x.t = y.t USING SAMPLE 6 ROWS LIMIT 2", max_rows=50)
+    assert info.value.code == "sql_sample" and "subquery" in info.value.message
+
+
+def test_using_sample_over_a_subquery_is_its_tablesample(two_sessions):
+    """2026-10-19: USING SAMPLE over a subquery, next to an ORDER BY or LIMIT
+    of its own, was refused as sql_sample "over a join", though there is no
+    join and DuckDB takes a subquery's TABLESAMPLE."""
+    mine, ids, _ = two_sessions
+    sql = f"SELECT * FROM (SELECT close FROM {ids[0]}) q USING SAMPLE 5 ROWS (reservoir, 42) ORDER BY close LIMIT 3"
+    out = mine.query(sql, max_rows=50)
+    assert out.row_count == 3
+    assert out.executed_sql.endswith(
+        ") AS q TABLESAMPLE RESERVOIR (5 ROWS) REPEATABLE (42) ORDER BY close LIMIT 3"
+    )
+    with pytest.raises(QueryRefused) as info:
+        mine.query("SELECT * FROM (VALUES (1), (2)) v(x) USING SAMPLE 1 ROWS ORDER BY x", max_rows=50)
+    assert info.value.code == "sql_sample" and "over a join, VALUES or UNNEST" in info.value.message
+
+
+def test_a_percent_or_with_ties_limit_is_wrapped_not_lowered(two_sessions):
+    """LIMIT 100 PERCENT (or 100%) was lowered to LIMIT 51 PERCENT, a share of
+    every row rather than a row count, so the whole answer of a cross join
+    reached Python before the cap; WITH TIES likewise returns more rows than
+    its count."""
+
+    def limited(sql, cap):
+        return guard.render(guard.force_limit(guard.check(sql, live_ids={"r_0123456789"}).ast, cap))
+
+    for sql in (
+        "SELECT * FROM r_0123456789 LIMIT 100 PERCENT",
+        "SELECT * FROM r_0123456789 LIMIT 100%",
+        "SELECT * FROM r_0123456789 ORDER BY 1 LIMIT 5 WITH TIES",
+    ):
+        rendered = limited(sql, 50)
+        assert rendered.startswith("SELECT * FROM (SELECT * FROM r_0123456789") and rendered.endswith(
+            ") AS q LIMIT 51"
+        ), rendered
+    mine, ids, _ = two_sessions
+    a = ids[0]
+    out = mine.query(f"SELECT x.close FROM {a} x, {a} y LIMIT 100 PERCENT", max_rows=5)
+    assert out.executed_sql.endswith(") AS q LIMIT 6")
+    assert out.row_count == 5 and out.truncated is True

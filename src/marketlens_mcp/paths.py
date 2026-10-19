@@ -74,8 +74,15 @@ def display_path(path: pathlib.Path | str, *, home: pathlib.Path | None = None) 
 
 
 def ensure_private_dir(path: pathlib.Path) -> pathlib.Path:
-    """Create ``path`` (and parents) and make it owner-only on POSIX."""
-    path.mkdir(parents=True, exist_ok=True)
+    """Create ``path`` (and parents) and make it owner-only on POSIX. A folder
+    that already exists keeps its permissions: it may be the owner's own (the
+    folder of MARKETLENS_CONFIG, a configured cache or data folder)."""
+    try:
+        path.mkdir(parents=True)
+    except FileExistsError:
+        if not path.is_dir():
+            raise
+        return path
     if os.name == "posix":
         os.chmod(path, 0o700)
     return path

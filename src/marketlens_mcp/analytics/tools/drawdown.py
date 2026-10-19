@@ -8,6 +8,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from marketlens_mcp.plugin_api import ToolContext, ToolOutput, ToolSpec
+from marketlens_mcp.worker import query_handler
 from marketlens_schema.analytics import DrawdownPoint, DrawdownSummary
 
 from ..common import (
@@ -82,7 +83,8 @@ def _max_sql(dd: str, col: str) -> str:
     )
 
 
-async def handler(ctx: ToolContext, args: DrawdownArgs) -> ToolOutput:
+@query_handler
+def handler(ctx: ToolContext, args: DrawdownArgs) -> ToolOutput:
     inp = resolve(ctx, TOOL, args.result_id, series_column=args.series_column)
     col = price_column(TOOL, inp, args.value_column, param="value_column")
     notes = list(inp.notes)

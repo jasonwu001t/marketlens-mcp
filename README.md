@@ -91,7 +91,7 @@ flowchart TB
 
 A tool call, end to end:
 
-1. The client calls a tool. `pipeline.py` validates the arguments against the tool's input model (pydantic); a bad argument comes back as `invalid_arguments` with a hint, before anything is fetched.
+1. The client calls a tool. `pipeline.py` validates the arguments against the tool's input model (pydantic); a bad argument comes back as `invalid_arguments` with a message that names each bad argument and what is wrong with it, before anything is fetched.
 2. The provider's handler calls upstream (paginating up to the fetch ceilings in `fetch.py`, under the per-provider rate limit in `ratelimit.py`) and maps the response onto the canonical models in `marketlens_schema`: SEC-style tickers, UTC instants, decimal-string money, a unit on every number, and a reason on every `null`.
 3. `offload.py` turns the rows into Arrow. At most `inline_max_rows` rows and about `inline_max_tokens` tokens come back inline; anything larger is written to the result store and the model gets a `result_id` marker instead (typed columns, a preview, ready-made queries; see [Large results](#large-results)).
 4. `trust.py` wraps the answer in the `_marketlens` envelope (provenance, notes, the untrusted-data notice), and the client receives it.
@@ -154,7 +154,7 @@ Every request a tool can make goes to one of these. Nothing else is called: no t
 | FRED / ALFRED (St. Louis Fed) | `https://api.stlouisfed.org/fred` | `/series/observations`, `/series/vintagedates` | `FRED_API_KEY` | `macro_series` |
 | BLS | `https://api.bls.gov/publicAPI/v2/timeseries/data/`; `https://www.bls.gov` | the time-series API; `/schedule/news_release/{cpi,empsit}.htm`; the release archive `/bls/news-release/{release}.htm` | `BLS_API_KEY` (optional) | `macro_bls_series`, `macro_release_schedule` |
 | BEA | `https://apps.bea.gov/api/data/` | NIPA `GetData` | `BEA_API_KEY` | `macro_bea_table` |
-| U.S. SEC EDGAR | `https://data.sec.gov`, `https://www.sec.gov` | `/submissions/CIK##########.json`; `/api/xbrl/companyfacts/CIK##########.json`; `/Archives/edgar/data/{cik}/...` (Forms 3/4/5/144, 13F-HR, N-PORT, 8-K EX-99.1); `/files/company_tickers.json`, `/files/company_tickers_mf.json`; the company Atom feed `/cgi-bin/browse-edgar?action=getcompany&...&output=atom` | `SEC_CONTACT_EMAIL` in the User-Agent | `sec_*` |
+| U.S. SEC EDGAR | `https://data.sec.gov`, `https://www.sec.gov` | `/submissions/CIK##########.json`; `/api/xbrl/companyfacts/CIK##########.json`; `/Archives/edgar/data/{cik}/...` (Forms 3/4/5/144, 13F-HR, N-PORT, 8-K EX-99.1, and each filing's index headers `{accession}-index-headers.html`, or its `-index.html`, for its acceptance time and a fund filing's series); `/files/company_tickers.json`, `/files/company_tickers_mf.json` | `SEC_CONTACT_EMAIL` in the User-Agent | `sec_*` |
 | Federal Reserve Board | `https://www.federalreserve.gov` | `/monetarypolicy/fomccalendars.htm`; statements `/newsevents/pressreleases/monetaryYYYYMMDDa.htm` | none | `fed_fomc_meetings`, `fed_fomc_statements` |
 | New York Fed | `https://markets.newyorkfed.org` | `/api/rates/all/search.json` | none | `fed_reference_rates` |
 | U.S. Treasury | `https://home.treasury.gov` | `/resource-center/data-chart-center/interest-rates/` (`daily-treasury-rates.csv`) | none | `treasury_yield_curve` |
@@ -319,7 +319,7 @@ Each tool belongs to one capability. Turn capabilities on or off in the config f
 | `analytics` | on | Returns, rolling volatility, correlation, resample, as-of align, drawdown and beta, computed locally on result handles. |
 | `portfolio` | off | Brokerage account reads: account, positions, orders, activities, portfolio history, account configuration, broker watchlists and locates (the paper account unless `portfolio.environment: live`). Off by default: what the model reads leaves your machine with the model's requests. |
 | `results` | always on | Query, describe, sample, list and drop results stored by this session. |
-| `results.export` | off | Write a stored result to CSV or Parquet in your export folder. The only tool that writes a file. |
+| `results.export` | off | Write a stored result to CSV or Parquet in your export folder. The only tool that writes a file outside marketlens's own result cache and data store. |
 | `provider.docs` | off | Search the data provider's documentation service (an outbound call to a third party). Third-party text, marked untrusted. |
 | `macro` | on | FRED/ALFRED, BLS and BEA series with vintages and as-of reads, BLS release schedules, the FRED series catalogue. Needs the `data` extra. |
 | `filings` | on | SEC EDGAR filings, XBRL facts, point-in-time fundamentals, earnings releases and press-release EPS, insider trades, 13F holdings, fund N-PORT reports. Needs the `data` extra. |
@@ -341,7 +341,7 @@ Settings live in a YAML file:
 
 No file means every default. `marketlens-mcp config init` writes the commented default file, `config path` prints where it is, `config show` prints the effective settings. The server reads the file once at start: restart it after editing. Unknown settings, wrong types and out-of-range values refuse to start with a one-line reason.
 
-Secrets never go in the file. They come from the environment only: `ALPACA_API_KEY`, `ALPACA_SECRET_KEY`, `MARKETLENS_HTTP_TOKEN` for HTTP, and the data sources' keys (`FRED_API_KEY`, `BEA_API_KEY`, `BLS_API_KEY`, `SEC_CONTACT_EMAIL`; see [the keys](#keys)). `MARKETLENS_LOG_LEVEL` (default `WARNING`) sets the log level; logs go to stderr.
+Secrets never go in the file. They come from the environment only: `ALPACA_API_KEY`, `ALPACA_SECRET_KEY` (or Alpaca's own spelling of the same pair, `APCA_API_KEY_ID` and `APCA_API_SECRET_KEY`: either pair works, and the tool table lists both), `MARKETLENS_HTTP_TOKEN` for HTTP, and the data sources' keys (`FRED_API_KEY`, `BEA_API_KEY`, `BLS_API_KEY`, `SEC_CONTACT_EMAIL`; see [the keys](#keys)). `MARKETLENS_LOG_LEVEL` (default `WARNING`) sets the log level; logs go to stderr.
 
 The default file:
 
@@ -553,11 +553,11 @@ Generated from the built-in tool manifest (`make readme`). `marketlens-mcp tools
 | `results_query` | results (on) | `duckdb:results_query` (local) | marketlens.QueryRow | - | Read-only SQL over this session's results (one SELECT, forced LIMIT) |
 | `results_sample` | results (on) | `duckdb:results_sample` (local) | marketlens.QueryRow | - | First, last or random rows of a stored result |
 | `results_export` | results.export (off) | `file:results_export` (local) | marketlens.QueryRow | - | Write a stored result to CSV or Parquet in results.export_dir |
-| `provider_docs_fetch` | provider.docs (off) | `mcp:fetch (docs.alpaca.markets/mcp)` (alpaca-docs) | marketlens.ProviderDocument | ALPACA_API_KEY, ALPACA_SECRET_KEY, APCA_API_KEY_ID, APCA_API_SECRET_KEY | untrusted text |
-| `provider_docs_get_endpoint` | provider.docs (off) | `mcp:get-endpoint (docs.alpaca.markets/mcp)` (alpaca-docs) | marketlens.ProviderDocument | ALPACA_API_KEY, ALPACA_SECRET_KEY, APCA_API_KEY_ID, APCA_API_SECRET_KEY | untrusted text |
-| `provider_docs_list_endpoints` | provider.docs (off) | `mcp:list-endpoints (docs.alpaca.markets/mcp)` (alpaca-docs) | marketlens.ProviderDocument | ALPACA_API_KEY, ALPACA_SECRET_KEY, APCA_API_KEY_ID, APCA_API_SECRET_KEY | untrusted text |
-| `provider_docs_search` | provider.docs (off) | `mcp:search (docs.alpaca.markets/mcp)` (alpaca-docs) | marketlens.ProviderDocument | ALPACA_API_KEY, ALPACA_SECRET_KEY, APCA_API_KEY_ID, APCA_API_SECRET_KEY | untrusted text |
-| `provider_docs_search_endpoints` | provider.docs (off) | `mcp:search-endpoints (docs.alpaca.markets/mcp)` (alpaca-docs) | marketlens.ProviderDocument | ALPACA_API_KEY, ALPACA_SECRET_KEY, APCA_API_KEY_ID, APCA_API_SECRET_KEY | untrusted text |
+| `provider_docs_fetch` | provider.docs (off) | `mcp:fetch (docs.alpaca.markets/mcp)` (alpaca-docs) | marketlens.ProviderDocument | - | untrusted text |
+| `provider_docs_get_endpoint` | provider.docs (off) | `mcp:get-endpoint (docs.alpaca.markets/mcp)` (alpaca-docs) | marketlens.ProviderDocument | - | untrusted text |
+| `provider_docs_list_endpoints` | provider.docs (off) | `mcp:list-endpoints (docs.alpaca.markets/mcp)` (alpaca-docs) | marketlens.ProviderDocument | - | untrusted text |
+| `provider_docs_search` | provider.docs (off) | `mcp:search (docs.alpaca.markets/mcp)` (alpaca-docs) | marketlens.ProviderDocument | - | untrusted text |
+| `provider_docs_search_endpoints` | provider.docs (off) | `mcp:search-endpoints (docs.alpaca.markets/mcp)` (alpaca-docs) | marketlens.ProviderDocument | - | untrusted text |
 | `macro_bea_table` | macro (on) | `omni bea.nipa <- apps.bea.gov/api/data (NIPA GetData)` (bea) | marketlens.EconomicObservation | BEA_API_KEY | BEA NIPA tables (GDP, PCE, income, profits); needs the data extra |
 | `macro_bls_series` | macro (on) | `omni bls.timeseries <- api.bls.gov/publicAPI/v2/timeseries/data` (bls) | marketlens.EconomicObservation | BLS_API_KEY | BLS monthly and quarterly series (CPI, unemployment, payrolls, JOLTS, ECI); needs the data extra |
 | `macro_release_schedule` | macro (on) | `omni bls.cpi_schedule, bls.empsit_schedule <- www.bls.gov/schedule/news_release` (bls) | marketlens.ReleaseScheduleEntry | - | CPI and jobs-report release dates and instants; needs the data extra |
@@ -591,7 +591,7 @@ Every response uses the vendor-neutral models in `marketlens_schema` (pydantic o
 
 ## Security and privacy
 
-- **Read-only**: no tool writes to your brokerage account or any provider; the only file a tool can write is an export into the folder you configure, and only with `results.export` on.
+- **Read-only**: no tool writes to your brokerage account or any provider. Apart from marketlens's own result cache (large results) and the data extra's store (what the data tools fetch), the only file a tool can write is an export into the folder you configure, and only with `results.export` on.
 - **What leaves your machine**: the requests tools make to the provider you configured, and whatever the model reads, which goes to your model provider with the conversation. Brokerage reads are off by default for that reason. The data tools call the publishers directly from your machine; the store is local. `news_official` sends GET requests to its fixed list of government and central-bank feeds only, with your `SEC_CONTACT_EMAIL` to SEC and BLS alone.
 - **Untrusted text**: every result is wrapped in a `_marketlens` envelope that tells the model to treat it as data; news and documentation text carry a stronger notice.
 - **No telemetry**: marketlens-mcp sends nothing anywhere except the upstream calls tools make. The FastMCP banner and its update check are off.
@@ -642,7 +642,7 @@ capabilities:
   myvendor_data: true      # a capability your plugin declares
 ```
 
-Plugins load only when you name them in `plugins.enabled`; `marketlens-mcp plugins` lists what was discovered and why one did not load, and a broken plugin is reported and skipped, never stops the server. A provider plugin reuses the canonical models (`marketlens.Bar`, `marketlens.Quote`, ...), prefixes its tools with its own name, sets `provenance.provider`, keeps a list of the vendor endpoints it does not map, and never maps an endpoint that writes. Its large results go to the same result store, so `results_query` and the `analytics_*` tools work on them unchanged. Installing a plugin is trusting its code: plugins run in the server's process. The plugin API, testing helpers (`marketlens_mcp.testing`) and a complete example are in [WRITING_A_PLUGIN.md](WRITING_A_PLUGIN.md).
+Plugins load only when you name them in `plugins.enabled`; `marketlens-mcp plugins` lists what was discovered and why one did not load, and a broken plugin is reported and skipped, never stops the server (a capability of it set under `capabilities:` is skipped with a notice). A provider plugin reuses the canonical models (`marketlens.Bar`, `marketlens.Quote`, ...), prefixes its tools with its own name, sets `provenance.provider`, keeps a list of the vendor endpoints it does not map, and never maps an endpoint that writes. Its large results go to the same result store, so `results_query` and the `analytics_*` tools work on them unchanged. Installing a plugin is trusting its code: plugins run in the server's process. The plugin API, testing helpers (`marketlens_mcp.testing`) and a complete example are in [WRITING_A_PLUGIN.md](WRITING_A_PLUGIN.md).
 
 ## Development
 

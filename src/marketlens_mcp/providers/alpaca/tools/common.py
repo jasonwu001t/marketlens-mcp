@@ -24,8 +24,10 @@ from marketlens_schema.base import (
 )
 
 from .. import convert
+from ..client import KEY_NAMES
 
-ALPACA_ENV = ("ALPACA_API_KEY", "ALPACA_SECRET_KEY")
+#: What an Alpaca tool may read: either spelling of the key pair (the client takes the first complete one).
+ALPACA_ENV = tuple(name for pair in KEY_NAMES for name in pair)
 SKIP_SAMPLE = 5
 #: How many skipped records a detailed skip note names, each with its reason.
 SKIP_DETAIL_MAX = 50
