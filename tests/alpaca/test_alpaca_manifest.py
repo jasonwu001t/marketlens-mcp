@@ -269,6 +269,23 @@ def test_spec_integrity(specs, name):
     assert name in golden.read_text(encoding="utf-8"), f"{spec.golden_test} never mentions {name}"
 
 
+def _list_inputs(schema):
+    """(name, description, minItems, maxItems) of each list input, optional ones included."""
+    for name, prop in schema["properties"].items():
+        for variant in prop.get("anyOf", [prop]):
+            if variant.get("type") == "array":
+                yield name, prop.get("description", ""), variant.get("minItems"), variant.get("maxItems")
+
+
+@pytest.mark.parametrize("name", sorted(TABLE))
+def test_a_list_input_says_the_size_its_schema_allows(specs, name):
+    """2026-10-19: portfolio_locate_quotes said tickers (1-200) and refused more than 100."""
+    for field, description, low, high in _list_inputs(specs[name].input_model.model_json_schema()):
+        said = re.search(r"\((\d+)-(\d+)\)", description)
+        if said:
+            assert (int(said[1]), int(said[2])) == (low, high), f"{name}.{field}: {description}"
+
+
 def test_capability_counts(specs):
     counts: dict[str, int] = {}
     for s in specs.values():
