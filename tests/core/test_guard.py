@@ -239,6 +239,22 @@ def test_using_sample_runs_with_and_without_its_own_order_and_limit(two_sessions
     assert info.value.code == "sql_sample" and "subquery" in info.value.message
 
 
+def test_using_sample_over_a_subquery_is_its_tablesample(two_sessions):
+    """2026-10-19: USING SAMPLE over a subquery, next to an ORDER BY or LIMIT
+    of its own, was refused as sql_sample "over a join", though there is no
+    join and DuckDB takes a subquery's TABLESAMPLE."""
+    mine, ids, _ = two_sessions
+    sql = f"SELECT * FROM (SELECT close FROM {ids[0]}) q USING SAMPLE 5 ROWS (reservoir, 42) ORDER BY close LIMIT 3"
+    out = mine.query(sql, max_rows=50)
+    assert out.row_count == 3
+    assert out.executed_sql.endswith(
+        ") AS q TABLESAMPLE RESERVOIR (5 ROWS) REPEATABLE (42) ORDER BY close LIMIT 3"
+    )
+    with pytest.raises(QueryRefused) as info:
+        mine.query("SELECT * FROM (VALUES (1), (2)) v(x) USING SAMPLE 1 ROWS ORDER BY x", max_rows=50)
+    assert info.value.code == "sql_sample" and "over a join, VALUES or UNNEST" in info.value.message
+
+
 def test_a_percent_or_with_ties_limit_is_wrapped_not_lowered(two_sessions):
     """LIMIT 100 PERCENT (or 100%) was lowered to LIMIT 51 PERCENT, a share of
     every row rather than a row count, so the whole answer of a cross join
