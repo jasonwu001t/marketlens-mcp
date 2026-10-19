@@ -88,6 +88,8 @@ PARITY: dict[str, Mapped | Excluded] = {
     "finra.short_interest": Excluded("second_wave", _LATER),
     "finra.regsho_daily": Excluded("second_wave", _LATER),
     "finra.margin_statistics": Excluded("second_wave", _LATER),
+    "fiscaldata.dts_detail": Excluded("second_wave", _LATER),
+    "fiscaldata.mts": Excluded("second_wave", _LATER),
     "ofr.financial_stress": Excluded("second_wave", _LATER),
     "atlantafed.rate_probs": Excluded("second_wave", _LATER),
     "bis.series": Excluded("second_wave", _LATER),

@@ -15,7 +15,7 @@
   "derived_from": [],
   "environment": null,
   "feed": null,
-  "knowledge_time": "2026-10-01T21:00:00Z",
+  "knowledge_time": "2026-10-01T20:15:00Z",
   "lag_days": 2.0,
   "operation": null,
   "pages_fetched": 1,
@@ -39,7 +39,7 @@
    "date": "2026-09-29",
    "debt_held_public": 29990000000000.0,
    "intragovernmental": 7490000000000.0,
-   "knowledge_time": "2026-09-30T21:00:00Z",
+   "knowledge_time": "2026-09-30T20:15:00Z",
    "total_debt": 37480000000000.0
   },
   {
@@ -47,7 +47,7 @@
    "date": "2026-09-30",
    "debt_held_public": 30000000000000.0,
    "intragovernmental": 7500000000000.0,
-   "knowledge_time": "2026-10-01T21:00:00Z",
+   "knowledge_time": "2026-10-01T20:15:00Z",
    "total_debt": 37500000000000.0
   }
  ]
