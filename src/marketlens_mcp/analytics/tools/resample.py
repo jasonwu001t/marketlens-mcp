@@ -9,6 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from marketlens_mcp.plugin_api import ToolContext, ToolOutput, ToolSpec
 from marketlens_mcp.results_api import ResultSession
+from marketlens_mcp.worker import query_handler
 from marketlens_schema import BUILTIN_MODELS
 from marketlens_schema.base import AbsenceCode, AbsenceReason, Timeframe
 from marketlens_schema.market import Bar
@@ -247,7 +248,8 @@ def _generic_sql(inp: Input, target: str, agg: str, columns: list[str], values: 
     )
 
 
-async def handler(ctx: ToolContext, args: ResampleArgs) -> ToolOutput:
+@query_handler
+def handler(ctx: ToolContext, args: ResampleArgs) -> ToolOutput:
     inp = resolve(ctx, TOOL, args.result_id, series_column=args.series_column)
     notes = list(inp.notes)
     target = args.timeframe

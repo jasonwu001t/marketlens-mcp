@@ -3,10 +3,13 @@ results_sample, results_list, results_drop and results_export."""
 
 from __future__ import annotations
 
+import asyncio
+import inspect
 import json
 import os
 import pathlib
 import re
+import time
 
 import pyarrow as pa
 import pyarrow.csv as pacsv
@@ -575,3 +578,52 @@ def test_csv_export_neutralises_third_party_formulas(setup):
         tmp_path / "out" / "plain.csv", convert_options=pacsv.ConvertOptions(column_types={"s": pa.string()})
     ).column("s").to_pylist() == ["-1.5", "=x"]
     assert out.notes == []
+
+
+def test_a_long_query_leaves_the_event_loop_and_the_light_tools_free(tmp_path):
+    """results_query ran DuckDB on the event loop: a query running to its
+    timeout froze every other call (and the session's messages) until it
+    stopped. It runs in the query thread now; results_list answers meanwhile."""
+    store = StoreRoot(tmp_path / "cache", StoreLimits(query_timeout_seconds=2)).session("s")
+    ctx = make_context(store=store)
+    heavy = (
+        "SELECT count(*) AS n FROM (SELECT unnest(range(5000)) AS a) t1, (SELECT unnest(range(5000)) AS b) t2, "
+        "(SELECT unnest(range(5000)) AS c) t3"
+    )
+
+    async def go():
+        gaps = []
+
+        async def ticker():
+            last = time.monotonic()
+            while True:
+                await asyncio.sleep(0.05)
+                now = time.monotonic()
+                gaps.append(now - last)
+                last = now
+
+        tick = asyncio.create_task(ticker())
+        query = asyncio.create_task(call_tool(SPECS["results_query"], ctx, sql=heavy))
+        await asyncio.sleep(0.3)
+        started = time.monotonic()
+        listed = await call_tool(SPECS["results_list"], ctx)
+        listed_after = time.monotonic() - started
+        with pytest.raises(ToolError) as info:
+            await query
+        tick.cancel()
+        return max(gaps), listed, listed_after, info.value.code
+
+    worst_gap, listed, listed_after, code = asyncio.run(go())
+    assert code == "sql_timeout"
+    assert isinstance(listed, InlineResult) and listed_after < 1.0
+    assert worst_gap < 1.0
+
+
+def test_every_store_bound_handler_runs_off_the_event_loop():
+    """The results and analytics handlers are synchronous store work wrapped
+    to run in a thread, so none of them can hold the event loop."""
+    from marketlens_mcp.analytics.tools import all_specs
+
+    for spec in (*rt.SPECS, *all_specs()):
+        inner = getattr(spec.handler, "__wrapped__", None)
+        assert inner is not None and not inspect.iscoroutinefunction(inner), spec.name

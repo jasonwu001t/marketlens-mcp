@@ -23,6 +23,7 @@ from ..manifest import DYNAMIC_MODELS
 from ..offload import estimate_tokens
 from ..plugin_api import ToolContext, ToolError, ToolOutput, ToolSpec
 from ..results_api import RESULT_ID_RE
+from ..worker import query_handler, thread_handler
 from .arrow import duckdb_type, json_safe, sql_ident, table_rows
 from .store import FileResultStore, QueryOutcome
 
@@ -97,7 +98,8 @@ def _inherited(store: FileResultStore, out: QueryOutcome) -> dict:
     }
 
 
-async def results_query(ctx: ToolContext, args: QueryArgs) -> ToolOutput:
+@query_handler
+def results_query(ctx: ToolContext, args: QueryArgs) -> ToolOutput:
     store = _store(ctx)
     limits = store.limits
     max_rows = min(args.max_rows, limits.query_max_rows)
@@ -171,7 +173,8 @@ class ResultIdArgs(BaseModel):
     result_id: str = RESULT_ID_FIELD
 
 
-async def results_describe(ctx: ToolContext, args: ResultIdArgs) -> ToolOutput:
+@thread_handler
+def results_describe(ctx: ToolContext, args: ResultIdArgs) -> ToolOutput:
     info = _store(ctx).info(args.result_id)
     return ToolOutput(model=info.model, provenance=info.provenance, stored=info, risk=info.risk)
 
@@ -190,7 +193,8 @@ class SampleArgs(BaseModel):
     columns: list[str] | None = Field(None, min_length=1, max_length=200, description="Only these columns")
 
 
-async def results_sample(ctx: ToolContext, args: SampleArgs) -> ToolOutput:
+@query_handler
+def results_sample(ctx: ToolContext, args: SampleArgs) -> ToolOutput:
     store = _store(ctx)
     info = store.info(args.result_id)
     names = [c.name for c in info.columns]
@@ -253,7 +257,8 @@ class NoArgs(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
-async def results_list(ctx: ToolContext, args: NoArgs) -> ToolOutput:
+@thread_handler
+def results_list(ctx: ToolContext, args: NoArgs) -> ToolOutput:
     infos = _store(ctx).list()
     notes = []
     if len(infos) > LIST_MAX:
@@ -282,7 +287,8 @@ async def results_list(ctx: ToolContext, args: NoArgs) -> ToolOutput:
 # --- results_drop -----------------------------------------------------------------------------
 
 
-async def results_drop(ctx: ToolContext, args: ResultIdArgs) -> ToolOutput:
+@thread_handler
+def results_drop(ctx: ToolContext, args: ResultIdArgs) -> ToolOutput:
     dropped = _store(ctx).drop(args.result_id)
     table = pa.table({"result_id": [args.result_id], "dropped": [dropped]})
     return ToolOutput(
@@ -345,7 +351,8 @@ def _csv_ready(table: pa.Table, *, neutralise: bool = False) -> tuple[pa.Table, 
     return pa.table(cols, names=table.column_names), neutralised
 
 
-async def results_export(ctx: ToolContext, args: ExportArgs) -> ToolOutput:
+@thread_handler
+def results_export(ctx: ToolContext, args: ExportArgs) -> ToolOutput:
     store = _store(ctx)
     export_dir = ctx.settings.get("export_dir") or store.limits.export_dir
     folder = pathlib.Path(export_dir) if export_dir else None

@@ -9,6 +9,7 @@ traceback goes to the server log (stderr), never to the model.
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import logging
 from collections.abc import Mapping
@@ -107,7 +108,9 @@ async def execute(spec: ToolSpec, ctx: ToolContext, arguments: Mapping[str, Any]
         out = await spec.handler(ctx, args)
         if not isinstance(out, ToolOutput):
             raise TypeError(f"handler of {spec.name} returned {type(out).__name__}, not ToolOutput")
-        response = finalize(
+        # Off the event loop: a stored answer is a Parquet write, a DuckDB summary and an eviction pass.
+        response = await asyncio.to_thread(
+            finalize,
             out,
             tool=spec.name,
             default_risk=spec.output_risk,
