@@ -632,7 +632,8 @@ class FileResultStore:
             last = rows(f"SELECT {cols} FROM t LIMIT {PREVIEW_ROWS} OFFSET {start}")
         span_start = span_end = None
         by_name = {c.name: c for c in columns}
-        if time_column and by_name[time_column].type.startswith("TIMESTAMP"):
+        # The span is of UTC instants: a naive TIMESTAMP's values name no zone (its min and max are in columns).
+        if time_column and by_name[time_column].type == "TIMESTAMP WITH TIME ZONE":
             span_start, span_end = by_name[time_column].min, by_name[time_column].max
         groups_count, groups_sample = None, []
         if group_column:

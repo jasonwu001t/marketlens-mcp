@@ -272,3 +272,23 @@ def test_a_carried_columns_source_outlives_the_result_that_computed_it(tmp_path)
         VOLATILITY, ctx, result_id=both.result_id, price_column="ret_right", window=2, periods_per_year=252
     )
     assert any("ret_right was computed by a marketlens.ReturnPoint result" in n for n in out.notes)
+
+
+def test_a_result_keyed_by_a_naive_timestamp_is_stored_and_aligned(real):
+    """Storing a result whose time column is a naive TIMESTAMP failed the
+    marker's validation (its time span had no zone), so analytics_align of
+    such a result failed as internal_error, stored or too large to show."""
+    store, ctx = real
+    (query,) = [s for s in RESULTS_SPECS if s.name == "results_query"]
+    left = put_bars(
+        store, bars("AAPL", [float(i + 1) for i in range(300)], start=M0, step=MINUTE, timeframe="1min")
+    )
+    naive = call(query, ctx, sql=f"SELECT t::TIMESTAMP AS ts, close FROM {left}", store=True).result_id
+    info = store.info(naive)
+    assert [c.type for c in info.columns][:1] == ["TIMESTAMP"]
+    for keep in (False, True):
+        aligned = call(
+            ALIGN, ctx, left_result_id=naive, right_result_id=left, right_columns=["close"], store=keep
+        )
+        assert isinstance(aligned, ResultMarker) and aligned.row_count == 300
+        assert aligned.preview.time_column == "ts" and aligned.preview.time_span_start is None
