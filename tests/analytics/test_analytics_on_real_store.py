@@ -357,3 +357,41 @@ def test_a_date_indexed_data_model_is_a_time_series(real):
         call(RETURNS, ctx, result_id=text, price_column="v")
     assert e.value.code == "not_time_series" and "the time column 'd' of" in e.value.message
     assert "is VARCHAR, not a timestamp or a date" in e.value.message
+
+
+@pytest.mark.parametrize("inline_max_rows", [50, 1000])
+def test_dynamic_outputs_follow_the_configured_inline_limits(tmp_path, inline_max_rows):
+    """dynamic_output compared against the default 200 rows, not
+    results.inline_max_rows: with 50, a 122-row resample was left to the
+    offload, which stored it with no time or series column (the next resample
+    then averaged every ticker into one series); with 1000, a 242-row resample
+    was stored although it fits inline."""
+    store = StoreRoot(tmp_path, StoreLimits(inline_max_rows=inline_max_rows)).session("test")
+    ctx = testing.make_context(store=store, capabilities=["analytics", "results"])
+    hours = [M0 + i * 60 * MINUTE for i in range(60 * 24)]
+    table = pa.table(
+        {
+            "t": pa.array(hours * 2, pa.timestamp("us", tz="UTC")),
+            "ticker": ["AAA"] * len(hours) + ["BBB"] * len(hours),
+            "px": [100.0] * len(hours) + [1.0] * len(hours),
+        }
+    )
+    prov = Provenance(provider="synthetic", route="duckdb:results_query", fetched_at=M0)
+    rid = store.put(
+        table,
+        tool="results_query",
+        model="marketlens.QueryRow",
+        provenance=prov,
+        time_column="t",
+        group_column="ticker",
+    ).result_id
+    if inline_max_rows == 50:
+        daily = call(RESAMPLE, ctx, result_id=rid, timeframe="1d")
+        assert isinstance(daily, ResultMarker) and daily.row_count == 122
+        info = store.info(daily.result_id)
+        assert (info.time_column, info.group_column) == ("t", "ticker")
+        weekly = call(RESAMPLE, ctx, result_id=daily.result_id, timeframe="1w", agg="mean")
+        assert {r["ticker"]: r["px"] for r in weekly.rows} == {"AAA": 100.0, "BBB": 1.0}
+    else:
+        half_days = call(RESAMPLE, ctx, result_id=rid, timeframe="12h")
+        assert isinstance(half_days, InlineResult) and half_days.row_count == 242

@@ -46,7 +46,8 @@ from marketlens_schema.base import TIMEFRAME_RE, AbsenceCode, AbsenceReason, Del
 
 CAPABILITY = "analytics"
 PROVIDER = "local"
-#: The contract's default inline limits (results.inline_max_rows / inline_max_tokens).
+#: The contract's default inline limits (results.inline_max_rows / inline_max_tokens), for a
+#: store that does not carry its own.
 INLINE_ROWS = 200
 INLINE_TOKENS = 6000
 SERIES_ALL = "_all"
@@ -720,11 +721,14 @@ def with_units(
     return table.cast(pa.schema(fields))
 
 
-def _small(table: pa.Table) -> bool:
-    if table.num_rows > INLINE_ROWS:
+def _small(ctx: ToolContext, table: pa.Table) -> bool:
+    """Within the configured inline limits (results.inline_max_rows and
+    inline_max_tokens; the contract's defaults for a store without them)."""
+    limits = getattr(ctx.results, "limits", None)
+    if table.num_rows > getattr(limits, "inline_max_rows", INLINE_ROWS):
         return False
     text = json.dumps(table.to_pylist(), default=str, separators=(",", ":"), ensure_ascii=False)
-    return math.ceil(len(text.encode("utf-8")) / 4) <= INLINE_TOKENS
+    return math.ceil(len(text.encode("utf-8")) / 4) <= getattr(limits, "inline_max_tokens", INLINE_TOKENS)
 
 
 def dynamic_output(
@@ -743,16 +747,16 @@ def dynamic_output(
     sources: Mapping[str, str] | None = None,
     store: bool = False,
 ) -> ToolOutput:
-    """A dynamic-schema output. Small (and not ``store``): the table (inline).
-    Large: stored here with its time and series columns, which the offload
-    cannot know for a dynamic schema, so the stored result chains into other
-    analytics tools. ``units`` labels columns (a price stays a price for the
+    """A dynamic-schema output. Small (and not ``store``): the table, inline
+    (decided here, so the offload never stores it without them). Large: stored
+    here with its time and series columns, which the offload cannot know for a
+    dynamic schema, so the stored result chains into other analytics tools. ``units`` labels columns (a price stays a price for the
     next tool), and ``sources`` the model each carried column was computed by
     (a drawdown stays a drawdown after its result is gone)."""
     out_risk = risk(inputs)
     units = {k: v for k, v in (units or {}).items() if v}
     table = with_units(utc_times(table), units, sources)
-    if not store and _small(table):
+    if not store and _small(ctx, table):
         return ToolOutput(
             model=model,
             provenance=prov,
@@ -760,6 +764,7 @@ def dynamic_output(
             notes=list(notes),
             absent=dict(absent or {}),
             risk=out_risk,
+            offload="never",
         )
     info = ctx.results.put(
         table,
