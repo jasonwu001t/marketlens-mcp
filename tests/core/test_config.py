@@ -203,6 +203,21 @@ def test_r6_wrong_type(tmp_path, text, key, type_text, got):
     )
 
 
+@pytest.mark.parametrize("size", ["0GB", "10KB", "63MB", "60MiB"])
+def test_a_query_memory_limit_too_small_to_work_is_refused(tmp_path, size):
+    """'0GB' and '10KB' passed, and then every stored result, results_query
+    and analytics call failed with DuckDB's out-of-memory error."""
+    assert refusal(tmp_path, f"results:\n  query_memory_limit: {size}\n") == (
+        f"marketlens config {shown(tmp_path)}: results.query_memory_limit must be at least 64MB (got '{size}')."
+    )
+
+
+@pytest.mark.parametrize("size", ["64MB", "0.5GB", "128MiB", "2GB"])
+def test_a_working_query_memory_limit_is_kept(tmp_path, size):
+    write(tmp_path, f"results:\n  query_memory_limit: {size}\n")
+    assert cfg.load_config().results["query_memory_limit"] == size
+
+
 def test_top_level_must_be_a_mapping(tmp_path):
     assert refusal(tmp_path, "- a\n- b\n") == (
         f"marketlens config {shown(tmp_path)}: the top level must be a mapping (got ['a', 'b'])."
