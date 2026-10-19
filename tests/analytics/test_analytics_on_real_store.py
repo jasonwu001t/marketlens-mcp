@@ -292,3 +292,68 @@ def test_a_result_keyed_by_a_naive_timestamp_is_stored_and_aligned(real):
         )
         assert isinstance(aligned, ResultMarker) and aligned.row_count == 300
         assert aligned.preview.time_column == "ts" and aligned.preview.time_span_start is None
+
+
+def test_a_date_indexed_data_model_is_a_time_series(real):
+    """Every analytics tool refused the data models whose time column is a
+    DATE (macro series, the yield curve, reference rates) as having 'no time
+    column', although the result records one: a date is its midnight UTC."""
+    from marketlens_mcp.results.arrow import rows_to_table
+    from marketlens_schema.data import EconomicObservation, YieldCurvePoint
+
+    store, ctx = real
+    prov = Provenance(provider="synthetic", route="GET /fred/series/observations", fetched_at=M0)
+    rows = [
+        EconomicObservation(
+            source="fred",
+            series_id=sid,
+            date=dt.date(2023 + m // 12, m % 12 + 1, 1),
+            value=base + m + (m % 3),
+            knowledge_time=M0,
+            pit="vintage",
+        )
+        for sid, base in (("CPI", 300.0), ("PCE", 120.0))
+        for m in range(40)
+    ]
+    macro = store.put(
+        rows_to_table(rows, EconomicObservation),
+        tool="macro_fred_series",
+        model=EconomicObservation.schema_name,
+        provenance=prov,
+    ).result_id
+    assert {c.name: c.type for c in store.info(macro).columns}["date"] == "DATE"
+    rets = call(RETURNS, ctx, result_id=macro)
+    assert rets.row_count == 78 and rets.rows[0]["t"] == "2023-02-01T00:00:00Z"
+    assert call(DRAWDOWN, ctx, result_id=macro).row_count == 2
+    monthly = call(RESAMPLE, ctx, result_id=macro, timeframe="1mo")
+    assert monthly.row_count == 80 and monthly.rows[0]["date"] == "2023-01-01"
+    assert call(CORRELATION, ctx, result_id=macro).row_count == 4
+    curve = [
+        YieldCurvePoint(
+            date=dt.date(2026, 1, 1) + dt.timedelta(days=d),
+            tenor=t,
+            rate=0.04 + d / 1e4 + i / 1e3,
+            knowledge_time=M0,
+        )
+        for d in range(30)
+        for i, t in enumerate(("1M", "10Y"))
+    ]
+    yc = store.put(
+        rows_to_table(curve, YieldCurvePoint),
+        tool="treasury_yield_curve",
+        model=YieldCurvePoint.schema_name,
+        provenance=prov,
+    ).result_id
+    assert call(RESAMPLE, ctx, result_id=yc, timeframe="1w").row_count == 10
+    # A time column of another type is named with its type, not called missing.
+    text = store.put(
+        pa.table({"d": ["2026-01-01", "2026-01-02"], "v": [1.0, 2.0]}),
+        tool="results_query",
+        model="marketlens.QueryRow",
+        provenance=prov,
+        time_column="d",
+    ).result_id
+    with pytest.raises(ToolError) as e:
+        call(RETURNS, ctx, result_id=text, price_column="v")
+    assert e.value.code == "not_time_series" and "the time column 'd' of" in e.value.message
+    assert "is VARCHAR, not a timestamp or a date" in e.value.message

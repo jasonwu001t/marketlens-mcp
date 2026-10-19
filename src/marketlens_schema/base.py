@@ -363,7 +363,7 @@ class CanonicalModel(BaseModel):
 
     #: "marketlens.Bar". Unique across built-ins and plugins.
     schema_name: ClassVar[str] = ""
-    #: The column analytics treat as time (an UtcDatetime field), if any.
+    #: The column analytics treat as time (an UtcDatetime or date field), if any.
     time_column: ClassVar[str | None] = None
     #: The column that identifies a series within a result (ticker, occ_symbol), if any.
     group_column: ClassVar[str | None] = None

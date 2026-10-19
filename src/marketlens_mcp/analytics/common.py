@@ -9,10 +9,10 @@ offload (``ToolOutput(table=...)``); dynamic outputs that are large are
 stored here so that they keep their time and series columns.
 
 Time: TIMESTAMP WITH TIME ZONE inputs are turned into naive UTC timestamps
-(``timezone('UTC', t)``) before any bucketing or arithmetic, so buckets are
-UTC-aligned whatever the connection's time zone (``time_bucket`` defaults:
-weeks start on Monday, months on the 1st); outputs are turned back into UTC
-instants.
+(``timezone('UTC', t)``), and DATE inputs into their midnight UTC, before any
+bucketing or arithmetic, so buckets are UTC-aligned whatever the connection's
+time zone (``time_bucket`` defaults: weeks start on Monday, months on the
+1st); outputs are turned back into UTC instants.
 """
 
 from __future__ import annotations
@@ -289,6 +289,12 @@ def is_timestamp(column: ColumnInfo) -> bool:
     return column.type == _TZ_TIMESTAMP or column.type in _NAIVE_TIMESTAMPS
 
 
+def is_time(column: ColumnInfo) -> bool:
+    """A timestamp, or a DATE (the data models' macro series, yield curve and
+    rates): ``Input.ts`` reads a date as its midnight UTC."""
+    return is_timestamp(column) or column.type == "DATE"
+
+
 @dataclass(frozen=True)
 class Input:
     """One result handle, resolved: its info, time column and series column;
@@ -401,7 +407,13 @@ def resolve(ctx: ToolContext, tool: str, result_id: str, *, series_column: str |
                 "and none is its time column.",
                 hint="Select exactly one timestamp column with results_query (store=true) and try again.",
             )
-    if time is None or time not in by_name or not is_timestamp(by_name[time]):
+    if time is not None and time in by_name and not is_time(by_name[time]):
+        raise refuse(
+            "not_time_series",
+            f"{tool} needs a time series, but the time column '{time}' of {label} is {by_name[time].type}, "
+            "not a timestamp or a date.",
+        )
+    if time is None or time not in by_name:
         raise refuse(
             "not_time_series",
             f"{tool} needs a time series, but {label} has no time column.",
