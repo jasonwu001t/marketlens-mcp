@@ -5,6 +5,7 @@ failure, the cache, redirects, the byte cap, and GET only."""
 from __future__ import annotations
 
 import asyncio
+import importlib.util
 import re
 import time
 from datetime import timedelta
@@ -473,16 +474,19 @@ def test_the_readme_lists_every_feed_with_its_publishers_terms():
 def test_doctor_prints_the_contact_and_the_feeds(capsys, monkeypatch, tmp_path):
     from marketlens_mcp import cli
 
+    # news_official adds no generic env line of its own; the data extra, when installed,
+    # declares SEC_CONTACT_EMAIL itself and prints that line once
+    generic = 1 if importlib.util.find_spec("omni") else 0
     monkeypatch.setenv("SEC_CONTACT_EMAIL", "")
     cli.main(["doctor"])
     out = capsys.readouterr().out
     # one line on the contact: news_official skips SEC and BLS without it (it does not refuse)
     assert "\nofficial feeds: 9 of 18 ready; SEC_CONTACT_EMAIL is not set" in out
-    assert "environment SEC_CONTACT_EMAIL" not in out
+    assert out.count("environment SEC_CONTACT_EMAIL") == generic
     monkeypatch.setenv("SEC_CONTACT_EMAIL", CONTACT)
     cli.main(["doctor"])
     out = capsys.readouterr().out
-    assert "official feeds: all 18 ready" in out and "environment SEC_CONTACT_EMAIL" not in out
+    assert "official feeds: all 18 ready" in out and out.count("environment SEC_CONTACT_EMAIL") == generic
     assert CONTACT not in out
     config = tmp_path / "xdg" / "marketlens" / "config.yaml"
     config.parent.mkdir(parents=True)
