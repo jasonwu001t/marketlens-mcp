@@ -131,7 +131,8 @@ def test_the_scaffold_passes_make_lint_as_written(checkout, capsys, argv, comman
         for command in commands:
             ruff = [sys.executable, "-m", "ruff", *command, "--stdin-filename", stdin_name, "-"]
             text = path.read_text(encoding="utf-8")
-            result = subprocess.run(ruff, input=text, cwd=REPO, capture_output=True, text=True, check=False)  # noqa: S603
+            run = {"input": text, "cwd": REPO, "capture_output": True, "encoding": "utf-8", "check": False}
+            result = subprocess.run(ruff, **run)  # noqa: S603
             assert result.returncode == 0, f"{command} {path.name}: {result.stdout}{result.stderr}"
 
 
