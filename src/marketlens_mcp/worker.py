@@ -9,8 +9,11 @@ here into the async handlers the manifest needs:
 
 * ``query_handler``: DuckDB work over stored results (``results_query``,
   ``results_sample``, the analytics tools) runs in one query thread, one call
-  at a time, so concurrent calls never multiply
-  ``results.query_memory_limit``.
+  at a time, so concurrent queries never multiply
+  ``results.query_memory_limit``. Storing an answer is not queued there: its
+  summary, a DuckDB connection under the same limit, runs in the thread that
+  stores it (``pipeline.execute`` stores a tool's answer in the default pool),
+  beside a query and other stores.
 * ``thread_handler``: other file work (list, describe, drop, export) runs in
   the loop's default thread pool, so it is not queued behind a slow query.
 """
