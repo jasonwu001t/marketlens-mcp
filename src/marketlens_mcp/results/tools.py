@@ -109,6 +109,7 @@ async def results_query(ctx: ToolContext, args: QueryArgs) -> ToolOutput:
             + ", ".join(f"{old} -> {new}" for old, new in out.renamed)
             + ". Name them with AS to choose the names."
         )
+    notes.extend(out.notes)
     if max_rows < args.max_rows and not args.store:
         notes.append(
             f"max_rows {args.max_rows} is above results.query_max_rows ({limits.query_max_rows}), so it was lowered "

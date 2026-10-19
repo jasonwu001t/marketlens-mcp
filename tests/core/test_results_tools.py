@@ -507,3 +507,26 @@ def test_sample_of_a_repeated_column_shows_it_once(setup):
     out = call(ctx, "results_sample", result_id=bars.result_id, n=2, columns=["close", "close"])
     assert [c.name for c in out.columns] == ["close"]
     assert all(set(row) == {"close"} for row in out.rows)
+
+
+def test_query_answers_intervals_and_nanosecond_timestamps(setup):
+    """An INTERVAL answered as [months, days, nanoseconds] inline and failed
+    as internal_error when stored (Parquet has no Arrow month_day_nano type);
+    a TIMESTAMP_NS with sub-microsecond digits failed even inline."""
+    ctx, _, _, small, *_ = setup
+    sql = f"SELECT t, t - lag(t) OVER (ORDER BY t) AS gap FROM {small.result_id} WHERE ticker = 'AAPL' ORDER BY t"
+    out = call(ctx, "results_query", sql=sql)
+    assert [r["gap"] for r in out.rows] == [None, "00:01:00", "00:01:00", "00:01:00", "00:01:00"]
+    assert [c.type for c in out.columns] == ["TIMESTAMP WITH TIME ZONE", "VARCHAR"]
+    assert any(n.startswith("Interval column(s) gap are text") for n in out.notes)
+    stored = call(ctx, "results_query", sql=sql, store=True)
+    assert isinstance(stored, ResultMarker)
+    back = call(
+        ctx, "results_query", sql=f"SELECT max(epoch(CAST(gap AS INTERVAL))) AS s FROM {stored.result_id}"
+    )
+    assert back.rows == [{"s": 60.0}]
+    ns_sql = "SELECT TIMESTAMP_NS '2026-01-01 00:00:00.123456789' AS ns"
+    ns = call(ctx, "results_query", sql=ns_sql)
+    assert ns.rows == [{"ns": "2026-01-01T00:00:00.123456"}]
+    assert any("ns are cut to microseconds" in n for n in ns.notes)
+    assert isinstance(call(ctx, "results_query", sql=ns_sql, store=True), ResultMarker)

@@ -170,7 +170,7 @@ def duckdb_type(t: pa.DataType) -> str:
         return "DATE"
     if pa.types.is_time(t):
         return "TIME"
-    if pa.types.is_duration(t):
+    if pa.types.is_duration(t) or pa.types.is_interval(t):
         return "INTERVAL"
     if pa.types.is_null(t):
         return '"NULL"'

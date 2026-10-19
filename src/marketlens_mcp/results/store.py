@@ -108,6 +108,7 @@ class QueryOutcome:
     result_ids: tuple[str, ...]
     risk: OutputRisk
     renamed: tuple[tuple[str, str], ...] = ()
+    notes: tuple[str, ...] = ()
 
 
 def _whole_numbers(table: pa.Table) -> pa.Table:
@@ -160,6 +161,40 @@ def lock_down(con: duckdb.DuckDBPyConnection) -> None:
     load an extension, or change its configuration back."""
     con.execute("SET enable_external_access = false")
     con.execute("SET lock_configuration = true")
+
+
+def _plain_types(table: pa.Table, limits: StoreLimits) -> tuple[pa.Table, list[str]]:
+    """Columns that Parquet cannot store or Python cannot read, in a form both
+    can, with a note for each kind: an INTERVAL (Arrow month_day_nano) as
+    DuckDB's text of it, a TIMESTAMP_NS cut to microseconds."""
+    intervals = [i for i, f in enumerate(table.schema) if pa.types.is_interval(f.type)]
+    nanos = [i for i, f in enumerate(table.schema) if pa.types.is_timestamp(f.type) and f.type.unit == "ns"]
+    notes = []
+    if intervals:
+        names = [table.schema.field(i).name for i in intervals]
+        con = connect(limits)
+        try:
+            lock_down(con)
+            con.register("t", table.select(intervals))
+            cast = ", ".join(f"CAST({sql_ident(n)} AS VARCHAR)" for n in names)
+            text = con.execute(f"SELECT {cast} FROM t").to_arrow_table()
+        finally:
+            con.close()
+        for j, i in enumerate(intervals):
+            table = table.set_column(i, pa.field(names[j], pa.string()), text.column(j))
+        shown = ", ".join(names)
+        notes.append(
+            f"Interval column(s) {shown} are text in DuckDB's form ('1 day 02:00:00'); CAST({sql_ident(names[0])} AS "
+            f"INTERVAL) reads one back, and epoch() of that gives seconds."
+        )
+    for i in nanos:
+        field = table.schema.field(i)
+        us = pa.timestamp("us", tz=field.type.tz)
+        table = table.set_column(i, field.with_type(us), table.column(i).cast(us, safe=False))
+    if nanos:
+        shown = ", ".join(table.schema.field(i).name for i in nanos)
+        notes.append(f"Nanosecond timestamp column(s) {shown} are cut to microseconds.")
+    return table, notes
 
 
 class StoreRoot:
@@ -429,8 +464,9 @@ class FileResultStore:
             table = session.query(executed)
             risks = {session.info(rid).risk for rid in checked.result_ids}
         truncated = table.num_rows > cap
-        table, renamed = unique_names(table)
-        table = _whole_numbers(table.slice(0, cap))
+        table, renamed = unique_names(table.slice(0, cap))
+        table, notes = _plain_types(table, self.limits)
+        table = _whole_numbers(table)
         return QueryOutcome(
             table=table,
             row_count=table.num_rows,
@@ -439,6 +475,7 @@ class FileResultStore:
             result_ids=checked.result_ids,
             risk="external_text" if "external_text" in risks else "api_structured",
             renamed=tuple(renamed),
+            notes=tuple(notes),
         )
 
     # -- internals ---------------------------------------------------------------------------

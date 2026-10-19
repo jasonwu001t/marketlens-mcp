@@ -158,3 +158,9 @@ def test_unique_names_follow_duckdb_and_rows_refuse_repeated_names():
     assert arrow.table_rows(table) == [{"a": 1, "a_1": 2, "a_1_1": 3, "A_2": 4, "b": 5}]
     with pytest.raises(ValueError, match="repeated column names"):
         arrow.table_rows(answer)
+
+
+def test_duckdb_type_of_an_interval():
+    con = duckdb.connect(":memory:")
+    answer = con.execute("SELECT INTERVAL 1 HOUR AS i").to_arrow_table()
+    assert arrow.duckdb_type(answer.schema.field("i").type) == "INTERVAL"
