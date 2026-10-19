@@ -359,12 +359,17 @@ class Input:
 def _parent_value(ctx: ToolContext, info: ResultInfo) -> str | None:
     """A stored query answer over one parent whose time column it kept: the
     parent model's default value column, when it is still there with the same
-    type."""
+    type; once the parent is gone, the default value column of the model its
+    columns record (a close the answer carried from bars)."""
     if info.model != QUERY_ROW_SCHEMA_NAME or len(info.parents) != 1 or info.time_column is None:
         return None
     try:
         parent = ctx.results.info(info.parents[0])
     except ResultNotFound:
+        for c in info.columns:
+            source = BUILTIN_MODELS.get(c.source_model or "")
+            if source is not None and source.value_columns and c.name == source.value_columns[0]:
+                return c.name
         return None
     cls = BUILTIN_MODELS.get(parent.model)
     if cls is None or not cls.value_columns or parent.time_column != info.time_column:

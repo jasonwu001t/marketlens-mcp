@@ -395,3 +395,17 @@ def test_dynamic_outputs_follow_the_configured_inline_limits(tmp_path, inline_ma
     else:
         half_days = call(RESAMPLE, ctx, result_id=rid, timeframe="12h")
         assert isinstance(half_days, InlineResult) and half_days.row_count == 242
+
+
+def test_a_stored_query_keeps_its_default_value_column_after_its_parent_is_gone(real):
+    """A stored query of bars defaulted to close only while the bars result
+    was live: once it was dropped (or expired, which a parent always does
+    first), analytics_returns refused with column_required."""
+    store, ctx = real
+    (query,) = [s for s in RESULTS_SPECS if s.name == "results_query"]
+    both = put_bars(store, bars("AAPL", [100.0, 110.0, 99.0]) + bars("SPY", [400.0, 404.0, 402.0]))
+    spy = call(query, ctx, sql=f"SELECT * FROM {both} WHERE ticker = 'SPY'", store=True).result_id
+    before = call(RETURNS, ctx, result_id=spy)
+    store.drop(both)
+    after = call(RETURNS, ctx, result_id=spy)
+    assert after.rows == before.rows and after.rows[0]["price_column"] == "close"
