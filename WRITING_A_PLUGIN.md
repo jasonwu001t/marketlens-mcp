@@ -31,7 +31,7 @@ Declare an entry point in the group `marketlens.plugins` whose value is a `Plugi
 name = "marketlens-myplugin"
 version = "0.1.0"
 requires-python = ">=3.11"
-dependencies = ["marketlens-mcp>=0.1,<0.2", "httpx>=0.28.1,<1"]
+dependencies = ["marketlens-mcp>=0.2,<0.3", "httpx>=0.28.1,<1"]
 
 [project.entry-points."marketlens.plugins"]
 myplugin = "my_plugin:PLUGIN"
