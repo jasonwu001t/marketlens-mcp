@@ -91,6 +91,8 @@ http:
 SECRET_ENV = (
     "ALPACA_API_KEY",
     "ALPACA_SECRET_KEY",
+    "APCA_API_KEY_ID",  # Alpaca's own spelling of the same pair; either pair works
+    "APCA_API_SECRET_KEY",
     "MARKETLENS_HTTP_TOKEN",
     "FRED_API_KEY",
     "BEA_API_KEY",

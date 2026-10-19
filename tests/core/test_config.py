@@ -295,3 +295,13 @@ def test_effective_yaml_shows_secrets_only_as_set_or_unset(tmp_path, monkeypatch
     assert "# MARKETLENS_HTTP_TOKEN: unset" in text
     body = yaml.safe_load(text)
     assert body["results"]["inline_max_rows"] == 200
+
+
+def test_effective_yaml_shows_the_apca_spelling_of_the_alpaca_keys(monkeypatch):
+    """2026-10-19: with only APCA_API_KEY_ID and APCA_API_SECRET_KEY set, which the
+    Alpaca tools accept, config show said the keys were unset and named no other."""
+    monkeypatch.setenv("APCA_API_KEY_ID", "PKALTVALUE")
+    monkeypatch.setenv("APCA_API_SECRET_KEY", "ALTSECRETVALUE")
+    text = cfg.load_config().effective_yaml()
+    assert "PKALTVALUE" not in text and "ALTSECRETVALUE" not in text
+    assert "# APCA_API_KEY_ID: set\n# APCA_API_SECRET_KEY: set\n" in text

@@ -102,6 +102,7 @@ All notable changes to this project are documented here. The format follows [Kee
 - WRITING_A_PLUGIN.md's example `pyproject.toml` depends on `marketlens-mcp>=0.2,<0.3`: it said `>=0.1,<0.2`, which excludes this release, so a plugin copied from the guide could not be installed next to the server. A test checks that the pin admits the package's version.
 - `portfolio_locate_quotes` describes `tickers` as 1-100, the most it accepts: it inherited "(1-200)" from the shared ticker list, so a model that sent 101 to 200 tickers got `invalid_arguments`.
 - The `provider_docs_*` tools no longer list the Alpaca key variables in the README's tool table or in `doctor`: they send no key, but the Alpaca provider declared both key pairs for every one of its tools. Each Alpaca data and brokerage tool now declares them itself, so with only `provider.docs` on, `doctor` names no Alpaca key.
+- `config show` reports `APCA_API_KEY_ID` and `APCA_API_SECRET_KEY` as set or unset: with only that spelling of the Alpaca key pair set, which the Alpaca tools accept, it said `ALPACA_API_KEY` and `ALPACA_SECRET_KEY` were unset and named nothing else. The README's configuration section says either pair works.
 
 ## [0.1.0] - Unreleased
 
