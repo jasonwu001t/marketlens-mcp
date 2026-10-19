@@ -164,11 +164,17 @@ def lock_down(con: duckdb.DuckDBPyConnection) -> None:
     con.execute("SET lock_configuration = true")
 
 
+def _holds_interval(t: pa.DataType) -> bool:
+    """An interval, or a list, struct, map or union with one anywhere inside."""
+    return pa.types.is_interval(t) or any(_holds_interval(t.field(i).type) for i in range(t.num_fields))
+
+
 def _plain_types(table: pa.Table, limits: StoreLimits) -> tuple[pa.Table, list[str]]:
     """Columns that Parquet cannot store or Python cannot read, in a form both
-    can, with a note for each kind: an INTERVAL (Arrow month_day_nano) as
-    DuckDB's text of it, a TIMESTAMP_NS cut to microseconds."""
-    intervals = [i for i, f in enumerate(table.schema) if pa.types.is_interval(f.type)]
+    can, with a note for each kind: an INTERVAL (Arrow month_day_nano), or a
+    list, struct or map holding one, as DuckDB's text of it, a TIMESTAMP_NS cut
+    to microseconds."""
+    intervals = [i for i, f in enumerate(table.schema) if _holds_interval(f.type)]
     nanos = [i for i, f in enumerate(table.schema) if pa.types.is_timestamp(f.type) and f.type.unit == "ns"]
     notes = []
     if intervals:
@@ -177,6 +183,7 @@ def _plain_types(table: pa.Table, limits: StoreLimits) -> tuple[pa.Table, list[s
         try:
             lock_down(con)
             con.register("t", table.select(intervals))
+            first_type = con.execute("DESCRIBE t").fetchone()[1]
             cast = ", ".join(f"CAST({sql_ident(n)} AS VARCHAR)" for n in names)
             text = con.execute(f"SELECT {cast} FROM t").to_arrow_table()
         finally:
@@ -186,7 +193,7 @@ def _plain_types(table: pa.Table, limits: StoreLimits) -> tuple[pa.Table, list[s
         shown = ", ".join(names)
         notes.append(
             f"Interval column(s) {shown} are text in DuckDB's form ('1 day 02:00:00'); CAST({sql_ident(names[0])} AS "
-            f"INTERVAL) reads one back, and epoch() of that gives seconds."
+            f"{first_type}) reads one back, and epoch() of an interval gives seconds."
         )
     for i in nanos:
         field = table.schema.field(i)

@@ -536,6 +536,37 @@ def test_query_answers_intervals_and_nanosecond_timestamps(setup):
     assert isinstance(call(ctx, "results_query", sql=ns_sql, store=True), ResultMarker)
 
 
+def test_query_answers_intervals_inside_a_list_struct_or_map(setup):
+    """2026-10-19: only a top-level INTERVAL became text, so a list of them
+    (list(t - t0), array_agg(gap)), or one in a struct or map, still showed
+    [months, days, nanoseconds] inline and failed as internal_error stored."""
+    ctx, _, _, small, *_ = setup
+    sql = (
+        "SELECT list(t - t0 ORDER BY t) AS gaps, {'gap': INTERVAL 1 DAY} AS s, MAP {'a': INTERVAL 3 HOUR} AS m "
+        f"FROM (SELECT t, min(t) OVER () AS t0 FROM {small.result_id} WHERE ticker = 'AAPL')"
+    )
+    out = call(ctx, "results_query", sql=sql)
+    assert out.rows == [
+        {
+            "gaps": "['00:00:00', '00:01:00', '00:02:00', '00:03:00', '00:04:00']",
+            "s": "{'gap': 1 day}",
+            "m": "{a='03:00:00'}",
+        }
+    ]
+    assert [c.type for c in out.columns] == ["VARCHAR", "VARCHAR", "VARCHAR"]
+    (note,) = [n for n in out.notes if n.startswith("Interval column(s) gaps, s, m are text")]
+    assert "CAST(gaps AS INTERVAL[]) reads one back" in note
+    stored = call(ctx, "results_query", sql=sql, store=True)
+    assert isinstance(stored, ResultMarker)
+    back = call(
+        ctx,
+        "results_query",
+        sql=f"SELECT epoch(CAST(gaps AS INTERVAL[])[5]) AS s, epoch(CAST(s AS STRUCT(gap INTERVAL)).gap) AS d "
+        f"FROM {stored.result_id}",
+    )
+    assert back.rows == [{"s": 240.0, "d": 86400.0}]
+
+
 def test_csv_export_neutralises_third_party_formulas(setup):
     """A headline starting with = (or +, -, @) was written as is, so a
     spreadsheet opening the export ran it as a formula; third-party text now
