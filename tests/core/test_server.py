@@ -181,6 +181,18 @@ def test_startup_notices(tmp_path):
     assert "plugin 'ghost' not loaded: not installed" in notices
 
 
+def test_a_broken_plugin_whose_capability_is_configured_does_not_stop_the_server(tmp_path):
+    """2026-10-19: its capability, set in the config, was refused as unknown
+    (ConfigError, exit 2), so the plugin's own error was never shown."""
+    text = "plugins:\n  enabled: [raiser, example]\ncapabilities:\n  raiser: true\n  example: true\n"
+    rt = runtime(tmp_path, text, eps=[EP("raiser", ex.RAISES), EP("example", ex.PLUGIN)])
+    assert server.startup_notices(rt) == [
+        "plugin 'raiser' not loaded: register() raised RuntimeError: boom while registering",
+        "capability 'raiser' in the config skipped: no loaded plugin declares it (not loaded: 'raiser')",
+    ]
+    assert rt.policy.is_enabled("example") and "raiser" not in rt.policy.enabled
+
+
 def test_tools_are_grouped_into_one_sub_server_per_capability(tmp_path):
     rt = runtime(tmp_path)
     mcp = server.build_server(rt)

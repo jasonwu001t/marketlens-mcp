@@ -259,6 +259,16 @@ def test_doctor_reports_a_broken_plugin(capsys, tmp_path):
     assert "plugin 'ghost' not loaded: not installed" in capsys.readouterr().out
 
 
+def test_a_missing_plugin_whose_capability_is_configured_is_reported_not_fatal(capsys, tmp_path):
+    write_config(tmp_path, "plugins:\n  enabled: [ghost]\ncapabilities:\n  ghost_data: true\n")
+    assert main("plugins") == 0
+    assert "error: not installed" in capsys.readouterr().out
+    assert main("doctor") == 1
+    out = capsys.readouterr().out
+    assert "config: ok" in out and "plugin 'ghost' not loaded: not installed" in out
+    assert "capability 'ghost_data' in the config skipped" in out
+
+
 def test_doctor_network_uses_one_clock_call(capsys, monkeypatch):
     calls = []
 

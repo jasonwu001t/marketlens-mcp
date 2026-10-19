@@ -37,7 +37,7 @@ dependencies = ["marketlens-mcp>=0.1,<0.2", "httpx>=0.28.1,<1"]
 myplugin = "my_plugin:PLUGIN"
 ```
 
-The server discovers entry points at start but imports a plugin only when the owner lists it in `plugins.enabled`. `register` is called once with a staging registry; if it raises, or anything it registered fails validation, nothing from the plugin is kept, the server starts without it, and `marketlens-mcp plugins` shows the reason.
+The server discovers entry points at start but imports a plugin only when the owner lists it in `plugins.enabled`. `register` is called once with a staging registry; if it raises, or anything it registered fails validation, nothing from the plugin is kept, the server starts without it (a capability of it set in the config is skipped with a notice), and `marketlens-mcp plugins` shows the reason.
 
 ## A complete example
 
