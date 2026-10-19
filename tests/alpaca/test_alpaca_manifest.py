@@ -218,19 +218,25 @@ KEY_INPUTS = {
     "provider_docs_get_endpoint": {"method", "path", "api"},
 }
 EXTERNAL_TEXT = {"news_search", *(n for n in TABLE if n.startswith("provider_docs_"))}
-ALPACA_ENV = ("ALPACA_API_KEY", "ALPACA_SECRET_KEY")
+ALPACA_ENV = ("ALPACA_API_KEY", "ALPACA_SECRET_KEY", "APCA_API_KEY_ID", "APCA_API_SECRET_KEY")
 GIT = shutil.which("git") or "git"
 
 
 def test_plugin_info():
     assert PLUGIN.name == "alpaca"
     assert PLUGIN.api_version == PLUGIN_API_VERSION
-    assert set(PLUGIN.env) == {
-        "ALPACA_API_KEY",
-        "ALPACA_SECRET_KEY",
-        "APCA_API_KEY_ID",
-        "APCA_API_SECRET_KEY",
-    }
+
+
+def test_only_the_tools_that_send_the_keys_declare_them():
+    """2026-10-19: the plugin-wide env gave the provider_docs_* tools, which send no
+    key, both Alpaca key pairs in the README's tool table and in doctor."""
+    from marketlens_mcp import readme, registry
+
+    cat = registry.build_catalog(readme.default_config(), discover=list)
+    alpaca = {name: e.env for name, e in cat.tools.items() if e.plugin == "builtin:alpaca"}
+    assert sorted(alpaca) == sorted(TABLE)
+    for name, env in alpaca.items():
+        assert env == (() if name.startswith("provider_docs_") else ALPACA_ENV), name
 
 
 def test_exactly_the_contract_tools_are_registered(specs):

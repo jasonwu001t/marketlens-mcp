@@ -17,7 +17,8 @@ from marketlens_schema import BUILTIN_MODELS, QUERY_ROW_SCHEMA_NAME
 
 from .plugin_api import CAPABILITY_ID_RE, TOOL_NAME_MAX, TOOL_NAME_RE
 
-ALPACA_ENV = ("ALPACA_API_KEY", "ALPACA_SECRET_KEY")
+#: Either spelling of Alpaca's key pair, as the built-in tools declare it.
+ALPACA_ENV = ("ALPACA_API_KEY", "ALPACA_SECRET_KEY", "APCA_API_KEY_ID", "APCA_API_SECRET_KEY")
 SPECS_DIR = pathlib.Path("src/marketlens_mcp/providers/alpaca/specs")
 
 

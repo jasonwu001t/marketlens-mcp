@@ -101,6 +101,7 @@ All notable changes to this project are documented here. The format follows [Kee
 - A plugin named in `plugins.enabled` that fails to load no longer stops the server when the config sets its capability (`capabilities: {myvendor_data: true}`, as the README shows): the capability was refused as unknown, so the server exited with code 2 and `marketlens-mcp plugins` failed with the same refusal instead of showing why the plugin did not load. While such a plugin is missing, a configured capability nothing declares is skipped with a start-up notice naming the plugins that did not load; with every listed plugin loaded, an unknown capability is still refused.
 - WRITING_A_PLUGIN.md's example `pyproject.toml` depends on `marketlens-mcp>=0.2,<0.3`: it said `>=0.1,<0.2`, which excludes this release, so a plugin copied from the guide could not be installed next to the server. A test checks that the pin admits the package's version.
 - `portfolio_locate_quotes` describes `tickers` as 1-100, the most it accepts: it inherited "(1-200)" from the shared ticker list, so a model that sent 101 to 200 tickers got `invalid_arguments`.
+- The `provider_docs_*` tools no longer list the Alpaca key variables in the README's tool table or in `doctor`: they send no key, but the Alpaca provider declared both key pairs for every one of its tools. Each Alpaca data and brokerage tool now declares them itself, so with only `provider.docs` on, `doctor` names no Alpaca key.
 
 ## [0.1.0] - Unreleased
 

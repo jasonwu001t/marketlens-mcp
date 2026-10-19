@@ -76,7 +76,7 @@ def test_alpaca_tool_from_an_operation(checkout, capsys):
     assert spec.route == "GET /v2/stocks/auctions" and spec.upstream_operations == ("StockAuctions",)
     assert spec.output_model is BUILTIN_MODELS["marketlens.Trade"]
     assert spec.golden_test == "tests/alpaca/test_market_auctions.py"
-    assert spec.env == ("ALPACA_API_KEY", "ALPACA_SECRET_KEY")
+    assert spec.env == ("ALPACA_API_KEY", "ALPACA_SECRET_KEY", "APCA_API_KEY_ID", "APCA_API_SECRET_KEY")
     manifest.validate_spec(spec, capabilities={"market"}, models=BUILTIN_MODELS)
 
 

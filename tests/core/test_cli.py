@@ -253,6 +253,16 @@ def test_doctor_reads_the_alpaca_key_pairs_as_one_credential(env, expected):
     assert cli._env_lines(sorted(names), env) == expected
 
 
+def test_doctor_names_no_alpaca_key_for_the_documentation_tools(capsys, tmp_path):
+    """2026-10-19: the provider_docs_* tools, which send no key, listed both Alpaca pairs."""
+    off = ("market", "reference", "news", "macro", "filings", "fed_treasury", "holidays", "calendars")
+    caps = "".join(f"  {cap}: false\n" for cap in off)
+    write_config(tmp_path, f"capabilities:\n{caps}  provider.docs: true\n")
+    assert main("doctor") == 0
+    out = capsys.readouterr().out
+    assert "ALPACA" not in out and "APCA" not in out
+
+
 def test_doctor_reports_a_broken_plugin(capsys, tmp_path):
     write_config(tmp_path, "plugins:\n  enabled: [ghost]\n")
     assert main("doctor") == 1
