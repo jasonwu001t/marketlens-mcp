@@ -26,7 +26,11 @@ NYFED = r"markets\.newyorkfed\.org/api/rates/all/search\.json"
 
 # --- D1 ------------------------------------------------------------------------------------------
 
-D1 = "The data tools need the marketlens-data package: install marketlens-mcp[data] (Python 3.13 or later)."
+# 2026-10-19: it said "install marketlens-mcp[data]", which cannot work before both packages are on PyPI.
+D1 = (
+    "The data tools need the marketlens-data package: install it beside marketlens-mcp (Python 3.13 or "
+    "later; see the README's Install section)."
+)
 
 
 def test_d1_when_omni_cannot_be_imported(tmp_path, monkeypatch):
