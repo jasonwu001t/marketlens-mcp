@@ -136,6 +136,34 @@ def test_the_scaffold_passes_make_lint_as_written(checkout, capsys, argv, comman
             assert result.returncode == 0, f"{command} {path.name}: {result.stdout}{result.stderr}"
 
 
+def test_an_operation_that_has_a_fixture_keeps_it(checkout, capsys):
+    """2026-10-19: once the fixture was named by its operation, a new tool over
+    an operation that already had one (Clock, Account, StockSnapshots, ...) was
+    refused outright: the scaffold would not overwrite <operationId>.json, so it
+    wrote nothing."""
+    fixtures = checkout / "tests/alpaca/fixtures"
+    fixtures.mkdir(parents=True)
+    (fixtures / "StockAuctions.json").write_text('{"auctions": {}}\n', encoding="utf-8")
+    argv = [
+        "market_auctions",
+        "--capability",
+        "market",
+        "--provider",
+        "alpaca",
+        "--operation",
+        "StockAuctions",
+    ]
+    assert cli.main(["add-capability", *argv]) == 0
+    assert (fixtures / "StockAuctions.json").read_text(encoding="utf-8") == '{"auctions": {}}\n'
+    test = checkout / "tests/alpaca/test_market_auctions.py"
+    assert 'FIXTURE = HERE / "fixtures" / "StockAuctions.json"' in test.read_text(encoding="utf-8")
+    assert (checkout / "src/marketlens_mcp/providers/alpaca/tools/market_auctions.py").is_file()
+    assert (checkout / "tests/alpaca/golden/market_auctions.json").is_file()
+    out = capsys.readouterr().out
+    assert "implement the handler, fill the golden file (the test reads the operation's fixture, which" in out
+    assert "reuse it, or add <operationId>__<case>.json for a case of its own)" in out
+
+
 def test_refuses_to_overwrite(checkout, capsys):
     args = ["add-capability", "market_auctions", "--capability", "market", "--provider", "alpaca"]
     assert cli.main(args) == 0

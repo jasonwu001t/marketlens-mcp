@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import pathlib
 import re
+from collections.abc import Sequence
 
 from marketlens_schema import BUILTIN_MODELS, QUERY_ROW_SCHEMA_NAME
 
@@ -161,7 +162,8 @@ def add_capability(
     cwd: pathlib.Path | None = None,
 ) -> list[pathlib.Path]:
     """Write the skeleton; return the written paths (relative to the target
-    root). Raises ScaffoldError with a readable reason."""
+    root). An Alpaca operation's fixture that is already there is left as it
+    is, and not among them. Raises ScaffoldError with a readable reason."""
     here = pathlib.Path.cwd() if cwd is None else cwd
     if not TOOL_NAME_RE.match(name):
         raise ScaffoldError(
@@ -213,6 +215,7 @@ def add_capability(
     alpaca_fixture = builtin and provider == "alpaca"
     fixture = operation if alpaca_fixture and operation else name
     fixture_text = "{}\n" if alpaca_fixture else json.dumps({"_synthetic": True}) + "\n"
+    fixture_rel = tests_rel / "fixtures" / f"{fixture}.json"
     files = {
         tool_rel: _tool_module(
             name=name,
@@ -225,9 +228,12 @@ def add_capability(
             builtin_checkout=builtin,
         ),
         tests_rel / f"test_{name}.py": _test_module(name, fixture),
-        tests_rel / "fixtures" / f"{fixture}.json": fixture_text,
+        fixture_rel: fixture_text,
         tests_rel / "golden" / f"{name}.json": "{}\n",
     }
+    if alpaca_fixture and operation and (base / fixture_rel).exists():
+        # The operation's own fixture, which another tool's test reads: the new test reads it too.
+        del files[fixture_rel]
     for rel in files:
         if (base / rel).exists():
             raise ScaffoldError(f"{rel.as_posix()} already exists; the scaffold never overwrites")
@@ -238,7 +244,14 @@ def add_capability(
     return list(files)
 
 
-def next_steps(name: str, provider: str, package: str | None) -> str:
+def next_steps(name: str, provider: str, package: str | None, written: Sequence[pathlib.Path] = ()) -> str:
+    """What to do after ``add_capability``, given the paths it wrote."""
+    fill = "fill the fixture and golden file"
+    if written and not any(p.parent.name == "fixtures" for p in written):
+        fill = (
+            "fill the golden file (the test reads the operation's fixture, which was already in "
+            "tests/alpaca/fixtures/: reuse it, or add <operationId>__<case>.json for a case of its own)"
+        )
     if package is not None:
         init = f"src/{package}/tools/__init__.py"
     else:
@@ -247,7 +260,4 @@ def next_steps(name: str, provider: str, package: str | None) -> str:
             + ("providers/alpaca" if provider == "alpaca" else "analytics")
             + "/tools/__init__.py"
         )
-    return (
-        f"Add '{name}' to MODULES in {init}, implement the handler, fill the fixture and golden file, then run "
-        "make test and make readme."
-    )
+    return f"Add '{name}' to MODULES in {init}, implement the handler, {fill}, then run make test and make readme."

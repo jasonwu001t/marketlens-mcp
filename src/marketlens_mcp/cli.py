@@ -485,7 +485,7 @@ def cmd_results(args: argparse.Namespace) -> int:
 def cmd_add_capability(args: argparse.Namespace) -> int:
     from .scaffold import add_capability, next_steps
 
-    add_capability(
+    written = add_capability(
         args.name,
         capability=args.capability,
         provider=args.provider,
@@ -494,7 +494,7 @@ def cmd_add_capability(args: argparse.Namespace) -> int:
         package=args.package,
         root=args.root,
     )
-    print(next_steps(args.name, args.provider, args.package))
+    print(next_steps(args.name, args.provider, args.package, written))
     return 0
 
 
