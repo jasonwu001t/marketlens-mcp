@@ -12,6 +12,7 @@ import secrets
 from typing import Literal
 
 import pyarrow as pa
+import pyarrow.compute as pc
 import pyarrow.csv as pacsv
 import pyarrow.parquet as pq
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -316,8 +317,16 @@ class ExportArgs(BaseModel):
         return v
 
 
-def _csv_ready(table: pa.Table) -> pa.Table:
-    cols = []
+#: A text cell starting with one of these is run as a formula by a spreadsheet
+#: (OWASP's CSV injection), so third-party text gets a leading ' in a CSV.
+FORMULA_START = r"^[=+\-@\t\r]"
+
+
+def _csv_ready(table: pa.Table, *, neutralise: bool = False) -> tuple[pa.Table, int]:
+    """The table for a CSV file, and how many text cells were neutralised:
+    nested values as JSON, and with ``neutralise`` a text cell that a
+    spreadsheet would run as a formula prefixed with '."""
+    cols, neutralised = [], 0
     for col in table.columns:
         t = col.type
         if pa.types.is_map(t) or pa.types.is_list(t) or pa.types.is_struct(t) or pa.types.is_large_list(t):
@@ -328,8 +337,12 @@ def _csv_ready(table: pa.Table) -> pa.Table:
                 ],
                 pa.string(),
             )
+        elif neutralise and (pa.types.is_string(t) or pa.types.is_large_string(t)):
+            formula = pc.fill_null(pc.match_substring_regex(col, FORMULA_START), False)
+            neutralised += pc.sum(formula).as_py() or 0
+            col = pc.if_else(formula, pc.binary_join_element_wise("'", col, ""), col)
         cols.append(col)
-    return pa.table(cols, names=table.column_names)
+    return pa.table(cols, names=table.column_names), neutralised
 
 
 async def results_export(ctx: ToolContext, args: ExportArgs) -> ToolOutput:
@@ -361,9 +374,17 @@ async def results_export(ctx: ToolContext, args: ExportArgs) -> ToolOutput:
         )
     table = store.read(args.result_id, limit=info.row_count)
     tmp = folder / f".{name}.{secrets.token_hex(4)}.tmp"
+    notes = []
     try:
         if args.format == "csv":
-            pacsv.write_csv(_csv_ready(table), tmp)
+            ready, neutralised = _csv_ready(table, neutralise=info.risk == "external_text")
+            pacsv.write_csv(ready, tmp)
+            if neutralised:
+                notes.append(
+                    f"{neutralised} third-party text cell(s) began with =, +, -, @, a tab or a carriage return and "
+                    "were written with a leading ' so that a spreadsheet shows them as text instead of running "
+                    "them as formulas."
+                )
         else:
             pq.write_table(table, tmp, compression="zstd")
         if args.overwrite:
@@ -400,6 +421,7 @@ async def results_export(ctx: ToolContext, args: ExportArgs) -> ToolOutput:
         model=QUERY_ROW_SCHEMA_NAME,
         provenance=_provenance(ctx, "file:results_export", request, [args.result_id]),
         table=result,
+        notes=notes,
         offload="never",
     )
 
