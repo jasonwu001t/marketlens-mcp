@@ -469,3 +469,41 @@ def test_query_stored_for_size_says_which_limit_and_the_description_names_the_li
         "decimals come back as strings",
     ):
         assert words in text
+
+
+def test_query_keeps_every_column_of_a_join_that_repeats_a_name(setup):
+    """a.close, b.close came back as one close holding b's value inline, and
+    with store=true failed as internal_error: a repeated name is renamed the
+    way DuckDB names it (close_1), with a note."""
+    ctx, _, _, small, *_ = setup
+    rid = small.result_id
+    sql = (
+        f"SELECT a.t, a.close, b.close FROM {rid} a JOIN {rid} b ON a.t = b.t "
+        f"WHERE a.ticker = 'AAPL' AND b.ticker = 'MSFT' ORDER BY a.t LIMIT 2"
+    )
+    out = call(ctx, "results_query", sql=sql)
+    assert isinstance(out, InlineResult)
+    assert [c.name for c in out.columns] == ["t", "close", "close_1"]
+    assert [(r["close"], r["close_1"]) for r in out.rows] == [
+        (pytest.approx(100.1), pytest.approx(110.1)),
+        (pytest.approx(100.11), pytest.approx(110.11)),
+    ]
+    assert any(
+        n.startswith("Repeated column names were renamed") and "close -> close_1" in n for n in out.notes
+    )
+    stored = call(ctx, "results_query", sql=sql, store=True)
+    assert isinstance(stored, ResultMarker)
+    assert [c.name for c in stored.columns] == ["t", "close", "close_1"]
+    star = call(
+        ctx, "results_query", sql=f"SELECT * FROM {rid} a JOIN {rid} b ON a.t = b.t AND a.ticker = b.ticker"
+    )
+    names = [c.name for c in star.columns]
+    assert len(names) == 26 and len(set(names)) == 26
+    assert all(set(names) - set(row) <= {"absent"} for row in star.rows)
+
+
+def test_sample_of_a_repeated_column_shows_it_once(setup):
+    ctx, _, bars, *_ = setup
+    out = call(ctx, "results_sample", result_id=bars.result_id, n=2, columns=["close", "close"])
+    assert [c.name for c in out.columns] == ["close"]
+    assert all(set(row) == {"close"} for row in out.rows)

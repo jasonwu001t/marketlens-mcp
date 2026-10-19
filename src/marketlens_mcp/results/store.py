@@ -48,7 +48,14 @@ from ..results_api import (
 )
 from . import evict as _evict
 from . import guard
-from .arrow import column_infos, column_infos_for, column_infos_from_schema, json_safe, sql_ident
+from .arrow import (
+    column_infos,
+    column_infos_for,
+    column_infos_from_schema,
+    json_safe,
+    sql_ident,
+    unique_names,
+)
 from .evict import StoreLockTimeout
 from .marker import GROUPS_SAMPLE, PREVIEW_ROWS, build_marker, truncate_strings, with_null_reasons
 
@@ -100,6 +107,7 @@ class QueryOutcome:
     executed_sql: str
     result_ids: tuple[str, ...]
     risk: OutputRisk
+    renamed: tuple[tuple[str, str], ...] = ()
 
 
 def _whole_numbers(table: pa.Table) -> pa.Table:
@@ -421,6 +429,7 @@ class FileResultStore:
             table = session.query(executed)
             risks = {session.info(rid).risk for rid in checked.result_ids}
         truncated = table.num_rows > cap
+        table, renamed = unique_names(table)
         table = _whole_numbers(table.slice(0, cap))
         return QueryOutcome(
             table=table,
@@ -429,6 +438,7 @@ class FileResultStore:
             executed_sql=executed,
             result_ids=checked.result_ids,
             risk="external_text" if "external_text" in risks else "api_structured",
+            renamed=tuple(renamed),
         )
 
     # -- internals ---------------------------------------------------------------------------

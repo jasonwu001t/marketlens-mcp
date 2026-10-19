@@ -103,6 +103,12 @@ async def results_query(ctx: ToolContext, args: QueryArgs) -> ToolOutput:
     out = store.query(args.sql, max_rows=max_rows, store=args.store)
     cap = limits.fetch_max_rows if args.store else max_rows
     notes = [f"Executed: {out.executed_sql}"]
+    if out.renamed:
+        notes.append(
+            "Repeated column names were renamed (the later column of each name): "
+            + ", ".join(f"{old} -> {new}" for old, new in out.renamed)
+            + ". Name them with AS to choose the names."
+        )
     if max_rows < args.max_rows and not args.store:
         notes.append(
             f"max_rows {args.max_rows} is above results.query_max_rows ({limits.query_max_rows}), so it was lowered "
@@ -193,7 +199,7 @@ async def results_sample(ctx: ToolContext, args: SampleArgs) -> ToolOutput:
                 "unknown_column",
                 f"{', '.join(repr(u) for u in unknown)} not in {args.result_id}. Its columns: {', '.join(names)}.",
             )
-    chosen = args.columns or names
+    chosen = list(dict.fromkeys(args.columns or names))
     cols = ", ".join(sql_ident(c) for c in chosen)
     rid = args.result_id
     t = sql_ident(info.time_column) if info.time_column else None
