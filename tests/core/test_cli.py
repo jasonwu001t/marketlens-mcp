@@ -297,6 +297,32 @@ def test_doctor_network_uses_one_clock_call(capsys, monkeypatch):
     assert "PKzz9fakekeyvalue" not in out and "zz9fakesecretvalue" not in out
 
 
+def test_doctor_network_takes_the_apca_spelling_of_the_key_pair(capsys, monkeypatch):
+    """2026-10-19: with only APCA_API_KEY_ID and APCA_API_SECRET_KEY set, which every
+    Alpaca tool accepts, --network skipped the clock call and counted a failure."""
+    calls = []
+
+    def handler(request):
+        calls.append(request)
+        return httpx.Response(200, json={"is_open": False, "timestamp": "2026-10-04T12:00:00-04:00"})
+
+    monkeypatch.setenv("APCA_API_KEY_ID", "PKzz9altkeyvalue")
+    monkeypatch.setenv("APCA_API_SECRET_KEY", "zz9altsecretvalue")
+    monkeypatch.setattr(cli, "HTTP_TRANSPORT", httpx.MockTransport(handler))
+    assert main("doctor", "--network") == 0
+    assert [r.headers["APCA-API-KEY-ID"] for r in calls] == ["PKzz9altkeyvalue"]
+    out = capsys.readouterr().out
+    assert "Alpaca clock: ok" in out and "zz9altsecretvalue" not in out
+
+
+def test_doctor_network_without_keys_names_both_spellings(capsys):
+    assert main("doctor", "--network") == 1
+    assert (
+        "Alpaca clock: skipped (neither key pair is set: ALPACA_API_KEY and ALPACA_SECRET_KEY or "
+        "APCA_API_KEY_ID and APCA_API_SECRET_KEY)"
+    ) in capsys.readouterr().out
+
+
 def test_doctor_network_failure(capsys, monkeypatch):
     monkeypatch.setenv("ALPACA_API_KEY", "PKTEST")
     monkeypatch.setenv("ALPACA_SECRET_KEY", "SECRET")

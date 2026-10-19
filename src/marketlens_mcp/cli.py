@@ -273,9 +273,14 @@ def guard_self_test() -> list[str]:
 def _network_check(rt) -> tuple[bool, str]:
     import httpx
 
-    key, secret = os.environ.get("ALPACA_API_KEY"), os.environ.get("ALPACA_SECRET_KEY")
+    from .providers.alpaca.client import KEY_NAMES
+
+    # The first complete pair, as the Alpaca client takes it.
+    pairs = [(os.environ.get(k), os.environ.get(s)) for k, s in KEY_NAMES]
+    key, secret = next(((k, s) for k, s in pairs if k and s), (None, None))
     if not key or not secret:
-        return False, "Alpaca clock: skipped (ALPACA_API_KEY and ALPACA_SECRET_KEY are not both set)"
+        spellings = " or ".join(" and ".join(pair) for pair in KEY_NAMES)
+        return False, f"Alpaca clock: skipped (neither key pair is set: {spellings})"
     settings = rt.config.provider_settings("alpaca")
     base = settings.get("trading_url") or (
         "https://api.alpaca.markets"
