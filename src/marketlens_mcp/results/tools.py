@@ -95,32 +95,82 @@ class QueryArgs(BaseModel):
     )
 
 
-def _leaves(sql: str, name: str, schema: dict, *, plain: bool = False) -> set[tuple[str, str]] | None:
+Equal = dict[tuple[str, str], frozenset[tuple[str, str]]]
+
+
+def _leaves(
+    sql: str, name: str, schema: dict, *, plain: bool = False, equal: Equal | None = None
+) -> set[tuple[str, str]] | None:
     """The (result_id, column) pairs the answer's column ``name`` is taken
     from, by its lineage (sqlglot's, through subqueries, CTEs and set
     operations), when it is one of them passed through, or max() (an
     aggregate) or greatest() of them, never earlier than any (``plain``: only
-    passed through); None when the query computes it otherwise (min() of a
-    week's, a time_bucket of it) or sqlglot cannot trace it."""
+    passed through), or, given the columns the query makes ``equal``
+    (``_equal``), coalesce() of equal ones (the t of a join USING (t)); None
+    when the query computes it otherwise (min() of a week's, a time_bucket of
+    it) or sqlglot cannot trace it."""
     try:
         node = lineage(name, sql, schema=schema, dialect="duckdb")
     except Exception:  # a query sqlglot cannot trace keeps no role; the answer is stored all the same
         return None
-    leaves = set()
-    for n in node.walk():
-        if not n.downstream:
-            if not isinstance(n.source, exp.Table):
-                return None
-            leaves.add((n.source.name.lower(), exp.to_column(n.name, dialect="duckdb").name.lower()))
-            continue
-        e = n.expression.unalias()
-        if not isinstance(e, exp.Column) and not (
-            not plain
-            and isinstance(e, exp.Max | exp.Greatest)
-            and all(isinstance(a, exp.Column) for a in e.iter_expressions())
-        ):
+    return _traced(node, plain, equal)
+
+
+def _traced(n, plain: bool, equal: Equal | None) -> set[tuple[str, str]] | None:
+    """``_leaves`` of one node of a column's lineage."""
+    if not n.downstream:
+        if not isinstance(n.source, exp.Table):
             return None
+        return {(n.source.name.lower(), exp.to_column(n.name, dialect="duckdb").name.lower())}
+    e = n.expression.unalias()
+    merged = equal is not None and isinstance(e, exp.Coalesce)
+    if not isinstance(e, exp.Column) and not (
+        (merged or (not plain and isinstance(e, exp.Max | exp.Greatest)))
+        and all(isinstance(a, exp.Column) for a in e.iter_expressions())
+    ):
+        return None
+    leaves: set[tuple[str, str]] = set()
+    for d in n.downstream:
+        found = _traced(d, plain, equal)
+        if found is None:
+            return None
+        leaves |= found
+    if merged and len({(equal or {}).get(x, frozenset({x})) for x in leaves}) > 1:
+        return None
     return leaves
+
+
+def _equal(sql: str, schema: dict) -> Equal:
+    """The columns of the results a query reads that its joins or filters
+    make equal row for row (ON a.t = b.t, USING (t), WHERE a.t = b.t, between
+    results read in the same SELECT, not through a subquery or CTE), each
+    mapped to its class of equal columns; empty when sqlglot cannot trace it."""
+    try:
+        scopes = traverse_scope(
+            qualify(sqlglot.parse_one(sql, dialect="duckdb"), schema=schema, dialect="duckdb")
+        )
+    except Exception:  # nothing is taken as equal; the answer is stored all the same
+        return {}
+    classes: Equal = {}
+    for scope in scopes:
+        tables = {alias: s.name.lower() for alias, s in scope.sources.items() if isinstance(s, exp.Table)}
+        where = scope.expression.args.get("where")
+        conds = [j.args.get("on") for j in scope.expression.args.get("joins") or []]
+        conds.append(where.this if where is not None else None)
+        for cond in conds:
+            for c in cond.flatten() if isinstance(cond, exp.And) else [cond]:
+                if not (
+                    isinstance(c, exp.EQ)
+                    and isinstance(c.this, exp.Column)
+                    and isinstance(c.expression, exp.Column)
+                    and c.this.table in tables
+                    and c.expression.table in tables
+                ):
+                    continue
+                pair = [(tables[x.table], x.name.lower()) for x in (c.this, c.expression)]
+                joined = frozenset().union(*(classes.get(x, frozenset({x})) for x in pair))
+                classes.update(dict.fromkeys(joined, joined))
+    return classes
 
 
 def _reads(source: exp.Table | Scope) -> set[str]:
@@ -242,16 +292,22 @@ def _stamps(columns: list[tuple[str, str]]) -> list[str]:
     return [name for name, typ in columns if typ.startswith("TIMESTAMP")]
 
 
+def _clocks_of(info: ResultInfo) -> set[str]:
+    """The columns of a result read holding when each row became known: with
+    role available, or named so (``CLOCK_NAMES``) without it."""
+    stamps = _stamps([(c.name, c.type) for c in info.columns])
+    return {
+        c.name for c in info.columns if c.role == "available" or (c.name in CLOCK_NAMES and c.name in stamps)
+    }
+
+
 def _dates(info: ResultInfo) -> set[str]:
     """The columns dating each row of a result read: its time column (as
     analytics tools take it, ``implied_time`` for one that records none) and
     its clocks (when each row became known); empty for undated rows."""
     stamps = _stamps([(c.name, c.type) for c in info.columns])
     time = info.time_column or (None if info.model in BUILTIN_MODELS else implied_time(stamps))
-    clocks = {
-        c.name for c in info.columns if c.role == "available" or (c.name in CLOCK_NAMES and c.name in stamps)
-    }
-    return clocks | ({time} if time else set())
+    return _clocks_of(info) | ({time} if time else set())
 
 
 def _rows_of(
@@ -262,27 +318,63 @@ def _rows_of(
     (``RowsOf.shown``: analytics_align refuses the answer unless
     match_on=time) when nothing shows when its rows became known: it reads
     rows known only after their time (``known_late``: bars, snapshots, a
-    bucket), or dated rows from which it computes its ``time`` column (a
-    bucket dated at its start, a cast), or none (a full-sample average, a list
-    of tickers), or rows from others (``_from_others``: lead(), a z-score).
-    None otherwise: its rows are dated as the rows it read (a filter, quotes
-    joined to reference codes), matched on its time column, or from a clock
-    it keeps (as a lower bound)."""
+    bucket), or a result read shows not when its rows did by the answer's
+    ``time`` column or the clock it keeps (``_hidden``). None otherwise: its
+    rows are dated as the rows it read (a filter, quotes joined to reference
+    codes), matched on its time column, or from a clock it passes through (a
+    lower bound, when it reads a result that does not show when its rows
+    became known)."""
     passed = _passed(store, out)
     if passed is not None or roles:
         return passed
     parents = [store.info(rid) for rid in sorted(out.result_ids)]
     src = next((x for p in parents if (x := source_rows(p)) is not None and known_late(x)), None)
-    dated = {p.result_id: p for p in parents if _dates(p)}
-    if src is None and dated:
-        sql = out.executed_sql
-        schema = {p.result_id: {c.name: c.type for c in p.columns} for p in parents}
-        dates = {(rid, c.lower()) for rid, p in dated.items() for c in _dates(p)}
-        leaves = _leaves(sql, time, schema) if time is not None else None
-        if leaves is None or not leaves <= dates or _from_others(sql, schema, set(dated)) is not None:
-            p = next(iter(dated.values()))
-            src = source_rows(p) or RowsOf(model=p.model, fetched_at=p.provenance.fetched_at)
+    if src is None and (p := _hidden(out, parents, time)) is not None:
+        src = source_rows(p) or RowsOf(model=p.model, fetched_at=p.provenance.fetched_at)
     return None if src is None else src.model_copy(update={"span": None, "lag_seconds": 0, "shown": False})
+
+
+def _hidden(out: QueryOutcome, parents: list[ResultInfo], time: str | None) -> ResultInfo | None:
+    """The result read that a stored answer keeping no role shows not when
+    its rows became known, by its ``time`` column and the clock analytics_align
+    would match it from (its first knowledge_time or ingested_at without the
+    role): an analytics output with no time column (a correlation, a beta or
+    drawdown summary: the whole sample's, whatever timestamp it is dated by
+    or joined to); else the first dated result read (``_dates``) when the
+    answer computes its time column from them or has none (a bucket dated at
+    its start, a full-sample mean), computes rows from others
+    (``_from_others``: lead(), a z-score) or computes the clock (a date_trunc
+    or min() of it, or another time renamed so: earlier than when its rows
+    became known); else a dated result whose clock neither column is built
+    from (a knowledge_time left out or renamed) or, with none, whose time
+    neither is equal to by the query's joins (``_equal``: trades joined to
+    the quotes 15 seconds later). None otherwise."""
+    summary = next((p for p in parents if p.parents and p.tool != "results_query" and not _dates(p)), None)
+    if summary is not None:
+        return summary
+    dated = [p for p in parents if _dates(p)]
+    if not dated:
+        return None
+    sql = out.executed_sql
+    schema = {p.result_id: {c.name: c.type for c in p.columns} for p in parents}
+    dates = {(p.result_id, c.lower()) for p in dated for c in _dates(p)}
+    equal = _equal(sql, schema)
+    stamps = _stamps([(f.name, duckdb_type(f.type)) for f in out.table.schema])
+    clock = next((n for n in stamps if n in CLOCK_NAMES and n != time), None)
+    leaves = _leaves(sql, time, schema, equal=equal) if time is not None else None
+    ticks = _leaves(sql, clock, schema) if clock is not None else set()
+    if (
+        leaves is None
+        or ticks is None
+        or not leaves | ticks <= dates
+        or _from_others(sql, schema, {p.result_id for p in dated}) is not None
+    ):
+        return dated[0]
+    reach = set().union(*(equal.get(x, {x}) for x in leaves | ticks))
+    return next(
+        (p for p in dated if not any((p.result_id, c.lower()) in reach for c in _clocks_of(p) or _dates(p))),
+        None,
+    )
 
 
 def _passed(store: FileResultStore, out: QueryOutcome) -> RowsOf | None:
@@ -293,9 +385,10 @@ def _passed(store: FileResultStore, out: QueryOutcome) -> RowsOf | None:
     max() of the rows'), a bar's timeframe passed through or left out (then
     recorded, when all the rows have one), and no row computed from others
     (``_from_others``); so analytics_align takes the answer's rows as known
-    when that result's are (a bar at its end). None otherwise."""
+    when that result's are (a bar at its end). Over several results, those
+    it joins row for row (``_joined``). None otherwise."""
     if len(out.result_ids) != 1:
-        return None
+        return _joined(out, [store.info(rid) for rid in sorted(out.result_ids)])
     parent = store.info(out.result_ids[0])
     cls = known_model(parent)
     period = period_rows(parent)
@@ -333,6 +426,67 @@ def _passed(store: FileResultStore, out: QueryOutcome) -> RowsOf | None:
         fetched_at=parent.provenance.fetched_at,
         adjustment=None if adjustment is None else str(adjustment),
         span=span,
+    )
+
+
+def _joined(out: QueryOutcome, parents: list[ResultInfo]) -> RowsOf | None:
+    """The rows of several results of one model of market data known at its
+    time column or at the end of its span (``known_model``: the day bars of
+    two tickers) that a stored answer joins row for row: its time column
+    passed through from them, every result's time made equal to it by the
+    join (USING (t), ON a.t = b.t), one span shared by all their rows (a
+    bar's timeframe, passed through or left out) and no row computed from
+    others (``_from_others``); each joined row covers the period its rows do
+    and is known when they all are (a spread of two closes at the day's end).
+    None otherwise."""
+    classes = {known_model(p) for p in parents}
+    cls = classes.pop() if len(classes) == 1 else None
+    if cls is None or cls.known_at_fetch or cls.time_column is None:
+        # Reference codes (exchanges) hold at every time: no time to join on.
+        return None
+    sql = out.executed_sql
+    rids = {p.result_id for p in parents}
+    schema = {p.result_id: {c.name: c.type for c in p.columns} for p in parents}
+    types = {f.name: duckdb_type(f.type) for f in out.table.schema}
+    time = cls.time_column
+    if any(types.get(time) != schema[rid].get(time) for rid in rids):
+        return None
+    equal = _equal(sql, schema)
+    leaves = _leaves(sql, time, schema, equal=equal)
+    ends = {(rid, time.lower()) for rid in rids}
+    if not leaves or not leaves <= ends or not ends <= set().union(*(equal.get(x, {x}) for x in leaves)):
+        return None
+    span = None
+    if cls.span_column is not None:
+        spans = set()
+        for p in parents:
+            col = next((c for c in p.columns if c.name == cls.span_column), None)
+            if col is not None and col.nulls == 0 and isinstance(col.min, str) and col.min == col.max:
+                spans.add(col.min)
+            elif col is None and p.rows_of is not None and p.rows_of.span is not None:
+                spans.add(p.rows_of.span)
+            else:
+                return None
+        if len(spans) != 1:
+            return None
+        span = spans.pop()
+        if cls.span_column in types:
+            passed = _leaves(sql, cls.span_column, schema, plain=True)
+            if not passed or not passed <= {(rid, cls.span_column.lower()) for rid in rids}:
+                return None
+            if any(types[cls.span_column] != schema[rid].get(cls.span_column) for rid, _ in passed):
+                return None
+            span = None
+    if _from_others(sql, schema, rids) is not None:
+        return None
+    srcs = [x for p in parents if (x := source_rows(p)) is not None]
+    adjusted = [x.adjustment for x in srcs if x.adjustment not in (None, "raw")]
+    return RowsOf(
+        model=cls.schema_name,
+        fetched_at=max(x.fetched_at for x in srcs),
+        adjustment=adjusted[0] if adjusted else srcs[0].adjustment,
+        span=span,
+        lag_seconds=max(x.lag_seconds for x in srcs),
     )
 
 
@@ -432,6 +586,9 @@ def _inherited(store: FileResultStore, out: QueryOutcome, roles: dict[str, str],
     if rows_of is not None:
         kept["rows_of"] = rows_of
     if len(parents) != 1:
+        if time is None and rows_of is not None and rows_of.shown:
+            # Rows of several results joined row for row (``_joined``): dated by their model's time column.
+            time = BUILTIN_MODELS[rows_of.model].time_column
         return {**kept, "time_column": time} if time else kept
     parent = parents[0]
     own = None if parent.model in DYNAMIC_MODELS else parent.model
@@ -931,8 +1088,8 @@ SPECS: tuple[ToolSpec, ...] = (
         "(24,000 bytes of JSON) or about 6,000 tokens, or store=true, is stored whole (max_rows bounds only an "
         "inline answer, fetch.max_rows (50,000) a stored one; one cut, or over a cut result, says truncated) and "
         "you get its result_id; a query of one result keeps its unchanged time and series columns, and a clock's "
-        "role passed through or max() (no window, subquery, self-join, bars, snapshots, role-less input but "
-        "quotes, trades; a top-N LIMIT is not caught), so it chains into analytics. Exact decimals come back as "
+        "role (when rows became known) passed through or max() (README: when not), so it chains into analytics. "
+        "Exact decimals come back as "
         "strings (CAST to DOUBLE); whole-number sums as numbers. Files, settings, other sessions and every write "
         "are refused.",
         "Read-only SQL over this session's results (one SELECT, forced LIMIT)",

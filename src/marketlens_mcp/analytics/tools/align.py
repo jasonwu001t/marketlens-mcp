@@ -52,8 +52,8 @@ def _unshown(info: ResultInfo) -> str:
     """Why a column named as when each row became known can lack its role."""
     if info.tool == "results_query":
         return (
-            "a query answer keeps none where it cannot show when its rows became known: its query computes the "
-            "clock, or rows from other rows, or reads a result that does not show it; results_query said why"
+            "a query answer passing it through keeps it only when every result it reads shows when its rows became "
+            "known"
         )
     if info.parents:
         return f"{info.tool} gives its outputs none"
@@ -78,12 +78,15 @@ class AlignArgs(BaseModel):
     )
     direction: Literal["backward", "forward"] = Field(
         "backward",
-        description="backward: the latest right row at or before the left time; forward: the first at or after.",
+        description="backward: the latest right row at or before the left time; forward: the first at or after. "
+        "By default a right row counts from when it became usable (match_on): a bar from its end, so bars of the "
+        "same timeframe pair with the previous bar, and forward can give a matched_t before the left time.",
     )
     tolerance: str | None = Field(
         None,
         description="Largest allowed time gap as an ISO-8601 duration (PT30S, PT5M, P1D; PT0S: the same time "
-        "only); none by default.",
+        "only), measured to when a right row became usable (match_on: a bar's end, so PT0S gives a bar that "
+        "ended at the left time); none by default.",
     )
     right_columns: list[str] | None = Field(
         None,
@@ -94,33 +97,13 @@ class AlignArgs(BaseModel):
     )
     match_on: Literal["available", "time"] = Field(
         "available",
-        description="What right rows are matched on when the right result has a column with role available "
-        "(when each row became known, e.g. a dataset's knowledge_time). available (default): point in time, "
-        "a right row is usable from the later of its time and when it became known, and each left row gets the "
-        "right row with the latest time at or before the left time among those known by then (backward), or "
-        "the first update usable at or after it (forward), so no value reaches a time before it was published "
-        "or a time before its own (a calendar row known in advance waits for its date); tolerance is measured "
-        "to when the row became usable. A note says how much older the "
-        "matches are than the latest right time by the time column; a result holding one version of each row "
-        "(its latest) has a revised row only as known from its revision, so a match can be older than the value "
-        "known then (a note says so when the result shows revisions). time: the right's time "
-        "column, which can pair a left row with a value published after it (look-ahead; a note counts such "
-        "rows). Without such a column, a knowledge_time or ingested_at column that has lost the role (a query "
-        "answer that cannot show when its rows became known) is matched on the same way, as a lower bound, and a "
-        "note says the match is not shown point in time. Fetched bars, a query answer passing them through and an "
-        "analytics output of them (a return, a resampled bucket, a window) are matched from the end of the period "
-        "each row covers, t plus its timeframe or bucket (and the lag its rows_of records when a bucket's last bar "
-        "ends later), when its values became known (time: on t, the period's start), and a note says the match is "
-        "not shown point in time when they hold prices adjusted for splits and dividends after their time "
-        "(adjustment other than raw). A snapshot (market_snapshots, options_snapshots, options_chain) is matched "
-        "from its fetch, as its values are as of then. A bucket of other rows (a dataset's resampled) is matched "
-        "from its end, with a note that its rows are not shown point in time. A result that shows neither when "
-        "its rows became known nor when their period ends (its rows_of not shown: a query's bucket dated at its "
-        "start or window over dated rows, a join of bars, returns leaving a knowledge_time out, rows aligned "
-        "forward or on time) is refused unless match_on=time. Else the right's time column is used, and a note "
-        "says the match is not shown point in time unless the right holds fetched rows known at their time "
-        "(quotes, trades; not a computed result, a plugin's rows dated by the period they describe, or orders or "
-        "news, whose fields change later).",
+        description="available (default): point in time. Each right row is matched from when it became usable: "
+        "the later of its time and its column with role available (when it became known, e.g. knowledge_time; "
+        "one passed through without the role is a lower bound, with a note), the end of the period it covers "
+        "(a bar or an analytics output of bars: t plus its timeframe), or its fetch (a snapshot). A result "
+        "showing none of these (a bucket dated at its start, a window, a knowledge_time left out or computed) "
+        "is refused. time: the time column alone, with a note counting look-ahead. README, Analytics: the "
+        "rules per source.",
     )
     store: bool = store_field()
 
@@ -305,19 +288,32 @@ def handler(ctx: ToolContext, args: AlignArgs) -> ToolOutput:
     if hidden is not None and args.match_on == "available":
         # Computed from dated rows in a way that shows neither: matched on its
         # time column (a bucket's start) it could take values known only later.
+        # A clock it was computed from and left out: keeping it is the way.
+        origin = clocked_ancestor(ctx, right.info)
+        origin = origin if origin is not None and right.column(origin[1]) is None else None
         raise refuse(
             "not_point_in_time",
             f"{TOOL}: {right.rid} was computed by {right.info.tool} from {hidden.model} rows (fetched at "
             f"{_at(hidden.fetched_at)}) in a way that shows neither when each of its rows became known nor when the "
-            "period it covers ends (a bucket dated at its start, lead() or another window, a join of bars, rows "
-            f"aligned forward, a knowledge_time left out), so matching on its time column {right.time} could pair a "
-            "left row with values known only after it. Align onto the rows it was computed from (analytics_resample "
-            f"records when each of its buckets ends), or pass match_on=time to match on {right.time} anyway, "
+            "period it covers ends (a bucket dated at its start, lead() or another window, a join of bars or of "
+            "rows of different times, a knowledge_time left out or computed, a summary's timestamp, rows aligned "
+            f"forward), so matching on its time column {right.time} could pair a left row with values known only "
+            "after it. "
+            + (
+                f"Keep {origin[1]} of {origin[0]} as it is (passed through, or its max()), or align"
+                if origin
+                else "Align"
+            )
+            + " onto the rows it was computed from (analytics_resample records when each of its buckets ends; for "
+            f"a join, align one result onto the other), or pass match_on=time to match on {right.time} anyway, "
             "look-ahead included.",
         )
-    # Else a column named as when each row became known that has lost its role
-    # (a query answer that cannot show it) is matched on the same way, the safe
-    # default, as a lower bound: the match is not called point in time.
+    # Else a column named as when each row became known that has no role (a
+    # query answer passing it through beside a result that does not show when
+    # its rows became known; an analytics output carrying it, a bucket's latest)
+    # is matched on the same way, as a lower bound: the match is not called
+    # point in time. results_query marks an answer computing it (a date_trunc
+    # of it, another time renamed so) not shown, refused above.
     avail = proven if proven is not None else (right.unmarked_clock if not ruled else None)
     unshown = unshown_known(right.info) if avail is None else None
     if avail is not None:
@@ -486,11 +482,11 @@ def handler(ctx: ToolContext, args: AlignArgs) -> ToolOutput:
         notes.append(
             f"Not shown point in time: {avail} of {right.rid} is named as when each row became known but has no "
             f"role available ({_unshown(right.info)}), so nothing shows a row was known by then. Each row was matched all the "
-            f"same from the later of its time column {right.time} and {avail}, the safe default, which keeps out "
-            f"the values {avail} shows were published after the left time"
+            f"same from the later of its time column {right.time} and {avail}, a lower bound on when it became known, "
+            f"which keeps out the values {avail} shows were published after the left time"
             + ("; the tolerance is measured to that" if args.tolerance else "")
-            + f", but a value computed from rows known later can still hold data published after it. match_on=time "
-            f"matches on {right.time} alone instead."
+            + f", but a value joined or computed with rows known later can still hold data published after it. "
+            f"match_on=time matches on {right.time} alone instead."
         )
     elif by_clock:
         how = (
@@ -627,11 +623,11 @@ SPEC = ToolSpec(
         "tolerance (ISO-8601, e.g. PT5M; PT0S: the same time) and the same `by` value (e.g. ticker; "
         "by_left/by_right if names differ). Output: the left columns, the chosen right columns (colliding names "
         "get suffix, default _right) and matched_t, the matched right row's time; unmatched right values are None. "
-        "Point in time: a right row counts from the later of its time and a column with role available (e.g. "
-        "knowledge_time) or a knowledge_time without it; a bar or an analytics output of bars from its period's "
-        "end; a snapshot from its fetch; a computed result showing neither is refused; notes say when a "
-        "match is not shown point in time (match_on=time: the time column alone, look-ahead counted). Lines up "
-        "series of different frequencies. Large outputs are stored and you get a result_id."
+        "Point in time (match_on): a right row counts from the later of its time and its column with role "
+        "available (e.g. knowledge_time); a bar or an output of bars from its end (bars of one timeframe pair with "
+        "the previous bar); a snapshot from its fetch; a result showing none of these is refused; notes say when "
+        "a match is not shown point in time. Lines up series of different frequencies. Large outputs are stored "
+        "and you get a result_id."
     ),
     readme="As-of join of two results (backward or forward, tolerance, by column; point in time on a column "
     "with role available); adds matched_t.",

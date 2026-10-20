@@ -493,10 +493,13 @@ class Input:
     def unmarked_clock(self) -> str | None:
         """Without a column with role available, a timestamp column named as
         a point-in-time clock (``knowledge_time``, ``ingested_at``) other than
-        the time column, which has lost the role (a query answer that cannot
-        show when its rows became known: its query computed the clock, or rows
-        from others, or read a computed result without the role); None
-        otherwise."""
+        the time column, which has no role: a query answer passing it through
+        (or its max()) beside a result that does not show when its rows became
+        known, an analytics output carrying it (a bucket's latest), a plugin
+        that did not mark it; a lower bound on when each row became known. A
+        query answer computing it (a date_trunc of it, another time renamed so)
+        is marked not shown by results_query, so analytics_align refuses it
+        before reading this. None otherwise."""
         if self.available is not None:
             return None
         return next(

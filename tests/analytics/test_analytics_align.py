@@ -469,17 +469,20 @@ def test_a_knowledge_time_without_the_role_is_matched_on_but_not_called_point_in
     the time-column match gave four of five rows a value published after them.
     It is matched on all the same, as a lower bound (the safe default), with a
     note that the match is not shown point in time; match_on=time counts the
-    look-ahead it shows, at least."""
+    look-ahead it shows, at least. Review of round 9: the note called it the
+    safe default; it is a lower bound, which a query answer computing the
+    clock is not (results_query marks such an answer not shown, refused)."""
     left, right = daily_left(store), known_series(store, role=False)
     out = run(SPEC, ctx, left_result_id=left, right_result_id=right, right_columns=["value"])
     assert [r["value"] for r in out.table.to_pylist()] == [None, 1.0, 2.0, 2.0, 3.0]
     assert not any(n.startswith("Point in time") for n in out.notes)
     assert (
         f"Not shown point in time: knowledge_time of {right} is named as when each row became known but has no "
-        "role available (datastore_query did not mark it), so nothing shows a row was known by then. Each row was matched all the same from the later of "
-        "its time column event_time and knowledge_time, the safe default, which keeps out the values "
-        "knowledge_time shows were published after the left time, but a value computed from rows known later can "
-        "still hold data published after it. match_on=time matches on event_time alone instead."
+        "role available (datastore_query did not mark it), so nothing shows a row was known by then. Each row was "
+        "matched all the same from the later of its time column event_time and knowledge_time, a lower bound on "
+        "when it became known, which keeps out the values knowledge_time shows were published after the left "
+        "time, but a value joined or computed with rows known later can still hold data published after it. "
+        "match_on=time matches on event_time alone instead."
     ) in out.notes
     assert "1 of 5 left rows found no right row (usable at or before their time)." in out.notes
     ahead = run(

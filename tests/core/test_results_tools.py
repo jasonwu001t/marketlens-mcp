@@ -22,7 +22,7 @@ from marketlens_mcp.plugin_api import ToolError
 from marketlens_mcp.results import tools as rt
 from marketlens_mcp.results.arrow import rows_to_table
 from marketlens_mcp.results.store import StoreLimits, StoreRoot
-from marketlens_mcp.results_api import ColumnInfo, InlineResult, ResultInfo, ResultMarker
+from marketlens_mcp.results_api import ColumnInfo, InlineResult, ResultInfo, ResultMarker, RowsOf
 from marketlens_mcp.testing import call_tool, make_context
 from marketlens_schema.market import Bar, NewsItem, StockExchange
 
@@ -223,7 +223,8 @@ def test_query_store_true_keeps_the_parents_time_series_columns_and_units(setup)
         f"SELECT a.ticker, a.t, a.close FROM {bars.result_id} a JOIN {small.result_id} b USING (ticker, t)",
     ):
         kept = store.info(call(ctx, "results_query", sql=sql, store=True).result_id)
-        assert (kept.time_column, kept.group_column) == (None, None), sql
+        # Bars joined row for row on t keep it as their time column (review of round 9), never units.
+        assert (kept.time_column, kept.group_column) == ("t" if "JOIN" in sql else None, None), sql
         assert all(c.unit is None for c in kept.columns), sql
 
 
@@ -695,13 +696,22 @@ def test_a_columns_role_survives_a_join_and_a_new_time_column_and_a_dropped_one_
     )
     assert roles(bucketed)["knowledge_time"] == "available"
     assert not any("leaves out" in n for n in joined.notes + bucketed.notes)
-    dropped = call(ctx, "results_query", sql=f"SELECT event_time, value FROM {known.result_id}", store=True)
-    assert all(r is None for r in roles(dropped).values())
-    assert (
-        f"The answer leaves out knowledge_time of {known.result_id} (role available: when each row became known), "
-        "so analytics_align matches it on its time column, which can pair a left row with a value published after "
-        "it; keep the column, with its name and type, to match point in time."
-    ) in dropped.notes
+    # Review of round 9: an answer leaving the clock out was matched on its
+    # time column; nothing shows when its rows became known, so it is refused.
+    for sql in (
+        f"SELECT event_time, value FROM {known.result_id}",
+        f"SELECT event_time, knowledge_time AS published, value FROM {known.result_id}",
+    ):
+        dropped = call(ctx, "results_query", sql=sql, store=True)
+        assert all(r is None for r in roles(dropped).values())
+        assert store.info(dropped.result_id).rows_of == RowsOf(
+            model="marketlens.QueryRow", fetched_at=known.provenance.fetched_at, shown=False
+        )
+        assert (
+            f"The answer leaves out knowledge_time of {known.result_id} (role available: when each row became "
+            "known), so analytics_align refuses the answer unless match_on=time, as nothing shows when its rows "
+            "became known; keep the column, with its name and type, to match point in time."
+        ) in dropped.notes
     inline = call(ctx, "results_query", sql=f"SELECT event_time, value FROM {known.result_id}")
     assert isinstance(inline, InlineResult) and not any("leaves out" in n for n in inline.notes)
 
@@ -715,7 +725,12 @@ def test_a_clock_the_query_computes_keeps_no_role(setup):
     that has one feeding it. Round 8: a week's bucket dated at its start
     (min(knowledge_time) beside it) shows not when its rows became known, so
     analytics_align refuses it; a clock computed beside rows dated as theirs
-    is matched on as a lower bound."""
+    is matched on as a lower bound. Review of round 9: a clock the query
+    computes is no lower bound (a date_trunc of it, an hour earlier, the
+    event time renamed so: every bar got a value published after it), nor is
+    one side's clock of a join (the other side's values may be known later):
+    refused too, also where the answer repeats the name and the computed
+    column comes first (the real clock renamed knowledge_time_1)."""
     ctx, store, *_ = setup
     known, other = _known_result(store), _known_result(store)
     k, o = known.result_id, other.result_id
@@ -732,32 +747,26 @@ def test_a_clock_the_query_computes_keeps_no_role(setup):
         "has one, never earlier than any row's (min() of a week's, say, is earlier than some of the week's "
         "values). "
     )
-    computed = why + (
-        "analytics_align says a match on the answer is not shown point in time, and matches each row from "
-        "the later of its time column and knowledge_time, a lower bound on when it became known."
-    )
     refused = why + (
         "analytics_align refuses the answer unless match_on=time, as nothing shows when its rows became known."
     )
-    for sql, note in (
-        (f"SELECT {week}, min(knowledge_time) AS knowledge_time FROM {k} GROUP BY ALL", refused),
-        (
-            f"SELECT event_time, time_bucket(INTERVAL 1 DAY, knowledge_time) AS knowledge_time FROM {k}",
-            computed,
-        ),
-        (
-            f"WITH w AS (SELECT {week}, min(knowledge_time) AS knowledge_time FROM {k} GROUP BY ALL) SELECT * FROM w",
-            refused,
-        ),
+    for sql in (
+        f"SELECT {week}, min(knowledge_time) AS knowledge_time FROM {k} GROUP BY ALL",
+        f"SELECT event_time, time_bucket(INTERVAL 1 DAY, knowledge_time) AS knowledge_time FROM {k}",
+        f"SELECT event_time, date_trunc('day', knowledge_time) AS knowledge_time, value FROM {k}",
+        f"SELECT event_time, knowledge_time - INTERVAL 1 HOUR AS knowledge_time, value FROM {k}",
+        f"SELECT event_time, least(knowledge_time, event_time) AS knowledge_time, value FROM {k}",
+        f"SELECT event_time, event_time AS knowledge_time, value FROM {k}",
+        f"SELECT knowledge_time - INTERVAL 2 DAY AS knowledge_time, * FROM {k}",
+        f"WITH w AS (SELECT {week}, min(knowledge_time) AS knowledge_time FROM {k} GROUP BY ALL) SELECT * FROM w",
         # A join keeping one side's clock: the other side's values may be known later.
-        (
-            f"SELECT a.event_time, a.value, b.value AS b_value, a.knowledge_time FROM {k} a JOIN {o} b USING (event_time)",
-            computed,
-        ),
+        f"SELECT a.event_time, a.value, b.value AS b_value, a.knowledge_time FROM {k} a JOIN {o} b USING (event_time)",
     ):
         kept, notes, rows_of = role(sql)
-        assert kept is None and notes[-1] == note, sql
-        assert (rows_of is not None and not rows_of.shown) == (note == refused), sql
+        assert kept is None and notes[-1] == refused, sql
+        assert rows_of == RowsOf(
+            model="marketlens.QueryRow", fetched_at=known.provenance.fetched_at, shown=False
+        ), sql
     for sql in (
         f"SELECT {week}, max(knowledge_time) AS knowledge_time FROM {k} GROUP BY ALL",
         f"WITH w AS (SELECT * FROM {k} WHERE value > 1) SELECT event_time, knowledge_time FROM w",
@@ -765,7 +774,7 @@ def test_a_clock_the_query_computes_keeps_no_role(setup):
         f"AS knowledge_time FROM {k} a JOIN {o} b USING (event_time)",
     ):
         kept, notes, rows_of = role(sql)
-        assert kept == "available" and computed not in notes and rows_of is None, sql
+        assert kept == "available" and not any("keeps no role" in n for n in notes) and rows_of is None, sql
 
 
 def test_a_query_computing_rows_from_other_rows_keeps_no_role(setup):
@@ -778,7 +787,9 @@ def test_a_query_computing_rows_from_other_rows_keeps_no_role(setup):
     a union, a fetched list of exchanges joined) keep it, and a quotes result
     joined keeps it with the quotes' time as the answer's time column, or in
     the clock. Round 8: rows computed from others show not when they became
-    known, so analytics_align refuses such an answer unless match_on=time."""
+    known, so analytics_align refuses such an answer unless match_on=time.
+    Round 9: so it refuses quotes joined forward, matched before from the
+    dataset's clock, which the quotes' time is not in."""
     from marketlens_schema.market import Quote
 
     ctx, store, *_ = setup
@@ -804,15 +815,10 @@ def test_a_query_computing_rows_from_other_rows_keeps_no_role(setup):
         info = store.info(out.result_id)
         return {c.name: c.role for c in info.columns}.get("knowledge_time"), info.time_column, out.notes
 
-    def lost(why, refused=True):
+    def lost(why):
         return (
             f"The answer's knowledge_time keeps no role available (when each row became known): {why}. "
-            + (
-                "analytics_align refuses the answer unless match_on=time, as nothing shows when its rows became known."
-                if refused
-                else "analytics_align says a match on the answer is not shown point in time, and matches each row from "
-                "the later of its time column and knowledge_time, a lower bound on when it became known."
-            )
+            "analytics_align refuses the answer unless match_on=time, as nothing shows when its rows became known."
         )
 
     window = lost(
@@ -833,10 +839,10 @@ def test_a_query_computing_rows_from_other_rows_keeps_no_role(setup):
         f"its query reads {k} in a LATERAL subquery (one run for each row it joins), so a row can depend on other "
         "rows, some known later"
     )
+    # Round 9: refused too, as the quotes' time is in neither the answer's time column nor the clock.
     forward = lost(
         f"it joins {b}, whose rows are dated by t, without passing t through as its time column or taking "
-        f"greatest() of it and the clock, so a row can hold a {b} row dated after it (an ASOF JOIN forward, say)",
-        refused=False,
+        f"greatest() of it and the clock, so a row can hold a {b} row dated after it (an ASOF JOIN forward, say)"
     )
     cols = "event_time, knowledge_time"
     next_day = "ON c.event_time = a.event_time + INTERVAL 1 DAY"
@@ -1189,7 +1195,6 @@ def test_an_answer_passing_fetched_market_data_through_records_the_fetch(setup):
     start) or rows from others from quotes, trades or a dataset's rows; one
     whose rows are dated as theirs (a filter, a bucket dated at the last of
     its quotes, quotes joined to exchange codes) records none."""
-    from marketlens_mcp.results_api import RowsOf
     from marketlens_schema.market import Quote
 
     ctx, store, bars, *_ = setup
@@ -1267,6 +1272,14 @@ def test_an_answer_passing_fetched_market_data_through_records_the_fetch(setup):
     last = f"SELECT max(t) AS t, ticker, max(bid_price) AS bid FROM {quotes} GROUP BY ticker, time_bucket(INTERVAL 1 MINUTE, t)"
     assert rows_of(last)[0] == as_quotes.model_copy(update={"shown": True})
     assert rows_of(f"SELECT q.t, q.bid_price, x.name FROM {quotes} q, {exchanges} x")[0] is None
+    # Two fetches of codes that hold at every time, joined: no time to join them on, nothing recorded.
+    again = store.put(
+        rows_to_table([StockExchange(code="P", name="NYSE Arca")], StockExchange),
+        tool="reference_stock_exchanges",
+        model=StockExchange.schema_name,
+        provenance=provenance(),
+    ).result_id
+    assert rows_of(f"SELECT x.code, y.name FROM {exchanges} x JOIN {again} y USING (code)")[0] is None
     kept, rid = rows_of(f"SELECT * FROM {adjusted} WHERE ticker = 'AAPL'")
     assert kept == RowsOf(model=Bar.schema_name, fetched_at=fetched_at, adjustment="all")
     # A pass-through of a pass-through keeps the fetch it passes through, and

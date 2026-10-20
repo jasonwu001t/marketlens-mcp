@@ -17,6 +17,7 @@ from analytics_harness import MINUTE, bars, schema_of, table_of, utc  # noqa: E4
 from marketlens_mcp.analytics.common import canonical_schema  # noqa: E402
 from marketlens_mcp.analytics.tools import all_specs  # noqa: E402
 from marketlens_mcp.analytics.tools.align import SPEC as ALIGN  # noqa: E402
+from marketlens_mcp.analytics.tools.align import AlignArgs  # noqa: E402
 from marketlens_mcp.analytics.tools.beta import SPEC as BETA  # noqa: E402
 from marketlens_mcp.analytics.tools.correlation import SPEC as CORRELATION  # noqa: E402
 from marketlens_mcp.analytics.tools.drawdown import SPEC as DRAWDOWN  # noqa: E402
@@ -508,10 +509,11 @@ def test_a_query_joining_bars_to_a_dataset_is_matched_no_later_than_each_bar(rea
     assert e.value.message == (
         f"analytics_align: {joined} was computed by results_query from marketlens.Bar rows (fetched at "
         "2026-01-05T13:30Z) in a way that shows neither when each of its rows became known nor when the period it "
-        "covers ends (a bucket dated at its start, lead() or another window, a join of bars, rows aligned forward, "
-        "a knowledge_time left out), so matching on its time column t could pair a left row with values known only "
-        "after it. Align onto the rows it was computed from (analytics_resample records when each of its buckets "
-        "ends), or pass match_on=time to match on t anyway, look-ahead included."
+        "covers ends (a bucket dated at its start, lead() or another window, a join of bars or of rows of different "
+        "times, a knowledge_time left out or computed, a summary's timestamp, rows aligned forward), so matching on "
+        "its time column t could pair a left row with values known only after it. Align onto the rows it was "
+        "computed from (analytics_resample records when each of its buckets ends; for a join, align one result "
+        "onto the other), or pass match_on=time to match on t anyway, look-ahead included."
     )
     out = call(
         ALIGN,
@@ -590,11 +592,11 @@ def test_a_value_computed_from_rows_known_later_is_not_matched_as_point_in_time(
     dataset's knowledge_time got the role again, and the same note. Neither
     keeps the role, so analytics_align says the match is not shown point in
     time, and matches from the later of each row's time and its knowledge_time
-    all the same (match_on=time counts the look-ahead that shows, at least); an
-    answer that dropped the clock is matched on its time column, and says so.
+    all the same (match_on=time counts the look-ahead that shows, at least).
     Round 8: rows computed from others (the z-score, and the join reading it)
     show not when they became known, so analytics_align refuses them unless
-    match_on=time, as it does a bucket of bars."""
+    match_on=time, as it does a bucket of bars. Round 9: so it refuses an
+    answer that dropped the clock, which it matched on its time column."""
     store, ctx = real
     (query,) = [s for s in RESULTS_SPECS if s.name == "results_query"]
     ts = pa.timestamp("us", tz="UTC")
@@ -642,16 +644,22 @@ def test_a_value_computed_from_rows_known_later_is_not_matched_as_point_in_time(
             in n
             for n in ahead.notes
         )
+    # Round 9: an answer that dropped the clock was matched on its time column
+    # with a note (a bar of January 7 at 06:00 got January 7's value, published
+    # at 12:00); it shows not when its rows became known, so it is refused.
     dropped = call(query, ctx, sql=f"SELECT event_time, value FROM {series}", store=True).result_id
-    out = call(ALIGN, ctx, left_result_id=left, right_result_id=dropped, right_columns=["value"])
-    assert [r["value"] for r in out.rows] == [1.0, 1.0]
+    assert store.info(dropped).rows_of == RowsOf(model="marketlens.QueryRow", fetched_at=M0, shown=False)
+    with pytest.raises(ToolError) as e:
+        call(ALIGN, ctx, left_result_id=left, right_result_id=dropped, right_columns=["value"])
+    assert e.value.code == "not_point_in_time"
     assert (
-        f"Not shown point in time: {dropped} was computed by results_query with no column of role available (when "
-        "each row became known), so its rows can hold values known after their time (a full-sample average, lead(), "
-        "a bucket dated at its start); its rows were matched on the time column event_time alone, which can pair a "
-        f"left row with a value published after it. It was computed from {series}, whose knowledge_time has that "
-        "role: keep knowledge_time in a query answer (passed through, or its max()) to match point in time."
-    ) in out.notes
+        f"Keep knowledge_time of {series} as it is (passed through, or its max()), or align onto the rows it was "
+        "computed from"
+    ) in e.value.message
+    out = call(
+        ALIGN, ctx, left_result_id=left, right_result_id=dropped, right_columns=["value"], match_on="time"
+    )
+    assert [r["value"] for r in out.rows] == [1.0, 1.0]
 
 
 def test_an_analytics_output_carries_no_role_from_its_model(real):
@@ -1175,13 +1183,26 @@ def test_aligned_rows_not_matched_point_in_time_are_refused_whatever_the_left(re
         ALIGN, ctx, left_result_id=dataset, right_result_id=spy, right_columns=["close"], store=True
     )
     assert store.info(settled.result_id).rows_of is None
-    # Bars aligned onto a clock that lost its role (a lower bound) show not when their rows became known.
+    # Bars aligned onto a clock without its role (a lower bound: passed through
+    # beside a macro series' rows, which show not when they became known) show
+    # not when their rows became known.
+    macro = store.put(
+        pa.table(
+            {"event_time": pa.array([utc(2026, 10, 8, 14)], pa.timestamp("us", tz="UTC")), "cpi": [3.0]}
+        ),
+        tool="research_macro_series",
+        model="marketlens.QueryRow",
+        provenance=Provenance(provider="plugin", route="GET /rows", fetched_at=M0),
+        time_column="event_time",
+    ).result_id
     lower = call(
         query,
         ctx,
-        sql=f"SELECT event_time, time_bucket(INTERVAL 1 DAY, knowledge_time) AS knowledge_time, value FROM {dataset}",
+        sql=f"SELECT d.event_time, d.knowledge_time, d.value + m.cpi AS value FROM {dataset} d "
+        f"JOIN {macro} m USING (event_time)",
         store=True,
     ).result_id
+    assert {c.name: c.role for c in store.info(lower).columns}["knowledge_time"] is None
     assert store.info(lower).rows_of is None
     onto = call(ALIGN, ctx, left_result_id=spy, right_result_id=lower, right_columns=["value"], store=True)
     assert store.info(onto.result_id).rows_of == RowsOf(model="marketlens.Bar", fetched_at=M0, shown=False)
@@ -1322,3 +1343,264 @@ def test_a_stored_query_keeps_its_default_value_column_after_its_parent_is_gone(
     store.drop(both)
     after = call(RETURNS, ctx, result_id=spy)
     assert after.rows == before.rows and after.rows[0]["price_column"] == "close"
+
+
+def test_a_clock_a_query_computes_is_no_lower_bound_and_is_refused(real):
+    """Review of round 9: analytics_align matched a knowledge_time without
+    the role from the later of each row's time and it, as a lower bound, also
+    where the query computed it: date_trunc('day', knowledge_time) of a
+    dataset known 46 hours after its date gave every SPY bar a value published
+    after it, under a note that the match kept those out; so did the clock an
+    hour earlier, the event time named knowledge_time, least() of the two, and
+    a computed knowledge_time before the dataset's own, which the answer
+    renamed knowledge_time_1. results_query marks such an answer not shown,
+    so analytics_align refuses it unless match_on=time; the clock passed
+    through keeps its role, and no bar gets a value published after it."""
+    store, ctx = real
+    (query,) = [s for s in RESULTS_SPECS if s.name == "results_query"]
+    days = [utc(2025, 10, 1, 4) + i * dt.timedelta(days=1) for i in range(30)]
+    spy = put_bars(store, bars("SPY", [100.0 + i for i in range(30)], times=days))
+    dgs10 = _dataset(
+        store, [4.0 + i / 100 for i in range(30)], start=utc(2025, 10, 1), known_after=dt.timedelta(hours=46)
+    )
+    for sql in (
+        f"SELECT event_time, date_trunc('day', knowledge_time) AS knowledge_time, value FROM {dgs10}",
+        f"SELECT event_time, knowledge_time - INTERVAL 1 HOUR AS knowledge_time, value FROM {dgs10}",
+        f"SELECT event_time, event_time AS knowledge_time, value FROM {dgs10}",
+        f"SELECT event_time, least(knowledge_time, event_time) AS knowledge_time, value FROM {dgs10}",
+        f"SELECT knowledge_time - INTERVAL 2 DAY AS knowledge_time, * FROM {dgs10}",
+    ):
+        answer = call(query, ctx, sql=sql, store=True).result_id
+        assert store.info(answer).rows_of == RowsOf(
+            model="marketlens.QueryRow", fetched_at=M0, shown=False
+        ), sql
+        with pytest.raises(ToolError) as e:
+            call(ALIGN, ctx, left_result_id=spy, right_result_id=answer, right_columns=["value"])
+        assert e.value.code == "not_point_in_time", sql
+        ahead = call(
+            ALIGN, ctx, left_result_id=spy, right_result_id=answer, right_columns=["value"], match_on="time"
+        )
+        assert ahead.row_count == 30, sql
+    kept = call(query, ctx, sql=f"SELECT * FROM {dgs10} WHERE value > 0", store=True).result_id
+    out = call(
+        ALIGN,
+        ctx,
+        left_result_id=spy,
+        right_result_id=kept,
+        right_columns=["value", "knowledge_time"],
+        store=True,
+    )
+    late = call(
+        query,
+        ctx,
+        sql=f"SELECT count(*) FILTER (WHERE knowledge_time > t) AS late, count(value) AS n FROM {out.result_id}",
+    )
+    assert late.rows == [{"late": 0, "n": 28}]
+
+
+def test_a_join_pairing_rows_of_different_times_is_refused_unless_match_on_time(real):
+    """Review of round 9: a join of two dated results that pairs a row with a
+    later row of the other (trades every 10 seconds joined to the quote 15
+    seconds after each, or forward) kept no role and was aligned on its time
+    column: every left row 7 seconds after a trade got a quote dated after it,
+    under a generic note, while lead() over the quotes was refused. An answer
+    keeping no role is marked not shown unless each dated result it reads
+    dates it, by its time column (passed through, or made equal to it by the
+    join: USING (t), ON a.t = b.t) or the clock it keeps; a trade joined to
+    the quote of its own time is matched on t."""
+    from marketlens_schema.market import Quote, Trade
+
+    store, ctx = real
+    (query,) = [s for s in RESULTS_SPECS if s.name == "results_query"]
+    t0 = utc(2026, 10, 8, 14)
+    every = [t0 + i * dt.timedelta(seconds=10) for i in range(20)]
+
+    def fetched(model, rows, tool):
+        return store.put(
+            table_of(model, rows),
+            tool=tool,
+            model=model.schema_name,
+            provenance=Provenance(provider="synthetic", route="GET /v2/stocks", fetched_at=M0),
+        ).result_id
+
+    def trades_at(times, price):
+        rows = [
+            Trade(ticker="SPY", asset_class="us_equity", t=t, price=price + i, size=1.0)
+            for i, t in enumerate(times)
+        ]
+        return fetched(Trade, rows, "market_trades")
+
+    def quotes_at(times):
+        rows = [
+            Quote(
+                ticker="SPY",
+                asset_class="us_equity",
+                t=t,
+                bid_price=600.0 + i,
+                ask_price=601.0 + i,
+                bid_size=1.0,
+                ask_size=1.0,
+            )
+            for i, t in enumerate(times)
+        ]
+        return fetched(Quote, rows, "market_quotes")
+
+    trades = trades_at(every, 700.0)
+    later = quotes_at([t + dt.timedelta(seconds=5) for t in every])
+    left = trades_at([t + dt.timedelta(seconds=7) for t in every], 1.0)
+    for sql in (
+        f"SELECT tr.t, tr.ticker, q.bid_price FROM {trades} tr JOIN {later} q ON q.t = tr.t + INTERVAL 15 SECOND",
+        f"SELECT tr.t, tr.ticker, q.bid_price FROM {trades} tr ASOF JOIN {later} q ON q.t >= tr.t",
+        f"SELECT tr.t, tr.ticker, q.bid FROM {trades} tr, (SELECT max(bid_price) AS bid FROM {later}) q",
+    ):
+        joined = call(query, ctx, sql=sql, store=True).result_id
+        assert store.info(joined).rows_of == RowsOf(model="marketlens.Quote", fetched_at=M0, shown=False), sql
+        with pytest.raises(ToolError) as e:
+            call(ALIGN, ctx, left_result_id=left, right_result_id=joined, right_columns=["ticker"])
+        assert e.value.code == "not_point_in_time", sql
+    same = quotes_at(every)
+    for sql in (
+        f"SELECT tr.t, tr.ticker, q.bid_price FROM {trades} tr JOIN {same} q ON q.t = tr.t",
+        f"SELECT t, tr.ticker, q.bid_price FROM {trades} tr JOIN {same} q USING (t)",
+        f"SELECT tr.t, tr.ticker, q.bid_price FROM {trades} tr, {same} q WHERE tr.t = q.t AND q.bid_price > 0",
+    ):
+        joined = call(query, ctx, sql=sql, store=True).result_id
+        assert store.info(joined).rows_of is None, sql
+        out = call(ALIGN, ctx, left_result_id=left, right_result_id=joined, right_columns=["bid_price"])
+        assert [(r["matched_t"], r["bid_price"]) for r in out.rows][:2] == [
+            ("2026-10-08T14:00:00Z", 600.0),
+            ("2026-10-08T14:00:10Z", 601.0),
+        ], sql
+
+
+def test_two_bar_series_joined_on_their_time_are_matched_from_their_end(real):
+    """Review of round 9: a spread of SPY's and QQQ's day bars joined on t was
+    refused, and match_on=time, which the refusal offered, matched each on its
+    start without a count of look-ahead, though each joined row covers the
+    same day and is known at its end, as a bar passed through is. An answer
+    joining bars of one timeframe row for row on t records them (rows_of),
+    with t as its time column, and is matched from each bar's end; joined on
+    another time, or bars of two timeframes, it is still refused."""
+    store, ctx = real
+    (query,) = [s for s in RESULTS_SPECS if s.name == "results_query"]
+    days = [utc(2026, 9, d, 4) for d in range(1, 11)]
+    spy = put_bars(store, bars("SPY", [100.0 + 2 * i for i in range(10)], times=days))
+    qqq = put_bars(store, bars("QQQ", [50.0 + i for i in range(10)], times=days))
+    hours = put_bars(
+        store, bars("SPY", [1.0, 1.0], times=[utc(2026, 9, 2, 14), utc(2026, 9, 3, 14)], timeframe="1h")
+    )
+    for sql, span in (
+        (f"SELECT a.t, a.timeframe, a.close - b.close AS spread FROM {spy} a JOIN {qqq} b USING (t)", None),
+        (f"SELECT t, a.close - b.close AS spread FROM {spy} a JOIN {qqq} b USING (t)", "1d"),
+        (f"SELECT a.t, a.close - b.close AS spread FROM {spy} a, {qqq} b WHERE b.t = a.t", "1d"),
+    ):
+        spread = call(query, ctx, sql=sql, store=True).result_id
+        info = store.info(spread)
+        assert info.rows_of == RowsOf(model="marketlens.Bar", fetched_at=M0, span=span), sql
+        assert info.time_column == "t", sql
+        out = call(ALIGN, ctx, left_result_id=hours, right_result_id=spread, right_columns=["spread"])
+        assert [(r["matched_t"][:10], r["spread"]) for r in out.rows] == [
+            ("2026-09-01", 50.0),
+            ("2026-09-02", 51.0),
+        ], sql
+        assert any(
+            n.startswith(f"Point in time: each bar of {spread} is matched from its end") for n in out.notes
+        )
+    hourly = put_bars(store, bars("QQQ", [50.0 + i for i in range(10)], times=days, timeframe="1h"))
+    for sql in (
+        f"SELECT a.t, a.timeframe, a.close - b.close AS spread FROM {spy} a JOIN {hourly} b USING (t)",
+        f"SELECT a.t, a.timeframe, a.close - b.close AS spread FROM {spy} a JOIN {qqq} b "
+        "ON b.t = a.t + INTERVAL 1 DAY",
+        f"SELECT a.t, b.timeframe, a.close - b.close AS spread FROM {spy} a ASOF JOIN {qqq} b ON b.t >= a.t",
+    ):
+        spread = call(query, ctx, sql=sql, store=True).result_id
+        assert store.info(spread).rows_of == RowsOf(model="marketlens.Bar", fetched_at=M0, shown=False), sql
+        with pytest.raises(ToolError) as e:
+            call(ALIGN, ctx, left_result_id=hours, right_result_id=spread, right_columns=["spread"])
+        assert e.value.code == "not_point_in_time" and "for a join, align one result onto the other" in (
+            e.value.message
+        ), sql
+
+
+def test_a_summary_dated_or_joined_by_a_query_is_refused_unless_match_on_time(real):
+    """Review of round 9: an analytics output with no time column (a
+    correlation, a drawdown summary) holds a value of the whole sample; a
+    query dating it by one of its timestamps (the correlation's end, the
+    drawdown's peak or trough) was aligned on it with only a note, so a bar
+    got the full sample's correlation, the day's close included, or its
+    maximum drawdown before the trough was seen; joined to a dataset's rows,
+    every row got it. A query answer reading such an output is marked not
+    shown, so analytics_align refuses it unless match_on=time."""
+    store, ctx = real
+    (query,) = [s for s in RESULTS_SPECS if s.name == "results_query"]
+    days = [utc(2026, 9, 1, 4) + i * dt.timedelta(days=1) for i in range(30)]
+    both = put_bars(
+        store,
+        bars("SPY", [100.0 + (i * 7) % 11 for i in range(30)], times=days)
+        + bars("QQQ", [50.0 + (i * 5) % 9 for i in range(30)], times=days),
+    )
+    spy = put_bars(store, bars("SPY", [100.0 + (i * 7) % 11 for i in range(30)], times=days))
+    corr = call(CORRELATION, ctx, result_id=both, store=True).result_id
+    dd = call(DRAWDOWN, ctx, result_id=spy, store=True).result_id
+    assert store.info(corr).rows_of is None and store.info(corr).time_column is None
+    dataset = _dataset(store, [1.0] * 30, start=utc(2026, 9, 1), known_after=dt.timedelta(hours=2))
+    left = put_bars(store, bars("SPY", [1.0], times=[utc(2026, 9, 11, 14)], timeframe="1h"))
+    for sql, model in (
+        (f"SELECT \"end\" AS t, a, b, correlation FROM {corr} WHERE a = 'SPY' AND b = 'QQQ'", corr),
+        (f"SELECT peak_t, max_drawdown FROM {dd}", dd),
+        (f"SELECT trough_t AS t, series, max_drawdown FROM {dd}", dd),
+        (
+            f"SELECT d.event_time, d.knowledge_time, d.value * c.correlation AS value FROM {dataset} d, {corr} c "
+            "WHERE c.a = 'SPY' AND c.b = 'QQQ'",
+            corr,
+        ),
+    ):
+        answer = call(query, ctx, sql=sql, store=True).result_id
+        rows_of = store.info(answer).rows_of
+        assert (rows_of.model, rows_of.shown) == (store.info(model).model, False), sql
+        with pytest.raises(ToolError) as e:
+            call(ALIGN, ctx, left_result_id=left, right_result_id=answer)
+        assert e.value.code == "not_point_in_time", sql
+
+
+def test_bars_on_the_right_count_from_their_end_whatever_direction_or_tolerance(real):
+    """Review of round 9: bars on the right are matched from their end, which
+    changed what direction and tolerance give for bars of one timeframe
+    without a word in their descriptions: a day bar is paired with the
+    previous day's, PT0S gives the bar that ended at the left time, not the
+    one starting then, and forward can give a matched_t before the left time.
+    The descriptions say so; match_on=time pairs the bars starting at the same
+    time, as before, and counts the look-ahead."""
+    store, ctx = real
+    days = [utc(2026, 10, d, 4) for d in range(5, 10)]
+    spy = put_bars(store, bars("SPY", [700.0 + i for i in range(5)], times=days))
+    qqq = put_bars(store, bars("QQQ", [200.0 + i for i in range(5)], times=days))
+
+    def pairs(**how):
+        out = call(ALIGN, ctx, left_result_id=spy, right_result_id=qqq, right_columns=["close"], **how)
+        return [
+            (r["t"][:10], r["matched_t"] and r["matched_t"][:10], r["close_right"]) for r in out.rows
+        ], out
+
+    previous = [
+        ("2026-10-05", None, None),
+        ("2026-10-06", "2026-10-05", 200.0),
+        ("2026-10-07", "2026-10-06", 201.0),
+        ("2026-10-08", "2026-10-07", 202.0),
+        ("2026-10-09", "2026-10-08", 203.0),
+    ]
+    assert pairs()[0] == previous
+    assert pairs(tolerance="PT0S")[0] == previous
+    forward, _ = pairs(direction="forward")
+    assert forward[1] == ("2026-10-06", "2026-10-05", 200.0)
+    same, out = pairs(match_on="time")
+    assert same == [(t, t, 200.0 + i) for i, (t, _, _) in enumerate(previous)]
+    assert any(
+        "5 of 5 matched left rows got a bar that ended after their time (look-ahead)" in n for n in out.notes
+    )
+    fields = AlignArgs.model_fields
+    assert "bars of the same timeframe pair with the previous bar" in fields["direction"].description
+    assert "forward can give a matched_t before the left time" in fields["direction"].description
+    assert "PT0S gives a bar that ended at the left time" in fields["tolerance"].description
+    # The contract, with the rules per source in the README: short enough to send on every turn.
+    assert len(fields["match_on"].description) < 700

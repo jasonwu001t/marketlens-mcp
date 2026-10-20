@@ -35,9 +35,11 @@ STORED_KIND = "stored"
 
 #: Names of a timestamp column holding when each row became known, beside the
 #: time the row describes (a dataset's knowledge_time, a store's ingested_at).
-#: Without its role available (a query answer that cannot show it),
-#: analytics_align still matches on such a column by default, as a lower bound,
-#: and says the match is not shown point in time.
+#: Without its role available (a query answer passing it through beside a
+#: result that does not show when its rows became known), analytics_align still
+#: matches on such a column by default, as a lower bound, and says the match is
+#: not shown point in time; results_query marks an answer computing it or
+#: leaving it out not shown, which analytics_align refuses.
 CLOCK_NAMES = ("knowledge_time", "ingested_at")
 
 
@@ -128,8 +130,8 @@ class RowsOf(BaseModel):
         True,
         description="False when the result was computed from these rows in a way that shows neither when each of "
         "its rows became known nor when its period ends (a bucket dated at its start, lead() or another window, "
-        "a join of bars, rows aligned forward, a knowledge_time left out): analytics_align refuses it unless "
-        "match_on=time",
+        "a join of bars or of rows of different times, rows aligned forward, a knowledge_time left out or "
+        "computed, a summary's timestamp): analytics_align refuses it unless match_on=time",
     )
 
 
