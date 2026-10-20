@@ -182,7 +182,7 @@ What the example shows:
 
 - **The manifest entry** (`ToolSpec`) is the single source of truth: the server registers the tool from it, checks the policy against `capability`, builds the input schema from `input_model` (which must forbid extra fields), and prints its row in `tools --markdown`.
 - **Readable failures** are `ToolError(code, message, hint=, retryable=)`. Any other exception becomes `internal_error` for the model; the traceback goes to the server log only.
-- **`ctx.paginate`** walks the upstream's pages within the owner's limits (`fetch.max_rows`, `fetch.max_pages`); when it stops early, the server adds a note telling the model how to continue with `page_token`.
+- **`ctx.paginate`** walks the upstream's pages within the owner's limits (`fetch.max_rows`, `fetch.max_pages`); when it stops early, the server marks the answer truncated and adds a note: with the `page_token` to continue when the upstream gave one, otherwise asking for a narrower request (without a token, a `truncation_note` your provenance already carries stands instead).
 - **`ctx.limiter(key, per_minute)`** is a process-wide token bucket shared by every session.
 - **`ctx.env(name)`** reads only names declared in `ToolSpec.env` or `PluginInfo.env`; anything else is a `KeyError`. Secrets come from the environment, never from the config file.
 - **Absence**: a value the source does not give is `None` with a reason, per row (`absent`) or for the whole response (`ToolOutput.absent`), never 0.

@@ -104,7 +104,7 @@ Package layout:
 | `src/marketlens_mcp/config.py`, `paths.py`, `policy.py` | The YAML config, where it and the cache live, capability on/off resolution |
 | `src/marketlens_mcp/registry.py`, `manifest.py`, `builtins.py`, `plugin_api.py` | Tool registration (built-ins and plugins share one API) and the tool manifest |
 | `src/marketlens_mcp/pipeline.py`, `fetch.py`, `ratelimit.py`, `offload.py`, `trust.py` | One tool call: validation, pagination, rate limiting, inline-or-stored, the trust envelope |
-| `src/marketlens_mcp/results/`, `results_api.py` | The result store, the SQL guard, markers, the `results_*` tools |
+| `src/marketlens_mcp/results/`, `results_api.py`, `worker.py` | The result store, the SQL guard, markers, the `results_*` tools; `worker.py` runs the store's blocking work off the event loop (`results_query`, `results_sample` and the analytics tools in one query thread, the other `results_*` tools in the default thread pool) |
 | `src/marketlens_mcp/analytics/` | The `analytics_*` tools |
 | `src/marketlens_mcp/providers/alpaca/` | The Alpaca provider (bundled OpenAPI specs, endpoint mapping, parity list) |
 | `src/marketlens_mcp/providers/data/` | The official-data provider over marketlens-data (`sources.py` keys, `parity.py` dataset coverage, `tools/`) |
@@ -151,10 +151,10 @@ Every request a tool can make goes to one of these. Nothing else is called: no t
 | Alpaca Market Data API | `https://data.alpaca.markets` | `/v2/stocks/{bars,quotes,trades,snapshots}` and their `/latest` forms, `/v2/stocks/meta/{exchanges,conditions/*}`; `/v1beta1/options/{bars,trades,snapshots,quotes/latest,trades/latest}`, `/v1beta1/options/meta/{exchanges,conditions/*}`; `/v1beta3/crypto/{loc}/{bars,quotes,trades,snapshots,latest/*}`; `/v1beta1/fixed_income/latest/quotes`; `/v1beta1/news`; `/v1beta1/screener/{stocks/most-actives,{market_type}/movers}`; `/v1/corporate-actions` | `ALPACA_API_KEY` / `ALPACA_SECRET_KEY` as headers | `market_*`, `options_*`, `crypto_*`, `fixed_income_*`, `news_search`, `reference_{stock,option}_exchanges`, `reference_condition_codes`, `reference_corporate_actions` |
 | Alpaca Trading API | `https://paper-api.alpaca.markets` (paper) or `https://api.alpaca.markets` (live) | `/v2/assets`, `/v2/calendar`, `/v2/clock`, `/v2/corporate_actions/announcements`, `/v2/options/contracts`; with `portfolio` on: `/v2/account`, `/v2/account/configurations`, `/v2/account/activities`, `/v2/account/portfolio/history`, `/v2/positions`, `/v2/orders`, `/v2/watchlists`, `/v1/locates` (GET only) | same keys | `reference_asset(s)`, `reference_calendar`, `reference_clock`, `reference_corporate_action_announcement(s)`, `reference_option_contract(s)`, `options_chain` (its open interest), `market_movers` (asset names, with `exclude_warrants_rights_units`), `calendar_us_holidays` (the NYSE cross-check, always on the paper URL), `portfolio_*` |
 | Alpaca documentation MCP | `https://docs.alpaca.markets/mcp` | its `search`, `fetch`, `list-endpoints`, `get-endpoint`, `search-endpoints` tools | none | `provider_docs_*` (off by default) |
-| FRED / ALFRED (St. Louis Fed) | `https://api.stlouisfed.org/fred` | `/series/observations`, `/series/vintagedates` | `FRED_API_KEY` | `macro_series` |
+| FRED / ALFRED (St. Louis Fed) | `https://api.stlouisfed.org/fred` | `/series/observations`, `/series/vintagedates`; `/series` (when FRED last updated a series it posts with its next vintage, such as U. Michigan's survey) | `FRED_API_KEY` | `macro_series` |
 | BLS | `https://api.bls.gov/publicAPI/v2/timeseries/data/`; `https://www.bls.gov` | the time-series API; `/schedule/news_release/{cpi,empsit}.htm` and this and next month's lists of releases, `/schedule/{year}/{MM}_sched_list.htm`; the release archive `/bls/news-release/{release}.htm` | `BLS_API_KEY` (optional) | `macro_bls_series`, `macro_release_schedule` |
 | BEA | `https://apps.bea.gov/api/data/` | NIPA `GetData` | `BEA_API_KEY` | `macro_bea_table` |
-| U.S. SEC EDGAR | `https://data.sec.gov`, `https://www.sec.gov` | `/submissions/CIK##########.json`; `/api/xbrl/companyfacts/CIK##########.json`; `/Archives/edgar/data/{cik}/...` (Forms 3/4/5/144, 13F-HR, N-PORT, 8-K EX-99.1, and each filing's index headers `{accession}-index-headers.html`, or its `-index.html`, for its acceptance time and a fund filing's series); `/files/company_tickers.json`, `/files/company_tickers_mf.json` | `SEC_CONTACT_EMAIL` in the User-Agent | `sec_*` |
+| U.S. SEC EDGAR | `https://data.sec.gov`, `https://www.sec.gov` | `/submissions/CIK##########.json` and, for older filings, `/submissions/CIK##########-submissions-NNN.json`; `/api/xbrl/companyfacts/CIK##########.json`; `/Archives/edgar/data/{cik}/...` (Forms 3/4/5/144, 13F-HR, N-PORT, 8-K EX-99.1, and each filing's index headers `{accession}-index-headers.html`, or its `-index.html`, for its acceptance time and a fund filing's series); `/files/company_tickers.json`, `/files/company_tickers_mf.json` | `SEC_CONTACT_EMAIL` in the User-Agent | `sec_*` |
 | Federal Reserve Board | `https://www.federalreserve.gov` | `/monetarypolicy/fomccalendars.htm`; statements `/newsevents/pressreleases/monetaryYYYYMMDDa.htm` | none | `fed_fomc_meetings`, `fed_fomc_statements` |
 | New York Fed | `https://markets.newyorkfed.org` | `/api/rates/all/search.json` | none | `fed_reference_rates` |
 | U.S. Treasury | `https://home.treasury.gov` | `/resource-center/data-chart-center/interest-rates/` (`daily-treasury-rates.csv`) | none | `treasury_yield_curve` |
@@ -295,7 +295,7 @@ With the `data` extra, run it from the extra (`"--from", "marketlens-mcp[data]"`
 }
 ```
 
-`SEC_CONTACT_EMAIL` is optional but strongly recommended: SEC EDGAR's fair-access rule asks every client to name a contact. Without it marketlens-data sends a placeholder contact and logs a warning, every `sec_` answer carries a note saying so, and SEC may throttle or block such requests (`news_official`, as above, skips its SEC and BLS feeds instead). `marketlens-mcp doctor` says whether it is set, never its value.
+`SEC_CONTACT_EMAIL` is optional but strongly recommended: SEC EDGAR's fair-access rule asks every client to name a contact. Without it marketlens-data sends a placeholder contact and logs a warning, every `sec_` answer carries a note saying so, and SEC may throttle or block such requests (`news_official`, as above, skips its SEC and BLS feeds instead). Set to something that is not an email address, it is refused in mode `auto`: every `sec_` tool answers `sec_contact_missing` until it is fixed, and `doctor` says so. `marketlens-mcp doctor` says whether it is set, never its value.
 
 Claude Code:
 
@@ -440,11 +440,11 @@ Each source names its own key; set the ones you need in the env block of the ser
 | Source | Variable | Needed | Get it | Tools |
 |---|---|---|---|---|
 | FRED / ALFRED | `FRED_API_KEY` | yes | free: https://fred.stlouisfed.org/docs/api/api_key.html | `macro_series` |
-| BLS | `BLS_API_KEY` | no | free; raises BLS's daily limit and years per request: https://data.bls.gov/registrationEngine/ | `macro_bls_series` |
+| BLS | `BLS_API_KEY` | no | free; raises BLS's daily limit and years per request: https://data.bls.gov/registrationEngine/ | `macro_bls_series`; `macro_release_schedule` is keyless (the key is for the time-series API only) |
 | BEA | `BEA_API_KEY` | yes | free: https://apps.bea.gov/API/signup/ | `macro_bea_table` |
-| SEC EDGAR | `SEC_CONTACT_EMAIL` | optional, strongly recommended | your contact address, sent in the User-Agent as SEC's fair-access rule asks; without it a placeholder contact is sent, which SEC may throttle or block: https://www.sec.gov/os/accessing-edgar-data | the nine `sec_` tools |
+| SEC EDGAR | `SEC_CONTACT_EMAIL` | optional, strongly recommended | your contact address, sent in the User-Agent as SEC's fair-access rule asks; without it a placeholder contact is sent, which SEC may throttle or block; set to something that is not an email address, in mode `auto` the `sec_` tools refuse until it is fixed, and `doctor` says so: https://www.sec.gov/os/accessing-edgar-data | the nine `sec_` tools |
 | Official feeds of SEC and BLS (built in, not the data extra) | `SEC_CONTACT_EMAIL` | optional | the same address, sent in the User-Agent to SEC and BLS only (both refuse undeclared automated clients); without it, or when it is not an email address, their nine feeds are skipped with a note and no placeholder is ever sent; the Fed, BEA, CFTC and ECB feeds need nothing | `news_official` |
-| Federal Reserve, NY Fed, Treasury, FiscalData | none | | keyless | `fed_`, `treasury_` tools, `macro_release_schedule` |
+| Federal Reserve, NY Fed, Treasury, FiscalData | none | | keyless | `fed_`, `treasury_` tools |
 | Nasdaq | none | | keyless; an unofficial endpoint | `calendar_economic`, `calendar_earnings`, `calendar_earnings_history` |
 | NYSE, SIFMA, OPM | none (either Alpaca key pair optional: `ALPACA_API_KEY` and `ALPACA_SECRET_KEY`, or `APCA_API_KEY_ID` and `APCA_API_SECRET_KEY`) | no | keyless; with paper-account Alpaca keys, NYSE's dates are cross-checked against Alpaca's paper trading calendar, and without keys the answer says they were not (live-account keys make the NYSE fetch fail) | `calendar_us_holidays` |
 | EIA | `EIA_API_KEY` | not used yet | free | planned (a later release) |
@@ -461,7 +461,7 @@ The store is a folder of your own: `providers.data.data_dir` if you set it, else
 
 ### Point in time and `as_of`
 
-Every data tool takes `as_of`: the answer as it was knowable then (a date means 00:00 UTC; give a datetime with a zone for intraday precision). Each tool's description states its dataset's rule:
+Every data tool except `macro_series_catalog` (the local FRED catalogue, which fetches nothing) takes `as_of`: the answer as it was knowable then (a date means 00:00 UTC; give a datetime with a zone for intraday precision). Each tool's description states its dataset's rule:
 
 - *vintage* (FRED/ALFRED, XBRL facts, fundamentals, N-PORT): exact; the values as published at `as_of`.
 - *lagged* (BLS, BEA, NY Fed, Treasury, FiscalData, FOMC statements, 13F, insider trades): a row is hidden until its release lag or EDGAR acceptance has passed; revisions are tracked from the first fetch on.

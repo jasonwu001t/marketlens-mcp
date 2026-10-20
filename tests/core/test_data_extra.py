@@ -209,7 +209,10 @@ def test_readme_data_setup_strongly_recommends_the_sec_contact():
     text = (REPO / "README.md").read_text(encoding="utf-8")
     setup = text.split("With the `data` extra, run it from the extra", 1)[1].split("Claude Code:", 1)[0]
     assert "`SEC_CONTACT_EMAIL` is optional but strongly recommended" in setup
-    assert "refuse" not in setup
+    # Unset, the placeholder is sent; only a value that is not an email address is refused.
+    for sentence in setup.split(". "):
+        assert "refuse" not in sentence or "not an email address" in sentence, sentence
+    assert "`sec_contact_missing`" in setup
     for words in ("placeholder contact", "logs a warning", "throttle or block", "carries a note"):
         assert words in setup, words
 
