@@ -242,8 +242,11 @@ def test_outside_a_checkout_needs_package_and_root(tmp_path, monkeypatch, capsys
     assert spec.output_model == "myplugin.Thing"
     assert spec.golden_test == "tests/test_myplugin_things.py"
     # make test and make readme are this repository's targets: a plugin has its own tests and is
-    # not in this README's tool table (review 2026-10-19).
+    # not in this README's tool table. Nor has it a MODULES list (the scaffold writes no
+    # tools/__init__.py): its register function adds the tool, as WRITING_A_PLUGIN.md says
+    # (review 2026-10-19).
+    assert not (root / "src/my_plugin/tools/__init__.py").exists()
     assert capsys.readouterr().out.strip() == (
-        "Add 'myplugin_things' to MODULES in src/my_plugin/tools/__init__.py, implement the handler, fill "
-        "the fixture and golden file, then run pytest."
+        "Add the SPECS of src/my_plugin/tools/myplugin_things.py with registry.add_tool in your plugin's "
+        "register function, implement the handler, fill the fixture and golden file, then run pytest."
     )

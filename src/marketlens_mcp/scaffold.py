@@ -253,13 +253,15 @@ def next_steps(name: str, provider: str, package: str | None, written: Sequence[
             "tests/alpaca/fixtures/: reuse it, or add <operationId>__<case>.json for a case of its own)"
         )
     if package is not None:
-        init = f"src/{package}/tools/__init__.py"
-        run = "pytest"  # a plugin's own tests; this repository's make targets and README are not its
-    else:
-        init = (
-            "src/marketlens_mcp/"
-            + ("providers/alpaca" if provider == "alpaca" else "analytics")
-            + "/tools/__init__.py"
+        # A plugin has no MODULES list: its register function adds its tools (WRITING_A_PLUGIN.md,
+        # Testing). It runs its own tests; this repository's make targets and README are not its.
+        return (
+            f"Add the SPECS of src/{package}/tools/{name}.py with registry.add_tool in your plugin's "
+            f"register function, implement the handler, {fill}, then run pytest."
         )
-        run = "make test and make readme"
-    return f"Add '{name}' to MODULES in {init}, implement the handler, {fill}, then run {run}."
+    init = (
+        "src/marketlens_mcp/"
+        + ("providers/alpaca" if provider == "alpaca" else "analytics")
+        + "/tools/__init__.py"
+    )
+    return f"Add '{name}' to MODULES in {init}, implement the handler, {fill}, then run make test and make readme."
