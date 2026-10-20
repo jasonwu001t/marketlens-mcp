@@ -128,7 +128,7 @@ SCHEDULES = {"cpi": "bls.cpi_schedule", "employment_situation": "bls.empsit_sche
 #: (`unit_mult`), but rows it stored before it kept the last two have neither: their scale is lost.
 BEA_LEVEL_NOTE = (
     "A value whose units is just 'Level' was stored without BEA's multiplier (UNIT_MULT; rows stored before "
-    "marketlens-data kept it have none), so it is not in ones: NIPA dollar levels are usually in millions of "
+    "marketlens-data kept it have none), so its scale is not known: NIPA dollar levels are usually in millions of "
     "dollars. Check the table's header on bea.gov before reading a magnitude."
 )
 
@@ -549,7 +549,7 @@ SPECS: tuple[ToolSpec, ...] = (
             "Every line of a BEA NIPA table (GDP T10101, PCE, personal income, corporate profits) at annual, "
             "quarterly or monthly frequency; series_id is the line's series code, title its description, "
             "units the publisher's unit, for a level with BEA's scale and measure ('Level, millions of Current "
-            "Dollars'); just 'Level' was stored without the scale and is not in ones (check the table's "
+            "Dollars'); just 'Level' was stored without the scale, which is then not known (check the table's "
             "header). BEA serves the latest revision only, so knowledge_time is the table's last "
             "revision date, never before the period's first release; history older than the first sync "
             "takes that sync's last revision date, so an earlier as_of returns none of it (GDP vintages: "

@@ -312,7 +312,7 @@ def test_macro_bea_table_history_from_the_first_sync_is_at_its_last_revision_not
 
 BEA_LEVEL_NOTE = (
     "A value whose units is just 'Level' was stored without BEA's multiplier (UNIT_MULT; rows stored before "
-    "marketlens-data kept it have none), so it is not in ones: NIPA dollar levels are usually in millions of "
+    "marketlens-data kept it have none), so its scale is not known: NIPA dollar levels are usually in millions of "
     "dollars. Check the table's header on bea.gov before reading a magnitude."
 )
 
@@ -332,7 +332,10 @@ def test_macro_bea_table_level_units_state_bea_measure_and_multiplier(tmp_path, 
     from marketlens_mcp.providers.data.tools.macro import SPECS
 
     description = next(s for s in SPECS if s.name == "macro_bea_table").description
-    assert "'Level, millions of Current Dollars'" in description and "not in ones" in description
+    # A 'Level' row BEA scales by 10^0 (a Ratio, a Fisher index level) is in ones: a row stored
+    # without UNIT_MULT has an unknown scale, not a wrong one (review 2026-10-19).
+    assert "'Level, millions of Current Dollars'" in description and "not in ones" not in description
+    assert "just 'Level' was stored without the scale, which is then not known" in description
 
 
 def test_macro_bea_table_level_without_a_multiplier_keeps_the_note(tmp_path, upstream, keys):
