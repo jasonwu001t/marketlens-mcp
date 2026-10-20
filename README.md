@@ -314,7 +314,7 @@ Each tool belongs to one capability. Turn capabilities on or off in the config f
 | Capability | Default | What it covers |
 |---|---|---|
 | `market` | on | Stock, option, crypto and fixed-income bars, quotes, trades, snapshots, latest values, option chains with greeks, crypto order books, screeners. |
-| `reference` | on | Assets, option contracts and exchanges, market calendar and clock, corporate actions and announcements. |
+| `reference` | on | Assets, option contracts, stock and option exchange codes, trade and quote condition codes, market calendar and clock, corporate actions and announcements. |
 | `news` | on | News articles from Alpaca (`news_search`) and official headlines from the Federal Reserve Board, SEC, BLS, BEA, CFTC and ECB feeds (`news_official`, keyless). Third-party text: every response is marked untrusted. |
 | `analytics` | on | Returns, rolling volatility, correlation, resample, as-of align, drawdown and beta, computed locally on result handles. |
 | `portfolio` | off | Brokerage account reads: account, positions, orders, activities, portfolio history, account configuration, broker watchlists and locates (the paper account unless `portfolio.environment: live`). Off by default: what the model reads leaves your machine with the model's requests. |

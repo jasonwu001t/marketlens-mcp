@@ -116,8 +116,8 @@ BUILTIN_CAPABILITIES: tuple[CapabilitySpec, ...] = (
     CapabilitySpec(
         "reference",
         "Reference data",
-        "Assets, option contracts and exchanges, market calendar and clock, corporate "
-        "actions and announcements.",
+        "Assets, option contracts, stock and option exchange codes, trade and quote condition "
+        "codes, market calendar and clock, corporate actions and announcements.",
         True,
     ),
     CapabilitySpec(
