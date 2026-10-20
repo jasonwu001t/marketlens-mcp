@@ -254,10 +254,12 @@ def next_steps(name: str, provider: str, package: str | None, written: Sequence[
         )
     if package is not None:
         init = f"src/{package}/tools/__init__.py"
+        run = "pytest"  # a plugin's own tests; this repository's make targets and README are not its
     else:
         init = (
             "src/marketlens_mcp/"
             + ("providers/alpaca" if provider == "alpaca" else "analytics")
             + "/tools/__init__.py"
         )
-    return f"Add '{name}' to MODULES in {init}, implement the handler, {fill}, then run make test and make readme."
+        run = "make test and make readme"
+    return f"Add '{name}' to MODULES in {init}, implement the handler, {fill}, then run {run}."

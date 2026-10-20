@@ -656,7 +656,7 @@ make readme schema  # regenerate the tool table and schema/
 make check          # lint + tests + generated-file checks
 ```
 
-`marketlens-mcp add-capability NAME --capability ID --provider alpaca|local [--operation OPID]` scaffolds a new tool with its golden test. See [CONTRIBUTING.md](CONTRIBUTING.md).
+`marketlens-mcp add-capability NAME --capability ID --provider alpaca|local [--operation OPID] [--model SCHEMA_NAME]` scaffolds a new tool with its golden test; with `--package PKG --root DIR`, a plugin's tool in its own folder. See [CONTRIBUTING.md](CONTRIBUTING.md) and [WRITING_A_PLUGIN.md](WRITING_A_PLUGIN.md#testing).
 
 ## License
 

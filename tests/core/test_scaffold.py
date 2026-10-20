@@ -241,4 +241,9 @@ def test_outside_a_checkout_needs_package_and_root(tmp_path, monkeypatch, capsys
     spec = load_module(tool).SPECS[0]
     assert spec.output_model == "myplugin.Thing"
     assert spec.golden_test == "tests/test_myplugin_things.py"
-    assert "Add 'myplugin_things' to MODULES in" in capsys.readouterr().out
+    # make test and make readme are this repository's targets: a plugin has its own tests and is
+    # not in this README's tool table (review 2026-10-19).
+    assert capsys.readouterr().out.strip() == (
+        "Add 'myplugin_things' to MODULES in src/my_plugin/tools/__init__.py, implement the handler, fill "
+        "the fixture and golden file, then run pytest."
+    )

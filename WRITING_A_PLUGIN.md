@@ -258,6 +258,8 @@ def test_daily_prices(api, tmp_path):
 
 Keep a golden file (the expected rows, `absent`, pagination and provenance minus `fetched_at`) next to a synthetic fixture of the upstream's JSON, and assert `marketlens_schema.unexplained_absences(rows, absent) == []`. Never record live responses or keys.
 
+`marketlens-mcp add-capability NAME --capability ID --provider local --package PKG --root DIR [--model SCHEMA_NAME]` writes a new tool's skeleton into your plugin's folder `DIR`: `src/PKG/tools/NAME.py` (an input model, a handler that refuses until you write it, and the `ToolSpec` in `SPECS`), `tests/test_NAME.py` (a golden test, skipped until you fill it in), `tests/fixtures/NAME.json` and `tests/golden/NAME.json`. It never overwrites a file. Add the module's `SPECS` with `registry.add_tool` in your `register` function.
+
 ## Versioning
 
 `PluginInfo.api_version` is the plugin API version you wrote against. The server loads a plugin when the major versions are equal and the plugin's minor is not newer than the server's; otherwise it skips it with a reason. Additive changes bump the minor; anything else bumps the major. The canonical schema has its own version (`SCHEMA_VERSION`, carried in every provenance block).
