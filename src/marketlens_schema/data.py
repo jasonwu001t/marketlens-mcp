@@ -8,7 +8,11 @@ Conventions of base.py hold, plus:
 
 * ``knowledge_time`` (every model) is when the value became knowable under its
   dataset's point-in-time policy: a vintage or acceptance instant where the
-  publisher states one, an approximation that is never early otherwise.
+  publisher states one, an approximation that is never early otherwise. Its
+  JSON Schema says ``x-role: available`` (the stored column's role), so
+  analytics_align matches a row from the later of its time and its
+  knowledge_time: never at a time before it was known, nor before its own (a
+  schedule known in advance counts from each date).
 * Rates and percentages are fractions (a 4.33 % yield is 0.0433), money is in
   US dollars (millions and billions multiplied out). A value published in the
   publisher's own unit is ``as_published`` and the row names that unit.
@@ -34,7 +38,7 @@ KNOWN = "When the value became knowable under the dataset's point-in-time policy
 
 
 def _known() -> Any:
-    return _unit("UTC", description=KNOWN)
+    return _unit("UTC", description=KNOWN, json_schema_extra={"x-role": "available"})
 
 
 # --- macro --------------------------------------------------------------------------------

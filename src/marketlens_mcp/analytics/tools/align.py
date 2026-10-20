@@ -2,33 +2,62 @@
 
 from __future__ import annotations
 
-from typing import Literal
+import datetime as dt
+from dataclasses import dataclass
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from marketlens_mcp.plugin_api import ToolContext, ToolOutput, ToolSpec
+from marketlens_mcp.results_api import (
+    ResultInfo,
+    RowsOf,
+    known_model,
+    known_span,
+    period_rows,
+    source_rows,
+    unshown_known,
+)
 from marketlens_mcp.worker import query_handler
-from marketlens_schema import ALIGNED_SCHEMA_NAME
+from marketlens_schema import ALIGNED_SCHEMA_NAME, CanonicalModel
 from marketlens_schema.base import AbsenceCode, AbsenceReason
 
 from ..common import (
     CAPABILITY,
     PROVIDER,
+    Input,
+    clocked_ancestor,
+    derived_rows_of,
     dynamic_output,
+    known_time,
     names,
     out_time,
     parse_duration,
+    plural,
     provenance,
     qi,
     refuse,
     resolve,
     result_id_field,
+    rows,
     scalar,
     store_field,
 )
 
 TOOL = "analytics_align"
 MATCHED = "matched_t"
+
+
+def _unshown(info: ResultInfo) -> str:
+    """Why a column named as when each row became known can lack its role."""
+    if info.tool == "results_query":
+        return (
+            "a query answer passing it through keeps it only when every result it reads shows when its rows became "
+            "known"
+        )
+    if info.parents:
+        return f"{info.tool} gives its outputs none"
+    return f"{info.tool} did not mark it"
 
 
 class AlignArgs(BaseModel):
@@ -49,12 +78,15 @@ class AlignArgs(BaseModel):
     )
     direction: Literal["backward", "forward"] = Field(
         "backward",
-        description="backward: the latest right row at or before the left time; forward: the first at or after.",
+        description="backward: the latest right row at or before the left time; forward: the first at or after. "
+        "By default a right row counts from when it became usable (match_on): a bar from its end, so bars of the "
+        "same timeframe pair with the previous bar, and forward can give a matched_t before the left time.",
     )
     tolerance: str | None = Field(
         None,
         description="Largest allowed time gap as an ISO-8601 duration (PT30S, PT5M, P1D; PT0S: the same time "
-        "only); none by default.",
+        "only), measured to when a right row became usable (match_on: a bar's end, so PT0S gives a bar that "
+        "ended at the left time); none by default.",
     )
     right_columns: list[str] | None = Field(
         None,
@@ -63,7 +95,114 @@ class AlignArgs(BaseModel):
     suffix: str = Field(
         "_right", pattern=r"^_?[A-Za-z0-9_]{1,20}$", description="Added to right column names that collide."
     )
+    match_on: Literal["available", "time"] = Field(
+        "available",
+        description="available (default): point in time. Each right row is matched from when it became usable: "
+        "the later of its time and its column with role available (when it became known, e.g. knowledge_time; "
+        "one passed through without the role is a lower bound, with a note), the end of the period it covers "
+        "(a bar or an analytics output of bars: t plus its timeframe), or its fetch (a snapshot). A result "
+        "showing none of these (a bucket dated at its start, a window, a knowledge_time left out or computed) "
+        "is refused. time: the time column alone, with a note counting look-ahead. README, Analytics: the "
+        "rules per source.",
+    )
     store: bool = store_field()
+
+
+def _span(gap: dt.timedelta) -> str:
+    seconds = gap.total_seconds()
+    for size, name in ((86400, "day"), (3600, "hour"), (60, "minute")):
+        if seconds >= size:
+            x = round(seconds / size, 1)
+            return f"{x:,g} {name}" + ("" if x == 1 else "s")
+    return f"{seconds:g} seconds"
+
+
+def _at(t: dt.datetime) -> str:
+    """An instant as UTC text: the day alone at midnight (a naive time is UTC)."""
+    t = t.astimezone(dt.UTC) if t.tzinfo else t
+    return t.strftime("%Y-%m-%d" if t.time() == dt.time() else "%Y-%m-%dT%H:%MZ")
+
+
+@dataclass(frozen=True)
+class _Rule:
+    """How the notes name the rule a right result's rows became known by,
+    after their time column: the end of their period, or their fetch."""
+
+    noun: str  # bar, row
+    end: str  # its end, t plus its timeframe
+    end_paren: str  # its end (t plus its timeframe)
+    why: str  # when its close became known
+    known: str  # its end
+    usable: str  # that ended (at or before its time)
+    usable_fwd: str  # that ends (at or after its time)
+    later: str  # that ended after (the left time)
+    start: str  # , a bar's start,
+    each_start: str  # each bar's start
+    span: str | None  # the column naming each row's span, if any
+
+
+def _rule(right: Input, cls: type[CanonicalModel] | None) -> _Rule | None:
+    """The rule of ``known_time``: None for rows known at their time. ``cls``
+    None: a bucket of rows not known by a rule (``period_rows``)."""
+    info, t = right.info, right.time
+    src = info.rows_of
+    if cls is not None and cls.known_at_fetch:
+        at = _at(src.fetched_at if src is not None else info.provenance.fetched_at)
+        return _Rule(
+            noun="row",
+            end=f"its fetch at {at}",
+            end_paren=f"its fetch ({at})",
+            why="when the values it holds were current (a snapshot's open interest, greeks and session still "
+            "trading are as of its fetch)",
+            known="its fetch",
+            usable="fetched",
+            usable_fwd="fetched",
+            later="fetched after",
+            start="",
+            each_start="the time it describes",
+            span=None,
+        )
+    span = known_span(info, cls)
+    lag = src.lag_seconds if src is not None else 0
+    if span is None and not lag:
+        return None
+    column = (
+        cls.span_column if cls is not None and cls.span_column in {c.name for c in info.columns} else None
+    )
+    # Bars as fetched, or passed through (their timeframe kept or left out).
+    passed = info.tool == "results_query" or not info.parents
+    if cls is not None and cls.span_column is not None and not lag and (column is not None or passed):
+        return _Rule(
+            noun="bar",
+            end=f"its end, {t} plus its {cls.span_column}",
+            end_paren=f"its end ({t} plus its {cls.span_column})",
+            why="when its close became known",
+            known="its end",
+            usable="that ended",
+            usable_fwd="that ends",
+            later="that ended after",
+            start=", a bar's start,",
+            each_start="each bar's start",
+            span=column,
+        )
+    covers = t + (f" plus its {column}" if column else f" plus {src.span}" if src and src.span else "")
+    if lag:
+        covers += f" and {_span(dt.timedelta(seconds=lag))} more, as late as one of the rows in it ends"
+    return _Rule(
+        noun="row",
+        end=f"the end of the period it covers, {covers}",
+        end_paren=f"the end of the period it covers ({covers})",
+        why=f"when the {src.model if src else cls.schema_name} rows it was computed from had all become known"
+        if cls is not None
+        else "the earliest it can hold every row it covers",
+        known="its end",
+        usable="whose period ended",
+        usable_fwd="whose period ends",
+        later="whose period ended after",
+        start=", the period's start,",
+        each_start="each period's start",
+        span=column,
+    )
 
 
 def _same(bl: str | None, br: str | None) -> str:
@@ -132,6 +271,63 @@ def handler(ctx: ToolContext, args: AlignArgs) -> ToolOutput:
         taken.add(name)
         out_names.append(name)
     notes = list(left.notes) + list(right.notes)
+    # Point in time: a right column with role available (when each row became
+    # known) joins the clock matched on, unless match_on=time.
+    proven = right.available
+    # Without one, fetched market data (or a result recording the rows it holds
+    # or was computed from, rows_of) is known by its model's rule: at its time
+    # (quotes, trades), at the end of the period it covers (a bar, t plus its
+    # timeframe; a bucket of them), at its fetch (a snapshot).
+    known = known_model(right.info) if proven is None else None
+    # A bucket of other rows (a dataset's) records its span: matched from its
+    # end, the earliest it can hold every row it covers, though not shown point in time.
+    period = period_rows(right.info) if proven is None else None
+    ruled = known is not None or period is not None
+    rule = _rule(right, known) if ruled else None
+    hidden = right.info.rows_of if proven is None and not ruled else None
+    if hidden is not None and args.match_on == "available":
+        # Computed from dated rows in a way that shows neither: matched on its
+        # time column (a bucket's start) it could take values known only later.
+        # A clock it was computed from and left out: keeping it is the way.
+        origin = clocked_ancestor(ctx, right.info)
+        origin = origin if origin is not None and right.column(origin[1]) is None else None
+        raise refuse(
+            "not_point_in_time",
+            f"{TOOL}: {right.rid} was computed by {right.info.tool} from {hidden.model} rows (fetched at "
+            f"{_at(hidden.fetched_at)}) in a way that shows neither when each of its rows became known nor when the "
+            "period it covers ends (a bucket dated at its start, lead() or another window, a join of bars or of "
+            "rows of different times, a knowledge_time left out or computed, a summary's timestamp, rows aligned "
+            f"forward), so matching on its time column {right.time} could pair a left row with values known only "
+            "after it. "
+            + (
+                f"Keep {origin[1]} of {origin[0]} as it is (passed through, or its max()), or align"
+                if origin
+                else "Align"
+            )
+            + " onto the rows it was computed from (analytics_resample records when each of its buckets ends; for "
+            f"a join, align one result onto the other), or pass match_on=time to match on {right.time} anyway, "
+            "look-ahead included.",
+        )
+    # Else a column named as when each row became known that has no role (a
+    # query answer passing it through beside a result that does not show when
+    # its rows became known; an analytics output carrying it, a bucket's latest)
+    # is matched on the same way, as a lower bound: the match is not called
+    # point in time. results_query marks an answer computing it (a date_trunc
+    # of it, another time renamed so) not shown, refused above.
+    avail = proven if proven is not None else (right.unmarked_clock if not ruled else None)
+    unshown = unshown_known(right.info) if avail is None else None
+    if avail is not None:
+        known_at = right.ts(column=avail)
+    elif ruled:
+        known_at = known_time(right, known)
+    else:
+        known_at = None
+    by_clock = known_at is not None and args.match_on == "available"
+    # Not matched on, but its look-ahead counted (match_on=time).
+    seen = known_at
+    # A clock that dates each row's own publication (not a bar's end): how
+    # much older the matches are than the latest right time, and revisions.
+    dated = by_clock and avail is not None
     with ctx.results.open([left.rid, right.rid]) as session:
         if br is None and right.group is not None:
             n = scalar(session, f"SELECT count(DISTINCT {qi(right.group)}) FROM {right.table}")
@@ -141,35 +337,238 @@ def handler(ctx: ToolContext, args: AlignArgs) -> ToolOutput:
                     f"{TOOL}: {right.label} has {n} series in column {right.group}; pass by (e.g. by={right.group}) "
                     "to match within each series, or keep one series with results_query first.",
                 )
-        lts, rts = left.ts("l"), "r.__rts"
-        cond = f"{lts} >= {rts}" if args.direction == "backward" else f"{lts} <= {rts}"
+        # __rt: the right row's time; __rk: the clock matched on (its time, or
+        # the later of its time and when it became known: a row is usable once
+        # its time has come and it is known, so a row known before its time, a
+        # calendar's, waits for it); __ra: when it became known, to count look-ahead.
+        where = f"{qi(right.time)} IS NOT NULL" + (f" AND {known_at} IS NOT NULL" if by_clock else "")
+        clock = f"greatest({right.ts()}, {known_at})" if by_clock else right.ts()
+        clocks = f"{right.ts()} AS __rt, {clock} AS __rk"
+        if seen is not None and not by_clock:
+            clocks += f", {seen} AS __ra"
+        src = base = f"SELECT *, {clocks} FROM {right.table} WHERE {where}"
+        if by_clock:
+            # Keep only the rows that were the latest usable of their series when
+            # they became usable (the latest time usable then, a revision of an
+            # older time being no update): an as-of match on __rk then gives the
+            # latest time at or before the left time known then, in its latest
+            # version then.
+            series = [qi(br)] if br else []
+            src = (
+                f"SELECT * FROM ({src}) QUALIFY __rt >= max(__rt) OVER ("
+                + (f"PARTITION BY {series[0]} " if series else "")
+                + "ORDER BY __rk RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AND row_number() OVER "
+                f"(PARTITION BY {', '.join([*series, '__rk'])} ORDER BY __rt DESC) = 1"
+            )
+        lts, rks = left.ts("l"), "r.__rk"
+        cond = f"{lts} >= {rks}" if args.direction == "backward" else f"{lts} <= {rks}"
         on = (f"l.{qi(bl)} = r.{qi(br)} AND " if bl else "") + cond
         if tolerance is None:
-            within = "r.__rts IS NOT NULL"
+            within = "r.__rk IS NOT NULL"
         else:
             gap = (
-                f"epoch_us({lts}) - epoch_us({rts})"
+                f"epoch_us({lts}) - epoch_us({rks})"
                 if args.direction == "backward"
-                else f"epoch_us({rts}) - epoch_us({lts})"
+                else f"epoch_us({rks}) - epoch_us({lts})"
             )
-            within = f"r.__rts IS NOT NULL AND {gap} <= {int(tolerance.total_seconds() * 1_000_000)}"
+            within = f"r.__rk IS NOT NULL AND {gap} <= {int(tolerance.total_seconds() * 1_000_000)}"
         picks = [
             f"CASE WHEN {within} THEN r.{qi(c)} END AS {qi(n)}"
             for c, n in zip(chosen, out_names, strict=False)
         ]
-        picks.append(f"CASE WHEN {within} THEN {out_time(rts)} END AS {qi(out_names[-1])}")
-        order = ([f"l.{qi(bl)}"] if bl else []) + [f"l.{qi(left.time)}"]
-        table = session.query(
-            f"SELECT l.*, {', '.join(picks)} FROM {left.table} l ASOF LEFT JOIN "
-            f"(SELECT *, {right.ts()} AS __rts FROM {right.table} WHERE {qi(right.time)} IS NOT NULL) r ON {on} "
-            f"ORDER BY {', '.join(order)}"
+        picks.append(f"CASE WHEN {within} THEN {out_time('r.__rt')} END AS {qi(out_names[-1])}")
+        if seen is not None and not by_clock:
+            picks.append(f"CASE WHEN {within} THEN r.__ra > {lts} END AS __late")
+        alias = "l"
+        sql = f"SELECT l.*, {', '.join(picks)} FROM {left.table} l ASOF LEFT JOIN ({src}) r ON {on}"
+        if dated:
+            # __newest: the latest right time at or before the clock the match
+            # was made at (the left time; forward: when the matched row became
+            # usable) by the time column alone. Later than the match, it is a
+            # row this result has only as known after that clock.
+            at = lts if args.direction == "backward" else f"CASE WHEN {within} THEN r.__rk END"
+            times = f"SELECT {f'{qi(br)}, ' if br else ''}__rt FROM ({base})"
+            sql = (
+                f"SELECT j.*, {out_time('e.__rt')} AS __newest FROM (SELECT l.*, {', '.join(picks)}, {at} AS __at "
+                f"FROM {left.table} l ASOF LEFT JOIN ({src}) r ON {on}) j ASOF LEFT JOIN ({times}) e ON "
+                + (f"j.{qi(bl)} = e.{qi(br)} AND " if bl else "")
+                + "j.__at >= e.__rt"
+            )
+            alias = "j"
+        order = ([f"{alias}.{qi(bl)}"] if bl else []) + [f"{alias}.{qi(left.time)}"]
+        table = session.query(f"{sql} ORDER BY {', '.join(order)}")
+        # Each output row holds its left row and a right row known by then
+        # (backward, matched from when it became known or by its time when that
+        # is when it was): it is known when its left row is; else it shows not
+        # (matched forward or on its time, or a right row that shows not), and
+        # aligning onto it is refused unless match_on=time.
+        own = derived_rows_of(session, [left], keeps_clock=True)
+        settled = args.direction == "backward" and (
+            (proven is not None and by_clock)
+            or (known is not None and unshown is None and (by_clock or known_at is None))
         )
+        if not settled:
+            of = (
+                own
+                or source_rows(right.info)
+                or RowsOf(model=right.model, fetched_at=right.info.provenance.fetched_at)
+            )
+            own = of.model_copy(update={"span": None, "lag_seconds": 0, "shown": False})
+        unknown = (
+            scalar(
+                session,
+                f"SELECT count(*) FROM {right.table} WHERE {qi(right.time)} IS NOT NULL AND {known_at} IS NULL",
+            )
+            if by_clock
+            else 0
+        )
+        older: list[tuple[dt.timedelta, Any, Any, Any]] = []
+        revised = total = 0
+        if dated:
+            older = [
+                (n - m, t, m, n)
+                for t, m, n in zip(
+                    table.column(left.time).to_pylist(),
+                    table.column(out_names[-1]).to_pylist(),
+                    table.column("__newest").to_pylist(),
+                    strict=True,
+                )
+                if m is not None and n is not None and n > m
+            ]
+            table = table.drop_columns(["__at", "__newest"])
+        if older:
+            # A result with one version of each time (the latest) has a
+            # revised row only as its revision: a row that became known after
+            # a later time of its series did shows one.
+            key = f"{qi(br)}, __rt" if br else "__rt"
+            one_version = (
+                scalar(session, f"SELECT max(n) FROM (SELECT count(*) AS n FROM ({base}) GROUP BY {key})")
+                == 1
+            )
+            series = f"PARTITION BY {qi(br)} " if br else ""
+            if one_version:
+                (counts,) = rows(
+                    session,
+                    f"SELECT count(*) FILTER (WHERE __rk > __next) AS revised, count(*) AS total FROM (SELECT __rk, "
+                    f"min(__rk) OVER ({series}ORDER BY __rt DESC ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING) "
+                    f"AS __next FROM ({base}))",
+                )
+                revised, total = counts["revised"], counts["total"]
+    late = None
+    if "__late" in table.column_names:
+        late = table.column("__late").to_pylist().count(True)
+        table = table.drop_columns(["__late"])
     unmatched = table.column(out_names[-1]).null_count
     notes.append(
         f"{unmatched} of {table.num_rows} left rows found no right row "
-        f"({'at or before' if args.direction == 'backward' else 'at or after'} their time"
-        f"{f', within {args.tolerance}' if args.tolerance else ''}{_same(bl, br)})."
+        f"({'usable ' if by_clock else ''}{'at or before' if args.direction == 'backward' else 'at or after'} "
+        f"their time{f', within {args.tolerance}' if args.tolerance else ''}{_same(bl, br)})."
     )
+    if by_clock and proven is not None:
+        how = (
+            f"each left row gets the right row with the latest {right.time} at or before its time among those "
+            "known by then, so none was published after it or is dated after it"
+            if args.direction == "backward"
+            else f"each left row gets the first update usable at or after its time: the right row with the "
+            f"latest {right.time} usable then"
+        )
+        notes.append(
+            f"Point in time: each row of {right.rid} is matched from when it became usable, the later of its "
+            f"time column {right.time} and when it became known ({avail}): {how}"
+            + ("; the tolerance is measured to when it became usable" if args.tolerance else "")
+            + f". match_on=time matches on {right.time} alone instead."
+        )
+    elif dated:
+        notes.append(
+            f"Not shown point in time: {avail} of {right.rid} is named as when each row became known but has no "
+            f"role available ({_unshown(right.info)}), so nothing shows a row was known by then. Each row was matched all the "
+            f"same from the later of its time column {right.time} and {avail}, a lower bound on when it became known, "
+            f"which keeps out the values {avail} shows were published after the left time"
+            + ("; the tolerance is measured to that" if args.tolerance else "")
+            + f", but a value joined or computed with rows known later can still hold data published after it. "
+            f"match_on=time matches on {right.time} alone instead."
+        )
+    elif by_clock:
+        how = (
+            f"each left row gets the {rule.noun} with the latest {right.time} {rule.usable} at or before its time"
+            if args.direction == "backward"
+            else f"each left row gets the first {rule.noun} {rule.usable_fwd} at or after its time"
+        )
+        tol = f"; the tolerance is measured to {rule.known}" if args.tolerance else ""
+        instead = f". match_on=time matches on {right.time}{rule.start} instead."
+        notes.append(
+            f"Point in time: each {rule.noun} of {right.rid} is matched from {rule.end}, {rule.why}: {how}{tol}{instead}"
+            if unshown is None
+            else f"Not shown point in time: {right.rid} {unshown}. Each {rule.noun} was matched all the same from "
+            f"{rule.end}, the safe default, which keeps out the {rule.noun}s {rule.later} the left time{tol}{instead}"
+        )
+    if by_clock:
+        if unknown and avail is None:
+            notes.append(
+                f"{plural(unknown, 'right row')} whose {rule.span} is not a timeframe {'was' if unknown == 1 else 'were'} "
+                f"left out: nothing says when {'it' if unknown == 1 else 'they'} ended."
+            )
+        elif unknown:
+            notes.append(
+                f"{plural(unknown, 'right row')} with no {avail} {'was' if unknown == 1 else 'were'} left out: "
+                f"nothing says when {'it' if unknown == 1 else 'they'} became known."
+            )
+        if older:
+            older.sort(key=lambda o: o[0])
+            gap, t, m, n = older[-1]
+            clock = "their time" if args.direction == "backward" else "when the matched row became usable"
+            notes.append(
+                f"{len(older)} of {table.num_rows - unmatched} matched left rows got an older right row than the "
+                f"latest {right.time} at or before {clock}, which {right.rid} has only as known after it: older by "
+                f"a median of {_span(older[(len(older) - 1) // 2][0])} and at most {_span(gap)} (left {_at(t)}: "
+                f"{right.time} {_at(m)} matched, {_at(n)} the latest)."
+            )
+        if revised:
+            notes.append(
+                f"{right.rid} holds one version of each {right.time}{f' per {br}' if br else ''}, and at least "
+                f"{revised:,} of its {total:,} rows are revisions (usable only after a later {right.time} was): a "
+                "revised row's earlier releases are not there, so where a left row got an older right row, a newer one may have been known at its time in "
+                "a version this result does not hold, the likelier the larger the gap. A result with every version "
+                "of each row matches exactly."
+            )
+    elif late is not None and avail is None:
+        notes.append(
+            f"match_on=time: matched on the time column {right.time} of {right.rid}, {rule.each_start}, not "
+            f"{rule.end_paren}, {rule.why}: {late} of {table.num_rows - unmatched} matched left rows got a "
+            f"{rule.noun} {rule.later} their time (look-ahead). match_on=available (the default) matches each "
+            f"{rule.noun} from {rule.known}."
+        )
+    elif late is not None and proven is None:
+        notes.append(
+            f"match_on=time: matched on the time column {right.time} of {right.rid} alone: at least {late} of "
+            f"{table.num_rows - unmatched} matched left rows got a right row with {avail} after their time "
+            f"(look-ahead). {avail} is named as when each row became known but has no role available "
+            f"({_unshown(right.info)}), "
+            f"so this counts by {avail} alone: a value computed from rows known later can hold data published after "
+            "the left time too. match_on=available (the default) matches from the later of the two."
+        )
+    elif late is not None:
+        notes.append(
+            f"match_on=time: matched on the time column {right.time} of {right.rid}, not on when its rows "
+            f"became known ({avail}): {late} of {table.num_rows - unmatched} matched left rows got a right row "
+            "known only after their time (look-ahead). match_on=available (the default) matches only rows "
+            "known by then."
+        )
+    # Without a clock, only fetched rows known by their time column (quotes,
+    # trades; bars and buckets at their end, snapshots at their fetch, said
+    # above), or rows computed from them recording so, show the match point in time.
+    if unshown is not None and not (rule is not None and by_clock):
+        origin = clocked_ancestor(ctx, right.info)
+        notes.append(
+            f"Not shown point in time: {right.rid} {unshown}; its rows were matched on the time column {right.time} "
+            "alone, which can pair a left row with a value published after it."
+            + (
+                f" It was computed from {origin[0]}, whose {origin[1]} has that role: keep {origin[1]} in a query "
+                "answer (passed through, or its max()) to match point in time."
+                if origin
+                else ""
+            )
+        )
     if renamed:
         notes.append("Right columns renamed: " + ", ".join(f"{a} -> {b}" for a, b in renamed) + ".")
     notes.append(f"{out_names[-1]} is the time of the matched right row.")
@@ -210,6 +609,7 @@ def handler(ctx: ToolContext, args: AlignArgs) -> ToolOutput:
         units=units,
         sources=sources,
         store=args.store,
+        rows_of=own,
     )
 
 
@@ -218,17 +618,19 @@ SPEC = ToolSpec(
     capability=CAPABILITY,
     title="As-of align",
     description=(
-        "As-of join of two stored time series, computed locally in DuckDB (ASOF LEFT JOIN): every left row is "
-        "kept and gets the right row that is the latest at or before its time (direction backward) or the "
-        "first at or after it (forward), optionally within a tolerance (ISO-8601 duration, e.g. PT5M; PT0S "
-        "for exact time matches) and "
-        "within the same `by` value (e.g. ticker; when the names differ, by_left and by_right, e.g. bars' ticker "
-        "and returns' series). Output: the left columns, the chosen right columns (names "
-        "that collide get the suffix, default _right) and matched_t, the matched right row's time; unmatched "
-        "right values are None (no_match). Use it to line up series of different frequencies. Large outputs "
-        "are stored and you get a result_id."
+        "As-of join of two stored time series: every left row is kept and gets the right row that is the latest "
+        "at or before its time (direction backward) or the first at or after it (forward), optionally within a "
+        "tolerance (ISO-8601, e.g. PT5M; PT0S: the same time) and the same `by` value (e.g. ticker; "
+        "by_left/by_right if names differ). Output: the left columns, the chosen right columns (colliding names "
+        "get suffix, default _right) and matched_t, the matched right row's time; unmatched right values are None. "
+        "Point in time (match_on): a right row counts from the later of its time and its column with role "
+        "available (e.g. knowledge_time); a bar or an output of bars from its end (bars of one timeframe pair with "
+        "the previous bar); a snapshot from its fetch; a result showing none of these is refused; notes say when "
+        "a match is not shown point in time. Lines up series of different frequencies. Large outputs are stored "
+        "and you get a result_id."
     ),
-    readme="As-of join of two results (backward or forward, tolerance, by column); adds matched_t.",
+    readme="As-of join of two results (backward or forward, tolerance, by column; point in time on a column "
+    "with role available); adds matched_t.",
     input_model=AlignArgs,
     output_model=ALIGNED_SCHEMA_NAME,
     provider=PROVIDER,

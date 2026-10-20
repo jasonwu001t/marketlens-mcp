@@ -23,6 +23,7 @@ from ..common import (
     bar_timeframe,
     check_unique_times,
     default_periods_per_year,
+    derived_rows_of,
     model_output,
     names,
     out_time,
@@ -394,6 +395,8 @@ def handler(ctx: ToolContext, args: VolatilityArgs) -> ToolOutput:
             f"NULL::MAP(VARCHAR, VARCHAR) AS absent FROM ({stats}) WHERE n >= {need} AND n = w ORDER BY series, t",
             [ppy, ppy],
         )
+        # A window is known when its last return is.
+        known = derived_rows_of(session, [inp], levels=False)
     if table.num_rows == 0:
         raise refuse(
             "too_few_points",
@@ -417,7 +420,15 @@ def handler(ctx: ToolContext, args: VolatilityArgs) -> ToolOutput:
     if note:
         notes.append(note)
     prov = provenance(ctx, TOOL, [inp.info], args)
-    return model_output(table, VolatilityPoint, prov, notes=notes, inputs=[inp.info], store=args.store)
+    return model_output(
+        table,
+        VolatilityPoint,
+        prov,
+        notes=notes,
+        inputs=[inp.info],
+        store=args.store,
+        rows_of=known,
+    )
 
 
 SPEC = ToolSpec(

@@ -40,7 +40,9 @@ def test_simple_returns_per_series_hand_computed(store, ctx):
     assert {r.period for r in rows} == {None}
     assert {r.price_column for r in rows} == {"close"}
     assert out.model is ReturnPoint
+    # The offload decides, and stores it with the bars its rows come from (rows_of).
     assert out.offload == "auto"
+    assert (out.rows_of.model, out.rows_of.span) == ("marketlens.Bar", "1d")
     p = out.provenance
     assert (p.provider, p.route, p.derived_from) == ("marketlens", "duckdb:analytics_returns", [rid])
     assert p.request["result_id"] == rid and p.request["kind"] == "simple"
@@ -250,8 +252,8 @@ def test_event_time_is_the_time_column_next_to_the_point_in_time_clocks(store, c
     out = run(SPEC, ctx, result_id=rid, price_column="value")
     assert [r["t"] for r in out.table.to_pylist()] == [utc(2026, 1, 2), utc(2026, 1, 3)]
     assert (
-        f"{rid} has no recorded time column; time column 'event_time' was used, not the point-in-time clock "
-        "knowledge_time, ingested_at." in out.notes
+        f"{rid} has no recorded time column; time column 'event_time' was used as the time each row describes; "
+        "knowledge_time, ingested_at say when it became known." in out.notes
     )
     # Another timestamp besides the clocks: still ambiguous.
     other = store.put_dynamic(

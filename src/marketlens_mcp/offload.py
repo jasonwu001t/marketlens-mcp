@@ -80,7 +80,9 @@ def finalize(
     limits: FetchLimits,
     models: Mapping[str, type[CanonicalModel]] | None = None,
 ) -> ToolResponse:
-    """Turn a handler's ToolOutput into the response the model sees."""
+    """Turn a handler's ToolOutput into the response the model sees. An
+    output recording the rows its own come from (``rows_of``: an analytics
+    tool's) is stored with them, which marketlens's own store takes."""
     given = [x for x in (out.rows, out.table, out.stored) if x is not None]
     if len(given) != 1:
         raise ValueError("a ToolOutput must carry exactly one of rows, table or stored")
@@ -167,6 +169,7 @@ def finalize(
         parents=list(provenance.derived_from),
         time_column=cls.time_column if cls else None,
         group_column=cls.group_column if cls else None,
+        **({"rows_of": rows_of} if (rows_of := getattr(out, "rows_of", None)) is not None else {}),
     )
     if marker is None:
         raise ValueError("this result store cannot build markers")

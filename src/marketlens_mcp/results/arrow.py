@@ -229,6 +229,13 @@ def _unit(model: type[BaseModel], name: str) -> str | None:
     return None
 
 
+def _role(model: type[BaseModel], name: str) -> str | None:
+    """The role a model's field states in its JSON Schema (``x-role``)."""
+    extra = model.model_fields[name].json_schema_extra
+    role = extra.get("x-role") if isinstance(extra, dict) else None
+    return role if role in ROLES else None
+
+
 def column_infos(model: type[CanonicalModel]) -> list[ColumnInfo]:
     """ColumnInfo for every column of a canonical model (no summary values)."""
     schema = arrow_schema(model)
@@ -245,6 +252,7 @@ def column_infos(model: type[CanonicalModel]) -> list[ColumnInfo]:
                 unit=_unit(model, field.name) if field.name != "absent" else None,
                 nullable=field.nullable,
                 description=desc,
+                role=_role(model, field.name) if field.name != "absent" else None,
             )
         )
     return out
@@ -255,11 +263,12 @@ def column_infos_for(
     model: type[CanonicalModel] | None,
     units: Mapping[str, str] | None = None,
     sources: Mapping[str, str] | None = None,
+    roles: Mapping[str, str] | None = None,
 ) -> list[ColumnInfo]:
-    """ColumnInfo for a table's actual columns: types from the table, units
-    and descriptions from ``model`` where a column of the same name and type
-    exists there (``units`` overrides)."""
-    infos = column_infos_from_schema(schema, units, sources)
+    """ColumnInfo for a table's actual columns: types from the table, units,
+    descriptions and roles from ``model`` where a column of the same name and
+    type exists there (``units`` overrides)."""
+    infos = column_infos_from_schema(schema, units, sources, roles)
     if model is None:
         return infos
     known = {c.name: c for c in column_infos(model)}
@@ -268,32 +277,50 @@ def column_infos_for(
         k = known.get(c.name)
         if k is not None and k.type == c.type:
             c = c.model_copy(
-                update={"unit": c.unit or k.unit, "description": k.description, "nullable": k.nullable}
+                update={
+                    "unit": c.unit or k.unit,
+                    "description": k.description,
+                    "nullable": k.nullable,
+                    "role": c.role or k.role,
+                }
             )
         out.append(c)
     return out
 
 
+#: The column roles a dynamic table's field may name (ColumnInfo.role).
+ROLES = frozenset({"available"})
+
+
 def column_infos_from_schema(
-    schema: pa.Schema, units: Mapping[str, str] | None = None, sources: Mapping[str, str] | None = None
+    schema: pa.Schema,
+    units: Mapping[str, str] | None = None,
+    sources: Mapping[str, str] | None = None,
+    roles: Mapping[str, str] | None = None,
 ) -> list[ColumnInfo]:
     """ColumnInfo for a dynamic result (types from the Arrow schema). A column's
     unit is ``units``' entry, else the one its Arrow field carries in metadata
     (``{b"unit": b"percent"}``): how a handler labels a dynamic table, which has
     no model to state ``x-unit``. Its source_model, likewise, is ``sources``'
     entry, else its field's ``b"source_model"``: the model of the result a
-    carried column was computed by."""
-    units, sources = units or {}, sources or {}
-    return [
-        ColumnInfo(
-            name=f.name,
-            type=duckdb_type(f.type),
-            unit=units.get(f.name) or _field_meta(f, b"unit"),
-            nullable=f.nullable,
-            source_model=sources.get(f.name) or _field_meta(f, b"source_model"),
+    carried column was computed by; and its role ``roles``' entry, else its
+    field's ``b"role"`` (``b"available"``: when each row became known), a role
+    marketlens does not know being ignored."""
+    units, sources, roles = units or {}, sources or {}, roles or {}
+    out = []
+    for f in schema:
+        role = roles.get(f.name) or _field_meta(f, b"role")
+        out.append(
+            ColumnInfo(
+                name=f.name,
+                type=duckdb_type(f.type),
+                unit=units.get(f.name) or _field_meta(f, b"unit"),
+                nullable=f.nullable,
+                source_model=sources.get(f.name) or _field_meta(f, b"source_model"),
+                role=role if role in ROLES else None,
+            )
         )
-        for f in schema
-    ]
+    return out
 
 
 def _field_meta(field: pa.Field, key: bytes) -> str | None:

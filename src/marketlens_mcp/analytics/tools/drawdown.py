@@ -16,6 +16,7 @@ from ..common import (
     PROVIDER,
     adjustment_note,
     check_unique_times,
+    derived_rows_of,
     model_output,
     names,
     out_time,
@@ -106,6 +107,8 @@ def handler(ctx: ToolContext, args: DrawdownArgs) -> ToolOutput:
         )
         model = DrawdownPoint if args.mode == "series" else DrawdownSummary
         table = session.query(_series_sql(dd) if args.mode == "series" else _max_sql(dd, col))
+        # A drawdown is known when its value is (a summary has no time to match on).
+        known = derived_rows_of(session, [inp]) if args.mode == "series" else None
     short = [s for s, n in counts.items() if n < 2]
     if short:
         notes.append(f"Series with fewer than 2 values are omitted: {names(short)}.")
@@ -122,7 +125,15 @@ def handler(ctx: ToolContext, args: DrawdownArgs) -> ToolOutput:
     if note:
         notes.append(note)
     prov = provenance(ctx, TOOL, [inp.info], args)
-    return model_output(table, model, prov, notes=notes, inputs=[inp.info], store=args.store)
+    return model_output(
+        table,
+        model,
+        prov,
+        notes=notes,
+        inputs=[inp.info],
+        store=args.store,
+        rows_of=known,
+    )
 
 
 SPEC = ToolSpec(

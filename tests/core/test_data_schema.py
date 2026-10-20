@@ -62,6 +62,20 @@ def test_the_23_models_are_built_in():
         assert ("knowledge_time" in model.model_fields) is (model is not d.EconomicSeriesInfo)
 
 
+def test_knowledge_time_is_the_column_of_when_each_row_became_known():
+    """Review of N2: every model's knowledge_time states x-role available, the
+    role the store gives the column, so analytics_align matches a stored
+    result (or a query of it that keeps the column) point in time; no other
+    built-in field has a role."""
+    from marketlens_mcp.results.arrow import column_infos
+
+    for model in BUILTIN_MODELS.values():
+        props = model.model_json_schema()["properties"]
+        roles = {n: p["x-role"] for n, p in props.items() if "x-role" in p}
+        assert roles == ({"knowledge_time": "available"} if "knowledge_time" in props else {}), model
+        assert {c.name: c.role for c in column_infos(model) if c.role} == roles, model
+
+
 def _unit(model, field):
     return model.model_json_schema()["properties"][field].get("x-unit") or next(
         (

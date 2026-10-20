@@ -49,7 +49,13 @@ if _SRC_PKG.is_dir() and str(_SRC_PKG) not in [str(Path(p).resolve()) for p in _
         sys.modules.pop(_name)
 
 from marketlens_mcp.plugin_api import FetchLimits, ToolOutput, ToolSpec  # noqa: E402
-from marketlens_mcp.results_api import ColumnInfo, ResultInfo, ResultNotFound, StoreUsage  # noqa: E402
+from marketlens_mcp.results_api import (  # noqa: E402
+    ColumnInfo,
+    ResultInfo,
+    ResultNotFound,
+    RowsOf,
+    StoreUsage,
+)
 from marketlens_schema import BUILTIN_MODELS, SCHEMA_VERSION, CanonicalModel  # noqa: E402
 from marketlens_schema.base import (  # noqa: E402
     AbsenceReason,
@@ -252,8 +258,16 @@ def _unit(model: type[CanonicalModel] | None, name: str) -> str | None:
     return extra.get("x-unit") if isinstance(extra, dict) else None
 
 
+def _role(model: type[CanonicalModel] | None, name: str) -> str | None:
+    """A model field's role (``x-role`` in its JSON Schema), as the real store reads it."""
+    if model is None or name not in model.model_fields:
+        return None
+    extra = model.model_fields[name].json_schema_extra
+    return extra.get("x-role") if isinstance(extra, dict) else None
+
+
 def _field_meta(field: pa.Field, key: bytes) -> str | None:
-    """A dynamic table's column unit or source_model, from its Arrow field metadata (as the real store reads it)."""
+    """A dynamic table's column unit, source_model or role, from its Arrow field metadata (as the real store reads it)."""
     raw = (field.metadata or {}).get(key)
     return raw.decode("utf-8") if raw else None
 
@@ -325,6 +339,8 @@ class FakeStore:
         group_column: str | None = None,
         column_units: dict[str, str] | None = None,
         column_sources: dict[str, str] | None = None,
+        column_roles: dict[str, str] | None = None,
+        rows_of: RowsOf | None = None,
     ) -> ResultInfo:
         cls = BUILTIN_MODELS.get(model)
         if cls is not None:
@@ -357,6 +373,9 @@ class FakeStore:
                     max=hi,
                     source_model=(column_sources or {}).get(name)
                     or _field_meta(arrow_field, b"source_model"),
+                    role=(column_roles or {}).get(name)
+                    or _field_meta(arrow_field, b"role")
+                    or _role(cls, name),
                 )
             )
         self._n += 1
@@ -378,6 +397,7 @@ class FakeStore:
             parents=list(parents),
             time_column=time_column,
             group_column=group_column,
+            rows_of=rows_of,
         )
         self.tables[rid] = table
         self.infos[rid] = info
@@ -463,6 +483,7 @@ class FakeStore:
             absent=out.absent,
             risk=out.risk or "api_structured",
             parents=out.provenance.derived_from,
+            rows_of=getattr(out, "rows_of", None),
         ).result_id
 
 

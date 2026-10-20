@@ -34,12 +34,20 @@ from pydantic import BaseModel, Field
 
 from marketlens_mcp.plugin_api import ToolContext, ToolError, ToolOutput
 from marketlens_mcp.results_api import (
+    CLOCK_NAMES,
     RESULT_ID_RE,
     ColumnInfo,
     OutputRisk,
     ResultInfo,
     ResultNotFound,
     ResultSession,
+    RowsOf,
+    implied_time,
+    known_late,
+    known_model,
+    known_span,
+    period_rows,
+    source_rows,
 )
 from marketlens_schema import ALIGNED_SCHEMA_NAME, BUILTIN_MODELS, QUERY_ROW_SCHEMA_NAME, CanonicalModel
 from marketlens_schema.base import TIMEFRAME_RE, AbsenceCode, AbsenceReason, Delay, Provenance
@@ -162,6 +170,138 @@ def tf_interval(tf: str) -> str:
 def tf_seconds(tf: str) -> int:
     n, u = tf_parts(tf)
     return n * _TF_SECONDS[u]
+
+
+#: The zone whose midnight starts a stock's or an option's bar of a day or longer (a crypto pair's: UTC).
+BAR_ZONE = "America/New_York"
+
+
+def span_end(ts: str, span: str) -> str:
+    """SQL: when a bar ends that starts at ``ts`` (a naive UTC timestamp
+    expression) and covers ``span`` (a timeframe expression: 15min, 4h, 1d, 1w,
+    3mo): N minutes or hours later, or N days, weeks or months later on the
+    calendar of the zone it starts at midnight in, New York (stocks and
+    options: a week across a clock change is an hour longer or shorter in UTC)
+    or UTC (crypto), and at a time midnight in neither, the later of the two;
+    NULL for a span that is not a timeframe."""
+    n = f"CAST(regexp_extract({span}, '^[0-9]+') AS INTEGER)"
+    unit = f"regexp_extract({span}, '[a-z]+$')"
+    local = f"timezone('{BAR_ZONE}', timezone('UTC', {ts}))"
+    days = f"CASE {unit} WHEN 'd' THEN to_days({n}) WHEN 'w' THEN to_days(7 * {n}) WHEN 'mo' THEN to_months({n}) END"
+    utc, zoned = f"{ts} + {days}", f"timezone('UTC', timezone('{BAR_ZONE}', {local} + {days}))"
+    return (
+        f"CASE WHEN NOT regexp_full_match({span}, '{TIMEFRAME_RE.pattern.strip('^$')}') THEN NULL "
+        f"WHEN {unit} = 'min' THEN {ts} + to_minutes({n}) WHEN {unit} = 'h' THEN {ts} + to_hours({n}) "
+        f"WHEN {local} = date_trunc('day', {local}) THEN {zoned} WHEN {ts} = date_trunc('day', {ts}) THEN {utc} "
+        f"ELSE greatest({utc}, {zoned}) END"
+    )
+
+
+def known_time(inp: Input, cls: type[CanonicalModel] | None) -> str | None:
+    """SQL: when each row of ``inp`` became known by the rule its rows follow
+    (``cls``, its ``known_model``; None for a bucket of other rows,
+    ``period_rows``), as a naive UTC timestamp: the end of the period it
+    covers (a bar's, a bucket's: ``span_end``) and ``lag_seconds`` after it,
+    or its fetch (a snapshot); None when that is its time column itself
+    (quotes, trades)."""
+    info = inp.info
+    src = info.rows_of
+    if cls is not None and cls.known_at_fetch:
+        at = (src.fetched_at if src is not None else info.provenance.fetched_at).astimezone(dt.UTC)
+        return f"TIMESTAMP '{at:%Y-%m-%d %H:%M:%S.%f}'"
+    span = known_span(info, cls)
+    lag = src.lag_seconds if src is not None else 0
+    if span is None and not lag:
+        return None
+    end = span_end(inp.ts(), span) if span is not None else inp.ts()
+    return f"({end} + to_seconds({lag}))" if lag else end
+
+
+def derived_rows_of(
+    session: ResultSession,
+    inputs: Sequence[Input],
+    *,
+    period: str | None = None,
+    levels: bool = True,
+    keeps_clock: bool = False,
+) -> RowsOf | None:
+    """What an output computed from ``inputs`` records of the rows its own
+    come from (``ResultInfo.rows_of``), so analytics_align takes each of its
+    rows as known no earlier than the last of the input rows it covers: with
+    ``period``, a row dated at a bucket's start covers the bucket's rows,
+    known at its end, or ``lag_seconds`` after it when one of them is known
+    later (a stock's day bar ends at midnight New York time, after a UTC
+    bucket); without, a row dated as an input row is known when that row is (a
+    return, a drawdown, a window ending there). ``levels``: the output holds
+    price levels, so it keeps the inputs' adjustment (returns, volatility and
+    beta hold ratios of prices, which a later split or dividend leaves as they
+    were). ``keeps_clock``: the output carries its inputs' other columns, a
+    clock among them (knowledge_time), which analytics_align matches on.
+
+    Fetched market data is known by its model's rule. Other rows (a
+    dataset's) are known no earlier than their time: a bucket of them records
+    its span (``period_rows``); rows dated as theirs record nothing (matched on
+    their time, not shown point in time), unless they show when they became
+    known only by a clock the output leaves out (returns of a dataset with a
+    knowledge_time). Marked not shown then, or when an input's rows are not
+    known by the same kind of rule as the others' or cover different spans and
+    are known only after their time (``known_late``: bars, snapshots)."""
+    found = [(inp, known_model(inp.info), source_rows(inp.info)) for inp in inputs]
+    srcs = [src for _, _, src in found if src is not None]
+    clocked = [inp for inp, cls, _ in found if cls is None and (inp.available or inp.unmarked_clock)]
+    dropped = [] if keeps_clock else clocked
+    if not srcs:
+        fetched_at = max(inp.info.provenance.fetched_at for inp in inputs)
+        if dropped:
+            return RowsOf(model=dropped[0].model, fetched_at=fetched_at, shown=False)
+        if period is None or clocked:
+            return None
+        return RowsOf(model=inputs[0].model, fetched_at=fetched_at, span=period)
+    late = [x for x in srcs if known_late(x)]
+    adjusted = [x.adjustment for x in srcs if x.adjustment not in (None, "raw")]
+    out = RowsOf(
+        model=(late or srcs)[0].model,
+        fetched_at=max(x.fetched_at for x in srcs),
+        adjustment=(adjusted[0] if adjusted else srcs[0].adjustment) if levels else None,
+    )
+    hidden = out.model_copy(update={"shown": False}) if late or dropped else None
+    classes = [cls for _, cls, _ in found]
+    at_fetch = {cls is not None and cls.known_at_fetch for cls in classes}
+    ruled = all(cls is not None or period_rows(inp.info) is not None for inp, cls, _ in found)
+    if dropped or not ruled or len(at_fetch) > 1:
+        return hidden
+    if at_fetch == {True}:
+        return out
+    if period is not None:
+        lag = 0
+        for inp, cls, _ in found:
+            known = known_time(inp, cls) or inp.ts()
+            end = span_end(f"time_bucket({tf_interval(period)}, {inp.ts()})", ql(period))
+            gap = scalar(
+                session,
+                f"SELECT max(epoch_us({known}) - epoch_us({end})) FROM {inp.table} WHERE {qi(inp.time)} IS NOT NULL",
+            )
+            if gap is not None and gap > 0:
+                lag = max(lag, math.ceil(gap / 1_000_000))
+        return out.model_copy(update={"span": period, "lag_seconds": lag})
+    spans: set[str | None] = set()
+    for inp, cls, _ in found:
+        span = known_span(inp.info, cls)
+        if span is None:
+            spans.add(None)
+            continue
+        spans |= {
+            r["s"]
+            for r in rows(
+                session,
+                f"SELECT DISTINCT {span} AS s FROM {inp.table} WHERE {qi(inp.time)} IS NOT NULL AND {span} IS NOT NULL",
+            )
+        }
+    if len(spans) > 1:
+        return hidden
+    return out.model_copy(
+        update={"span": next(iter(spans), None), "lag_seconds": max(x.lag_seconds for x in srcs)}
+    )
 
 
 def tf_nests(source: str, target: str) -> bool:
@@ -326,13 +466,50 @@ class Input:
     def table(self) -> str:
         return qi(self.rid)
 
-    def ts(self, alias: str | None = None) -> str:
-        """The time column as a naive UTC timestamp expression."""
-        ref = f"{alias}.{qi(self.time)}" if alias else qi(self.time)
-        col = self.column(self.time)
+    def ts(self, alias: str | None = None, *, column: str | None = None) -> str:
+        """The time column (or another timestamp ``column``) as a naive UTC
+        timestamp expression."""
+        name = column or self.time
+        ref = f"{alias}.{qi(name)}" if alias else qi(name)
+        col = self.column(name)
         if col is not None and col.type == _TZ_TIMESTAMP:
             return f"timezone('UTC', {ref})"
         return f"CAST({ref} AS TIMESTAMP)"
+
+    @property
+    def available(self) -> str | None:
+        """The timestamp column holding when each row became known (role
+        available), other than the time column; None without one."""
+        return next(
+            (
+                c.name
+                for c in self.info.columns
+                if c.role == "available" and c.name != self.time and is_timestamp(c)
+            ),
+            None,
+        )
+
+    @property
+    def unmarked_clock(self) -> str | None:
+        """Without a column with role available, a timestamp column named as
+        a point-in-time clock (``knowledge_time``, ``ingested_at``) other than
+        the time column, which has no role: a query answer passing it through
+        (or its max()) beside a result that does not show when its rows became
+        known, an analytics output carrying it (a bucket's latest), a plugin
+        that did not mark it; a lower bound on when each row became known. A
+        query answer computing it (a date_trunc of it, another time renamed so)
+        is marked not shown by results_query, so analytics_align refuses it
+        before reading this. None otherwise."""
+        if self.available is not None:
+            return None
+        return next(
+            (
+                c.name
+                for c in self.info.columns
+                if c.name in _CLOCKS and c.name != self.time and is_timestamp(c)
+            ),
+            None,
+        )
 
     def series(self, alias: str | None = None) -> str:
         if self.group is None:
@@ -380,9 +557,31 @@ def _parent_value(ctx: ToolContext, info: ResultInfo) -> str | None:
     return name if mine is not None and theirs is not None and mine.type == theirs.type else None
 
 
+def clocked_ancestor(ctx: ToolContext, info: ResultInfo) -> tuple[str, str] | None:
+    """A result ``info`` was computed from (its parents, their parents, ...)
+    that has a column with role available (when each row became known), as
+    (result id, column), the nearest first; None when none still stored has
+    one."""
+    queue, seen = list(info.parents), set()
+    while queue:
+        rid = queue.pop(0)
+        if rid in seen:
+            continue
+        seen.add(rid)
+        try:
+            parent = ctx.results.info(rid)
+        except ResultNotFound:
+            continue
+        clock = next((c.name for c in parent.columns if c.role == "available"), None)
+        if clock is not None:
+            return rid, clock
+        queue.extend(parent.parents)
+    return None
+
+
 #: Point-in-time clock columns next to ``event_time`` (a datastore's values):
 #: when a value was known or stored, not the time it describes.
-_CLOCKS = ("knowledge_time", "ingested_at")
+_CLOCKS = CLOCK_NAMES
 
 
 def resolve(ctx: ToolContext, tool: str, result_id: str, *, series_column: str | None = None) -> Input:
@@ -395,16 +594,18 @@ def resolve(ctx: ToolContext, tool: str, result_id: str, *, series_column: str |
     time = info.time_column
     if time is None and info.model not in BUILTIN_MODELS:
         stamps = [c.name for c in info.columns if is_timestamp(c)]
-        clocks: list[str] = []
-        if len(stamps) > 1 and "t" in stamps:
-            stamps = ["t"]
-        elif len(stamps) > 1 and "event_time" in stamps and set(stamps) - {"event_time"} <= set(_CLOCKS):
-            clocks, stamps = [c for c in stamps if c != "event_time"], ["event_time"]
-        if len(stamps) == 1:
-            time = stamps[0]
+        time = implied_time(stamps)
+        clocks = [c for c in stamps if c != "event_time"] if time == "event_time" and len(stamps) > 1 else []
+        if time is not None:
             notes.append(
                 f"{info.result_id} has no recorded time column; time column '{time}' was used"
-                + (f", not the point-in-time clock {names(clocks)}." if clocks else ".")
+                + (
+                    f" as the time each row describes; {names(clocks)} "
+                    + ("says" if len(clocks) == 1 else "say")
+                    + " when it became known."
+                    if clocks
+                    else "."
+                )
             )
         elif stamps:
             raise refuse(
@@ -671,6 +872,15 @@ def risk(inputs: Sequence[ResultInfo]) -> OutputRisk | None:
     return "external_text" if any(i.risk == "external_text" for i in inputs) else None
 
 
+@dataclass
+class DerivedOutput(ToolOutput):
+    """A ToolOutput that records the rows its own come from (``rows_of``,
+    ``derived_rows_of``): the server's offload stores it with them when it
+    stores the output. ToolOutput's own fields are the contract's."""
+
+    rows_of: RowsOf | None = None
+
+
 def model_output(
     table: pa.Table,
     model: type[CanonicalModel],
@@ -680,10 +890,12 @@ def model_output(
     absent: dict[str, AbsenceReason] | None = None,
     inputs: Sequence[ResultInfo] = (),
     store: bool = False,
+    rows_of: RowsOf | None = None,
 ) -> ToolOutput:
     """A canonical-model output; the server's offload decides inline or
-    stored (always stored with ``store``)."""
-    return ToolOutput(
+    stored (always stored with ``store``), and stores it with ``rows_of``
+    (the rows its own come from, ``derived_rows_of``)."""
+    return DerivedOutput(
         model=model,
         provenance=prov,
         table=to_model_table(table, model),
@@ -691,6 +903,7 @@ def model_output(
         absent=dict(absent or {}),
         risk=risk(inputs),
         offload="always" if store else "auto",
+        rows_of=rows_of,
     )
 
 
@@ -751,18 +964,20 @@ def dynamic_output(
     units: Mapping[str, str] | None = None,
     sources: Mapping[str, str] | None = None,
     store: bool = False,
+    rows_of: RowsOf | None = None,
 ) -> ToolOutput:
     """A dynamic-schema output. Small (and not ``store``): the table, inline
     (decided here, so the offload never stores it without them). Large: stored
     here with its time and series columns, which the offload cannot know for a
     dynamic schema, so the stored result chains into other analytics tools. ``units`` labels columns (a price stays a price for the
     next tool), and ``sources`` the model each carried column was computed by
-    (a drawdown stays a drawdown after its result is gone)."""
+    (a drawdown stays a drawdown after its result is gone). ``rows_of``: the
+    rows its own come from (``derived_rows_of``), stored with it either way."""
     out_risk = risk(inputs)
     units = {k: v for k, v in (units or {}).items() if v}
     table = with_units(utc_times(table), units, sources)
     if not store and _small(ctx, table):
-        return ToolOutput(
+        return DerivedOutput(
             model=model,
             provenance=prov,
             table=table,
@@ -770,6 +985,7 @@ def dynamic_output(
             absent=dict(absent or {}),
             risk=out_risk,
             offload="never",
+            rows_of=rows_of,
         )
     info = ctx.results.put(
         table,
@@ -782,6 +998,8 @@ def dynamic_output(
         time_column=time_column,
         group_column=group_column,
         column_units=units or None,
+        # marketlens's own store's (the contract pins the ResultStore protocol's put).
+        **({"rows_of": rows_of} if rows_of is not None else {}),
     )
     return ToolOutput(
         model=model, provenance=prov, stored=info, notes=list(notes), absent=dict(absent or {}), risk=out_risk

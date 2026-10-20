@@ -24,6 +24,10 @@ CONVENTIONS (schema 1.x)
   float. Market-data prices and analytics series are ``float``.
 * Every numeric field states its unit in the JSON Schema as ``x-unit`` (see
   ``UNITS``). Percentages are fractions: 0.0125 means 1.25 %.
+* A timestamp field holding when each row became known (published or first
+  available), beside the time the row describes, says ``x-role: available``
+  in the JSON Schema; analytics_align matches a row from the later of its
+  time and that one (point in time).
 * ABSENCE: a value the source does not give is ``None``, never 0, and every
   ``None`` is explained, either per row in the row's ``absent`` map
   (field -> AbsenceCode) or for the whole response in the response-level
@@ -369,6 +373,27 @@ class CanonicalModel(BaseModel):
     group_column: ClassVar[str | None] = None
     #: Numeric columns an analytics tool may default to, first is the default.
     value_columns: ClassVar[tuple[str, ...]] = ()
+    #: True when a fetched row is known by its time column and fixed from then
+    #: on: at that time (a quote, a trade; not an order, whose fill comes
+    #: later, nor a news item, updated later), or, with a ``span_column``, at
+    #: the end of its span (a bar, at its start plus its timeframe, when its
+    #: close is known), or, with no time column, at every time (an exchange, a
+    #: condition code; not an asset or a position, whose values are today's).
+    #: Only a built-in model's counts, whichever tool emits its rows (a
+    #: plugin's that declares the model too): results_query and
+    #: analytics_align take no other rows without a column of role available
+    #: as known by their time. A fetch that changed the rows after their time
+    #: (bars adjusted for later splits and dividends) is not.
+    known_at_time: ClassVar[bool] = False
+    #: True when a fetched row holds values as of its fetch, whatever its time
+    #: column (a snapshot: open interest published the next morning, greeks
+    #: and a session still trading, as fetched), so it is known only at the
+    #: fetch. Only a built-in model's counts, as for ``known_at_time``.
+    known_at_fetch: ClassVar[bool] = False
+    #: The column naming how long the period a row covers from its time
+    #: column lasts (a bar's timeframe: 15min, 1d, 1w), if any; such a row is
+    #: known only at the period's end.
+    span_column: ClassVar[str | None] = None
 
     absent: dict[str, AbsenceCode] | None = Field(
         default=None, description="Per-row reasons for None fields: field name -> AbsenceCode"

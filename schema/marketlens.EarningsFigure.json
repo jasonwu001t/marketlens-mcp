@@ -85,6 +85,7 @@
       "format": "date-time",
       "title": "Knowledge Time",
       "type": "string",
+      "x-role": "available",
       "x-unit": "UTC"
     },
     "metric": {
