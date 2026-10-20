@@ -120,7 +120,8 @@ ROUTES = {
     "catalog": "omni catalog.series_meta (local, no fetch)",
     "bls": "omni bls.timeseries <- api.bls.gov/publicAPI/v2/timeseries/data",
     "bea": "omni bea.nipa <- apps.bea.gov/api/data (NIPA GetData)",
-    "schedule": "omni bls.cpi_schedule, bls.empsit_schedule <- www.bls.gov/schedule/news_release",
+    "schedule": "omni bls.cpi_schedule, bls.empsit_schedule <- www.bls.gov/schedule/news_release, "
+    "schedule/{year}/{MM}_sched_list.htm (this and next month's releases)",
 }
 SCHEDULES = {"cpi": "bls.cpi_schedule", "employment_situation": "bls.empsit_schedule"}
 #: marketlens-data keeps BEA's CL_UNIT (`unit`), METRIC_NAME (`metric_name`) and UNIT_MULT
@@ -578,7 +579,7 @@ SPECS: tuple[ToolSpec, ...] = (
         input_model=ScheduleInputs,
         output_model=ReleaseScheduleEntry,
         provider="bls",
-        route="omni bls.cpi_schedule, bls.empsit_schedule <- www.bls.gov/schedule/news_release",
+        route=ROUTES["schedule"],
         handler=macro_release_schedule,
         golden_test=GOLDEN,
     ),

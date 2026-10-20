@@ -395,5 +395,17 @@ def test_macro_release_schedule_golden(tmp_path, upstream, frozen_clock):
         ("employment_situation", "2026-11-06", "2026-11-06T13:30:00Z"),
         ("cpi", "2026-11-13", "2026-11-13T13:30:00Z"),
     ]
+    # The route names every page the sync reads: each release's page and this and next month's
+    # lists of releases (review 2026-10-19: the lists were missing from it and from the README).
+    assert {r.url.path for r in upstream.requests} == {
+        "/schedule/news_release/cpi.htm",
+        "/schedule/news_release/empsit.htm",
+        "/schedule/2026/10_sched_list.htm",
+        "/schedule/2026/11_sched_list.htm",
+    }
+    assert out.provenance.route == (
+        "omni bls.cpi_schedule, bls.empsit_schedule <- www.bls.gov/schedule/news_release, "
+        "schedule/{year}/{MM}_sched_list.htm (this and next month's releases)"
+    )
     only = call("macro_release_schedule", context(tmp_path), releases=["cpi"], start="2026-10-01")
     assert [r.start_date.isoformat() for r in only.rows] == ["2026-10-15", "2026-11-13"]
