@@ -446,7 +446,7 @@ Each source names its own key; set the ones you need in the env block of the ser
 | Official feeds of SEC and BLS (built in, not the data extra) | `SEC_CONTACT_EMAIL` | optional | the same address, sent in the User-Agent to SEC and BLS only (both refuse undeclared automated clients); without it, or when it is not an email address, their nine feeds are skipped with a note and no placeholder is ever sent; the Fed, BEA, CFTC and ECB feeds need nothing | `news_official` |
 | Federal Reserve, NY Fed, Treasury, FiscalData | none | | keyless | `fed_`, `treasury_` tools, `macro_release_schedule` |
 | Nasdaq | none | | keyless; an unofficial endpoint | `calendar_economic`, `calendar_earnings`, `calendar_earnings_history` |
-| NYSE, SIFMA, OPM | none (`ALPACA_API_KEY`, `ALPACA_SECRET_KEY` optional) | no | keyless; with paper-account Alpaca keys, NYSE's dates are cross-checked against Alpaca's paper trading calendar, and without keys the answer says they were not (live-account keys make the NYSE fetch fail) | `calendar_us_holidays` |
+| NYSE, SIFMA, OPM | none (either Alpaca key pair optional: `ALPACA_API_KEY` and `ALPACA_SECRET_KEY`, or `APCA_API_KEY_ID` and `APCA_API_SECRET_KEY`) | no | keyless; with paper-account Alpaca keys, NYSE's dates are cross-checked against Alpaca's paper trading calendar, and without keys the answer says they were not (live-account keys make the NYSE fetch fail) | `calendar_us_holidays` |
 | EIA | `EIA_API_KEY` | not used yet | free | planned (a later release) |
 | Census | `CENSUS_API_KEY` | not used yet | | planned (a later release) |
 

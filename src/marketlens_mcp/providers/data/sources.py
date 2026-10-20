@@ -31,6 +31,7 @@ class SourceKey:
     url: str | None = None  # where to get the key (or the publisher's rules)
     note: str | None = None  # what an optional key buys
     tools: tuple[str, ...] = ()
+    alternative: tuple[str, ...] = ()  # another complete set that works as well (Alpaca's own spelling)
 
 
 @dataclass(frozen=True)
@@ -115,6 +116,7 @@ SOURCES: tuple[SourceKey, ...] = (
         False,
         note="optional cross-check of NYSE's calendar",
         tools=("calendar_us_holidays",),
+        alternative=("APCA_API_KEY_ID", "APCA_API_SECRET_KEY"),
     ),
     SourceKey("sifma", "SIFMA", "holidays", tools=("calendar_us_holidays",)),
     SourceKey("opm", "OPM", "holidays", tools=("calendar_us_holidays",)),
@@ -167,12 +169,15 @@ def readiness(env: Mapping[str, str], enabled: Collection[str], *, mode: str = "
     out: list[SourceStatus] = []
     for s in SOURCES:
         prefix = f"data source {s.source}: "
+        complete = next(
+            (vs for vs in (s.variables, s.alternative) if vs and all(_is_set(v, env) for v in vs)), None
+        )
         if s.capability not in enabled:
             state, text = "off", f"capability {s.capability} is off"
         elif not s.variables:
             state, text = "keyless", "keyless"
-        elif all(_is_set(v, env) for v in s.variables):
-            state, text = "ready", f"ready ({_names(s.variables)} set)"
+        elif complete:
+            state, text = "ready", f"ready ({_names(complete)} set)"
         elif s.source == "sec" and env.get("SEC_CONTACT_EMAIL"):
             state, text = ("missing" if mode == "auto" else "optional"), SEC_NOT_EMAIL
         elif s.source == "sec":

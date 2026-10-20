@@ -67,6 +67,28 @@ def test_doctor_with_the_extra_and_keys(capsys, keys, tmp_path, monkeypatch):
     assert store.is_dir()
 
 
+def test_doctor_nyse_cross_check_takes_either_alpaca_key_pair(capsys, monkeypatch):
+    # marketlens-data's NYSE cross-check reads Alpaca's own spelling too (APCA_API_KEY_ID,
+    # APCA_API_SECRET_KEY); the doctor said "not set" with only that pair (review 2026-10-19).
+    monkeypatch.setenv("APCA_API_KEY_ID", "test-key-id")
+    monkeypatch.setenv("APCA_API_SECRET_KEY", "test-secret")
+    _, out = doctor(capsys)
+    nyse = [line for line in out.splitlines() if line.startswith("data source nyse:")]
+    assert nyse == ["data source nyse: ready (APCA_API_KEY_ID and APCA_API_SECRET_KEY set)"]
+    monkeypatch.setenv("ALPACA_API_KEY", "test-key-id")
+    monkeypatch.setenv("ALPACA_SECRET_KEY", "test-secret")
+    _, out = doctor(capsys)
+    assert "data source nyse: ready (ALPACA_API_KEY and ALPACA_SECRET_KEY set)\n" in out
+    monkeypatch.setenv("APCA_API_SECRET_KEY", "")
+    monkeypatch.setenv("ALPACA_SECRET_KEY", "")
+    _, out = doctor(capsys)
+    assert (
+        "data source nyse: optional ALPACA_API_KEY and ALPACA_SECRET_KEY not set "
+        "(optional cross-check of NYSE's calendar)\n"
+    ) in out
+    assert "test-key-id" not in out and "test-secret" not in out
+
+
 def test_doctor_sec_contact_not_set(capsys):
     # a contact address, not a key: optional, and no "free key" link
     _, out = doctor(capsys)
