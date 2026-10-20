@@ -38,8 +38,8 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=8.3", "pytest-asyncio>=0.24", "ruff>=0.6"]
-# Official macro, SEC EDGAR, Fed and Treasury data (marketlens-data needs Python 3.13 or later;
-# on an older Python the resolver refuses the extra, which is the message we want).
+# Official macro, SEC EDGAR, Fed and Treasury data (marketlens-data needs Python 3.11 or later,
+# as this package does).
 data = ["marketlens-data>=0.1,<0.2"]
 
 [project.scripts]
