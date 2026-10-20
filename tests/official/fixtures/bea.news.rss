@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rss xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:foaf="http://xmlns.com/foaf/0.1/" xmlns:og="http://ogp.me/ns#" xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#" xmlns:schema="http://schema.org/" xmlns:sioc="http://rdfs.org/sioc/ns#" xmlns:sioct="http://rdfs.org/sioc/types#" xmlns:skos="http://www.w3.org/2004/02/skos/core#" xmlns:xsd="http://www.w3.org/2001/XMLSchema#" version="2.0" xml:base="http://www.bea.gov/">
+  <channel>
+    <title>News Releases</title>
+    <link>http://www.bea.gov/</link>
+    <description>Synthetic test feed in the shape of BEA's news releases</description>
+    <language>en</language>
+    <item>
+      <title>Synthetic Trade in Goods and Services, August 2026</title>
+      <link>http://www.bea.gov/news/2026/synthetic-trade-goods-and-services-august-2026</link>
+      <description>The synthetic trade deficit changed in August 2026, according to test data.</description>
+      <pubDate>Tue, 06 Oct 2026 08:30:00 -0400</pubDate>
+      <dc:creator>U.S. Bureau of Economic Analysis</dc:creator>
+      <guid isPermaLink="true">http://www.bea.gov/news/2026/synthetic-trade-goods-and-services-august-2026</guid>
+    </item>
+    <item>
+      <title>Synthetic Gross Domestic Product, Second Quarter 2026 (Third Estimate)</title>
+      <link>/news/2026/synthetic-gdp-second-quarter-2026-third-estimate</link>
+      <description>Synthetic real GDP increased at a test rate in the second quarter.</description>
+      <pubDate>Thu, 15 Oct 2026 08:30:00 -0400</pubDate>
+      <dc:creator>U.S. Bureau of Economic Analysis</dc:creator>
+      <guid isPermaLink="true">http://www.bea.gov/news/2026/synthetic-gdp-second-quarter-2026-third-estimate</guid>
+    </item>
+  </channel>
+</rss>

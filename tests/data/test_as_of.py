@@ -23,6 +23,7 @@ EXEMPT = {"sec.fund_tickers"}
 def schedule_routes(upstream):
     upstream.text_file(r"www\.bls\.gov/schedule/news_release/cpi\.htm", "bls.cpi_schedule.html")
     upstream.text_file(r"www\.bls\.gov/schedule/news_release/empsit\.htm", "bls.empsit_schedule.html")
+    upstream.text_file(r"www\.bls\.gov/schedule/\d{4}/\d{2}_sched_list\.htm", "bls.schedule_month_list.html")
 
 
 def file_route(pattern, name):

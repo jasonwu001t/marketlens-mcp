@@ -15,7 +15,7 @@
   "derived_from": [],
   "environment": null,
   "feed": null,
-  "knowledge_time": "2026-10-01T21:00:00Z",
+  "knowledge_time": "2026-10-01T20:00:00Z",
   "lag_days": 2.0,
   "operation": null,
   "pages_fetched": 1,
@@ -39,14 +39,14 @@
    "account_type": "Treasury General Account (TGA) Closing Balance",
    "closing_balance": 830500000000.0,
    "date": "2026-09-29",
-   "knowledge_time": "2026-09-30T21:00:00Z"
+   "knowledge_time": "2026-09-30T20:00:00Z"
   },
   {
    "absent": null,
    "account_type": "Treasury General Account (TGA) Closing Balance",
    "closing_balance": 850123456000.0,
    "date": "2026-09-30",
-   "knowledge_time": "2026-10-01T21:00:00Z"
+   "knowledge_time": "2026-10-01T20:00:00Z"
   }
  ]
 }

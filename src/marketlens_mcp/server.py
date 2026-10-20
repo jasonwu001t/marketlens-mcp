@@ -93,7 +93,8 @@ def build_runtime(
     if builtins is not None:
         kwargs["builtins"] = tuple(builtins)
     catalog = build_catalog(config, **kwargs)
-    policy = resolve(config, catalog.capabilities)
+    unloaded = [p.name for p in catalog.plugins if p.enabled and not p.loaded]
+    policy = resolve(config, catalog.capabilities, unloaded=unloaded)
     limits = StoreLimits.from_config(config.results, fetch_max_rows=config.fetch_limits.max_rows)
     store_root = StoreRoot(cache_dir(e), limits, models=catalog.models)
     return Runtime(
@@ -110,13 +111,21 @@ def enabled_tool_names(rt: Runtime) -> list[str]:
 
 
 def startup_notices(rt: Runtime) -> list[str]:
-    """Lines printed on stderr at start: R12 and one R13 per skipped plugin."""
+    """Lines printed on stderr at start: R12, one R13 per skipped plugin, and
+    one per configured capability skipped because no loaded plugin declares it."""
     notices = []
     if rt.config.portfolio_environment == "live":
         notices.append(LIVE_WARNING)
+    unloaded = []
     for status in rt.catalog.plugins:
         if status.enabled and not status.loaded:
             notices.append(_skip_message(status))
+            unloaded.append(f"'{status.name}'")
+    for cap in rt.policy.skipped:
+        notices.append(
+            f"capability '{cap}' in the config skipped: no loaded plugin declares it "
+            f"(not loaded: {', '.join(unloaded)})"
+        )
     return notices
 
 

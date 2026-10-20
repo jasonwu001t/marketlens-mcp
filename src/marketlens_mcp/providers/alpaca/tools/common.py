@@ -24,8 +24,10 @@ from marketlens_schema.base import (
 )
 
 from .. import convert
+from ..client import KEY_NAMES
 
-ALPACA_ENV = ("ALPACA_API_KEY", "ALPACA_SECRET_KEY")
+#: What an Alpaca tool may read: either spelling of the key pair (the client takes the first complete one).
+ALPACA_ENV = tuple(name for pair in KEY_NAMES for name in pair)
 SKIP_SAMPLE = 5
 #: How many skipped records a detailed skip note names, each with its reason.
 SKIP_DETAIL_MAX = 50
@@ -198,6 +200,7 @@ def window(
     day_zone: tzinfo = UTC,
     lag: timedelta = timedelta(0),
     lagging: str = "",
+    upstream: str = "Alpaca",
 ) -> Window:
     """With a timeframe of a day or longer, a start from lookback is floored to
     00:00 UTC so the first day's bar (stamped at midnight New York, 04:00 or
@@ -209,7 +212,8 @@ def window(
     An end later than the newest data the feed serves (now, or ``lag`` before
     now for a delayed feed, named by ``lagging``) is cut to it, and a lookback
     without an end reaches back from it. Each adjustment is said in a note; a
-    start not before it is refused by name."""
+    start not before it is refused by name (``upstream`` names the source in
+    that refusal: the official feeds share this window)."""
     now = ctx.now()
     latest = now - lag
     notes: list[str] = []
@@ -224,7 +228,7 @@ def window(
                 f"end {end.strip()} is a date: the window includes that whole day, to midnight "
                 f"{_zone_name(day_zone)} ({convert.iso_z(end_dt)})."
             )
-    source = f"the {lagging}" if lag and lagging else "Alpaca"
+    source = f"the {lagging}" if lag and lagging else upstream
     if end and end_dt is not None and end_dt > latest:
         if lag:
             notes.append(

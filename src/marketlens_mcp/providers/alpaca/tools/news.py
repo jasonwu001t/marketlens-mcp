@@ -64,9 +64,15 @@ class NewsIn(Inputs):
     @field_validator("query")
     @classmethod
     def _words(cls, v: str | None) -> str | None:
-        if v is not None and not re.search(r"\w", v):
-            raise ValueError("query needs at least one word")
-        return None if v is None else " ".join(v.split())
+        return query_words(v)
+
+
+def query_words(v: str | None) -> str | None:
+    """A query with its whitespace collapsed; refused without a word in it
+    (news_search and news_official)."""
+    if v is not None and not re.search(r"\w", v):
+        raise ValueError("query needs at least one word")
+    return None if v is None else " ".join(v.split())
 
 
 def class_roots(tickers: list[str]) -> list[str]:

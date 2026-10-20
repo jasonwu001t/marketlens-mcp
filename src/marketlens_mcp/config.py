@@ -60,6 +60,9 @@ providers:
     ttl_hours: 12         # how long a fetched slice is reused before it is fetched again
     calendar_ttl_minutes: 60
     call_timeout_seconds: 120
+  official:
+    cache_seconds: 300    # reuse a fetched feed this long (0: fetch every time; the ECB's 5 s Crawl-delay holds)
+    timeout_seconds: 20   # per feed request; a call stops 10 s after it
 
 results:
   inline_max_rows: 200
@@ -88,6 +91,8 @@ http:
 SECRET_ENV = (
     "ALPACA_API_KEY",
     "ALPACA_SECRET_KEY",
+    "APCA_API_KEY_ID",  # Alpaca's own spelling of the same pair; either pair works
+    "APCA_API_SECRET_KEY",
     "MARKETLENS_HTTP_TOKEN",
     "FRED_API_KEY",
     "BEA_API_KEY",
@@ -159,14 +164,33 @@ class _AbsPathOrNull(_Rule):
         return value is None or (isinstance(value, str) and pathlib.Path(value).expanduser().is_absolute())
 
 
-_SIZE_RE = re.compile(r"^\d+(?:\.\d+)?\s*(?:KB|MB|GB|TB|KiB|MiB|GiB|TiB)$")
+_SIZE_RE = re.compile(r"^(\d+(?:\.\d+)?)\s*(KB|MB|GB|TB|KiB|MiB|GiB|TiB)$")
+#: Bytes per unit, as DuckDB reads them (KB = 1000 bytes, KiB = 1024).
+_SIZE_UNITS = {
+    "KB": 10**3,
+    "MB": 10**6,
+    "GB": 10**9,
+    "TB": 10**12,
+    "KiB": 2**10,
+    "MiB": 2**20,
+    "GiB": 2**30,
+    "TiB": 2**40,
+}
 
 
 class _Size(_Rule):
     type_text = "a size such as 1GB or 512MB"
 
+    def __init__(self, least: str):
+        self.least = least
+
     def check(self, value: Any) -> bool:
         return isinstance(value, str) and bool(_SIZE_RE.match(value))
+
+    @staticmethod
+    def bytes(value: str) -> float:
+        number, unit = _SIZE_RE.match(value).groups()  # type: ignore[union-attr]
+        return float(number) * _SIZE_UNITS[unit]
 
 
 class _Version(_Rule):
@@ -203,6 +227,7 @@ SCHEMA: dict[str, Any] = {
             "calendar_ttl_minutes": _Int(5, 1440),
             "call_timeout_seconds": _Int(10, 600),
         },
+        "official": {"cache_seconds": _Int(0, 3600), "timeout_seconds": _Int(5, 120)},
     },
     "results": {
         "inline_max_rows": _Int(1, 1000),
@@ -210,7 +235,7 @@ SCHEMA: dict[str, Any] = {
         "query_max_rows": _Int(1, 200),
         "query_max_bytes": _Int(1000, 200000),
         "query_timeout_seconds": _Num(1, 120),
-        "query_memory_limit": _Size(),
+        "query_memory_limit": _Size("64MB"),  # far below it DuckDB runs out of memory storing any result
         "ttl_hours": _Num(1, 168),
         "max_store_gb": _Num(0.1, 100),
         "export_dir": _OptStr(),
@@ -351,6 +376,8 @@ def _validate(
                     shown,
                     f"{dotted} must be between {_fmt_num(rule.lo)} and {_fmt_num(rule.hi)} (got {value}).",
                 )
+            if isinstance(rule, _Size) and rule.bytes(value) < rule.bytes(rule.least):
+                raise _refuse(shown, f"{dotted} must be at least {rule.least} (got {value!r}).")
             out[key] = value
 
 

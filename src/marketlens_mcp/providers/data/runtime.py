@@ -70,7 +70,8 @@ REQUIRED_API: tuple[str, ...] = (
 )
 
 D1_TEXT = (
-    "The data tools need the marketlens-data package: install marketlens-mcp[data] (Python 3.13 or later)."
+    "The data tools need the marketlens-data package: install it beside marketlens-mcp (Python 3.13 or "
+    "later; see the README's Install section)."
 )
 
 

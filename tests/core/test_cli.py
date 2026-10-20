@@ -138,6 +138,18 @@ def test_config_init_honours_marketlens_config(capsys, tmp_path, monkeypatch):
     assert target.is_file()
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX permissions")
+def test_config_init_leaves_an_existing_folder_as_it_was(capsys, tmp_path, monkeypatch):
+    """MARKETLENS_CONFIG in an existing project folder made that folder owner-only."""
+    project = tmp_path / "project"
+    project.mkdir()
+    os.chmod(project, 0o740)
+    monkeypatch.setenv("MARKETLENS_CONFIG", str(project / "marketlens.yaml"))
+    assert main("config", "init") == 0
+    assert stat.S_IMODE(project.stat().st_mode) == 0o740
+    assert stat.S_IMODE((project / "marketlens.yaml").stat().st_mode) == 0o600
+
+
 def test_schema_command(capsys, tmp_path):
     assert main("schema") == 0
     index = json.loads(capsys.readouterr().out)
@@ -241,10 +253,30 @@ def test_doctor_reads_the_alpaca_key_pairs_as_one_credential(env, expected):
     assert cli._env_lines(sorted(names), env) == expected
 
 
+def test_doctor_names_no_alpaca_key_for_the_documentation_tools(capsys, tmp_path):
+    """2026-10-19: the provider_docs_* tools, which send no key, listed both Alpaca pairs."""
+    off = ("market", "reference", "news", "macro", "filings", "fed_treasury", "holidays", "calendars")
+    caps = "".join(f"  {cap}: false\n" for cap in off)
+    write_config(tmp_path, f"capabilities:\n{caps}  provider.docs: true\n")
+    assert main("doctor") == 0
+    out = capsys.readouterr().out
+    assert "ALPACA" not in out and "APCA" not in out
+
+
 def test_doctor_reports_a_broken_plugin(capsys, tmp_path):
     write_config(tmp_path, "plugins:\n  enabled: [ghost]\n")
     assert main("doctor") == 1
     assert "plugin 'ghost' not loaded: not installed" in capsys.readouterr().out
+
+
+def test_a_missing_plugin_whose_capability_is_configured_is_reported_not_fatal(capsys, tmp_path):
+    write_config(tmp_path, "plugins:\n  enabled: [ghost]\ncapabilities:\n  ghost_data: true\n")
+    assert main("plugins") == 0
+    assert "error: not installed" in capsys.readouterr().out
+    assert main("doctor") == 1
+    out = capsys.readouterr().out
+    assert "config: ok" in out and "plugin 'ghost' not loaded: not installed" in out
+    assert "capability 'ghost_data' in the config skipped" in out
 
 
 def test_doctor_network_uses_one_clock_call(capsys, monkeypatch):
@@ -263,6 +295,32 @@ def test_doctor_network_uses_one_clock_call(capsys, monkeypatch):
     assert str(calls[0].url) == "https://paper-api.alpaca.markets/v2/clock"
     out = capsys.readouterr().out
     assert "PKzz9fakekeyvalue" not in out and "zz9fakesecretvalue" not in out
+
+
+def test_doctor_network_takes_the_apca_spelling_of_the_key_pair(capsys, monkeypatch):
+    """2026-10-19: with only APCA_API_KEY_ID and APCA_API_SECRET_KEY set, which every
+    Alpaca tool accepts, --network skipped the clock call and counted a failure."""
+    calls = []
+
+    def handler(request):
+        calls.append(request)
+        return httpx.Response(200, json={"is_open": False, "timestamp": "2026-10-04T12:00:00-04:00"})
+
+    monkeypatch.setenv("APCA_API_KEY_ID", "PKzz9altkeyvalue")
+    monkeypatch.setenv("APCA_API_SECRET_KEY", "zz9altsecretvalue")
+    monkeypatch.setattr(cli, "HTTP_TRANSPORT", httpx.MockTransport(handler))
+    assert main("doctor", "--network") == 0
+    assert [r.headers["APCA-API-KEY-ID"] for r in calls] == ["PKzz9altkeyvalue"]
+    out = capsys.readouterr().out
+    assert "Alpaca clock: ok" in out and "zz9altsecretvalue" not in out
+
+
+def test_doctor_network_without_keys_names_both_spellings(capsys):
+    assert main("doctor", "--network") == 1
+    assert (
+        "Alpaca clock: skipped (neither key pair is set: ALPACA_API_KEY and ALPACA_SECRET_KEY or "
+        "APCA_API_KEY_ID and APCA_API_SECRET_KEY)"
+    ) in capsys.readouterr().out
 
 
 def test_doctor_network_failure(capsys, monkeypatch):

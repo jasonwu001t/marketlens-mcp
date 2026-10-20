@@ -144,3 +144,23 @@ def test_json_safe_values():
     assert arrow.json_safe(float("nan")) is None
     assert arrow.json_safe([("a", "b")]) == {"a": "b"}  # Arrow maps arrive as pairs
     assert arrow.json_safe({"x": dt.date(2026, 1, 1)}) == {"x": "2026-01-01"}
+
+
+def test_unique_names_follow_duckdb_and_rows_refuse_repeated_names():
+    sql = "SELECT 1 AS a, 2 AS a, 3 AS a_1, 4 AS A, 5 AS b"
+    con = duckdb.connect(":memory:")
+    answer = con.execute(sql).to_arrow_table()
+    con.execute(f"CREATE TABLE x AS {sql}")
+    described = [r[0] for r in con.execute("DESCRIBE x").fetchall()]
+    table, renamed = arrow.unique_names(answer)
+    assert table.column_names == described == ["a", "a_1", "a_1_1", "A_2", "b"]
+    assert renamed == [("a", "a_1"), ("a_1", "a_1_1"), ("A", "A_2")]
+    assert arrow.table_rows(table) == [{"a": 1, "a_1": 2, "a_1_1": 3, "A_2": 4, "b": 5}]
+    with pytest.raises(ValueError, match="repeated column names"):
+        arrow.table_rows(answer)
+
+
+def test_duckdb_type_of_an_interval():
+    con = duckdb.connect(":memory:")
+    answer = con.execute("SELECT INTERVAL 1 HOUR AS i").to_arrow_table()
+    assert arrow.duckdb_type(answer.schema.field("i").type) == "INTERVAL"

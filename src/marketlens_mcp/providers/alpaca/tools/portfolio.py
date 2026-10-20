@@ -206,7 +206,9 @@ class LocateIn(Inputs):
 
 
 class LocateQuotesIn(Inputs):
-    tickers: Annotated[EquityTickers, Field(max_length=100)]
+    tickers: Annotated[
+        EquityTickers, Field(max_length=100, description='Stock tickers, e.g. ["AAPL", "BRK-B"] (1-100).')
+    ]
 
 
 # --- helpers ---------------------------------------------------------------------------------

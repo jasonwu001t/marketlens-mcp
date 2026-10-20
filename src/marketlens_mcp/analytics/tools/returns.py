@@ -7,6 +7,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from marketlens_mcp.plugin_api import ToolContext, ToolOutput, ToolSpec
+from marketlens_mcp.worker import query_handler
 from marketlens_schema.analytics import ReturnPoint
 from marketlens_schema.base import Timeframe
 
@@ -63,7 +64,8 @@ class ReturnsArgs(BaseModel):
     store: bool = store_field()
 
 
-async def handler(ctx: ToolContext, args: ReturnsArgs) -> ToolOutput:
+@query_handler
+def handler(ctx: ToolContext, args: ReturnsArgs) -> ToolOutput:
     inp = resolve(ctx, TOOL, args.result_id, series_column=args.series_column)
     price = price_column(TOOL, inp, args.price_column, param="price_column")
     notes = list(inp.notes)

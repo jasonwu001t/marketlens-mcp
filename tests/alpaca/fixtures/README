@@ -2,11 +2,12 @@ Alpaca test fixtures
 ====================
 
 Every JSON file in this directory except alpaca_mcp_server_tools.json is
-SYNTHETIC ("_synthetic": true applies to all of them). They were written by
-hand in the shape of the response schemas and examples of the pinned OpenAPI
-specs (src/marketlens_mcp/providers/alpaca/specs/), with invented values. None
-is a recording of a live response, none contains an API key, account number or
-personal data of anyone. Ids are made-up UUIDs; tickers are public symbols.
+SYNTHETIC. None carries a "_synthetic" key; this README marks them all. They
+were written by hand in the shape of the response schemas and examples of the
+pinned OpenAPI specs (src/marketlens_mcp/providers/alpaca/specs/), with
+invented values. None is a recording of a live response, none contains an API
+key, account number or personal data of anyone. Ids are made-up UUIDs; tickers
+are public symbols.
 
 Naming: <operationId>[__case].json, e.g. StockBars__page1.json is the first
 page of a two-page StockBars response. Cases cover: multi-page responses and
@@ -15,8 +16,9 @@ timestamps, quote sizes in round lots before 2025-11-03, canceled trades,
 multi-leg orders, null entries in portfolio history, rejected locates, movers
 that are warrants, rights, units or sub-dollar listings, crypto bars without
 trades (volume and trade count 0), a chain's contract list with and without
-open interest, exchange and condition code tables (the spec's examples), and
-documentation-server payloads.
+open interest, and exchange and condition code tables (the spec's examples).
+The documentation server's payloads are not here: test_alpaca_provider_docs.py
+builds them inline.
 
 alpaca_mcp_server_tools.json is the list of the 72 tools alpacahq/alpaca-mcp-server
 exposes at commit a82ad1c (name, read or write, route), pinned for the parity

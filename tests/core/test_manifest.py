@@ -14,6 +14,7 @@ from pydantic import BaseModel, ConfigDict
 from marketlens_mcp import config as cfg
 from marketlens_mcp import manifest, registry
 from marketlens_mcp.plugin_api import TOOL_NAME_MAX, TOOL_NAME_RE, RegistrationError
+from marketlens_mcp.results.tools import SPECS as RESULTS_SPECS
 from marketlens_schema import ALIGNED_SCHEMA_NAME, QUERY_ROW_SCHEMA_NAME
 
 REPO = pathlib.Path(__file__).resolve().parents[2]
@@ -90,3 +91,22 @@ def test_annotations_are_forced_read_only():
     b = manifest.annotations(dataclasses.replace(ex.THINGS, provider="alpaca"))
     assert b.openWorldHint is True
     assert a.title == "Example things"
+
+
+def test_the_results_tools_that_write_or_delete_say_so():
+    """results_export (which writes, and with overwrite replaces, a file) and
+    results_drop (which deletes a result) were annotated readOnlyHint=True,
+    destructiveHint=False, so a client could run them without asking."""
+    hints = {
+        s.name: (a.readOnlyHint, a.destructiveHint, a.idempotentHint, a.openWorldHint)
+        for s in RESULTS_SPECS
+        for a in [manifest.annotations(s)]
+    }
+    assert hints == {
+        "results_query": (True, False, True, False),
+        "results_describe": (True, False, True, False),
+        "results_sample": (True, False, True, False),
+        "results_list": (True, False, True, False),
+        "results_drop": (False, True, True, False),
+        "results_export": (False, True, False, False),
+    }

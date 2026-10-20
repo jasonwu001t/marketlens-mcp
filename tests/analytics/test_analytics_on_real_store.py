@@ -1185,3 +1185,140 @@ def test_aligned_rows_not_matched_point_in_time_are_refused_whatever_the_left(re
     assert store.info(lower).rows_of is None
     onto = call(ALIGN, ctx, left_result_id=spy, right_result_id=lower, right_columns=["value"], store=True)
     assert store.info(onto.result_id).rows_of == RowsOf(model="marketlens.Bar", fetched_at=M0, shown=False)
+
+
+def test_a_result_keyed_by_a_naive_timestamp_is_stored_and_aligned(real):
+    """Storing a result whose time column is a naive TIMESTAMP failed the
+    marker's validation (its time span had no zone), so analytics_align of
+    such a result failed as internal_error, stored or too large to show."""
+    store, ctx = real
+    (query,) = [s for s in RESULTS_SPECS if s.name == "results_query"]
+    left = put_bars(
+        store, bars("AAPL", [float(i + 1) for i in range(300)], start=M0, step=MINUTE, timeframe="1min")
+    )
+    naive = call(query, ctx, sql=f"SELECT t::TIMESTAMP AS ts, close FROM {left}", store=True).result_id
+    info = store.info(naive)
+    assert [c.type for c in info.columns][:1] == ["TIMESTAMP"]
+    for keep in (False, True):
+        aligned = call(
+            ALIGN, ctx, left_result_id=naive, right_result_id=left, right_columns=["close"], store=keep
+        )
+        assert isinstance(aligned, ResultMarker) and aligned.row_count == 300
+        assert aligned.preview.time_column == "ts" and aligned.preview.time_span_start is None
+
+
+def test_a_date_indexed_data_model_is_a_time_series(real):
+    """Every analytics tool refused the data models whose time column is a
+    DATE (macro series, the yield curve, reference rates) as having 'no time
+    column', although the result records one: a date is its midnight UTC."""
+    from marketlens_mcp.results.arrow import rows_to_table
+    from marketlens_schema.data import EconomicObservation, YieldCurvePoint
+
+    store, ctx = real
+    prov = Provenance(provider="synthetic", route="GET /fred/series/observations", fetched_at=M0)
+    rows = [
+        EconomicObservation(
+            source="fred",
+            series_id=sid,
+            date=dt.date(2023 + m // 12, m % 12 + 1, 1),
+            value=base + m + (m % 3),
+            knowledge_time=M0,
+            pit="vintage",
+        )
+        for sid, base in (("CPI", 300.0), ("PCE", 120.0))
+        for m in range(40)
+    ]
+    macro = store.put(
+        rows_to_table(rows, EconomicObservation),
+        tool="macro_fred_series",
+        model=EconomicObservation.schema_name,
+        provenance=prov,
+    ).result_id
+    assert {c.name: c.type for c in store.info(macro).columns}["date"] == "DATE"
+    rets = call(RETURNS, ctx, result_id=macro)
+    assert rets.row_count == 78 and rets.rows[0]["t"] == "2023-02-01T00:00:00Z"
+    assert call(DRAWDOWN, ctx, result_id=macro).row_count == 2
+    monthly = call(RESAMPLE, ctx, result_id=macro, timeframe="1mo")
+    assert monthly.row_count == 80 and monthly.rows[0]["date"] == "2023-01-01"
+    assert call(CORRELATION, ctx, result_id=macro).row_count == 4
+    curve = [
+        YieldCurvePoint(
+            date=dt.date(2026, 1, 1) + dt.timedelta(days=d),
+            tenor=t,
+            rate=0.04 + d / 1e4 + i / 1e3,
+            knowledge_time=M0,
+        )
+        for d in range(30)
+        for i, t in enumerate(("1M", "10Y"))
+    ]
+    yc = store.put(
+        rows_to_table(curve, YieldCurvePoint),
+        tool="treasury_yield_curve",
+        model=YieldCurvePoint.schema_name,
+        provenance=prov,
+    ).result_id
+    assert call(RESAMPLE, ctx, result_id=yc, timeframe="1w").row_count == 10
+    # A time column of another type is named with its type, not called missing.
+    text = store.put(
+        pa.table({"d": ["2026-01-01", "2026-01-02"], "v": [1.0, 2.0]}),
+        tool="results_query",
+        model="marketlens.QueryRow",
+        provenance=prov,
+        time_column="d",
+    ).result_id
+    with pytest.raises(ToolError) as e:
+        call(RETURNS, ctx, result_id=text, price_column="v")
+    assert e.value.code == "not_time_series" and "the time column 'd' of" in e.value.message
+    assert "is VARCHAR, not a timestamp or a date" in e.value.message
+
+
+@pytest.mark.parametrize("inline_max_rows", [50, 1000])
+def test_dynamic_outputs_follow_the_configured_inline_limits(tmp_path, inline_max_rows):
+    """dynamic_output compared against the default 200 rows, not
+    results.inline_max_rows: with 50, a 122-row resample was left to the
+    offload, which stored it with no time or series column (the next resample
+    then averaged every ticker into one series); with 1000, a 242-row resample
+    was stored although it fits inline."""
+    store = StoreRoot(tmp_path, StoreLimits(inline_max_rows=inline_max_rows)).session("test")
+    ctx = testing.make_context(store=store, capabilities=["analytics", "results"])
+    hours = [M0 + i * 60 * MINUTE for i in range(60 * 24)]
+    table = pa.table(
+        {
+            "t": pa.array(hours * 2, pa.timestamp("us", tz="UTC")),
+            "ticker": ["AAA"] * len(hours) + ["BBB"] * len(hours),
+            "px": [100.0] * len(hours) + [1.0] * len(hours),
+        }
+    )
+    prov = Provenance(provider="synthetic", route="duckdb:results_query", fetched_at=M0)
+    rid = store.put(
+        table,
+        tool="results_query",
+        model="marketlens.QueryRow",
+        provenance=prov,
+        time_column="t",
+        group_column="ticker",
+    ).result_id
+    if inline_max_rows == 50:
+        daily = call(RESAMPLE, ctx, result_id=rid, timeframe="1d")
+        assert isinstance(daily, ResultMarker) and daily.row_count == 122
+        info = store.info(daily.result_id)
+        assert (info.time_column, info.group_column) == ("t", "ticker")
+        weekly = call(RESAMPLE, ctx, result_id=daily.result_id, timeframe="1w", agg="mean")
+        assert {r["ticker"]: r["px"] for r in weekly.rows} == {"AAA": 100.0, "BBB": 1.0}
+    else:
+        half_days = call(RESAMPLE, ctx, result_id=rid, timeframe="12h")
+        assert isinstance(half_days, InlineResult) and half_days.row_count == 242
+
+
+def test_a_stored_query_keeps_its_default_value_column_after_its_parent_is_gone(real):
+    """A stored query of bars defaulted to close only while the bars result
+    was live: once it was dropped (or expired, which a parent always does
+    first), analytics_returns refused with column_required."""
+    store, ctx = real
+    (query,) = [s for s in RESULTS_SPECS if s.name == "results_query"]
+    both = put_bars(store, bars("AAPL", [100.0, 110.0, 99.0]) + bars("SPY", [400.0, 404.0, 402.0]))
+    spy = call(query, ctx, sql=f"SELECT * FROM {both} WHERE ticker = 'SPY'", store=True).result_id
+    before = call(RETURNS, ctx, result_id=spy)
+    store.drop(both)
+    after = call(RETURNS, ctx, result_id=spy)
+    assert after.rows == before.rows and after.rows[0]["price_column"] == "close"

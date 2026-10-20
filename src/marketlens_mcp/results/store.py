@@ -34,6 +34,7 @@ import pyarrow.parquet as pq
 
 from marketlens_schema import BUILTIN_MODELS, SCHEMA_VERSION, CanonicalModel, PaginationState, Provenance
 
+from .. import paths
 from ..results_api import (
     RESULT_ID_RE,
     AbsenceReason,
@@ -49,7 +50,14 @@ from ..results_api import (
 )
 from . import evict as _evict
 from . import guard
-from .arrow import column_infos, column_infos_for, column_infos_from_schema, json_safe, sql_ident
+from .arrow import (
+    column_infos,
+    column_infos_for,
+    column_infos_from_schema,
+    json_safe,
+    sql_ident,
+    unique_names,
+)
 from .evict import StoreLockTimeout
 from .marker import GROUPS_SAMPLE, PREVIEW_ROWS, build_marker, truncate_strings, with_null_reasons
 
@@ -101,6 +109,8 @@ class QueryOutcome:
     executed_sql: str
     result_ids: tuple[str, ...]
     risk: OutputRisk
+    renamed: tuple[tuple[str, str], ...] = ()
+    notes: tuple[str, ...] = ()
 
 
 def _whole_numbers(table: pa.Table) -> pa.Table:
@@ -155,6 +165,47 @@ def lock_down(con: duckdb.DuckDBPyConnection) -> None:
     con.execute("SET lock_configuration = true")
 
 
+def _holds_interval(t: pa.DataType) -> bool:
+    """An interval, or a list, struct, map or union with one anywhere inside."""
+    return pa.types.is_interval(t) or any(_holds_interval(t.field(i).type) for i in range(t.num_fields))
+
+
+def _plain_types(table: pa.Table, limits: StoreLimits) -> tuple[pa.Table, list[str]]:
+    """Columns that Parquet cannot store or Python cannot read, in a form both
+    can, with a note for each kind: an INTERVAL (Arrow month_day_nano), or a
+    list, struct or map holding one, as DuckDB's text of it, a TIMESTAMP_NS cut
+    to microseconds."""
+    intervals = [i for i, f in enumerate(table.schema) if _holds_interval(f.type)]
+    nanos = [i for i, f in enumerate(table.schema) if pa.types.is_timestamp(f.type) and f.type.unit == "ns"]
+    notes = []
+    if intervals:
+        names = [table.schema.field(i).name for i in intervals]
+        con = connect(limits)
+        try:
+            lock_down(con)
+            con.register("t", table.select(intervals))
+            first_type = con.execute("DESCRIBE t").fetchone()[1]
+            cast = ", ".join(f"CAST({sql_ident(n)} AS VARCHAR)" for n in names)
+            text = con.execute(f"SELECT {cast} FROM t").to_arrow_table()
+        finally:
+            con.close()
+        for j, i in enumerate(intervals):
+            table = table.set_column(i, pa.field(names[j], pa.string()), text.column(j))
+        shown = ", ".join(names)
+        notes.append(
+            f"Interval column(s) {shown} are text in DuckDB's form ('1 day 02:00:00'); CAST({sql_ident(names[0])} AS "
+            f"{first_type}) reads one back, and epoch() of an interval gives seconds."
+        )
+    for i in nanos:
+        field = table.schema.field(i)
+        us = pa.timestamp("us", tz=field.type.tz)
+        table = table.set_column(i, field.with_type(us), table.column(i).cast(us, safe=False))
+    if nanos:
+        shown = ", ".join(table.schema.field(i).name for i in nanos)
+        notes.append(f"Nanosecond timestamp column(s) {shown} are cut to microseconds.")
+    return table, notes
+
+
 class StoreRoot:
     """The cache directory's result store: sessions, eviction, usage."""
 
@@ -187,10 +238,15 @@ class StoreRoot:
                 self._sessions[session_key] = FileResultStore(self, session_key)
             return self._sessions[session_key]
 
+    def ensure_dirs(self) -> None:
+        """The results folder, owner-only, and the cache folder, owner-only when
+        it is created here (an existing one, MARKETLENS_CACHE_DIR, keeps its mode)."""
+        paths.ensure_private_dir(self.cache_dir)
+        _private_dir(self.results_dir)
+
     @contextlib.contextmanager
     def lock(self) -> Iterator[None]:
-        _private_dir(self.cache_dir)
-        _private_dir(self.results_dir)
+        self.ensure_dirs()
         with _evict.store_lock(self.results_dir, timeout=self.lock_timeout):
             yield
 
@@ -348,6 +404,7 @@ class FileResultStore:
         group_column = group_column if group_column in names else None
         columns, preview = self._summarise(table, columns, time_column, group_column)
         columns = with_null_reasons(columns, absent)
+        self._root.ensure_dirs()
         _private_dir(self._dir)
         rid = self._new_id()
         parquet = self._parquet(rid)
@@ -439,7 +496,9 @@ class FileResultStore:
             table = session.query(executed)
             risks = {session.info(rid).risk for rid in checked.result_ids}
         truncated = table.num_rows > cap
-        table = _whole_numbers(table.slice(0, cap))
+        table, renamed = unique_names(table.slice(0, cap))
+        table, notes = _plain_types(table, self.limits)
+        table = _whole_numbers(table)
         return QueryOutcome(
             table=table,
             row_count=table.num_rows,
@@ -447,6 +506,8 @@ class FileResultStore:
             executed_sql=executed,
             result_ids=checked.result_ids,
             risk="external_text" if "external_text" in risks else "api_structured",
+            renamed=tuple(renamed),
+            notes=tuple(notes),
         )
 
     # -- internals ---------------------------------------------------------------------------
@@ -604,7 +665,8 @@ class FileResultStore:
             last = rows(f"SELECT {cols} FROM t LIMIT {PREVIEW_ROWS} OFFSET {start}")
         span_start = span_end = None
         by_name = {c.name: c for c in columns}
-        if time_column and by_name[time_column].type.startswith("TIMESTAMP"):
+        # The span is of UTC instants: a naive TIMESTAMP's values name no zone (its min and max are in columns).
+        if time_column and by_name[time_column].type == "TIMESTAMP WITH TIME ZONE":
             span_start, span_end = by_name[time_column].min, by_name[time_column].max
         groups_count, groups_sample = None, []
         if group_column:

@@ -8,6 +8,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from marketlens_mcp.plugin_api import ToolContext, ToolOutput, ToolSpec
+from marketlens_mcp.worker import query_handler
 from marketlens_schema import BUILTIN_MODELS
 from marketlens_schema.analytics import CorrelationCell
 
@@ -64,7 +65,8 @@ class CorrelationArgs(BaseModel):
     store: bool = store_field()
 
 
-async def handler(ctx: ToolContext, args: CorrelationArgs) -> ToolOutput:
+@query_handler
+def handler(ctx: ToolContext, args: CorrelationArgs) -> ToolOutput:
     inp = resolve(ctx, TOOL, args.result_id, series_column=args.series_column)
     if inp.group is None:
         raise refuse(

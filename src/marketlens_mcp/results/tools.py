@@ -1,6 +1,7 @@
 """The results tools (contract 5.5): query, describe, sample, list and drop
 (capability ``results``, always on) and export (capability
-``results.export``, off by default; the only tool that writes a file)."""
+``results.export``, off by default; the only tool that writes a file outside
+the result cache and the data extra's store)."""
 
 from __future__ import annotations
 
@@ -13,6 +14,7 @@ import secrets
 from typing import Literal
 
 import pyarrow as pa
+import pyarrow.compute as pc
 import pyarrow.csv as pacsv
 import pyarrow.parquet as pq
 import sqlglot
@@ -41,6 +43,7 @@ from ..results_api import (
     source_rows,
     unshown_known,
 )
+from ..worker import query_handler, thread_handler
 from .arrow import duckdb_type, json_safe, sql_ident, table_rows
 from .store import FileResultStore, QueryOutcome
 
@@ -512,7 +515,8 @@ def _incomplete_parents(store: FileResultStore, out: QueryOutcome) -> str | None
     )
 
 
-async def results_query(ctx: ToolContext, args: QueryArgs) -> ToolOutput:
+@query_handler
+def results_query(ctx: ToolContext, args: QueryArgs) -> ToolOutput:
     store = _store(ctx)
     limits = store.limits
     max_rows = min(args.max_rows, limits.query_max_rows)
@@ -538,6 +542,13 @@ async def results_query(ctx: ToolContext, args: QueryArgs) -> ToolOutput:
             )
     cap = limits.fetch_max_rows if keep and slow is None else max_rows
     notes = [f"Executed: {out.executed_sql}"]
+    if out.renamed:
+        notes.append(
+            "Repeated column names were renamed (the later column of each name): "
+            + ", ".join(f"{old} -> {new}" for old, new in out.renamed)
+            + ". Name them with AS to choose the names."
+        )
+    notes.extend(out.notes)
     if max_rows < args.max_rows and not keep:
         notes.append(
             f"max_rows {args.max_rows} is above results.query_max_rows ({limits.query_max_rows}), so it was lowered "
@@ -626,7 +637,8 @@ class ResultIdArgs(BaseModel):
     result_id: str = RESULT_ID_FIELD
 
 
-async def results_describe(ctx: ToolContext, args: ResultIdArgs) -> ToolOutput:
+@thread_handler
+def results_describe(ctx: ToolContext, args: ResultIdArgs) -> ToolOutput:
     info = _store(ctx).info(args.result_id)
     prov = info.provenance
     # An incomplete result says so again, as its first answer did.
@@ -648,7 +660,8 @@ class SampleArgs(BaseModel):
     columns: list[str] | None = Field(None, min_length=1, max_length=200, description="Only these columns")
 
 
-async def results_sample(ctx: ToolContext, args: SampleArgs) -> ToolOutput:
+@query_handler
+def results_sample(ctx: ToolContext, args: SampleArgs) -> ToolOutput:
     store = _store(ctx)
     info = store.info(args.result_id)
     names = [c.name for c in info.columns]
@@ -659,7 +672,7 @@ async def results_sample(ctx: ToolContext, args: SampleArgs) -> ToolOutput:
                 "unknown_column",
                 f"{', '.join(repr(u) for u in unknown)} not in {args.result_id}. Its columns: {', '.join(names)}.",
             )
-    chosen = args.columns or names
+    chosen = list(dict.fromkeys(args.columns or names))
     cols = ", ".join(sql_ident(c) for c in chosen)
     rid = args.result_id
     t = sql_ident(info.time_column) if info.time_column else None
@@ -711,7 +724,8 @@ class NoArgs(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
-async def results_list(ctx: ToolContext, args: NoArgs) -> ToolOutput:
+@thread_handler
+def results_list(ctx: ToolContext, args: NoArgs) -> ToolOutput:
     infos = _store(ctx).list()
     notes = []
     if len(infos) > LIST_MAX:
@@ -740,7 +754,8 @@ async def results_list(ctx: ToolContext, args: NoArgs) -> ToolOutput:
 # --- results_drop -----------------------------------------------------------------------------
 
 
-async def results_drop(ctx: ToolContext, args: ResultIdArgs) -> ToolOutput:
+@thread_handler
+def results_drop(ctx: ToolContext, args: ResultIdArgs) -> ToolOutput:
     dropped = _store(ctx).drop(args.result_id)
     table = pa.table({"result_id": [args.result_id], "dropped": [dropped]})
     return ToolOutput(
@@ -775,8 +790,16 @@ class ExportArgs(BaseModel):
         return v
 
 
-def _csv_ready(table: pa.Table) -> pa.Table:
-    cols = []
+#: A text cell starting with one of these is run as a formula by a spreadsheet
+#: (OWASP's CSV injection), so third-party text gets a leading ' in a CSV.
+FORMULA_START = r"^[=+\-@\t\r]"
+
+
+def _csv_ready(table: pa.Table, *, neutralise: bool = False) -> tuple[pa.Table, int]:
+    """The table for a CSV file, and how many text cells were neutralised:
+    nested values as JSON, and with ``neutralise`` a text cell that a
+    spreadsheet would run as a formula prefixed with '."""
+    cols, neutralised = [], 0
     for col in table.columns:
         t = col.type
         if pa.types.is_map(t) or pa.types.is_list(t) or pa.types.is_struct(t) or pa.types.is_large_list(t):
@@ -787,11 +810,16 @@ def _csv_ready(table: pa.Table) -> pa.Table:
                 ],
                 pa.string(),
             )
+        elif neutralise and (pa.types.is_string(t) or pa.types.is_large_string(t)):
+            formula = pc.fill_null(pc.match_substring_regex(col, FORMULA_START), False)
+            neutralised += pc.sum(formula).as_py() or 0
+            col = pc.if_else(formula, pc.binary_join_element_wise("'", col, ""), col)
         cols.append(col)
-    return pa.table(cols, names=table.column_names)
+    return pa.table(cols, names=table.column_names), neutralised
 
 
-async def results_export(ctx: ToolContext, args: ExportArgs) -> ToolOutput:
+@thread_handler
+def results_export(ctx: ToolContext, args: ExportArgs) -> ToolOutput:
     store = _store(ctx)
     export_dir = ctx.settings.get("export_dir") or store.limits.export_dir
     folder = pathlib.Path(export_dir) if export_dir else None
@@ -820,9 +848,17 @@ async def results_export(ctx: ToolContext, args: ExportArgs) -> ToolOutput:
         )
     table = store.read(args.result_id, limit=info.row_count)
     tmp = folder / f".{name}.{secrets.token_hex(4)}.tmp"
+    notes = []
     try:
         if args.format == "csv":
-            pacsv.write_csv(_csv_ready(table), tmp)
+            ready, neutralised = _csv_ready(table, neutralise=info.risk == "external_text")
+            pacsv.write_csv(ready, tmp)
+            if neutralised:
+                notes.append(
+                    f"{neutralised} third-party text cell(s) began with =, +, -, @, a tab or a carriage return and "
+                    "were written with a leading ' so that a spreadsheet shows them as text instead of running "
+                    "them as formulas."
+                )
         else:
             pq.write_table(table, tmp, compression="zstd")
         if args.overwrite:
@@ -859,6 +895,7 @@ async def results_export(ctx: ToolContext, args: ExportArgs) -> ToolOutput:
         model=QUERY_ROW_SCHEMA_NAME,
         provenance=_provenance(ctx, "file:results_export", request, [args.result_id]),
         table=result,
+        notes=notes,
         offload="never",
     )
 

@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
+import pyarrow as pa
 import pytest
-from coresupport import run
+from coresupport import provenance, run
 
 from marketlens_mcp import fetch, ratelimit
-from marketlens_mcp.plugin_api import FetchLimits, RateLimiter
+from marketlens_mcp.offload import finalize
+from marketlens_mcp.plugin_api import FetchLimits, RateLimiter, ToolOutput
+from marketlens_mcp.results.store import StoreRoot
 from marketlens_mcp.testing import make_context
+from marketlens_schema import QUERY_ROW_SCHEMA_NAME
 
 
 def pages_of(sizes, last_token=None):
@@ -90,3 +94,40 @@ def test_limiter_is_process_wide_per_key():
     assert ratelimit.get_limiter("test:other", 120) is not a
     assert isinstance(a, RateLimiter)
     assert make_context().limiter("test:key", 120) is a
+
+
+def test_rows_cut_from_a_last_page_leave_the_fetch_incomplete_and_flagged(tmp_path):
+    """An upstream that ignored page_limit on a page with no next token was
+    cut at fetch.max_rows but reported complete, so the middleware's
+    truncation note never fired and provenance.truncated stayed false."""
+
+    async def single(token, page_limit):
+        return list(range(10)), None
+
+    limits = FetchLimits(max_rows=5, max_pages=20)
+    ctx = make_context(limits=limits)
+    page = run(ctx.paginate(single))
+    state = page.state()
+    assert (state.complete, state.rows_fetched, state.row_cap_hit, state.next_page_token) == (
+        False,
+        5,
+        True,
+        None,
+    )
+    out = finalize(
+        ToolOutput(
+            model=QUERY_ROW_SCHEMA_NAME,
+            provenance=provenance(),
+            table=pa.table({"n": page.rows}),
+            pagination=state,
+        ),
+        tool="plugin_tool",
+        default_risk="api_structured",
+        store=StoreRoot(tmp_path / "cache").session("s"),
+        limits=limits,
+    )
+    assert out.provenance.truncated is True
+    assert out.notes == [
+        "Stopped after 1 pages and 5 rows (limits fetch.max_pages=20, fetch.max_rows=5). The data is incomplete; "
+        "narrow the request."
+    ]

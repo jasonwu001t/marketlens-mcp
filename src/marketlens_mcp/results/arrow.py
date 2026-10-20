@@ -170,7 +170,7 @@ def duckdb_type(t: pa.DataType) -> str:
         return "DATE"
     if pa.types.is_time(t):
         return "TIME"
-    if pa.types.is_duration(t):
+    if pa.types.is_duration(t) or pa.types.is_interval(t):
         return "INTERVAL"
     if pa.types.is_null(t):
         return '"NULL"'
@@ -365,8 +365,29 @@ def json_safe(value: Any) -> Any:
     return str(value)
 
 
+def unique_names(table: pa.Table) -> tuple[pa.Table, list[tuple[str, str]]]:
+    """``table`` with each repeated column name (compared without case, as
+    DuckDB does) suffixed ``_1``, ``_2``, ... the way DuckDB's CREATE TABLE AS
+    names them, and the (old, new) pairs: rows are dicts keyed by name, so a
+    repeated name (``a.px, b.px`` of a join) would keep only one value."""
+    used: set[str] = set()
+    names, renamed = [], []
+    for name in table.column_names:
+        new, i = name, 0
+        while new.lower() in used:
+            i += 1
+            new = f"{name}_{i}"
+        used.add(new.lower())
+        names.append(new)
+        if new != name:
+            renamed.append((name, new))
+    return (table.rename_columns(names) if renamed else table), renamed
+
+
 def table_rows(table: pa.Table) -> list[dict[str, Any]]:
     """JSON-safe dicts of every row of ``table``; a null ``absent`` is omitted."""
+    if len(set(table.column_names)) != table.num_columns:
+        raise ValueError(f"repeated column names would lose values: {table.column_names}")
     out = []
     for row in table.to_pylist():
         d = {k: json_safe(v) for k, v in row.items()}

@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rss xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:content="http://purl.org/rss/1.0/modules/content/" version="2.0" xml:base="https://www.cftc.gov/">
+  <channel>
+    <title>Press Releases</title>
+    <link>https://www.cftc.gov/</link>
+    <description></description>
+    <language>en</language>
+    <item>
+      <title>CFTC Charges a Synthetic Firm and Its CEO in a Test Fraud Scheme</title>
+      <link>https://www.cftc.gov/PressRoom/PressReleases/9899-26</link>
+      <description></description>
+      <pubDate>Wed, 14 Oct 2026 14:56:39 +0000</pubDate>
+      <dc:creator>web-editor-2</dc:creator>
+      <guid isPermaLink="true">https://www.cftc.gov/PressRoom/PressReleases/9899-26</guid>
+    </item>
+    <item>
+      <title>Court Orders a Synthetic Defendant to Pay a Test Penalty</title>
+      <link>https://www.example.com/not-the-cftc/9898-26</link>
+      <description></description>
+      <pubDate>Tue, 13 Oct 2026 16:03:00 +0000</pubDate>
+      <dc:creator>web-editor-2</dc:creator>
+      <guid isPermaLink="true">https://www.example.com/not-the-cftc/9898-26</guid>
+    </item>
+  </channel>
+</rss>

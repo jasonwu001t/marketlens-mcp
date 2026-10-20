@@ -5,12 +5,15 @@ from __future__ import annotations
 import importlib.util
 import json
 import pathlib
+import subprocess
+import sys
 
 import pytest
 
 from marketlens_mcp import cli, manifest, scaffold
 from marketlens_schema import BUILTIN_MODELS
 
+REPO = pathlib.Path(__file__).resolve().parents[2]
 SPEC = {
     "openapi": "3.0.0",
     "paths": {
@@ -56,11 +59,15 @@ def test_alpaca_tool_from_an_operation(checkout, capsys):
     )
     tool = checkout / "src/marketlens_mcp/providers/alpaca/tools/market_auctions.py"
     test = checkout / "tests/alpaca/test_market_auctions.py"
-    fixture = checkout / "tests/alpaca/fixtures/market_auctions.json"
+    # Named by its operation, as tests/alpaca/fixtures/README names every Alpaca
+    # fixture, and without a "_synthetic" key (the README marks them all).
+    fixture = checkout / "tests/alpaca/fixtures/StockAuctions.json"
     golden = checkout / "tests/alpaca/golden/market_auctions.json"
     for f in (tool, test, fixture, golden):
         assert f.is_file(), f
-    assert json.loads(fixture.read_text(encoding="utf-8")) == {"_synthetic": True}
+    assert not (checkout / "tests/alpaca/fixtures/market_auctions.json").exists()
+    assert json.loads(fixture.read_text(encoding="utf-8")) == {}
+    assert 'FIXTURE = HERE / "fixtures" / "StockAuctions.json"' in test.read_text(encoding="utf-8")
     assert json.loads(golden.read_text(encoding="utf-8")) == {}
     assert "market_auctions" in test.read_text(encoding="utf-8") and "pytest.mark.skip" in test.read_text(
         encoding="utf-8"
@@ -76,8 +83,85 @@ def test_alpaca_tool_from_an_operation(checkout, capsys):
     assert spec.route == "GET /v2/stocks/auctions" and spec.upstream_operations == ("StockAuctions",)
     assert spec.output_model is BUILTIN_MODELS["marketlens.Trade"]
     assert spec.golden_test == "tests/alpaca/test_market_auctions.py"
-    assert spec.env == ("ALPACA_API_KEY", "ALPACA_SECRET_KEY")
+    assert spec.env == ("ALPACA_API_KEY", "ALPACA_SECRET_KEY", "APCA_API_KEY_ID", "APCA_API_SECRET_KEY")
     manifest.validate_spec(spec, capabilities={"market"}, models=BUILTIN_MODELS)
+
+
+@pytest.mark.parametrize(
+    ("argv", "commands"),
+    [
+        (
+            [
+                "market_auctions",
+                "--capability",
+                "market",
+                "--provider",
+                "alpaca",
+                "--operation",
+                "StockAuctions",
+            ],
+            (["check"], ["format", "--check"]),
+        ),
+        (
+            ["analytics_skew", "--capability", "analytics", "--provider", "local"],
+            (["check"], ["format", "--check"]),
+        ),
+        # A plugin's import sections follow its own project, so only the layout is checked.
+        (
+            ["myplugin_things", "--capability", "myplugin", "--provider", "local", "--package", "my_plugin"],
+            (["format", "--check"],),
+        ),
+    ],
+    ids=["alpaca", "local", "plugin"],
+)
+def test_the_scaffold_passes_make_lint_as_written(checkout, capsys, argv, commands):
+    """2026-10-19: the tool module wrote its tuples with repr()'s single quotes, so
+    `make lint` (ruff format --check) failed on it until `make fmt` was run."""
+    if importlib.util.find_spec("ruff") is None:
+        pytest.skip("ruff is a dev dependency")
+    root = checkout / "plugin" if "--package" in argv else checkout
+    if "--package" in argv:
+        argv = [*argv, "--root", str(root), "--model", "myplugin.Thing"]
+    assert cli.main(["add-capability", *argv]) == 0
+    written = sorted(root.rglob("*.py"))
+    assert len(written) == 2, written
+    for path in written:
+        # Linted as if it were in this checkout, under this repository's ruff settings.
+        stdin_name = str(REPO / path.relative_to(root))
+        for command in commands:
+            ruff = [sys.executable, "-m", "ruff", *command, "--stdin-filename", stdin_name, "-"]
+            text = path.read_text(encoding="utf-8")
+            run = {"input": text, "cwd": REPO, "capture_output": True, "encoding": "utf-8", "check": False}
+            result = subprocess.run(ruff, **run)  # noqa: S603
+            assert result.returncode == 0, f"{command} {path.name}: {result.stdout}{result.stderr}"
+
+
+def test_an_operation_that_has_a_fixture_keeps_it(checkout, capsys):
+    """2026-10-19: once the fixture was named by its operation, a new tool over
+    an operation that already had one (Clock, Account, StockSnapshots, ...) was
+    refused outright: the scaffold would not overwrite <operationId>.json, so it
+    wrote nothing."""
+    fixtures = checkout / "tests/alpaca/fixtures"
+    fixtures.mkdir(parents=True)
+    (fixtures / "StockAuctions.json").write_text('{"auctions": {}}\n', encoding="utf-8")
+    argv = [
+        "market_auctions",
+        "--capability",
+        "market",
+        "--provider",
+        "alpaca",
+        "--operation",
+        "StockAuctions",
+    ]
+    assert cli.main(["add-capability", *argv]) == 0
+    assert (fixtures / "StockAuctions.json").read_text(encoding="utf-8") == '{"auctions": {}}\n'
+    test = checkout / "tests/alpaca/test_market_auctions.py"
+    assert 'FIXTURE = HERE / "fixtures" / "StockAuctions.json"' in test.read_text(encoding="utf-8")
+    assert (checkout / "src/marketlens_mcp/providers/alpaca/tools/market_auctions.py").is_file()
+    assert (checkout / "tests/alpaca/golden/market_auctions.json").is_file()
+    out = capsys.readouterr().out
+    assert "implement the handler, fill the golden file (the test reads the operation's fixture, which" in out
+    assert "reuse it, or add <operationId>__<case>.json for a case of its own)" in out
 
 
 def test_refuses_to_overwrite(checkout, capsys):

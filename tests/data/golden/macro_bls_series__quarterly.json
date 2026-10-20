@@ -1,0 +1,88 @@
+{
+ "absent": {
+  "line_number": {
+   "code": "not_applicable",
+   "detail": "BEA tables only"
+  },
+  "table_name": {
+   "code": "not_applicable",
+   "detail": "BEA tables only"
+  },
+  "title": {
+   "code": "not_provided_by_source",
+   "detail": "BLS's data API returns no series title"
+  },
+  "units": {
+   "code": "not_provided_by_source",
+   "detail": "BLS's data API returns no unit"
+  }
+ },
+ "model": "marketlens.EconomicObservation",
+ "notes": [],
+ "offload": "auto",
+ "pagination": null,
+ "provenance": {
+  "as_of": null,
+  "authority": [
+   "official"
+  ],
+  "cached": false,
+  "dataset": "bls.timeseries",
+  "delay": "unknown",
+  "derived_from": [],
+  "environment": null,
+  "feed": null,
+  "knowledge_time": "2026-07-31T12:30:00Z",
+  "lag_days": 184.0,
+  "operation": null,
+  "pages_fetched": 1,
+  "provider": "bls",
+  "request": {
+   "as_of": null,
+   "end": "2026-10-02",
+   "series_ids": [
+    "CIS1010000000000I"
+   ],
+   "start": "2026-02-01"
+  },
+  "route": "omni bls.timeseries <- api.bls.gov/publicAPI/v2/timeseries/data",
+  "schema_version": "1.1.0",
+  "stale": null,
+  "truncated": false,
+  "truncation_note": null,
+  "upstream_request_id": null
+ },
+ "risk": null,
+ "rows": [
+  {
+   "absent": null,
+   "date": "2026-01-01",
+   "frequency": "Q",
+   "knowledge_time": "2026-07-31T12:30:00Z",
+   "line_number": null,
+   "period": "Q01",
+   "pit": "lagged",
+   "series_id": "CIS1010000000000I",
+   "source": "bls",
+   "table_name": null,
+   "title": null,
+   "units": null,
+   "value": 174.1
+  },
+  {
+   "absent": null,
+   "date": "2026-04-01",
+   "frequency": "Q",
+   "knowledge_time": "2026-07-31T12:30:00Z",
+   "line_number": null,
+   "period": "Q02",
+   "pit": "lagged",
+   "series_id": "CIS1010000000000I",
+   "source": "bls",
+   "table_name": null,
+   "title": null,
+   "units": null,
+   "value": 175.3
+  }
+ ]
+}

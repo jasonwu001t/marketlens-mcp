@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0" xml:base="https://www.bls.gov/feeds" xmlns:dc="http://purl.org/dc/elements/1.1/">
+  <channel>
+    <title>Latest Numbers (synthetic)</title>
+    <link>https://www.bls.gov/</link>
+    <description>Synthetic test feed in the shape of the BLS latest numbers</description>
+    <language>en</language>
+    <item>
+      <title>Major Economic Indicators Latest Numbers</title>
+      <link>https://www.bls.gov/bls/</link>
+      <description>&lt;p&gt;Synthetic Price Index (SPI):&lt;/p&gt;
+		&lt;table&gt;&lt;tr&gt;&lt;td&gt;+9.9% in Sep 2026&lt;/td&gt;&lt;td&gt;&lt;a href="https://www.bls.gov/x"&gt;News Release&lt;/a&gt;&lt;/td&gt;&lt;/tr&gt;
+		&lt;tr&gt;&lt;td&gt;Synthetic Jobless Rate:&lt;/td&gt;&lt;td&gt;9.9% in Sep 2026&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;</description>
+      <pubDate>Fri, 16 Oct 2026 08:31:15 -0400</pubDate>
+      <dc:creator>U.S. Bureau of Labor Statistics</dc:creator>
+    </item>
+  </channel>
+</rss>

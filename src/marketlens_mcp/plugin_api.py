@@ -281,7 +281,9 @@ class PageResult(Generic[T]):
 
     @property
     def complete(self) -> bool:
-        return self.next_page_token is None
+        """Every row the upstream had: no token left and no row cut at a cap
+        (an upstream that ignored page_limit on its last page is cut too)."""
+        return self.next_page_token is None and not (self.row_cap_hit or self.page_cap_hit)
 
     def state(self) -> PaginationState:
         return PaginationState(

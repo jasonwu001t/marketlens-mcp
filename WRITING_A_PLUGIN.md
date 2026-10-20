@@ -31,13 +31,13 @@ Declare an entry point in the group `marketlens.plugins` whose value is a `Plugi
 name = "marketlens-myplugin"
 version = "0.1.0"
 requires-python = ">=3.11"
-dependencies = ["marketlens-mcp>=0.1,<0.2", "httpx>=0.28.1,<1"]
+dependencies = ["marketlens-mcp>=0.2,<0.3", "httpx>=0.28.1,<1"]
 
 [project.entry-points."marketlens.plugins"]
 myplugin = "my_plugin:PLUGIN"
 ```
 
-The server discovers entry points at start but imports a plugin only when the owner lists it in `plugins.enabled`. `register` is called once with a staging registry; if it raises, or anything it registered fails validation, nothing from the plugin is kept, the server starts without it, and `marketlens-mcp plugins` shows the reason.
+The server discovers entry points at start but imports a plugin only when the owner lists it in `plugins.enabled`. `register` is called once with a staging registry; if it raises, or anything it registered fails validation, nothing from the plugin is kept, the server starts without it (a capability of it set in the config is skipped with a notice), and `marketlens-mcp plugins` shows the reason.
 
 ## A complete example
 
@@ -189,7 +189,7 @@ What the example shows:
 
 ## Naming rules
 
-- Plugin names (entry-point names): `^[a-z][a-z0-9_]{1,31}$`, not `results`, `alpaca`, `analytics`, `data`, `core` or `marketlens`.
+- Plugin names (entry-point names): `^[a-z][a-z0-9_]{1,31}$`, not `results`, `alpaca`, `analytics`, `data`, `official`, `core` or `marketlens`.
 - Tool names: snake_case, domain first, at most 40 characters (`<domain>_<thing>`), so that a client's prefix still fits provider limits.
 - Capability ids: `research`, `myplugin.extra` (lower case, at most one dot).
 - Model schema names: `<plugin>.<Model>`.
@@ -271,6 +271,8 @@ A provider is a plugin that maps another data vendor onto the **existing** canon
 - translate the vendor's symbols, timestamps and units into the conventions above, and give every missing value a reason (a vendor's 0 that means "no quote" becomes `None` with `no_data`);
 - keep an exclusion list of the vendor endpoints you do not map, each with a reason, and a parity test that fails when the vendor's API gains an endpoint you have not classified (see [ADDING_A_CAPABILITY.md](ADDING_A_CAPABILITY.md) for the routine the Alpaca provider follows);
 - never map an endpoint that writes.
+
+Official government and central-bank feeds are the exception: their publishers are public bodies, not commercial vendors, so they are built in rather than a plugin. The built-in `official` provider (`news_official`) reads the Federal Reserve Board, SEC, BLS, BEA, CFTC and ECB feeds: no key, no account, public-domain or freely reusable text, read-only over a fixed allow-list. A new official feed is a line in that allow-list ([ADDING_A_CAPABILITY.md](ADDING_A_CAPABILITY.md#official-feeds-a-built-in-provider-not-a-plugin)). A commercial publisher's feed could only be a plugin, and only where its terms allow automated use (most news sites' terms do not).
 
 ## Security notes
 

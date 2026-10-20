@@ -59,7 +59,8 @@ class EconomicObservation(CanonicalModel):
     )
     date: Date = Field(description="First day of the period the value describes")
     period: str | None = Field(
-        default=None, description="Publisher's period code: M01..M12, Q1..Q4 or A (None for FRED)"
+        default=None,
+        description="Publisher's period code: M01..M12, Q1..Q4 (BEA), Q01..Q04 (BLS) or A (None for FRED)",
     )
     frequency: str | None = Field(default=None, description="A, Q or M where the source states it")
     value: float | None = _unit("as_published", default=None, description="In the row's `units`")

@@ -58,6 +58,18 @@ def test_r3_unknown_capability(tmp_path):
     )
 
 
+def test_an_unknown_capability_is_skipped_while_a_listed_plugin_did_not_load(tmp_path):
+    """2026-10-19: the capability of a plugin that failed to load, set in the
+    config as the README shows, was refused as unknown and stopped the server,
+    although a broken plugin is skipped, never fatal."""
+    c = load(tmp_path, "capabilities:\n  myvendor_data: true\n  news: false\n")
+    pol = policy.resolve(c, BUILTIN_CAPABILITIES, unloaded=["myvendor"])
+    assert pol.skipped == ("myvendor_data",)
+    assert "myvendor_data" not in pol.enabled
+    assert not pol.is_enabled("news")
+    assert policy.resolve(load(tmp_path), BUILTIN_CAPABILITIES, unloaded=["myvendor"]).skipped == ()
+
+
 def test_plugin_capability_default_applies_once_the_plugin_is_loaded(tmp_path):
     research = CapabilitySpec("research", "Research", "Notes and theses.", True, declared_by="myplugin")
     hidden = CapabilitySpec("myplugin.extra", "Extra", "Off by default.", False, declared_by="myplugin")

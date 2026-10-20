@@ -67,7 +67,7 @@ Then fill them in:
 4. **Handler.** Open `AlpacaClient(ctx)`; call `api.get("data" | "trading", path, params)` (`decimals=True` for money); page list endpoints through `ctx.paginate` (or `marketdata.fetch_grouped` / `fetch_once`), sizing each upstream page from the `limit` the paginator passes; map records with `collect(...)` so a record that does not fit the model is skipped and noted instead of failing the call; return `output(...)` with the provenance fields (route template, operationId, feed and delay where they apply, `environment` for brokerage reads, `as_of`, the normalised request).
 5. **Absence.** Every `None` needs a reason: per row through `build_row(..., codes={...})`, or once for the whole response in the output's `absent` map when a field never applies to that endpoint.
 6. **Spec.** Add a `spec(...)` entry to the module's `SPECS` with `operations=(...)` (every operationId the tool calls) and `parity=(...)` (the alpaca-mcp-server tool names it covers, if any), `risk="external_text"` for third-party prose, `golden_test` pointing at the test module. Add the module to `MODULES` if it is new.
-7. **Fixture and golden.** Write `tests/alpaca/fixtures/<operationId>[__case].json` by hand from the spec's schema and examples (synthetic values, no recordings, no keys) and a test that calls the tool through `alpaca_harness.call` and `check_golden`. Generate the golden file once with `MARKETLENS_UPDATE_GOLDEN=1`, then read it line by line: tickers, timestamps, units, absence codes, provenance. Add the same case to `HTTP_CASES` in `tests/alpaca/test_alpaca_read_only.py` (a tool without one fails there).
+7. **Fixture and golden.** Fill `tests/alpaca/fixtures/<operationId>.json` (the scaffold writes it empty; when the operation has one already, another tool's, it is left as it is and the new test reads it: reuse it, or add a case of your own; name further cases `<operationId>__<case>.json`) by hand from the spec's schema and examples (synthetic values, no recordings, no keys) and a test that calls the tool through `alpaca_harness.call` and `check_golden`. Generate the golden file once with `MARKETLENS_UPDATE_GOLDEN=1`, then read it line by line: tickers, timestamps, units, absence codes, provenance. Add the same case to `HTTP_CASES` in `tests/alpaca/test_alpaca_read_only.py` (a tool without one fails there).
 
 ## 4. Validate
 
@@ -104,6 +104,15 @@ The `data` provider (`src/marketlens_mcp/providers/data/`) reads publishers thro
 3. **Describe it**: its description carries the dataset's point-in-time line (`common.describe(text, policy)`), the key it needs, and the "stored" note; `ToolSpec.env` names the key; `DATASETS` maps the tool to its dataset ids.
 4. **Account for it** in `parity.PARITY` (Mapped), and the key in `sources.SOURCES` if the source is new (doctor prints its line).
 5. **Test it** in `tests/data/test_<module>.py` with a synthetic fixture in the publisher's own shape, served by the fake publisher of `tests/data/data_harness.py` behind marketlens-data's HTTP client, and a golden file (`MARKETLENS_UPDATE_GOLDEN=1`, then read it). `make test-data` runs them; they need the extra installed.
+
+## Official feeds: a built-in provider, not a plugin
+
+`news_official` (`src/marketlens_mcp/providers/official/`) reads the press, speech, testimony, enforcement and data-release feeds of the Federal Reserve Board, SEC, BLS, BEA, CFTC and ECB. It is a built-in provider, not a plugin, because these are public publishers, not commercial vendors: their feeds need no key or account, their text is public domain or free to reuse with a citation, and the provider is read-only over a fixed allow-list (`feeds.py`) that no setting or argument can extend. A commercial publisher's or vendor's feed is never added here: it could only be a plugin, under its own terms. To add an official feed:
+
+1. Check it once, live, with a declared User-Agent (`marketlens-mcp/<version>` and a contact): it must answer 200 with a current RSS 2.0 or Atom document, and the publisher's robots.txt must allow its path. Read the publisher's reuse terms.
+2. Add a `Feed` to `FEEDS` (and a `Publisher` if it is new, with its domain, whether it needs `SEC_CONTACT_EMAIL`, and its terms in one line), with a comment saying why it is in; a candidate you leave out goes in the module docstring with why it is out.
+3. Write a synthetic fixture in the feed's shape (`tests/official/fixtures/<feed id>.<kind>`, invented items, never a recording), regenerate the golden files with `MARKETLENS_UPDATE_GOLDEN=1` and read them line by line.
+4. Update the feed list in README.md ([Official feeds](README.md#official-feeds) and the Upstream APIs row) and CHANGELOG.md.
 
 ## Adding a provider instead
 

@@ -2,9 +2,12 @@
 
 Under the lock, at start, after every put and every 10 minutes while
 serving: delete results whose ``expires_at <= now``; delete orphan files
-(Parquet or temp files with no sidecar) older than one hour; if the total
-size is above the cap, delete oldest-first by ``created_at`` (any session)
-until the total is at most 90 % of the cap; remove empty session folders.
+(the store's own Parquet, sidecar or temp names with no sidecar) older than
+one hour; if the total size is above the cap, delete oldest-first by
+``created_at`` (any session) until the total is at most 90 % of the cap;
+remove empty session folders. A file of another name, and anything reached
+through a symbolic link, is never touched: the cache folder may be the
+owner's own (MARKETLENS_CACHE_DIR).
 """
 
 from __future__ import annotations
@@ -13,6 +16,7 @@ import contextlib
 import json
 import os
 import pathlib
+import re
 import time
 from collections.abc import Collection, Iterator
 from dataclasses import dataclass, field
@@ -23,6 +27,9 @@ LOCK_STALE_SECONDS = 60.0
 LOCK_RETRY_SECONDS = 0.05
 ORPHAN_AGE_SECONDS = 3600.0
 TARGET_FRACTION = 0.9
+#: The names the store writes in a session folder: a result's Parquet and
+#: sidecar, and their temp names while they are written.
+STORE_FILE_RE = re.compile(r"^r_[0-9a-f]{10}\.(?:parquet|json)(?:\.tmp)?$")
 
 
 class StoreLockTimeout(RuntimeError):
@@ -86,13 +93,22 @@ def _parse_time(text: str) -> datetime:
     return datetime.fromisoformat(text.replace("Z", "+00:00"))
 
 
+def _sessions(results_dir: pathlib.Path) -> list[pathlib.Path]:
+    """The session folders (not hidden, not a symbolic link)."""
+    return sorted(
+        p for p in results_dir.iterdir() if p.is_dir() and not p.is_symlink() and not p.name.startswith(".")
+    )
+
+
 def scan(results_dir: pathlib.Path) -> list[Entry]:
     """Every stored result with a readable sidecar, across sessions."""
     out: list[Entry] = []
     if not results_dir.is_dir():
         return out
-    for session in sorted(p for p in results_dir.iterdir() if p.is_dir() and not p.name.startswith(".")):
+    for session in _sessions(results_dir):
         for sidecar in session.glob("r_*.json"):
+            if not STORE_FILE_RE.match(sidecar.name):
+                continue
             try:
                 info = json.loads(sidecar.read_text(encoding="utf-8"))["info"]
                 created, expires = _parse_time(info["created_at"]), _parse_time(info["expires_at"])
@@ -131,9 +147,9 @@ def evict(
             live.append(e)
     known = {(e.session, e.result_id) for e in entries}
     cutoff = now.timestamp() - ORPHAN_AGE_SECONDS
-    for session in (p for p in results_dir.iterdir() if p.is_dir() and not p.name.startswith(".")):
+    for session in _sessions(results_dir):
         for f in session.iterdir():
-            if f.is_dir():
+            if not STORE_FILE_RE.match(f.name) or f.is_symlink() or f.is_dir():
                 continue
             stem = f.name.split(".", 1)[0]
             if f.suffix == ".json" and (session.name, stem) in known:
@@ -158,7 +174,7 @@ def evict(
             _delete(e.files)
             total -= e.bytes
             report.evicted.append(e.result_id)
-    for session in (p for p in results_dir.iterdir() if p.is_dir() and not p.name.startswith(".")):
+    for session in _sessions(results_dir):
         try:
             session.rmdir()
             report.sessions_removed += 1

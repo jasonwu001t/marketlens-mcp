@@ -82,7 +82,11 @@ class BlsInputs(Inputs):
         ),
         AfterValidator(_ids(_BLS_ID, "CUUR0000SA0")),
     ]
-    start: date | None = Field(default=None, description="First month (inclusive). Default: 10 years back.")
+    start: date | None = Field(
+        default=None,
+        description="First month (inclusive; a quarter is kept when any of its months is in the window). "
+        "Default: 10 years back.",
+    )
     end: date | None = Field(default=None, description="Last month (inclusive). Default: today.")
     as_of: AsOf | None = common.as_of_field()
 
@@ -262,7 +266,7 @@ async def macro_bls_series(ctx: ToolContext, args: BlsInputs) -> ToolOutput:
     start, end = common.window(
         ctx.tool, args.start, args.end, default_start=common.years_ago(today, 10), default_end=today
     )
-    start = start.replace(day=1)  # monthly observations are dated the first of their month
+    start = start.replace(day=1)  # observations are dated the first of their month (or quarter)
     blocks = decade_blocks(start, end, today.year)
 
     def work(session: common.Session):
@@ -278,7 +282,10 @@ async def macro_bls_series(ctx: ToolContext, args: BlsInputs) -> ToolOutput:
     for order, (sid, records) in enumerate(found):
         for r in records:
             d = F.day(r["date"])
-            if not F.within(d, start, end):
+            period = F.text(r["period"])
+            quarterly = period is not None and period.startswith("Q")  # Q01-Q04; else M01-M12
+            # a quarter is in the window when any of its months is: its last on or after start
+            if d is None or d > end or (d.replace(month=d.month + 2) if quarterly else d) < start:
                 continue
             rows.append(
                 (
@@ -290,8 +297,8 @@ async def macro_bls_series(ctx: ToolContext, args: BlsInputs) -> ToolOutput:
                             "series_id": sid,
                             "title": None,
                             "date": d,
-                            "period": F.text(r["period"]),
-                            "frequency": "M",
+                            "period": period,
+                            "frequency": "Q" if quarterly else "M",
                             "value": F.number(r["value"]),
                             "units": None,
                             "table_name": None,
@@ -500,9 +507,9 @@ SPECS: tuple[ToolSpec, ...] = (
         capability="macro",
         title="BLS series",
         description=common.describe(
-            "BLS monthly series (CPI-U CUUR0000SA0, core CPI CUUR0000SA0L1E, the "
-            "unemployment rate LNS14000000, payrolls CES0000000001, JOLTS openings JTS000000000000000JOL). "
-            "value is as BLS publishes it; BLS serves only the latest revision and no release date, so "
+            "BLS monthly and quarterly series (CPI-U CUUR0000SA0, core CPI CUUR0000SA0L1E, unemployment "
+            "LNS14000000, payrolls CES0000000001, JOLTS openings JTS000000000000000JOL, ECI CIS1010000000000I). "
+            "BLS serves only the latest revision and no release date, so "
             "knowledge_time is the latest release in BLS's archive at the value's first fetch (08:30 ET; "
             "JOLTS 10:00 ET; real earnings: CPI or jobs report), else that fetch (the archive lagging or "
             "unread, a state's JOLTS, SA CPI from December's to January's CPI): history older than the first sync "
@@ -511,7 +518,7 @@ SPECS: tuple[ToolSpec, ...] = (
             "optional.",
             "lagged",
         ),
-        readme="BLS monthly series (CPI, unemployment, payrolls, JOLTS)",
+        readme="BLS monthly and quarterly series (CPI, unemployment, payrolls, JOLTS, ECI)",
         input_model=BlsInputs,
         output_model=EconomicObservation,
         provider="bls",

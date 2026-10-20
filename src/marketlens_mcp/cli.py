@@ -273,9 +273,14 @@ def guard_self_test() -> list[str]:
 def _network_check(rt) -> tuple[bool, str]:
     import httpx
 
-    key, secret = os.environ.get("ALPACA_API_KEY"), os.environ.get("ALPACA_SECRET_KEY")
+    from .providers.alpaca.client import KEY_NAMES
+
+    # The first complete pair, as the Alpaca client takes it.
+    pairs = [(os.environ.get(k), os.environ.get(s)) for k, s in KEY_NAMES]
+    key, secret = next(((k, s) for k, s in pairs if k and s), (None, None))
     if not key or not secret:
-        return False, "Alpaca clock: skipped (ALPACA_API_KEY and ALPACA_SECRET_KEY are not both set)"
+        spellings = " or ".join(" and ".join(pair) for pair in KEY_NAMES)
+        return False, f"Alpaca clock: skipped (neither key pair is set: {spellings})"
     settings = rt.config.provider_settings("alpaca")
     base = settings.get("trading_url") or (
         "https://api.alpaca.markets"
@@ -297,9 +302,10 @@ def _network_check(rt) -> tuple[bool, str]:
     return True, "Alpaca clock: ok"
 
 
+#: Neither package is on PyPI yet, so the extra cannot be installed by name: the README says how.
 DATA_NOT_INSTALLED = (
-    "data extra: not installed; install marketlens-mcp[data] (Python 3.13 or later) to list the macro, "
-    "filings, fed_treasury, holidays and calendars tools"
+    "data extra: not installed; install marketlens-data beside marketlens-mcp (Python 3.13 or later; see "
+    "the README's Install section) to list the macro, filings, fed_treasury, holidays and calendars tools"
 )
 
 
@@ -382,8 +388,16 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     print(
         f"version: marketlens-mcp {__version__}, schema {SCHEMA_VERSION}, plugin API {PLUGIN_API_VERSION[0]}.{PLUGIN_API_VERSION[1]}"
     )
-    for line in _env_lines(sorted({n for e in enabled_entries(rt) for n in e.env}), os.environ):
+    from .providers.official import tool as official
+
+    enabled = enabled_entries(rt)
+    official_on = any(e.spec.name == "news_official" for e in enabled)
+    # news_official does not refuse without SEC_CONTACT_EMAIL (it skips SEC and BLS): its own line says so
+    names = sorted({n for e in enabled if e.spec.name != "news_official" for n in e.env})
+    for line in _env_lines(names, os.environ):
         print(line)
+    if official_on:
+        print(official.doctor_line(os.environ))
     cache = rt.store_root.cache_dir
     try:
         paths.ensure_private_dir(rt.store_root.results_dir)
@@ -471,7 +485,7 @@ def cmd_results(args: argparse.Namespace) -> int:
 def cmd_add_capability(args: argparse.Namespace) -> int:
     from .scaffold import add_capability, next_steps
 
-    add_capability(
+    written = add_capability(
         args.name,
         capability=args.capability,
         provider=args.provider,
@@ -480,7 +494,7 @@ def cmd_add_capability(args: argparse.Namespace) -> int:
         package=args.package,
         root=args.root,
     )
-    print(next_steps(args.name, args.provider, args.package))
+    print(next_steps(args.name, args.provider, args.package, written))
     return 0
 
 

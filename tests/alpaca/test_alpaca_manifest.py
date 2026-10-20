@@ -218,19 +218,25 @@ KEY_INPUTS = {
     "provider_docs_get_endpoint": {"method", "path", "api"},
 }
 EXTERNAL_TEXT = {"news_search", *(n for n in TABLE if n.startswith("provider_docs_"))}
-ALPACA_ENV = ("ALPACA_API_KEY", "ALPACA_SECRET_KEY")
+ALPACA_ENV = ("ALPACA_API_KEY", "ALPACA_SECRET_KEY", "APCA_API_KEY_ID", "APCA_API_SECRET_KEY")
 GIT = shutil.which("git") or "git"
 
 
 def test_plugin_info():
     assert PLUGIN.name == "alpaca"
     assert PLUGIN.api_version == PLUGIN_API_VERSION
-    assert set(PLUGIN.env) == {
-        "ALPACA_API_KEY",
-        "ALPACA_SECRET_KEY",
-        "APCA_API_KEY_ID",
-        "APCA_API_SECRET_KEY",
-    }
+
+
+def test_only_the_tools_that_send_the_keys_declare_them():
+    """2026-10-19: the plugin-wide env gave the provider_docs_* tools, which send no
+    key, both Alpaca key pairs in the README's tool table and in doctor."""
+    from marketlens_mcp import readme, registry
+
+    cat = registry.build_catalog(readme.default_config(), discover=list)
+    alpaca = {name: e.env for name, e in cat.tools.items() if e.plugin == "builtin:alpaca"}
+    assert sorted(alpaca) == sorted(TABLE)
+    for name, env in alpaca.items():
+        assert env == (() if name.startswith("provider_docs_") else ALPACA_ENV), name
 
 
 def test_exactly_the_contract_tools_are_registered(specs):
@@ -267,6 +273,23 @@ def test_spec_integrity(specs, name):
     golden = REPO / spec.golden_test
     assert golden.is_file(), spec.golden_test
     assert name in golden.read_text(encoding="utf-8"), f"{spec.golden_test} never mentions {name}"
+
+
+def _list_inputs(schema):
+    """(name, description, minItems, maxItems) of each list input, optional ones included."""
+    for name, prop in schema["properties"].items():
+        for variant in prop.get("anyOf", [prop]):
+            if variant.get("type") == "array":
+                yield name, prop.get("description", ""), variant.get("minItems"), variant.get("maxItems")
+
+
+@pytest.mark.parametrize("name", sorted(TABLE))
+def test_a_list_input_says_the_size_its_schema_allows(specs, name):
+    """2026-10-19: portfolio_locate_quotes said tickers (1-200) and refused more than 100."""
+    for field, description, low, high in _list_inputs(specs[name].input_model.model_json_schema()):
+        said = re.search(r"\((\d+)-(\d+)\)", description)
+        if said:
+            assert (int(said[1]), int(said[2])) == (low, high), f"{name}.{field}: {description}"
 
 
 def test_capability_counts(specs):

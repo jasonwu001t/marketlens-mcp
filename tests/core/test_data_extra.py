@@ -63,7 +63,7 @@ def catalog(monkeypatch, *, installed: bool):
 
 
 def test_the_provider_is_built_in_and_its_name_reserved():
-    assert builtins.BUILTIN_PLUGINS[-1] == "marketlens_mcp.providers.data:PLUGIN"
+    assert builtins.BUILTIN_PLUGINS[-2] == "marketlens_mcp.providers.data:PLUGIN"  # then official
     assert "data" in registry.BUILTIN_PLUGIN_NAMES
     assert data.PLUGIN.name == "data"
     assert data.PLUGIN.env == (
@@ -124,7 +124,7 @@ def test_the_25_tools(monkeypatch):
         assert "as_of" in spec.input_model.model_fields or name == "macro_series_catalog", name
 
 
-@pytest.mark.parametrize(("installed", "count"), [(False, 49), (True, 71)])
+@pytest.mark.parametrize(("installed", "count"), [(False, 50), (True, 72)])
 def test_tools_json_counts(monkeypatch, capsys, installed, count):
     monkeypatch.setattr(runtime, "available", lambda: installed)
     assert cli.main(["tools", "--json"]) == 0
@@ -154,9 +154,11 @@ def test_doctor_without_the_extra(monkeypatch, capsys):
     monkeypatch.setattr(runtime, "available", lambda: False)
     assert cli.main(["doctor"]) == 0
     out = capsys.readouterr().out
+    # 2026-10-19: it said "install marketlens-mcp[data]", which cannot work before both are on PyPI.
     assert (
-        "data extra: not installed; install marketlens-mcp[data] (Python 3.13 or later) to list the "
-        "macro, filings, fed_treasury, holidays and calendars tools\n"
+        "data extra: not installed; install marketlens-data beside marketlens-mcp (Python 3.13 or later; "
+        "see the README's Install section) to list the macro, filings, fed_treasury, holidays and "
+        "calendars tools\n"
     ) in out
     assert "data source" not in out and "data store" not in out
 
@@ -502,14 +504,14 @@ def test_readiness_in_local_mode_needs_no_key():
 
 
 def test_parity_list_shape():
-    assert len(parity.PARITY) == 60
+    assert len(parity.PARITY) == 84
     mapped = {k: v for k, v in parity.PARITY.items() if isinstance(v, parity.Mapped)}
     excluded = {k: v for k, v in parity.PARITY.items() if isinstance(v, parity.Excluded)}
-    assert (len(mapped), len(excluded)) == (27, 33)
+    assert (len(mapped), len(excluded)) == (27, 57)
     kinds = [v.kind for v in excluded.values()]
     assert {k: kinds.count(k) for k in set(kinds)} == {
         "covered": 7,
-        "second_wave": 16,
+        "second_wave": 40,
         "not_planned": 8,
         "internal": 2,
     }

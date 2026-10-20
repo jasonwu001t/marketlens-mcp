@@ -9,6 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from marketlens_mcp.plugin_api import ToolContext, ToolOutput, ToolSpec
 from marketlens_mcp.results_api import ResultSession
+from marketlens_mcp.worker import query_handler
 from marketlens_schema.analytics import BetaPoint, BetaResult
 from marketlens_schema.base import Timeframe
 
@@ -203,7 +204,8 @@ def _gap_note(session: ResultSession, rets: str, period: str | None) -> list[str
     ]
 
 
-async def handler(ctx: ToolContext, args: BetaArgs) -> ToolOutput:
+@query_handler
+def handler(ctx: ToolContext, args: BetaArgs) -> ToolOutput:
     a, b = _inputs(ctx, args)
     ca = price_column(TOOL, a, args.price_column, param="price_column")
     cb = price_column(TOOL, b, args.price_column, param="price_column")

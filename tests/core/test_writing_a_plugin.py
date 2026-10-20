@@ -5,13 +5,15 @@ from __future__ import annotations
 
 import pathlib
 import sys
+import tomllib
 import types
 
 import httpx
 from coresupport import run
+from packaging.requirements import Requirement
 
+from marketlens_mcp import __version__, registry
 from marketlens_mcp import config as cfg
-from marketlens_mcp import registry
 from marketlens_mcp.plugin_api import FetchLimits
 from marketlens_mcp.testing import call_tool, make_context
 
@@ -26,6 +28,16 @@ def load_example() -> types.ModuleType:
     sys.modules[module.__name__] = module  # pydantic resolves annotations through sys.modules
     exec(compile(code, str(DOC), "exec"), module.__dict__)  # noqa: S102 - our own documentation
     return module
+
+
+def test_the_documented_pyproject_installs_beside_this_version():
+    """2026-10-19: the example pinned marketlens-mcp<0.2 while the package was 0.2.0,
+    so a plugin copied from the guide could not be installed next to the server."""
+    text = DOC.read_text(encoding="utf-8")
+    toml = text.split("## The entry point", 1)[1].split("```toml", 1)[1].split("```", 1)[0]
+    deps = [Requirement(d) for d in tomllib.loads(toml)["project"]["dependencies"]]
+    (server,) = [d for d in deps if d.name == "marketlens-mcp"]
+    assert server.specifier.contains(__version__, prereleases=True), server
 
 
 def test_the_documented_plugin_registers(tmp_path):

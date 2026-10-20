@@ -89,7 +89,7 @@
         }
       ],
       "default": null,
-      "description": "Publisher's period code: M01..M12, Q1..Q4 or A (None for FRED)",
+      "description": "Publisher's period code: M01..M12, Q1..Q4 (BEA), Q01..Q04 (BLS) or A (None for FRED)",
       "title": "Period"
     },
     "pit": {
