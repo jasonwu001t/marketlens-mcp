@@ -311,27 +311,63 @@ def test_macro_bea_table_history_from_the_first_sync_is_at_its_last_revision_not
 
 
 BEA_LEVEL_NOTE = (
-    "BEA states each value's multiplier (UNIT_MULT) separately and it is not stored, so a value whose units "
-    "is 'Level' is not in ones: NIPA dollar levels are usually in millions of dollars. Check the table's "
-    "header on bea.gov before reading a magnitude."
+    "A value whose units is just 'Level' was stored without BEA's multiplier (UNIT_MULT; rows stored before "
+    "marketlens-data kept it have none), so its scale is not known: NIPA dollar levels are usually in millions of "
+    "dollars. Check the table's header on bea.gov before reading a magnitude."
 )
 
 
-def test_macro_bea_table_level_values_say_their_multiplier_is_not_stored(tmp_path, upstream, keys):
-    # A dollar-level table: BEA sends 31,012,345 with UNIT_MULT 6 (millions); the
-    # stored row keeps only units 'Level', so the answer must say the scale is lost.
+def test_macro_bea_table_level_units_state_bea_measure_and_multiplier(tmp_path, upstream, keys):
+    # A dollar-level table: BEA sends 31,012,345 with METRIC_NAME Current Dollars and
+    # UNIT_MULT 6 (millions). marketlens-data keeps both (unit_mult, metric_name), so the
+    # units say the scale and no note is needed (review 2026-10-19: they were dropped).
     upstream.json_file(BEA, "bea.nipa__T10105.json")
     out = call("macro_bea_table", context(tmp_path), table_name="T10105")
-    assert out.notes == [BEA_LEVEL_NOTE]
+    assert out.notes == []
     doc = check_golden(out, "macro_bea_table__level")
     assert [(r["series_id"], r["units"], r["value"]) for r in doc["rows"]][:2] == [
-        ("A191RC", "Level", 31012345.0),
-        ("A191RC", "Level", 31456789.0),
+        ("A191RC", "Level, millions of Current Dollars", 31012345.0),
+        ("A191RC", "Level, millions of Current Dollars", 31456789.0),
     ]
     from marketlens_mcp.providers.data.tools.macro import SPECS
 
     description = next(s for s in SPECS if s.name == "macro_bea_table").description
-    assert "multiplier" in description and "millions" in description
+    # A 'Level' row BEA scales by 10^0 (a Ratio, a Fisher index level) is in ones: a row stored
+    # without UNIT_MULT has an unknown scale, not a wrong one (review 2026-10-19).
+    assert "'Level, millions of Current Dollars'" in description and "not in ones" not in description
+    assert "just 'Level' was stored without the scale, which is then not known" in description
+
+
+def test_macro_bea_table_level_without_a_multiplier_keeps_the_note(tmp_path, upstream, keys):
+    # A row stored before marketlens-data kept UNIT_MULT reads back without it, as
+    # does one BEA sent without it: its units stay 'Level' and the note says why.
+    from data_harness import fixture_json
+
+    payload = fixture_json("bea.nipa__T10105.json")
+    for item in payload["BEAAPI"]["Results"]["Data"]:
+        del item["UNIT_MULT"], item["METRIC_NAME"]
+    upstream.add(BEA, payload)
+    out = call("macro_bea_table", context(tmp_path), table_name="T10105")
+    assert out.notes == [BEA_LEVEL_NOTE]
+    assert {r.units for r in out.rows} == {"Level"}
+
+
+@pytest.mark.parametrize(
+    ("unit", "measure", "power", "units"),
+    [
+        ("Level", "Current Dollars", 6, "Level, millions of Current Dollars"),
+        ("Level", "Persons", 3, "Level, thousands of Persons"),
+        ("Level", "Ratio", 0, "Level, Ratio"),
+        ("Level", "Chained Dollars", 12, "Level, 10^12 Chained Dollars"),
+        ("Level", None, 9, "Level, billions of units"),
+        ("Level", "Current Dollars", None, "Level"),
+        ("Percent change, annual rate", "Fisher Quantity Index", 0, "Percent change, annual rate"),
+    ],
+)
+def test_bea_units(unit, measure, power, units):
+    from marketlens_mcp.providers.data.tools.macro import _bea_units
+
+    assert _bea_units(unit, measure, power) == units
 
 
 def test_macro_bea_table_needs_its_key(tmp_path, upstream):
@@ -362,5 +398,17 @@ def test_macro_release_schedule_golden(tmp_path, upstream, frozen_clock):
         ("employment_situation", "2026-11-06", "2026-11-06T13:30:00Z"),
         ("cpi", "2026-11-13", "2026-11-13T13:30:00Z"),
     ]
+    # The route names every page the sync reads: each release's page and this and next month's
+    # lists of releases (review 2026-10-19: the lists were missing from it and from the README).
+    assert {r.url.path for r in upstream.requests} == {
+        "/schedule/news_release/cpi.htm",
+        "/schedule/news_release/empsit.htm",
+        "/schedule/2026/10_sched_list.htm",
+        "/schedule/2026/11_sched_list.htm",
+    }
+    assert out.provenance.route == (
+        "omni bls.cpi_schedule, bls.empsit_schedule <- www.bls.gov/schedule/news_release, "
+        "schedule/{year}/{MM}_sched_list.htm (this and next month's releases)"
+    )
     only = call("macro_release_schedule", context(tmp_path), releases=["cpi"], start="2026-10-01")
     assert [r.start_date.isoformat() for r in only.rows] == ["2026-10-15", "2026-11-13"]

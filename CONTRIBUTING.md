@@ -12,7 +12,7 @@ make lint            # ruff check + ruff format --check
 
 `make check` runs lint, the tests and the generated-file checks that CI runs.
 
-The data provider's tests (`tests/data`) need the `data` extra (Python 3.13): `make install-data`, then `make test-data`. Without the extra they are skipped. Before marketlens-data is on PyPI, install it from a checkout: `make install-data MARKETLENS_DATA_SRC=../omni`.
+The data provider's tests (`tests/data`) need the `data` extra (Python 3.11 or later): `make install-data`, then `make test-data`. Without the extra they are skipped. Before marketlens-data is on PyPI, install it from a checkout: `make install-data MARKETLENS_DATA_SRC=../omni`.
 
 ## Ground rules
 
@@ -27,7 +27,7 @@ The data provider's tests (`tests/data`) need the `data` extra (Python 3.13): `m
 
 - For a new Alpaca endpoint, follow [ADDING_A_CAPABILITY.md](ADDING_A_CAPABILITY.md).
 - For another data vendor, or tools that belong to one application, write a plugin instead: [WRITING_A_PLUGIN.md](WRITING_A_PLUGIN.md).
-- `marketlens-mcp add-capability NAME --capability ID --provider alpaca|local [--operation OPID] [--model SCHEMA_NAME]` writes the skeleton: the tool module with its manifest entry, a golden test, a fixture and a golden file.
+- `marketlens-mcp add-capability NAME --capability ID --provider alpaca|local [--operation OPID] [--model SCHEMA_NAME] [--package PKG --root DIR]` writes the skeleton: the tool module with its manifest entry, a golden test, a fixture and a golden file. With `--package PKG --root DIR` it writes a plugin's tool instead, under `DIR` (`src/PKG/tools/NAME.py` and `tests/`), and needs no checkout (see [WRITING_A_PLUGIN.md](WRITING_A_PLUGIN.md#testing)).
 
 Every tool's manifest entry (`ToolSpec`) names its capability, its input and output models, its upstream route and operations, and the test module that exercises it; `tests/core/test_manifest.py` checks all of them.
 

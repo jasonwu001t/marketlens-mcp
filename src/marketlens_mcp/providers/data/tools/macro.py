@@ -120,14 +120,16 @@ ROUTES = {
     "catalog": "omni catalog.series_meta (local, no fetch)",
     "bls": "omni bls.timeseries <- api.bls.gov/publicAPI/v2/timeseries/data",
     "bea": "omni bea.nipa <- apps.bea.gov/api/data (NIPA GetData)",
-    "schedule": "omni bls.cpi_schedule, bls.empsit_schedule <- www.bls.gov/schedule/news_release",
+    "schedule": "omni bls.cpi_schedule, bls.empsit_schedule <- www.bls.gov/schedule/news_release, "
+    "schedule/{year}/{MM}_sched_list.htm (this and next month's releases)",
 }
 SCHEDULES = {"cpi": "bls.cpi_schedule", "employment_situation": "bls.empsit_schedule"}
-#: marketlens-data keeps BEA's CL_UNIT but not its UNIT_MULT, so a level's scale is lost.
+#: marketlens-data keeps BEA's CL_UNIT (`unit`), METRIC_NAME (`metric_name`) and UNIT_MULT
+#: (`unit_mult`), but rows it stored before it kept the last two have neither: their scale is lost.
 BEA_LEVEL_NOTE = (
-    "BEA states each value's multiplier (UNIT_MULT) separately and it is not stored, so a value whose units "
-    "is 'Level' is not in ones: NIPA dollar levels are usually in millions of dollars. Check the table's "
-    "header on bea.gov before reading a magnitude."
+    "A value whose units is just 'Level' was stored without BEA's multiplier (UNIT_MULT; rows stored before "
+    "marketlens-data kept it have none), so its scale is not known: NIPA dollar levels are usually in millions of "
+    "dollars. Check the table's header on bea.gov before reading a magnitude."
 )
 
 
@@ -331,6 +333,15 @@ async def macro_bls_series(ctx: ToolContext, args: BlsInputs) -> ToolOutput:
     return common.output(ctx, s, EconomicObservation, ordered, prov, absent=absent)
 
 
+def _bea_units(unit: str | None, measure: str | None, power: int | None) -> str | None:
+    """A 'Level' row's units with BEA's METRIC_NAME and UNIT_MULT ('Level, millions of Current
+    Dollars'); any other unit, or a level stored without UNIT_MULT, as BEA's CL_UNIT."""
+    if power is None or (unit or "").strip().lower() != "level":
+        return unit
+    scale = {0: "", 3: "thousands of ", 6: "millions of ", 9: "billions of "}.get(power, f"10^{power} ")
+    return f"{unit}, {scale}{measure or 'units'}"
+
+
 def _period(d: date, frequency: str) -> str:
     if frequency == "A":
         return "A"
@@ -368,7 +379,9 @@ async def macro_bea_table(ctx: ToolContext, args: BeaInputs) -> ToolOutput:
                     "period": _period(d, args.frequency),
                     "frequency": args.frequency,
                     "value": F.number(r["value"]),
-                    "units": F.text(r["unit"]),
+                    "units": _bea_units(
+                        F.text(r["unit"]), F.text(r.get("metric_name")), F.integer(r.get("unit_mult"))
+                    ),
                     "table_name": args.table_name,
                     "line_number": line,
                     "knowledge_time": F.instant(r["knowledge_time"]),
@@ -378,7 +391,8 @@ async def macro_bea_table(ctx: ToolContext, args: BeaInputs) -> ToolOutput:
             )
         )
     rows.sort(key=lambda r: (r.line_number or 0, r.series_id, r.date))
-    levels = any((r.units or "").strip().lower() == "level" for r in rows)
+    # A level with its multiplier reads "Level, millions of ..."; one without it is just "Level".
+    unscaled = any((r.units or "").strip().lower() == "level" for r in rows)
     prov = common.provenance(
         ctx,
         provider="bea",
@@ -397,7 +411,7 @@ async def macro_bea_table(ctx: ToolContext, args: BeaInputs) -> ToolOutput:
         session=session,
         authority=["official"],
     )
-    notes = [BEA_LEVEL_NOTE] if levels else []
+    notes = [BEA_LEVEL_NOTE] if unscaled else []
     return common.output(ctx, s, EconomicObservation, rows, prov, notes=notes)
 
 
@@ -534,9 +548,9 @@ SPECS: tuple[ToolSpec, ...] = (
         description=common.describe(
             "Every line of a BEA NIPA table (GDP T10101, PCE, personal income, corporate profits) at annual, "
             "quarterly or monthly frequency; series_id is the line's series code, title its description, "
-            "units the publisher's unit. BEA states a value's multiplier separately and it is not stored: a "
-            "units of 'Level' is not in ones (NIPA dollar levels are usually millions of dollars; check the "
-            "table's header). BEA serves the latest revision only, so knowledge_time is the table's last "
+            "units the publisher's unit, for a level with BEA's scale and measure ('Level, millions of Current "
+            "Dollars'); just 'Level' was stored without the scale, which is then not known (check the table's "
+            "header). BEA serves the latest revision only, so knowledge_time is the table's last "
             "revision date, never before the period's first release; history older than the first sync "
             "takes that sync's last revision date, so an earlier as_of returns none of it (GDP vintages: "
             "macro_series). A revision seen later is a new vintage. Needs BEA_API_KEY (free).",
@@ -565,7 +579,7 @@ SPECS: tuple[ToolSpec, ...] = (
         input_model=ScheduleInputs,
         output_model=ReleaseScheduleEntry,
         provider="bls",
-        route="omni bls.cpi_schedule, bls.empsit_schedule <- www.bls.gov/schedule/news_release",
+        route=ROUTES["schedule"],
         handler=macro_release_schedule,
         golden_test=GOLDEN,
     ),

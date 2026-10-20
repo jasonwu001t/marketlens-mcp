@@ -1,9 +1,7 @@
 {
  "absent": {},
  "model": "marketlens.EconomicObservation",
- "notes": [
-  "BEA states each value's multiplier (UNIT_MULT) separately and it is not stored, so a value whose units is 'Level' is not in ones: NIPA dollar levels are usually in millions of dollars. Check the table's header on bea.gov before reading a magnitude."
- ],
+ "notes": [],
  "offload": "auto",
  "pagination": null,
  "provenance": {
@@ -51,7 +49,7 @@
    "source": "bea",
    "table_name": "T10105",
    "title": "Gross domestic product",
-   "units": "Level",
+   "units": "Level, millions of Current Dollars",
    "value": 31012345.0
   },
   {
@@ -66,7 +64,7 @@
    "source": "bea",
    "table_name": "T10105",
    "title": "Gross domestic product",
-   "units": "Level",
+   "units": "Level, millions of Current Dollars",
    "value": 31456789.0
   },
   {
@@ -81,7 +79,7 @@
    "source": "bea",
    "table_name": "T10105",
    "title": "Personal consumption expenditures",
-   "units": "Level",
+   "units": "Level, millions of Current Dollars",
    "value": 21098765.0
   },
   {
@@ -96,7 +94,7 @@
    "source": "bea",
    "table_name": "T10105",
    "title": "Personal consumption expenditures",
-   "units": "Level",
+   "units": "Level, millions of Current Dollars",
    "value": 21345678.0
   }
  ]

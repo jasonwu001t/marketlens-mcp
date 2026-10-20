@@ -304,7 +304,7 @@ def _network_check(rt) -> tuple[bool, str]:
 
 #: Neither package is on PyPI yet, so the extra cannot be installed by name: the README says how.
 DATA_NOT_INSTALLED = (
-    "data extra: not installed; install marketlens-data beside marketlens-mcp (Python 3.13 or later; see "
+    "data extra: not installed; install marketlens-data beside marketlens-mcp (Python 3.11 or later; see "
     "the README's Install section) to list the macro, filings, fed_treasury, holidays and calendars tools"
 )
 

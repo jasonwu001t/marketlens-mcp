@@ -26,9 +26,10 @@ NYFED = r"markets\.newyorkfed\.org/api/rates/all/search\.json"
 
 # --- D1 ------------------------------------------------------------------------------------------
 
-# 2026-10-19: it said "install marketlens-mcp[data]", which cannot work before both packages are on PyPI.
+# 2026-10-19: it said "install marketlens-mcp[data]", which cannot work before both packages are on PyPI,
+# and "Python 3.13 or later", but marketlens-data's floor is 3.11, as this package's is.
 D1 = (
-    "The data tools need the marketlens-data package: install it beside marketlens-mcp (Python 3.13 or "
+    "The data tools need the marketlens-data package: install it beside marketlens-mcp (Python 3.11 or "
     "later; see the README's Install section)."
 )
 

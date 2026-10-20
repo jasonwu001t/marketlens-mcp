@@ -29,7 +29,7 @@
    ],
    "start": "2026-09-02"
   },
-  "route": "omni bls.cpi_schedule, bls.empsit_schedule <- www.bls.gov/schedule/news_release",
+  "route": "omni bls.cpi_schedule, bls.empsit_schedule <- www.bls.gov/schedule/news_release, schedule/{year}/{MM}_sched_list.htm (this and next month's releases)",
   "schema_version": "1.1.0",
   "stale": null,
   "truncated": false,
