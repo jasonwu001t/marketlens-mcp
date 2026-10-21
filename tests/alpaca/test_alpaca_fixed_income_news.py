@@ -249,7 +249,7 @@ def test_news_query_without_tickers_refuses_a_window_one_call_cannot_read(specs,
     """2026-10-20: "Bridgewater" over the default P7D (about 5,950 articles)
     read the newest 1,000 and reported no match, three times."""
     with pytest.raises(ToolError) as e:
-        call(specs["news_search"], ctx, query="Bridgewater")
+        call(specs["news_search"], ctx, query="Bridgewater", lookback="P7D")
     assert e.value.code == "invalid_arguments"
     assert e.value.message == (
         "query without tickers filters every article Alpaca has in the window, about 850 a day, and one call "
@@ -263,7 +263,7 @@ def test_news_query_without_tickers_refuses_a_window_one_call_cannot_read(specs,
 def test_the_refusal_names_filings_search_when_filings_is_on(specs, alpaca):
     ctx = FakeContext(capabilities=frozenset({"news", "filings"}))
     with pytest.raises(ToolError) as e:
-        call(specs["news_search"], ctx, query="Bridgewater")
+        call(specs["news_search"], ctx, query="Bridgewater", start="2026-09-01T00:00:00Z")
     assert e.value.hint == (
         'Give tickers, or a window of at most 28 hours (lookback="PT28H"); to find a company, fund or person in '
         "SEC filings, use filings_search (SEC EDGAR full-text search)."
@@ -278,6 +278,30 @@ def test_a_query_without_tickers_reads_a_window_one_call_can_read(specs, ctx, al
     with pytest.raises(ToolError) as e:
         call(specs["news_search"], ctx, query="Bridgewater", lookback="PT29H")  # about 1,027
     assert "holds about 1,027" in e.value.message and len(alpaca.requests) == 1
+
+
+def test_a_query_without_tickers_defaults_to_the_window_one_call_reads(specs, ctx, alpaca):
+    """Not P7D, which a query without tickers could never read: the caller
+    chose no window, so it gets the longest one a call reads, and a note."""
+    alpaca.add("/v1beta1/news", {"news": [], "next_page_token": None})
+    out = call(specs["news_search"], ctx, query="Bridgewater")
+    assert alpaca.params()["start"] == "2026-10-01T16:00:00Z"  # 28 hours before NOW
+    assert out.provenance.request["lookback"] == "PT28H"
+    assert out.notes[0] == (
+        "query without tickers filters every article Alpaca has in the window, about 850 a day, and one call "
+        "reads at most 1,000 (20 page(s) of 50, fetch.max_pages): so the default lookback is PT28H, not P7D. "
+        "Give tickers for a longer window."
+    )
+    ctx = FakeContext(capabilities=frozenset({"news", "filings"}), limits=FetchLimits(max_pages=1))
+    out = call(specs["news_search"], ctx, query="Bridgewater", end="2026-10-01T00:00:00Z")
+    assert alpaca.params()["start"] == "2026-09-30T23:00:00Z"  # an hour before end: 50 articles
+    assert out.notes[0].endswith(
+        "so the default lookback is PT1H, not P7D. Give tickers for a longer window; to find a company, fund or "
+        "person in SEC filings, use filings_search (SEC EDGAR full-text search)."
+    )
+    call(specs["news_search"], ctx, tickers=["SPY"], query="Bridgewater")
+    assert alpaca.params()["start"] == "2026-09-25T20:00:00Z"  # with tickers, P7D
+    assert len(alpaca.requests) == 3
 
 
 def test_tickers_or_a_page_token_lift_the_refusal(specs, ctx, alpaca):
