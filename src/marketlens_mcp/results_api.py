@@ -416,6 +416,10 @@ class QueryRefused(ValueError):
     """The query guard refused a statement. ``message`` is readable and names
     the rule; it never contains a filesystem path."""
 
+    #: A readable next step for the model (ToolError.hint), or None. Set after
+    #: construction, so that __init__ keeps the signature plugins were given.
+    hint: str | None = None
+
     def __init__(self, code: str, message: str):
         super().__init__(message)
         self.code = code

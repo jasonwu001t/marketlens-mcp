@@ -7,6 +7,7 @@ from __future__ import annotations
 import pathlib
 import re
 
+import duckdb
 import pytest
 from coresupport import bar_rows, provenance
 
@@ -171,6 +172,7 @@ def test_duckdb_errors_are_first_line_and_scrubbed(two_sessions):
     assert info.value.code == "sql_error"
     assert "\n" not in info.value.message
     assert "no_such_column" in info.value.message
+    assert info.value.hint is None
 
 
 def test_scrub_replaces_paths_but_not_pairs_or_words():
@@ -278,3 +280,130 @@ def test_a_percent_or_with_ties_limit_is_wrapped_not_lowered(two_sessions):
     out = mine.query(f"SELECT x.close FROM {a} x, {a} y LIMIT 100 PERCENT", max_rows=5)
     assert out.executed_sql.endswith(") AS q LIMIT 6")
     assert out.row_count == 5 and out.truncated is True
+
+
+def test_a_keyword_used_as_a_with_name_gets_a_hint(two_sessions):
+    """2026-10-20: a WITH query named map failed as "Expecting (. Line 3,
+    Col: 21." with nothing saying that map is a keyword (a DuckDB function)."""
+    mine, ids, _ = two_sessions
+    sql = (
+        f"WITH h AS (SELECT ticker FROM {ids[0]}),\n"
+        f"map AS (SELECT ticker, close FROM {ids[0]})\n"
+        "SELECT h.ticker, map.close FROM h JOIN map ON h.ticker = map.ticker"
+    )
+    with pytest.raises(QueryRefused) as info:
+        guard.check(sql, live_ids=mine.live_ids())
+    assert info.value.code == "sql_parse"
+    assert info.value.message == "The SQL does not parse: Expecting (. Line 3, Col: 21."
+    assert info.value.hint == guard.keyword_hint(["map"])
+    assert info.value.hint == (
+        "map is a SQL keyword here, so it cannot be a bare name (a WITH name, alias or column): "
+        'rename it, or double-quote it wherever it names something ("map", "map".col).'
+    )
+
+
+def test_a_reserved_word_as_a_with_name():
+    with pytest.raises(QueryRefused) as info:
+        guard.check("WITH union AS (SELECT 1 AS a) SELECT * FROM union", live_ids=set())
+    assert info.value.code == "sql_parse"
+    assert info.value.hint == guard.keyword_hint(["union"])
+    assert guard.keyword_hint(["union", "map", "end", "left"]) == (
+        "union, map, end are SQL keywords here, so they cannot be bare names (WITH names, aliases or "
+        'columns): rename them, or double-quote them wherever they name something ("union", "union".col).'
+    )
+    assert guard.keyword_hint([]) is None
+
+
+@pytest.mark.parametrize(
+    "sql",
+    [
+        "SELECT close FROM {A} WHERE AND close = 1",
+        "SELECT (close FROM {A}",
+        "SELECT close FROM {A} ORDER close",
+        "WITH map AS (SELECT * FROM {A}) SELECT * FROM map WHERE (",
+    ],
+)
+def test_ordinary_syntax_errors_get_no_hint(two_sessions, sql):
+    mine, ids, other = two_sessions
+    with pytest.raises(QueryRefused) as info:
+        guard.check(expand(sql, ids, other), live_ids=mine.live_ids())
+    assert info.value.code == "sql_parse"
+    assert info.value.hint is None
+
+
+def test_double_quoted_keywords_run(two_sessions):
+    mine, ids, _ = two_sessions
+    out = mine.query(
+        f'WITH "map" AS (SELECT ticker FROM {ids[0]}) SELECT "map".ticker FROM "map"', max_rows=5
+    )
+    assert out.row_count == 5
+
+
+@pytest.mark.parametrize(
+    ("sql", "word", "start"),
+    [
+        ('SELECT end FROM (SELECT 1 AS "end") s', "end", 'Parser Error: syntax error at or near "end"'),
+        ('SELECT left FROM (SELECT 1 AS "left") s', "left", "Parser Error: syntax error at or near"),
+        ("SELECT close FROM {A} AS group", "group", 'Parser Error: syntax error at or near "group"'),
+    ],
+)
+def test_duckdb_refusing_a_keyword_name_gets_a_hint(two_sessions, sql, word, start):
+    """sqlglot reads these and DuckDB's parser does not: end is a column of
+    the correlation and beta results."""
+    mine, ids, other = two_sessions
+    with pytest.raises(QueryRefused) as info:
+        mine.query(expand(sql, ids, other), max_rows=5)
+    assert info.value.code == "sql_error"
+    assert info.value.message.startswith(start)
+    assert info.value.hint == guard.keyword_hint([word])
+    assert mine.query('SELECT r.end FROM (SELECT 1 AS "end") r', max_rows=5).row_count == 1
+
+
+@pytest.mark.parametrize(
+    ("sql", "hint"),
+    [
+        ("SELECT ticker, sum(volume) + close FROM {A} GROUP BY ALL", "GROUP BY ALL groups by every"),
+        ("SELECT ticker, sum(volume) FROM {A}", "ticker is used outside an aggregate"),
+        ("SELECT ticker FROM {A} GROUP BY ticker HAVING close > 0", "close is used outside an aggregate"),
+        ("SELECT sum(volume) FROM {A} WHERE sum(close) > 0", "WHERE filters rows before they are grouped"),
+        ("SELECT avg(sum(volume)) FROM {A}", "Aggregate in a WITH query"),
+    ],
+)
+def test_grouping_mistakes_get_a_hint(two_sessions, sql, hint):
+    mine, ids, other = two_sessions
+    with pytest.raises(QueryRefused) as info:
+        mine.query(expand(sql, ids, other), max_rows=5)
+    assert info.value.code == "sql_error"
+    assert info.value.message.startswith("Binder Error:")
+    assert info.value.hint.startswith(hint)
+
+
+#: A keyword as a WITH name, a table alias, a column alias and a column.
+NAME_PROBES = (
+    "WITH x AS (SELECT 1 AS a), {q} AS (SELECT 2 AS b) SELECT x.a, {q}.b FROM x JOIN {q} ON true",
+    "SELECT {q}.a FROM r_0123456789 AS {q}",
+    "SELECT a AS {q} FROM r_0123456789",
+    'SELECT {q} FROM (SELECT 1 AS "{w}") s',
+)
+
+
+def test_every_keyword_name_breaks_unquoted_and_runs_quoted():
+    """KEYWORD_NAMES is what sqlglot 30.21 and DuckDB 1.5 refuse as a bare
+    name: a version that accepts one of them fails here, and the word goes."""
+    con = duckdb.connect()
+    con.execute("CREATE TABLE r_0123456789 AS SELECT 1 AS a, 2 AS b")
+
+    def runs(sql: str) -> bool:
+        try:
+            checked = guard.check(sql, live_ids={"r_0123456789"})
+            con.execute(guard.render(checked.ast)).fetchall()
+        except (QueryRefused, duckdb.Error):
+            return False
+        return True
+
+    for w in sorted(guard.KEYWORD_NAMES):
+        assert not all(runs(p.format(q=w, w=w)) for p in NAME_PROBES), w
+        assert all(runs(p.format(q=f'"{w}"', w=w)) for p in NAME_PROBES), w
+    for w in ("order", "table", "list", "struct", "filter", "window", "limit"):
+        assert w not in guard.KEYWORD_NAMES
+        assert all(runs(p.format(q=w, w=w)) for p in NAME_PROBES), w

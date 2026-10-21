@@ -86,7 +86,9 @@ def to_tool_error(exc: BaseException, ctx: ToolContext, tool: str) -> ToolError:
             "that created them; fetch the data again.",
         )
     if isinstance(exc, QueryRefused):
-        return ToolError(exc.code, scrub(exc.message, *known))
+        return ToolError(
+            exc.code, scrub(exc.message, *known), hint=scrub(exc.hint, *known) if exc.hint else None
+        )
     if isinstance(exc, StoreLockTimeout):
         return ToolError(
             "store_busy",

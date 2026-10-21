@@ -310,6 +310,21 @@ def test_query_refusals_become_tool_errors(setup):
     assert info.value.code == "sql_function"
 
 
+def test_a_refusals_hint_reaches_the_tool_error(setup):
+    ctx, _, bars, *_ = setup
+    sql = (
+        f"WITH h AS (SELECT ticker FROM {bars.result_id}),\n"
+        f"map AS (SELECT ticker, close FROM {bars.result_id})\n"
+        "SELECT h.ticker, map.close FROM h JOIN map ON h.ticker = map.ticker"
+    )
+    with pytest.raises(ToolError) as info:
+        call(ctx, "results_query", sql=sql)
+    assert info.value.code == "sql_parse"
+    assert info.value.message == "The SQL does not parse: Expecting (. Line 3, Col: 21."
+    assert "map is a SQL keyword here" in info.value.hint
+    assert "'map'" not in info.value.hint
+
+
 LEAKY = (
     "('secret_directory', 'allowed_directories', 'temp_directory', 'home_directory', 'extension_directory')"
 )
