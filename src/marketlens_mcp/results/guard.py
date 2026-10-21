@@ -104,6 +104,8 @@ KEYWORD_NAMES = frozenset({
     "select", "semi", "show", "similar", "summarize", "tablesample", "then", "true", "uncache", "union",
     "unpack", "unpivot", "using", "values", "verbose", "when", "where", "with", "xor",
 })  # fmt: skip
+#: What follows ``name.`` when the name qualifies something: a column or *.
+_AFTER_DOT = (TokenType.VAR, TokenType.IDENTIFIER, TokenType.STAR)
 
 #: DuckDB's grouping errors and the next step for each; the first match wins.
 _GROUPING_HINTS: tuple[tuple[re.Pattern[str], str], ...] = (
@@ -304,8 +306,8 @@ def keyword_hint(words: list[str]) -> str | None:
 
 def _parse_names(sql: str, exc: ParseError) -> list[str]:
     """Keywords used as bare names at sqlglot's error: the error token or the
-    one before it, unquoted, in a name position (before a dot, after AS, or
-    a WITH name before its AS). Anything else gives no words."""
+    one before it, unquoted, in a name position (before a dot and a column or
+    *, after AS, or a WITH name before its AS). Anything else gives no words."""
     errors = exc.errors
     if not errors:
         return []
@@ -321,6 +323,8 @@ def _parse_names(sql: str, exc: ParseError) -> list[str]:
     def kind(i: int) -> TokenType | None:
         return tokens[i].token_type if 0 <= i < len(tokens) else None
 
+    if kind(at) is TokenType.DOT and kind(at + 1) not in _AFTER_DOT:
+        return []  # a stray dot is the error, whatever it follows (ORDER BY a DESC., FROM t AS map.)
     words: list[str] = []
     for i in (at - 1, at):
         if i < 0:
@@ -328,7 +332,8 @@ def _parse_names(sql: str, exc: ParseError) -> list[str]:
         token = tokens[i]
         word = token.text.lower()
         named = (
-            kind(i + 1) is TokenType.DOT
+            # map.close names map; a stray dot after a keyword (ORDER BY a DESC.) names nothing
+            (kind(i + 1) is TokenType.DOT and kind(i + 2) in _AFTER_DOT)
             or kind(i - 1) is TokenType.ALIAS
             or (
                 kind(i - 1) in (TokenType.WITH, TokenType.RECURSIVE, TokenType.COMMA)

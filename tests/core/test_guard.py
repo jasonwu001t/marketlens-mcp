@@ -321,6 +321,12 @@ def test_a_reserved_word_as_a_with_name():
         "SELECT (close FROM {A}",
         "SELECT close FROM {A} ORDER close",
         "WITH map AS (SELECT * FROM {A}) SELECT * FROM map WHERE (",
+        # a stray dot after a keyword: the keyword names nothing
+        "SELECT close FROM {A} ORDER BY close DESC.",
+        "SELECT close FROM {A} WHERE close IS NULL.",
+        "SELECT ticker, count(*) FROM {A} GROUP BY ALL.",
+        "SELECT close FROM {A} ORDER BY close DESC. LIMIT 5",
+        "SELECT close FROM {A} AS map.",
     ],
 )
 def test_ordinary_syntax_errors_get_no_hint(two_sessions, sql):
