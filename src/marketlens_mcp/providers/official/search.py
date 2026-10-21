@@ -29,7 +29,8 @@ What SEC's endpoint does, as checked live on 2026-10-20:
   restriction; www.sec.gov's robots.txt does not cover that host. SEC's
   "Accessing EDGAR Data" asks for at most 10 requests a second, a declared
   User-Agent with a contact, and no crawling: a call here makes at most
-  MAX_LIMIT / PAGE requests, one at a time, under the host's limiter, each
+  MAX_LIMIT / PAGE requests, one at a time, under the host's limiter (one
+  call's pages at once, then one a second, whatever runs at once), each
   asked for by the user, and none without SEC_CONTACT_EMAIL.
 """
 
@@ -68,10 +69,10 @@ FIRST_DATE = date(2001, 1, 1)
 ROUTE = "GET efts.sec.gov/LATEST/search-index"
 WINDOW_DOC = "EDGAR serves only the first 10,000 hits of a search"
 
-_ACCESSION = re.compile(r"^\d{10}-\d{2}-\d{6}$")
+_ACCESSION = re.compile(r"^\d{10}-\d{2}-\d{6}$", re.ASCII)
 #: A file name only: it is placed in a URL, so never a slash.
 _DOCUMENT = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,199}$")
-_CIK10 = re.compile(r"^\d{10}$")
+_CIK10 = re.compile(r"^\d{10}$", re.ASCII)
 #: No comma: the forms are sent as one comma list.
 _FORM = re.compile(r"^[A-Z0-9][A-Z0-9 ./-]{0,19}$")
 #: "Name  (TICKERS)  (CIK 0000000000)", the tickers optional.
@@ -124,7 +125,7 @@ class FilingsSearchIn(Inputs):
         out = []
         for form in v:
             s = form.strip().upper()
-            if not _FORM.match(s):
+            if not _FORM.fullmatch(s):
                 raise ValueError(f"{form!r} is not an SEC form type (e.g. 13F-HR, 10-K, 8-K, SC 13D)")
             out.append(s)
         return list(dict.fromkeys(out))
@@ -183,11 +184,11 @@ def hit_row(hit: dict[str, Any]) -> FilingSearchHit:
     source = hit["_source"]
     accession, _, document = str(hit["_id"]).partition(":")
     accession = str(source.get("adsh") or accession)
-    if not _ACCESSION.match(accession):
+    if not _ACCESSION.fullmatch(accession):
         raise ValueError(f"accession {accession[:40]!r} is not of the form 0000000000-00-000000")
-    if not _DOCUMENT.match(document):
+    if not _DOCUMENT.fullmatch(document):
         raise ValueError(f"document {document[:40]!r} is not a file name")
-    ciks = [c for c in source["ciks"] if isinstance(c, str) and _CIK10.match(c)]
+    ciks = [c for c in source["ciks"] if isinstance(c, str) and _CIK10.fullmatch(c)]
     if not ciks:
         raise ValueError("no 10-digit CIK")
     names = source.get("display_names") or []
@@ -238,6 +239,14 @@ def _page(body: Any) -> tuple[list[Any], int, str]:
 
 
 async def filings_search(ctx: ToolContext, args: FilingsSearchIn) -> ToolOutput:
+    today = ctx.now().astimezone(NEW_YORK).date()
+    first, last = args.start or FIRST_DATE, args.end or today
+    if first > last:  # given both, the validator refused it; a default can reverse it too
+        raise ToolError(
+            "invalid_arguments",
+            f"start ({first}) must not be after end ({last}): an omitted start is {FIRST_DATE}, where EDGAR's "
+            "full-text search begins, and an omitted end is today in New York. Nothing was fetched.",
+        )
     try:
         configured = ctx.env("SEC_CONTACT_EMAIL")
     except KeyError:
@@ -253,7 +262,6 @@ async def filings_search(ctx: ToolContext, args: FilingsSearchIn) -> ToolOutput:
         )
     limit = min(args.limit, ctx.limits.max_rows)
     start = offset = int(args.page_token or 0)
-    today = ctx.now().astimezone(NEW_YORK).date()
     agent = user_agent(contact)
     skips = Skips(FilingSearchHit.schema_name)
     rows: list[FilingSearchHit] = []

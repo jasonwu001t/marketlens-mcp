@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import asyncio
 import copy
+import functools
 import json
 import time
 from datetime import UTC, date, datetime
@@ -14,7 +15,7 @@ import httpx
 import pytest
 from official_harness import CONTACT, NOW, check_golden, fixture_bytes
 
-from marketlens_mcp import __version__, pipeline, registry
+from marketlens_mcp import __version__, pipeline, ratelimit, registry
 from marketlens_mcp import config as cfg
 from marketlens_mcp.plugin_api import FetchLimits, ToolError
 from marketlens_mcp.providers.data import runtime
@@ -131,6 +132,12 @@ def test_a_hit_that_does_not_fit_is_skipped():
         {"_source": {**good["_source"], "ciks": ["1", 2]}},
         {"_source": {**good["_source"], "form": " "}},
         {"_source": {**good["_source"], "file_date": "14/08/2026"}},
+        # a trailing newline, or digits other than 0-9, would end up inside the URLs
+        {"_id": "0000000001-26-000003:primary_doc.xml\n"},
+        {"_source": {**good["_source"], "adsh": "0000000001-26-000003\n"}},
+        {"_source": {**good["_source"], "adsh": "\u0660" * 9 + "\u0661-26-000003"}},
+        {"_source": {**good["_source"], "ciks": ["0000000001\n"]}},
+        {"_source": {**good["_source"], "ciks": ["\u0660" * 9 + "\u0661"]}},
     ):
         with pytest.raises((ValueError, TypeError, KeyError)):
             search.hit_row({**good, **change})
@@ -170,6 +177,14 @@ def test_filing_dates(publishers):
     call(ciks=["1350694"])
     assert "dateRange" not in params(publishers.requests[-1])
     assert refused(ciks=["1350694"], start="2026-02-01", end="2026-01-01").code == "invalid_arguments"
+    # a default end (today) or start (2001-01-01) can reverse the range too
+    error = refused(ciks=["1350694"], start="2026-10-17")
+    assert error.code == "invalid_arguments"
+    assert error.message == (
+        "start (2026-10-17) must not be after end (2026-10-16): an omitted start is 2001-01-01, where EDGAR's "
+        "full-text search begins, and an omitted end is today in New York. Nothing was fetched."
+    )
+    assert refused(ciks=["1350694"], end="2000-12-31").code == "invalid_arguments"
     assert len(publishers.requests) == 4
 
 
@@ -245,6 +260,37 @@ def test_a_limit_above_max_rows_is_lowered(publishers):
     out = call(context(limits=FetchLimits(max_rows=120)), query="Example", limit=300)
     assert len(out.rows) == 120 and out.pagination.next_page_token == "120"
     assert "limit 300 is above fetch.max_rows (120), so it was lowered to that." in out.notes
+
+
+def test_calls_at_once_stay_under_secs_fair_access_ceiling(publishers, monkeypatch):
+    """SEC's fair-access ceiling is 10 requests a second per client, whatever
+    runs at once: the full-text search's limiter sends one call's pages at
+    once (fetch.SEARCH_BURST), then one a second. The clock is simulated."""
+    clock = [0.0]
+
+    async def sleep(seconds: float) -> None:
+        wake = clock[0] + seconds
+        await asyncio.sleep(0)
+        clock[0] = max(clock[0], wake)
+
+    bucket = functools.partial(ratelimit.TokenBucket, clock=lambda: clock[0], sleep=sleep)
+    monkeypatch.setattr(ratelimit, "TokenBucket", bucket)
+    serve = pages_of(1000)
+    sent: list[float] = []
+
+    def answer(request: httpx.Request) -> httpx.Response:
+        sent.append(clock[0])
+        return serve(request)
+
+    publishers.set(URL, answer)
+    args = SPEC.input_model.model_validate({"query": "Example", "limit": 500})
+
+    async def four():
+        return await asyncio.gather(*(SPEC.handler(context(), args) for _ in range(4)))
+
+    outs = asyncio.run(four())
+    assert [len(out.rows) for out in outs] == [500] * 4 and len(sent) == 20
+    assert max(sum(1 for t in sent if at <= t < at + 1) for at in sent) <= 10
 
 
 # --- failures -----------------------------------------------------------------------------------

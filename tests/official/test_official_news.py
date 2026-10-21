@@ -352,9 +352,9 @@ def test_the_ecbs_crawl_delay_holds_with_the_cache_off(publishers, monkeypatch):
     rates = {}
     real = fetch._answer
 
-    async def spy(ctx, http, url, agent, timeout, rate):
-        rates[url] = rate
-        return await real(ctx, http, url, agent, timeout, rate)
+    async def spy(http, url, agent, timeout, limiter):
+        rates[url] = limiter.per_minute
+        return await real(http, url, agent, timeout, limiter)
 
     monkeypatch.setattr(fetch, "_answer", spy)
     off = {"cache_seconds": 0}
