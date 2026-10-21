@@ -10,7 +10,7 @@ from typing import Literal
 
 from pydantic import Field, field_validator
 
-from marketlens_mcp.plugin_api import ToolContext, ToolOutput
+from marketlens_mcp.plugin_api import ToolContext, ToolError, ToolOutput
 from marketlens_schema.market import NewsItem
 
 from .. import mappers
@@ -27,6 +27,7 @@ from .common import (
     Inputs,
     Instant,
     Skips,
+    Window,
     absence,
     collect,
     output,
@@ -37,6 +38,9 @@ from .common import (
 
 GOLDEN = "tests/alpaca/test_alpaca_fixed_income_news.py"
 NEWS_PAGE_MAX = 50
+#: Articles Alpaca's news has a day across all tickers: live, on 2026-10-09 a
+#: one-day window without tickers read 838 and a two-day one more than 1,000.
+ALL_NEWS_PER_DAY = 850
 
 
 class NewsIn(Inputs):
@@ -55,8 +59,10 @@ class NewsIn(Inputs):
         description="Only articles whose headline or summary has every word of this, as whole words in any case "
         '(e.g. "rate cut"). Alpaca\'s news API has no text search, so this server filters the articles Alpaca '
         "returns for the window and tickers: the fetch still reads them all (fetch limits apply before the "
-        "filter) and a note says how many matched. Without tickers Alpaca has several hundred articles a day "
-        "and a fetch reads at most fetch.max_pages pages of 50, so give tickers or a window of a day or less.",
+        "filter) and a note says how many matched. Without tickers Alpaca has about 850 articles a day and a call "
+        "reads at most fetch.max_pages pages of 50 (1,000 by default), so a query without tickers over a longer "
+        "window than that holds (about 28 hours by default) is refused before anything is fetched: give tickers or "
+        "a window of a day or less.",
     )
     sort: Literal["asc", "desc"] = Field("desc", description="Order by update time; desc = newest first.")
     page_token: str | None = Field(None, max_length=2000, description=CONTINUE_DOC)
@@ -96,6 +102,35 @@ def matcher(query: str) -> Callable[[NewsItem], bool]:
     return lambda row: all(w.search(html.unescape(f"{row.headline}\n{row.summary or ''}")) for w in words)
 
 
+def refuse_unreadable_window(ctx: ToolContext, win: Window) -> None:
+    """Refuse, before any request, a query over every ticker whose window
+    holds more articles than one call reads (fetch.max_pages pages of 50): the
+    filter would see only the newest part, and a name absent there would look
+    absent from the whole window."""
+    readable = ctx.limits.max_pages * NEWS_PAGE_MAX
+    hours = (win.as_of - win.start).total_seconds() / 3600
+    estimate = round(ALL_NEWS_PER_DAY * hours / 24)
+    if estimate <= readable:
+        return
+    most = int(readable * 24 // ALL_NEWS_PER_DAY)  # 28 with the default 20 pages
+    message = (
+        f"query without tickers filters every article Alpaca has in the window, about {ALL_NEWS_PER_DAY} a day, "
+        f"and one call reads at most {readable:,} ({ctx.limits.max_pages} page(s) of {NEWS_PAGE_MAX}, "
+        f"fetch.max_pages): the window from {iso_z(win.start)} to {iso_z(win.as_of)} holds about {estimate:,}, so "
+        "the fetch would stop before its end. Nothing was fetched."
+    )
+    hint = (
+        f'Give tickers, or a window of at most {most} hours (lookback="PT{most}H")'
+        + (
+            "; to find a company, fund or person in SEC filings, use filings_search (SEC EDGAR full-text search)"
+            if "filings" in ctx.capabilities
+            else ""
+        )
+        + "."
+    )
+    raise ToolError("invalid_arguments", message, hint=hint)
+
+
 def class_note(tickers: list[str] | None, seen: set[str], page, start_token: str | None) -> list[str]:
     """Name a requested share class no article was tagged with, when the
     whole window was read."""
@@ -124,6 +159,8 @@ async def news_search(ctx: ToolContext, args: NewsIn) -> ToolOutput:
     root_set = set(roots)
     async with AlpacaClient(ctx) as api:
         win = window(ctx, args.start, args.end, args.lookback, "P7D")
+        if args.query and not args.tickers and args.page_token is None:
+            refuse_unreadable_window(ctx, win)
         params = {
             "symbols": news_symbols(args.tickers) if args.tickers else None,
             "start": iso_z(win.start),
