@@ -114,6 +114,8 @@ The `data` provider (`src/marketlens_mcp/providers/data/`) reads publishers thro
 3. Write a synthetic fixture in the feed's shape (`tests/official/fixtures/<feed id>.<kind>`, invented items, never a recording), regenerate the golden files with `MARKETLENS_UPDATE_GOLDEN=1` and read them line by line.
 4. Update the feed list in README.md ([Official feeds](README.md#official-feeds) and the Upstream APIs row) and CHANGELOG.md.
 
+The same provider answers `filings_search` from one fixed JSON URL, SEC EDGAR's full-text search (`search.SEARCH_URL` in `search.py`), under the feeds' fetch rules (`fetch.fetch_json`: GET only, the host's limiter, no redirect followed, uncompressed, at most 5 MB). Another official JSON endpoint follows the feed steps: check its shape, robots.txt and terms once, live, with a declared User-Agent; give it a fixed URL that no argument can change (arguments become query parameters only); write a synthetic fixture and a golden file; add its README Upstream APIs row and a CHANGELOG entry.
+
 ## Adding a provider instead
 
 A different vendor (another broker, a data API, a local database) is a plugin, not a change to this provider: map its responses onto the existing canonical models, prefix its tools with its own name, set `provenance.provider` to the vendor, keep its own exclusion list and parity test against the vendor's API. See [WRITING_A_PLUGIN.md](WRITING_A_PLUGIN.md).

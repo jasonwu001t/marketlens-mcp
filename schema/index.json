@@ -22,6 +22,7 @@
     "marketlens.EconomicObservation": "marketlens.EconomicObservation.json",
     "marketlens.EconomicSeriesInfo": "marketlens.EconomicSeriesInfo.json",
     "marketlens.Filing": "marketlens.Filing.json",
+    "marketlens.FilingSearchHit": "marketlens.FilingSearchHit.json",
     "marketlens.FixedIncomeQuote": "marketlens.FixedIncomeQuote.json",
     "marketlens.FomcMeeting": "marketlens.FomcMeeting.json",
     "marketlens.FomcStatement": "marketlens.FomcStatement.json",

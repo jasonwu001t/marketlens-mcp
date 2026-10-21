@@ -17,6 +17,7 @@ NAMES = [
     "EconomicSeriesInfo",
     "ReleaseScheduleEntry",
     "Filing",
+    "FilingSearchHit",
     "XbrlFact",
     "FundamentalValue",
     "EarningsRelease",
@@ -52,7 +53,7 @@ def test_units_added():
         assert name in UNITS
 
 
-def test_the_23_models_are_built_in():
+def test_the_24_models_are_built_in():
     assert [m.__name__ for m in d.DATA_MODELS] == NAMES
     for model in d.DATA_MODELS:
         assert model.schema_name == f"marketlens.{model.__name__}"
@@ -93,6 +94,7 @@ def _unit(model, field):
         (d.EconomicObservation, "value", "as_published"),
         (d.EconomicObservation, "line_number", "ordinal"),
         (d.EconomicObservation, "knowledge_time", "UTC"),
+        (d.FilingSearchHit, "knowledge_time", "UTC"),
         (d.XbrlFact, "value", "as_published"),
         (d.FundamentalValue, "value", "as_published"),
         (d.EarningsFigure, "value", "USD_per_share"),
@@ -137,6 +139,7 @@ def test_field_units(model, field, expected):
         (d.EconomicSeriesInfo, None, "series_id", ()),
         (d.ReleaseScheduleEntry, "scheduled_at", "release", ()),
         (d.Filing, "accepted_at", "ticker", ()),
+        (d.FilingSearchHit, "filing_date", "cik", ()),
         (d.XbrlFact, "period_end", "metric", ("value",)),
         (d.FundamentalValue, "period_end", "metric", ("value",)),
         (d.EarningsRelease, "accepted_at", "ticker", ()),

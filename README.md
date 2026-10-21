@@ -22,7 +22,7 @@ flowchart TB
     subgraph providers["providers (one plugin API)"]
       alpaca["alpaca/<br/>market, reference, news,<br/>portfolio, provider.docs"]
       data["data/ (optional extra)<br/>macro, filings, fed_treasury,<br/>holidays, calendars"]
-      official["official/<br/>news (news_official)"]
+      official["official/<br/>news_official, filings_search"]
       plugins["installed plugins<br/>marketlens.plugins entry points"]
     end
     store[("results/<br/>DuckDB + Parquet result store<br/>per session, 24 h")]
@@ -31,7 +31,7 @@ flowchart TB
   alpacaapi["Alpaca market-data API<br/>Alpaca trading API (reads only)<br/>Alpaca docs MCP"]
   omni[("marketlens-data (omni)<br/>local point-in-time store")]
   publishers["FRED, BLS, BEA, SEC EDGAR, Federal Reserve,<br/>NY Fed, Treasury, FiscalData, NYSE, SIFMA, OPM, Nasdaq"]
-  feeds["Fed, SEC, BLS, BEA, CFTC, ECB<br/>RSS/Atom feeds (fixed allow-list)"]
+  feeds["Fed, SEC, BLS, BEA, CFTC, ECB<br/>RSS/Atom feeds (fixed allow-list)<br/>SEC EDGAR full-text search (efts.sec.gov)"]
   other["the plugin's own upstream"]
 
   client <--> transport
@@ -67,7 +67,8 @@ flowchart TB
  |                             rows + provenance -> offload.py (inline/stored)   |
  |                                                                               |
  |  providers (registered through the same plugin API as third-party plugins)   |
- |   official/ (built in): news_official -> Fed, SEC, BLS, BEA, CFTC, ECB feeds  |
+ |   official/ (built in): news_official -> Fed, SEC, BLS, BEA, CFTC, ECB feeds; |
+ |                         filings_search -> EDGAR full-text search              |
  |   +- alpaca/ -------------+  +- data/ (optional extra) -+  +- plugins -------+ |
  |   | market, reference,    |  | macro, filings,          |  | entry points in | |
  |   | news, portfolio,      |  | fed_treasury, holidays,  |  | marketlens.     | |
@@ -108,7 +109,7 @@ Package layout:
 | `src/marketlens_mcp/analytics/` | The `analytics_*` tools |
 | `src/marketlens_mcp/providers/alpaca/` | The Alpaca provider (bundled OpenAPI specs, endpoint mapping, parity list) |
 | `src/marketlens_mcp/providers/data/` | The official-data provider over marketlens-data (`sources.py` keys, `parity.py` dataset coverage, `tools/`) |
-| `src/marketlens_mcp/providers/official/` | The official-feeds provider: `news_official` over a fixed allow-list of government and central-bank RSS/Atom feeds (`feeds.py` the list and why each feed is in or out, `parse.py`, `fetch.py`, `tool.py`) |
+| `src/marketlens_mcp/providers/official/` | The official-feeds provider: `news_official` over a fixed allow-list of government and central-bank RSS/Atom feeds (`feeds.py` the list and why each feed is in or out, `parse.py`, `fetch.py`, `tool.py`); `filings_search` over SEC EDGAR's full-text search (`search.py`) |
 | `src/marketlens_schema/` | The vendor-neutral canonical models (pydantic only; usable without the server) |
 | `schema/` | Generated JSON Schemas of the canonical models (`make schema`) |
 
@@ -120,6 +121,7 @@ Package layout:
 | Alpaca trading API (assets, calendar, clock, corporate-action announcements, option contracts; account reads) | built-in `alpaca` provider | same | `reference`, `portfolio` (off); also `market` (`options_chain`'s open interest, `market_movers`' asset names) and, through the `data` extra, `holidays` (the optional NYSE cross-check, paper-account keys only) |
 | Alpaca documentation MCP (`docs.alpaca.markets/mcp`) | built-in `alpaca-docs` | none | `provider.docs` (off) |
 | Official RSS/Atom feeds of the Federal Reserve Board, SEC, BLS, BEA, CFTC and ECB (press releases, speeches, testimony, enforcement and data-release notices) | built-in `official` provider | none; `SEC_CONTACT_EMAIL` for the SEC and BLS feeds | `news` |
+| SEC EDGAR full-text search (filings since 2001) | built-in `official` provider | `SEC_CONTACT_EMAIL` (refused without it) | `filings` |
 | FRED/ALFRED, BLS, BEA | `data` extra (marketlens-data) | `FRED_API_KEY`, `BEA_API_KEY`, `BLS_API_KEY` (optional) | `macro` |
 | SEC EDGAR (submissions, XBRL company facts, Archives) | `data` extra | `SEC_CONTACT_EMAIL` (recommended) | `filings` |
 | Federal Reserve (FOMC), NY Fed, U.S. Treasury, FiscalData | `data` extra | keyless | `fed_treasury` |
@@ -142,6 +144,10 @@ Package layout:
 
 An FOMC statement is in both `fed.monetary` and `fed.press`; a release found in two feeds is kept once, under the first in this order.
 
+### SEC EDGAR full-text search
+
+`filings_search` asks one fixed URL, `https://efts.sec.gov/LATEST/search-index` (the search behind EDGAR's own full-text search page), GET only, with the query parameters the call builds: 100 hits a request, one request at a time, at most 5 a call (`limit` 500), under the host's limiter (60 a minute; SEC's fair-access ceiling is 10 a second), with `SEC_CONTACT_EMAIL` in the User-Agent and nothing asked without it. Nothing is cached: each call asks EDGAR. EDGAR serves only the first 10,000 hits of a search; narrow it to reach the rest. efts.sec.gov answers 403 for robots.txt, which RFC 9309 reads as no restriction, and www.sec.gov's robots.txt does not cover it; SEC's fair-access page asks for a declared contact and no crawling, and a call here is one user's question, never a crawl. Entity names and document types are written by the filers: the rows are marked untrusted text.
+
 ### Upstream APIs
 
 Every request a tool can make goes to one of these. Nothing else is called: no telemetry, no update check.
@@ -162,6 +168,7 @@ Every request a tool can make goes to one of these. Nothing else is called: no t
 | NYSE, SIFMA, OPM | `https://www.nyse.com`, `https://www.sifma.org`, `https://www.opm.gov` | `/markets/hours-calendars`; `/resources/guides-playbooks/holiday-schedule` and `/us-holiday-archive`; `/policy-data-oversight/pay-leave/federal-holidays/` | none | `calendar_us_holidays` |
 | Nasdaq (unofficial) | `https://api.nasdaq.com` | `/api/calendar/economicevents`, `/api/calendar/earnings`, `/api/company/{symbol}/earnings-surprise` | none | `calendar_economic`, `calendar_earnings`, `calendar_earnings_history` (off by default) |
 | Official feeds (Federal Reserve Board, SEC, BLS, BEA, CFTC, ECB) | `https://www.federalreserve.gov`, `https://www.sec.gov`, `https://www.bls.gov`, `https://www.bea.gov`, `https://www.cftc.gov`, `https://www.ecb.europa.eu` | `/feeds/{press_monetary,press_all,speeches,testimony}.xml`; `/news/{pressreleases,speeches-statements}.rss`, `/enforcement-litigation/litigation-releases/rss`; `/feed/{bls_latest,cpi,empsit,ppi,jolts,eci}.rss`; `/news/rss`; `/RSS/{RSSGP/rssgp,RSSENF/rssenf,RSSST/rssst}.xml`; `/rss/press.html` ([the list](#official-feeds)) | none; for SEC and BLS, `SEC_CONTACT_EMAIL` in the User-Agent (without it those feeds are skipped) | `news_official` |
+| SEC EDGAR full-text search | `https://efts.sec.gov` | `/LATEST/search-index` (q, forms, ciks, dateRange/startdt/enddt, from) | `SEC_CONTACT_EMAIL` in the User-Agent; refused without it | `filings_search` |
 
 The tool table below names each tool's main route; the second reads of `options_chain`, `market_movers` and `calendar_us_holidays` are in the rows above.
 
@@ -272,7 +279,7 @@ Claude Desktop (`claude_desktop_config.json`):
 }
 ```
 
-`SEC_CONTACT_EMAIL` is optional, and needs no extra: the built-in `news_official` reads its SEC and BLS feeds (9 of its 18; see [Official feeds](#official-feeds)) only when it is set to an email address, which it sends in the User-Agent to SEC and BLS alone. Without it those feeds are skipped with a note; no placeholder contact is ever sent.
+`SEC_CONTACT_EMAIL` is optional, and needs no extra: the built-in `news_official` reads its SEC and BLS feeds (9 of its 18; see [Official feeds](#official-feeds)) only when it is set to an email address, which it sends in the User-Agent to SEC and BLS alone. Without it those feeds are skipped with a note (no placeholder contact is ever sent) and `filings_search`, SEC EDGAR's full-text search, refuses.
 
 With the `data` extra, run it from the extra (`"--from", "marketlens-mcp[data]"`) once both packages are on PyPI; until then, add the marketlens-data checkout with `--with`, as below (see [Install](#install)). Either way, add the official sources' keys (each one only for the tools that need it; see [the keys](#keys)):
 
@@ -322,12 +329,12 @@ Each tool belongs to one capability. Turn capabilities on or off in the config f
 | `results.export` | off | Write a stored result to CSV or Parquet in your export folder. The only tool that writes a file outside marketlens's own result cache and data store. |
 | `provider.docs` | off | Search the data provider's documentation service (an outbound call to a third party). Third-party text, marked untrusted. |
 | `macro` | on | FRED/ALFRED, BLS and BEA series with vintages and as-of reads, BLS release schedules, the FRED series catalogue. Needs the `data` extra. |
-| `filings` | on | SEC EDGAR filings, XBRL facts, point-in-time fundamentals, earnings releases and press-release EPS, insider trades, 13F holdings, fund N-PORT reports. Needs the `data` extra. |
+| `filings` | on | SEC EDGAR filings, XBRL facts, point-in-time fundamentals, earnings releases and press-release EPS, insider trades, 13F holdings, fund N-PORT reports, SEC EDGAR full-text search (`filings_search`, built in). The `sec_` tools need the `data` extra. |
 | `fed_treasury` | on | FOMC meetings and statements, NY Fed reference rates, the Treasury yield curve, auctions, debt and cash balance. Needs the `data` extra. |
 | `holidays` | on | US market holidays and early closes from their publishers: NYSE (stocks), SIFMA (bonds), OPM (federal). Keyless. Needs the `data` extra. |
 | `calendars` | off | Nasdaq's economic calendar (PMI and other actual and consensus figures), earnings calendar and history. Off by default: the Nasdaq endpoint is unofficial and may change or refuse without notice. Needs the `data` extra. |
 
-The last five are declared whether or not the `data` extra is installed (a config file naming them is always valid); their tools are listed only where it is. Plugins may declare more capabilities; see [Another vendor, or your own data](#another-vendor-or-your-own-data).
+The last five are declared whether or not the `data` extra is installed (a config file naming them is always valid); their tools are listed only where it is, except the built-in `filings_search`. Plugins may declare more capabilities; see [Another vendor, or your own data](#another-vendor-or-your-own-data).
 
 **Read-only.** marketlens-mcp has no tool that places, replaces or cancels orders, closes positions, exercises options, changes account settings, or edits broker watchlists. Those tools do not exist in the package, so no configuration can enable them.
 
@@ -443,7 +450,7 @@ Each source names its own key; set the ones you need in the env block of the ser
 | BLS | `BLS_API_KEY` | no | free; raises BLS's daily limit and years per request: https://data.bls.gov/registrationEngine/ | `macro_bls_series`; `macro_release_schedule` is keyless (the key is for the time-series API only) |
 | BEA | `BEA_API_KEY` | yes | free: https://apps.bea.gov/API/signup/ | `macro_bea_table` |
 | SEC EDGAR | `SEC_CONTACT_EMAIL` | optional, strongly recommended | your contact address, sent in the User-Agent as SEC's fair-access rule asks; without it a placeholder contact is sent, which SEC may throttle or block; set to something that is not an email address, in mode `auto` the `sec_` tools refuse until it is fixed, and `doctor` says so: https://www.sec.gov/os/accessing-edgar-data | the nine `sec_` tools |
-| Official feeds of SEC and BLS (built in, not the data extra) | `SEC_CONTACT_EMAIL` | optional | the same address, sent in the User-Agent to SEC and BLS only (both refuse undeclared automated clients); without it, or when it is not an email address, their nine feeds are skipped with a note and no placeholder is ever sent; the Fed, BEA, CFTC and ECB feeds need nothing | `news_official` |
+| Official feeds of SEC and BLS (built in, not the data extra) | `SEC_CONTACT_EMAIL` | optional | the same address, sent in the User-Agent to SEC and BLS only (both refuse undeclared automated clients); without it, or when it is not an email address, their nine feeds are skipped with a note and no placeholder is ever sent; the Fed, BEA, CFTC and ECB feeds need nothing | `news_official`; `filings_search` (refused without it) |
 | Federal Reserve, NY Fed, Treasury, FiscalData | none | | keyless | `fed_`, `treasury_` tools |
 | Nasdaq | none | | keyless; an unofficial endpoint | `calendar_economic`, `calendar_earnings`, `calendar_earnings_history` |
 | NYSE, SIFMA, OPM | none (either Alpaca key pair optional: `ALPACA_API_KEY` and `ALPACA_SECRET_KEY`, or `APCA_API_KEY_ID` and `APCA_API_SECRET_KEY`) | no | keyless; with paper-account Alpaca keys, NYSE's dates are cross-checked against Alpaca's paper trading calendar, and without keys the answer says they were not (live-account keys make the NYSE fetch fail) | `calendar_us_holidays` |
@@ -481,6 +488,7 @@ Every data tool except `macro_series_catalog` (the local FRED catalogue, which f
 - "List Apple's 10-K filings and the revenue they reported." (`sec_filings` with `forms: ["10-K"]`, `sec_fundamentals`)
 - "Which insiders sold this year?" (`sec_insider_trades`)
 - "What did this fund manager hold last quarter?" (`sec_13f_holdings`)
+- "Which filings mention Bridgewater Associates, and what is its CIK?" (`filings_search` with `query` and `forms: ["13F-HR"]`)
 
 ## Tools
 
@@ -563,6 +571,7 @@ Generated from the built-in tool manifest (`make readme`). `marketlens-mcp tools
 | `macro_release_schedule` | macro (on) | `omni bls.cpi_schedule, bls.empsit_schedule <- www.bls.gov/schedule/news_release, schedule/{year}/{MM}_sched_list.htm (this and next month's releases)` (bls) | marketlens.ReleaseScheduleEntry | - | CPI and jobs-report release dates and instants; needs the data extra |
 | `macro_series` | macro (on) | `omni fred.series <- api.stlouisfed.org/fred/series/observations, series/vintagedates (ALFRED vintages)` (fred) | marketlens.EconomicObservation | FRED_API_KEY | FRED/ALFRED series with vintages and as-of reads; needs the data extra |
 | `macro_series_catalog` | macro (on) | `omni catalog.series_meta (local, no fetch)` (local) | marketlens.EconomicSeriesInfo | - | Names, categories and units of the catalogued FRED series; needs the data extra |
+| `filings_search` | filings (on) | `GET efts.sec.gov/LATEST/search-index (SEC EDGAR full-text search)` (official) | marketlens.FilingSearchHit | SEC_CONTACT_EMAIL | untrusted text |
 | `sec_13f_holdings` | filings (on) | `omni sec13f.holdings <- www.sec.gov/Archives (13F-HR)` (sec13f) | marketlens.InstitutionalHolding | SEC_CONTACT_EMAIL | 13F-HR institutional holdings of a manager; needs the data extra |
 | `sec_earnings_figures` | filings (on) | `omni sec.earnings_press_release_figures <- www.sec.gov/Archives (EX-99.1)` (sec) | marketlens.EarningsFigure | SEC_CONTACT_EMAIL | untrusted text; needs the data extra |
 | `sec_earnings_releases` | filings (on) | `omni sec.earnings_releases <- data.sec.gov/submissions (8-K Item 2.02)` (sec) | marketlens.EarningsRelease | SEC_CONTACT_EMAIL | 8-K Item 2.02 earnings releases, stamped at acceptance; needs the data extra |

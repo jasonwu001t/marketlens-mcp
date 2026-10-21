@@ -124,7 +124,7 @@ def test_the_25_tools(monkeypatch):
         assert "as_of" in spec.input_model.model_fields or name == "macro_series_catalog", name
 
 
-@pytest.mark.parametrize(("installed", "count"), [(False, 50), (True, 72)])
+@pytest.mark.parametrize(("installed", "count"), [(False, 51), (True, 73)])
 def test_tools_json_counts(monkeypatch, capsys, installed, count):
     monkeypatch.setattr(runtime, "available", lambda: installed)
     assert cli.main(["tools", "--json"]) == 0

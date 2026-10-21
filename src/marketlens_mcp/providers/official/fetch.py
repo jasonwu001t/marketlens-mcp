@@ -1,9 +1,11 @@
 """Fetching the allow-listed feeds. It can only GET.
 
-* Only the URLs of ``feeds.FEEDS``, at most CONCURRENCY at a time, each after
-  the process-wide limiter of its host (PER_MINUTE requests a minute, or 60 /
-  the publisher's robots.txt Crawl-delay: 12 for the ECB; SEC's fair-access
-  ceiling is 10 a second).
+* Only the URLs of ``feeds.FEEDS``, and SEC's full-text search URL
+  (``search.SEARCH_URL``) with the query parameters a filings_search call
+  builds. The feeds are read at most CONCURRENCY at a time; every request
+  waits for the process-wide limiter of its host (PER_MINUTE requests a
+  minute, or 60 / the publisher's robots.txt Crawl-delay: 12 for the ECB;
+  SEC's fair-access ceiling is 10 a second).
 * User-Agent: ``marketlens-mcp/<version> (+<repository>)``; for SEC and BLS,
   ``marketlens-mcp/<version> <SEC_CONTACT_EMAIL>`` (SEC's fair-access form).
   Without a contact those feeds are never requested (``tool.py`` skips them).
@@ -311,3 +313,26 @@ def _late(feed: Feed, asked: bool, deadline: float) -> Fetched:
     if asked:
         return Fetched(feed, error=f"did not answer within this call's limit of {deadline:g} seconds")
     return Fetched(feed, error=f"was not asked: this call's limit of {deadline:g} seconds ran out first")
+
+
+async def fetch_json(ctx: ToolContext, url: str, agent: str) -> Any:
+    """One GET of SEC's full-text search under the feeds' rules: the host's
+    limiter (PER_MINUTE), a 5xx retried once, no redirect followed, at most
+    MAX_BYTES, uncompressed. Raises FeedFailed."""
+    settings = Settings.from_mapping(ctx.settings)
+    async with httpx.AsyncClient(
+        transport=_Capped(_transport.get() or httpx.AsyncHTTPTransport(), MAX_BYTES),
+        timeout=settings.timeout_seconds,
+        follow_redirects=False,
+        trust_env=False,
+        headers={"Accept": "application/json", "Accept-Encoding": "identity"},
+    ) as http:
+        response = await _answer(ctx, http, url, agent, settings.timeout_seconds, PER_MINUTE)
+        if response.status_code == 429:
+            raise FeedFailed("asked this server to slow down (HTTP 429)")
+        if response.status_code != 200:
+            raise FeedFailed(f"answered HTTP {response.status_code}")
+        try:
+            return response.json()
+        except ValueError:
+            raise FeedFailed("answered with JSON that does not parse") from None
