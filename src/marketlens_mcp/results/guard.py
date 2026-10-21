@@ -21,6 +21,7 @@ from dataclasses import dataclass
 import sqlglot
 from sqlglot import exp
 from sqlglot.errors import ParseError, TokenError
+from sqlglot.tokens import TokenType
 
 from ..results_api import RESULT_ID_RE, QueryRefused
 
@@ -85,6 +86,52 @@ DENIED_PREFIXES = (
     "json_execute",
 )
 DENIED_SUFFIXES = ("_scan",)
+
+#: Words that break a query when used unquoted as a name (a WITH name, a table
+#: alias, a column): DuckDB's reserved and type/function keywords and the
+#: keywords of sqlglot's DuckDB dialect that the guard's parser or DuckDB
+#: refuses there, and that sqlglot does not quote when it writes the statement
+#: back (order, table, list, struct, filter, window and limit are quoted, so
+#: they work as names). Probed with sqlglot 30.21 and DuckDB 1.5.
+KEYWORD_NAMES = frozenset({
+    "all", "alter", "and", "anti", "any", "as", "asc", "asof", "at", "authorization", "between", "binary",
+    "by", "case", "check", "collation", "concurrently", "create", "cross", "current_user", "desc", "describe",
+    "distinct", "drop", "else", "end", "except", "false", "fetch", "for", "force", "freeze", "from", "full",
+    "glob", "grant", "group", "having", "ilike", "in", "inner", "insert", "install", "intersect", "into",
+    "is", "isnull", "join", "lambda", "lateral", "left", "like", "map", "natural", "not", "notnull", "null",
+    "on", "only", "or", "outer", "overlaps", "partitioned_by", "pivot", "pivot_longer", "pivot_wider",
+    "positional", "qualify", "recursive", "regexp", "returning", "revoke", "right", "rlike", "rollback",
+    "select", "semi", "show", "similar", "summarize", "tablesample", "then", "true", "uncache", "union",
+    "unpack", "unpivot", "using", "values", "verbose", "when", "where", "with", "xor",
+})  # fmt: skip
+#: What follows ``name.`` when the name qualifies something: a column or *.
+_AFTER_DOT = (TokenType.VAR, TokenType.IDENTIFIER, TokenType.STAR)
+
+#: DuckDB's grouping errors and the next step for each; the first match wins.
+_GROUPING_HINTS: tuple[tuple[re.Pattern[str], str], ...] = (
+    (
+        re.compile(r"Cannot mix aggregates with non-aggregated columns"),
+        "GROUP BY ALL groups by every selected expression that has no aggregate, so one that mixes an "
+        "aggregate with a plain column (sum(a) + b) cannot be grouped: aggregate that column too "
+        "(sum(a) + any_value(b)), or name the GROUP BY columns instead of ALL (GROUP BY k, b).",
+    ),
+    (
+        re.compile(r'column (?:"([^"]+)"|(\S+)) must appear in the GROUP BY clause'),
+        "{0} is used outside an aggregate in a grouped query (in SELECT, ORDER BY or HAVING): add it to "
+        "GROUP BY (or use GROUP BY ALL), or aggregate it (max({0}), or any_value({0}) when it is the same "
+        "on every row of a group). To keep every row beside a group's total, use a window function: "
+        "sum(x) OVER (PARTITION BY k).",
+    ),
+    (
+        re.compile(r"WHERE clause cannot contain aggregates"),
+        "WHERE filters rows before they are grouped, so it cannot test an aggregate: test it in HAVING, "
+        "after GROUP BY, or aggregate in a WITH query and filter its result.",
+    ),
+    (
+        re.compile(r"aggregate function calls cannot be nested"),
+        "Aggregate in a WITH query (or a subquery), then aggregate its result in the outer query.",
+    ),
+)
 
 _FORBIDDEN_NODES: tuple[type[exp.Expression], ...] = tuple(
     getattr(exp, name)
@@ -240,6 +287,91 @@ def _cte_references(root: exp.Expression) -> set[int]:
     return {id(table) for table in root.find_all(exp.Table) if _binds_to_cte(table)}
 
 
+def keyword_hint(words: list[str]) -> str | None:
+    """How to use keywords as names, for the first three of ``words``."""
+    if not words:
+        return None
+    words = words[:3]
+    one = words[0]
+    if len(words) == 1:
+        return (
+            f"{one} is a SQL keyword here, so it cannot be a bare name (a WITH name, alias or column): "
+            f'rename it, or double-quote it wherever it names something ("{one}", "{one}".col).'
+        )
+    return (
+        f"{', '.join(words)} are SQL keywords here, so they cannot be bare names (WITH names, aliases or "
+        f'columns): rename them, or double-quote them wherever they name something ("{one}", "{one}".col).'
+    )
+
+
+def _parse_names(sql: str, exc: ParseError) -> list[str]:
+    """Keywords used as bare names at sqlglot's error: the error token or the
+    one before it, unquoted, in a name position (before a dot and a column or
+    *, after AS, or a WITH name before its AS). Anything else gives no words."""
+    errors = exc.errors
+    if not errors:
+        return []
+    line, col = errors[0].get("line"), errors[0].get("col")
+    try:
+        tokens = sqlglot.Dialect.get_or_raise("duckdb").tokenize(sql)
+    except (TokenError, ParseError):
+        return []
+    at = next((i for i, token in enumerate(tokens) if (token.line, token.col) == (line, col)), None)
+    if at is None:
+        return []
+
+    def kind(i: int) -> TokenType | None:
+        return tokens[i].token_type if 0 <= i < len(tokens) else None
+
+    if kind(at) is TokenType.DOT and kind(at + 1) not in _AFTER_DOT:
+        return []  # a stray dot is the error, whatever it follows (ORDER BY a DESC., FROM t AS map.)
+    words: list[str] = []
+    for i in (at - 1, at):
+        if i < 0:
+            continue
+        token = tokens[i]
+        word = token.text.lower()
+        named = (
+            # map.close names map; a stray dot after a keyword (ORDER BY a DESC.) names nothing
+            (kind(i + 1) is TokenType.DOT and kind(i + 2) in _AFTER_DOT)
+            or kind(i - 1) is TokenType.ALIAS
+            or (
+                kind(i - 1) in (TokenType.WITH, TokenType.RECURSIVE, TokenType.COMMA)
+                and kind(i + 1) is TokenType.ALIAS
+            )
+        )
+        if token.token_type is not TokenType.IDENTIFIER and word in KEYWORD_NAMES and named:
+            words.append(word)
+    return list(dict.fromkeys(words))
+
+
+def _tree_names(ast: exp.Expression) -> list[str]:
+    """Unquoted keyword names in a statement sqlglot read and DuckDB's parser
+    did not. A qualified column (r.end) is skipped: DuckDB reads it."""
+    words: list[str] = []
+    for ident in ast.find_all(exp.Identifier):
+        name = ident.name.lower()
+        if ident.args.get("quoted") or name not in KEYWORD_NAMES:
+            continue
+        parent = ident.parent
+        if isinstance(parent, exp.Column) and parent.this is ident and parent.args.get("table"):
+            continue
+        words.append(name)
+    return list(dict.fromkeys(words))
+
+
+def error_hint(message: str, ast: exp.Expression) -> str | None:
+    """A hint for a DuckDB error on a checked statement: a keyword used as a
+    bare name for a parser error, else the fix for a grouping mistake."""
+    if message.startswith("Parser Error:"):
+        return keyword_hint(_tree_names(ast))
+    for pattern, template in _GROUPING_HINTS:
+        match = pattern.search(message)
+        if match:
+            return template.format(next((g for g in match.groups() if g), ""))
+    return None
+
+
 def check(sql: str, *, live_ids: Collection[str], gone: Callable[[str], None] | None = None) -> Checked:
     """Steps 1-5. Raises QueryRefused with a readable reason. ``gone`` is
     called with a result-id-shaped table name that is not live, before it is
@@ -252,7 +384,9 @@ def check(sql: str, *, live_ids: Collection[str], gone: Callable[[str], None] | 
     try:
         statements = [s for s in sqlglot.parse(sql, read="duckdb") if s is not None]
     except (ParseError, TokenError) as exc:
-        raise QueryRefused("sql_parse", f"The SQL does not parse: {scrub(_first_line(exc))}") from None
+        refused = QueryRefused("sql_parse", f"The SQL does not parse: {scrub(_first_line(exc))}")
+        refused.hint = keyword_hint(_parse_names(sql, exc)) if isinstance(exc, ParseError) else None
+        raise refused from None
     if not statements:
         raise QueryRefused("sql_empty", "The SQL is empty.")
     if len(statements) > 1:

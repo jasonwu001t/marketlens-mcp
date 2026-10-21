@@ -5,7 +5,6 @@ failure, the cache, redirects, the byte cap, and GET only."""
 from __future__ import annotations
 
 import asyncio
-import importlib.util
 import re
 import time
 from datetime import timedelta
@@ -353,9 +352,9 @@ def test_the_ecbs_crawl_delay_holds_with_the_cache_off(publishers, monkeypatch):
     rates = {}
     real = fetch._answer
 
-    async def spy(ctx, http, url, agent, timeout, rate):
-        rates[url] = rate
-        return await real(ctx, http, url, agent, timeout, rate)
+    async def spy(http, url, agent, timeout, limiter):
+        rates[url] = limiter.per_minute
+        return await real(http, url, agent, timeout, limiter)
 
     monkeypatch.setattr(fetch, "_answer", spy)
     off = {"cache_seconds": 0}
@@ -474,19 +473,18 @@ def test_the_readme_lists_every_feed_with_its_publishers_terms():
 def test_doctor_prints_the_contact_and_the_feeds(capsys, monkeypatch, tmp_path):
     from marketlens_mcp import cli
 
-    # news_official adds no generic env line of its own; the data extra, when installed,
-    # declares SEC_CONTACT_EMAIL itself and prints that line once
-    generic = 1 if importlib.util.find_spec("omni") else 0
+    # news_official adds no generic env line of its own; filings_search declares
+    # SEC_CONTACT_EMAIL (it refuses without it), so that line is printed once
     monkeypatch.setenv("SEC_CONTACT_EMAIL", "")
     cli.main(["doctor"])
     out = capsys.readouterr().out
     # one line on the contact: news_official skips SEC and BLS without it (it does not refuse)
     assert "\nofficial feeds: 9 of 18 ready; SEC_CONTACT_EMAIL is not set" in out
-    assert out.count("environment SEC_CONTACT_EMAIL") == generic
+    assert out.count("environment SEC_CONTACT_EMAIL") == 1
     monkeypatch.setenv("SEC_CONTACT_EMAIL", CONTACT)
     cli.main(["doctor"])
     out = capsys.readouterr().out
-    assert "official feeds: all 18 ready" in out and out.count("environment SEC_CONTACT_EMAIL") == generic
+    assert "official feeds: all 18 ready" in out and out.count("environment SEC_CONTACT_EMAIL") == 1
     assert CONTACT not in out
     config = tmp_path / "xdg" / "marketlens" / "config.yaml"
     config.parent.mkdir(parents=True)

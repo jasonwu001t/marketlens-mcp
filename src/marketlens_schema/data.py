@@ -22,6 +22,9 @@ Conventions of base.py hold, plus:
 * Text written by companies, the Fed or a calendar vendor (press-release
   lines, statements, event descriptions) is UNTRUSTED: the tools that return
   it mark their responses ``external_text``.
+
+FilingSearchHit is built by the built-in official provider (filings_search),
+not the extra.
 """
 
 from __future__ import annotations
@@ -128,6 +131,37 @@ class Filing(CanonicalModel):
     primary_doc_url: str | None = None
     sic: str | None = None
     sic_description: str | None = None
+    knowledge_time: UtcDatetime = _known()
+
+
+class FilingSearchHit(CanonicalModel):
+    """One document of an EDGAR filing that SEC's full-text search matched: the
+    filing's index entry and the document's address, not its text.
+    entity_name and document_type are written by the filers: UNTRUSTED."""
+
+    schema_name: ClassVar[str] = "marketlens.FilingSearchHit"
+    time_column: ClassVar[str | None] = "filing_date"
+    group_column: ClassVar[str | None] = "cik"
+
+    accession_number: str = Field(description="0000000000-00-000000")
+    cik: str = Field(description="10-digit, zero-padded: the first entity EDGAR lists for the filing")
+    entity_name: str | None = Field(
+        default=None,
+        description="That entity's name as EDGAR shows it (usually the filer; for a Form 144, the issuer)",
+    )
+    ciks: list[str] = Field(
+        default_factory=list, description="Every entity EDGAR lists for the filing, 10-digit, in its order"
+    )
+    form: str = Field(description="As filed: 13F-HR, 13F-HR/A, 8-K, SC 13D, ...")
+    filing_date: Date
+    report_date: Date | None = Field(default=None, description="The period the filing reports on")
+    document: str = Field(description="The matched file's name in the filing (primary_doc.xml, ex99-1.htm)")
+    document_type: str | None = Field(
+        default=None,
+        description="EDGAR's type of that file: the form for the main document, EX-99.1 for an exhibit",
+    )
+    document_url: str
+    filing_url: str = Field(description="The filing's index page on www.sec.gov")
     knowledge_time: UtcDatetime = _known()
 
 
@@ -557,6 +591,7 @@ DATA_MODELS: tuple[type[CanonicalModel], ...] = (
     EconomicSeriesInfo,
     ReleaseScheduleEntry,
     Filing,
+    FilingSearchHit,
     XbrlFact,
     FundamentalValue,
     EarningsRelease,

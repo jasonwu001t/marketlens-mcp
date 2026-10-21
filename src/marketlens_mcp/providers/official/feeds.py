@@ -45,7 +45,8 @@ Out:
   disallows every path of apps.bea.gov for every agent.
 * EDGAR's company and current-filings Atom feeds (www.sec.gov/cgi-bin/
   browse-edgar): robots.txt disallows /cgi-bin. Filings belong to the data
-  extra's sec_ tools.
+  extra's sec_ tools. SEC's full-text search, a JSON API on efts.sec.gov, is
+  filings_search (search.py).
 * The Treasury: home.treasury.gov has no press-release feed (its /rss.xml is
   a general site feed, mostly FAQ entries months old), and TreasuryDirect's
   robots.txt disallows every agent but the government's search crawler

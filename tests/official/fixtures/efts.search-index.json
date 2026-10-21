@@ -1,0 +1,338 @@
+{
+ "took": 41,
+ "timed_out": false,
+ "_shards": {
+  "total": 50,
+  "successful": 50,
+  "skipped": 0,
+  "failed": 0
+ },
+ "hits": {
+  "total": {
+   "value": 6,
+   "relation": "eq"
+  },
+  "max_score": 18.2,
+  "hits": [
+   {
+    "_index": "edgar_file",
+    "_id": "0000000001-26-000003:primary_doc.xml",
+    "_score": 18.2,
+    "_source": {
+     "ciks": [
+      "0000000001"
+     ],
+     "period_ending": "2026-06-30",
+     "file_num": [
+      "028-99901"
+     ],
+     "display_names": [
+      "Example Capital Management, LP  (CIK 0000000001)"
+     ],
+     "xsl": "xslForm13F_X02",
+     "sequence": 1,
+     "root_forms": [
+      "13F-HR"
+     ],
+     "file_date": "2026-08-14",
+     "biz_states": [
+      "CT"
+     ],
+     "sics": [],
+     "form": "13F-HR",
+     "adsh": "0000000001-26-000003",
+     "film_num": [
+      "26999001"
+     ],
+     "biz_locations": [
+      "Westport, CT"
+     ],
+     "file_type": "13F-HR",
+     "file_description": null,
+     "inc_states": [
+      "DE"
+     ],
+     "items": []
+    }
+   },
+   {
+    "_index": "edgar_file",
+    "_id": "0000000001-26-000004:primary_doc.xml",
+    "_score": 17.9,
+    "_source": {
+     "ciks": [
+      "0000000001"
+     ],
+     "period_ending": "2026-06-30",
+     "file_num": [
+      "028-99901"
+     ],
+     "display_names": [
+      "Example Capital Management, LP  (CIK 0000000001)"
+     ],
+     "xsl": "xslForm13F_X02",
+     "sequence": 1,
+     "root_forms": [
+      "13F-HR"
+     ],
+     "file_date": "2026-09-02",
+     "biz_states": [
+      "CT"
+     ],
+     "sics": [],
+     "form": "13F-HR/A",
+     "adsh": "0000000001-26-000004",
+     "film_num": [
+      "26999002"
+     ],
+     "biz_locations": [
+      "Westport, CT"
+     ],
+     "file_type": "13F-HR/A",
+     "file_description": null,
+     "inc_states": [
+      "DE"
+     ],
+     "items": []
+    }
+   },
+   {
+    "_index": "edgar_file",
+    "_id": "0000000004-26-000012:ex99-1.htm",
+    "_score": 9.4,
+    "_source": {
+     "ciks": [
+      "0000000004"
+     ],
+     "period_ending": "2026-07-30",
+     "file_num": [
+      "001-99904"
+     ],
+     "display_names": [
+      "Example Holdings Inc.  (EXHD)  (CIK 0000000004)"
+     ],
+     "xsl": null,
+     "sequence": 2,
+     "root_forms": [
+      "8-K"
+     ],
+     "file_date": "2026-07-30",
+     "biz_states": [
+      "NY"
+     ],
+     "sics": [
+      "6211"
+     ],
+     "form": "8-K",
+     "adsh": "0000000004-26-000012",
+     "film_num": [
+      "26999004"
+     ],
+     "biz_locations": [
+      "New York, NY"
+     ],
+     "file_type": "EX-99.1",
+     "file_description": "PRESS RELEASE, EXAMPLE CAPITAL STAKE",
+     "inc_states": [
+      "DE"
+     ],
+     "items": [
+      "2.02",
+      "9.01"
+     ]
+    }
+   },
+   {
+    "_index": "edgar_file",
+    "_id": "0001999999-26-000101:primary_doc.xml",
+    "_score": 8.1,
+    "_source": {
+     "ciks": [
+      "0000000002",
+      "0000000003"
+     ],
+     "period_ending": null,
+     "file_num": [
+      "001-99902"
+     ],
+     "display_names": [
+      "Example Corp  (EXMP)  (CIK 0000000002)",
+      "Doe Jane  (CIK 0000000003)"
+     ],
+     "xsl": "xsl144X01",
+     "sequence": 1,
+     "root_forms": [
+      "144"
+     ],
+     "file_date": "2026-08-11",
+     "biz_states": [
+      "CA"
+     ],
+     "sics": [
+      "3674"
+     ],
+     "form": "144",
+     "adsh": "0001999999-26-000101",
+     "film_num": [],
+     "biz_locations": [
+      "San Jose, CA"
+     ],
+     "file_type": "144",
+     "file_description": null,
+     "inc_states": [
+      "DE"
+     ],
+     "items": []
+    }
+   },
+   {
+    "_index": "edgar_file",
+    "_id": "0000000005-26-000001:primary_doc.xml",
+    "_score": 6.3,
+    "_source": {
+     "ciks": [
+      "0000000005"
+     ],
+     "period_ending": null,
+     "file_num": [
+      "021-99905"
+     ],
+     "display_names": [
+      "Example Fund I, L.P.  (CIK 0000000005)"
+     ],
+     "xsl": "xslFormDX01",
+     "sequence": 1,
+     "root_forms": [
+      "D"
+     ],
+     "file_date": "2026-06-22",
+     "biz_states": [
+      "CT"
+     ],
+     "sics": [],
+     "form": "D",
+     "adsh": "0000000005-26-000001",
+     "film_num": [
+      "26999005"
+     ],
+     "biz_locations": [
+      "Westport, CT"
+     ],
+     "file_type": "D",
+     "file_description": null,
+     "inc_states": [
+      "DE"
+     ],
+     "items": []
+    }
+   },
+   {
+    "_index": "edgar_file",
+    "_id": "0000000006-26-000001:attachments/ex1.htm",
+    "_score": 2.0,
+    "_source": {
+     "ciks": [
+      "0000000006"
+     ],
+     "period_ending": "2026-03-31",
+     "file_num": [],
+     "display_names": [
+      "Example Advisers LLC  (CIK 0000000006)"
+     ],
+     "xsl": null,
+     "sequence": 1,
+     "root_forms": [
+      "13F-HR"
+     ],
+     "file_date": "2026-05-15",
+     "biz_states": [],
+     "sics": [],
+     "form": "13F-HR",
+     "adsh": "0000000006-26-000001",
+     "film_num": [],
+     "biz_locations": [],
+     "file_type": "EX-1",
+     "file_description": null,
+     "inc_states": [
+      "NY"
+     ],
+     "items": []
+    }
+   }
+  ]
+ },
+ "aggregations": {
+  "form_filter": {
+   "doc_count_error_upper_bound": 0,
+   "sum_other_doc_count": 0,
+   "buckets": [
+    {
+     "key": "13F-HR",
+     "doc_count": 3
+    },
+    {
+     "key": "8-K",
+     "doc_count": 1
+    },
+    {
+     "key": "144",
+     "doc_count": 1
+    },
+    {
+     "key": "D",
+     "doc_count": 1
+    }
+   ]
+  },
+  "entity_filter": {
+   "doc_count_error_upper_bound": 0,
+   "sum_other_doc_count": 0,
+   "buckets": [
+    {
+     "key": "Example Capital Management, LP  (CIK 0000000001)",
+     "doc_count": 2
+    }
+   ]
+  },
+  "sic_filter": {
+   "doc_count_error_upper_bound": 0,
+   "sum_other_doc_count": 0,
+   "buckets": []
+  },
+  "biz_states_filter": {
+   "doc_count_error_upper_bound": 0,
+   "sum_other_doc_count": 0,
+   "buckets": [
+    {
+     "key": "CT",
+     "doc_count": 3
+    }
+   ]
+  }
+ },
+ "query": {
+  "from": 0,
+  "size": 100,
+  "query": {
+   "bool": {
+    "must": [
+     {
+      "match_phrase": {
+       "doc_text": "Example Capital"
+      }
+     }
+    ],
+    "should": [],
+    "filter": [
+     {
+      "terms": {
+       "root_forms": [
+        "13F-HR"
+       ]
+      }
+     }
+    ]
+   }
+  }
+ }
+}

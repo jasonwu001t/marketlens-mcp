@@ -34,7 +34,18 @@ feeds.py), named <feed id> plus the document's kind:
   resolves against the xml:base, not the feed's URL.
 * ecb.press.xml: the ECB's single-line RSS 2.0 without descriptions, links
   with a double slash, +0200 dates.
+* efts.search-index.json: one page of SEC EDGAR's full-text search
+  (efts.sec.gov/LATEST/search-index) in its JSON shape as it was on
+  2026-10-20 (took, _shards, hits.total {value, relation}, hits with _id
+  "<accession>:<file name>" and _source, aggregations, the query echoed),
+  served for any query string. Every name, CIK, accession number, file
+  number and place is invented. Its six hits: a 13F-HR cover page
+  (primary_doc.xml), a 13F-HR/A, an 8-K exhibit (ex99-1.htm, file_type
+  EX-99.1, items), a Form 144 listing the issuer, then the person (two
+  display names, one without tickers), a Form D with no period_ending, and
+  a hit whose file name holds a slash (skipped: it would be placed in a URL).
 
-The golden outputs in ../golden/ are what news_official must produce from
-these fixtures (rows, response absent map, notes, provenance minus
-fetched_at). Regenerate with MARKETLENS_UPDATE_GOLDEN=1 and review the diff.
+The golden outputs in ../golden/ are what news_official and filings_search
+must produce from these fixtures (rows, response absent map, notes,
+provenance minus fetched_at). Regenerate with MARKETLENS_UPDATE_GOLDEN=1 and
+review the diff.

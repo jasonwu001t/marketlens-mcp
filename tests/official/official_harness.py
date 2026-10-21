@@ -27,7 +27,7 @@ import pytest
 
 from marketlens_mcp import ratelimit
 from marketlens_mcp.plugin_api import ToolOutput
-from marketlens_mcp.providers.official import feeds, fetch
+from marketlens_mcp.providers.official import feeds, fetch, search
 from marketlens_mcp.providers.official.tool import SPECS
 from marketlens_mcp.testing import make_context
 from marketlens_schema import unexplained_absences
@@ -49,15 +49,19 @@ def fixture_bytes(feed_id: str) -> bytes:
 
 class FakePublishers:
     """Answers GETs of the allow-listed URLs with their fixtures; ``set``
-    replaces a URL's answers (the last one repeats). Unknown URLs answer 404.
-    Any other method answers 405, and the ``publishers`` fixture fails the
-    test at teardown if one was sent: the provider is read-only on the wire."""
+    replaces a URL's answers (the last one repeats). A URL with a query that
+    has no answers of its own gets those of the URL without it (the full-text
+    search: a callable answer reads ``request.url.params``). Unknown URLs
+    answer 404. Any other method answers 405, and the ``publishers`` fixture
+    fails the test at teardown if one was sent: the provider is read-only on
+    the wire."""
 
     def __init__(self) -> None:
         self.requests: list[httpx.Request] = []
         self.answers: dict[str, list[Answer]] = {
             f.url: [httpx.Response(200, content=fixture_bytes(f.id))] for f in feeds.FEEDS
         }
+        self.answers[search.SEARCH_URL] = [httpx.Response(200, content=fixture_bytes("efts.search-index"))]
         self.served: dict[str, int] = {}
         self.transport = httpx.MockTransport(self._handle)
 
@@ -69,11 +73,12 @@ class FakePublishers:
         if request.method != "GET":
             return httpx.Response(405, text=f"the fake publishers answer GET only, not {request.method}")
         url = str(request.url)
-        answers = self.answers.get(url)
+        key = url if url in self.answers else url.partition("?")[0]
+        answers = self.answers.get(key)
         if not answers:
             return httpx.Response(404, text="no such feed")
-        i = self.served.get(url, 0)
-        self.served[url] = i + 1
+        i = self.served.get(key, 0)
+        self.served[key] = i + 1
         answer = answers[min(i, len(answers) - 1)]
         return answer(request) if callable(answer) else answer
 

@@ -751,6 +751,7 @@
     "marketlens.EconomicObservation",
     "marketlens.EconomicSeriesInfo",
     "marketlens.Filing",
+    "marketlens.FilingSearchHit",
     "marketlens.FixedIncomeQuote",
     "marketlens.FomcMeeting",
     "marketlens.FomcStatement",

@@ -493,7 +493,12 @@ class FileResultStore:
         cap = self.limits.fetch_max_rows if store else max_rows
         executed = guard.render(guard.force_limit(checked.ast, cap))
         with self.open(checked.result_ids) as session:
-            table = session.query(executed)
+            try:
+                table = session.query(executed)
+            except QueryRefused as exc:
+                if exc.code == "sql_error":
+                    exc.hint = guard.error_hint(exc.message, checked.ast)
+                raise
             risks = {session.info(rid).risk for rid in checked.result_ids}
         truncated = table.num_rows > cap
         table, renamed = unique_names(table.slice(0, cap))

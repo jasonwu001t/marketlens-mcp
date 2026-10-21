@@ -88,6 +88,25 @@ def test_token_bucket_spaces_requests():
     assert slept and sum(slept) == pytest.approx(1.0, rel=1e-6)  # 60/min refills one per second
 
 
+def test_a_token_bucket_with_a_burst_holds_that_many():
+    clock = {"t": 0.0}
+    slept = []
+
+    async def sleep(s):
+        slept.append(s)
+        clock["t"] += s
+
+    bucket = ratelimit.TokenBucket(60, burst=5, clock=lambda: clock["t"], sleep=sleep)
+
+    async def go():
+        for _ in range(6):
+            await bucket.acquire()
+
+    run(go())
+    assert sum(slept) == pytest.approx(1.0, rel=1e-6)  # five at once, the sixth a second later
+    assert ratelimit.get_limiter("test:burst", 60, burst=5).capacity == 5
+
+
 def test_limiter_is_process_wide_per_key():
     a = ratelimit.get_limiter("test:key", 120)
     assert ratelimit.get_limiter("test:key", 120) is a

@@ -1,9 +1,12 @@
 """Fetching the allow-listed feeds. It can only GET.
 
-* Only the URLs of ``feeds.FEEDS``, at most CONCURRENCY at a time, each after
-  the process-wide limiter of its host (PER_MINUTE requests a minute, or 60 /
-  the publisher's robots.txt Crawl-delay: 12 for the ECB; SEC's fair-access
-  ceiling is 10 a second).
+* Only the URLs of ``feeds.FEEDS``, and SEC's full-text search URL
+  (``search.SEARCH_URL``) with the query parameters a filings_search call
+  builds. The feeds are read at most CONCURRENCY at a time; every request
+  waits for the process-wide limiter of its host (PER_MINUTE requests a
+  minute, or 60 / the publisher's robots.txt Crawl-delay: 12 for the ECB;
+  SEC's fair-access ceiling is 10 a second). The full-text search's limiter
+  also holds at most SEARCH_BURST requests, so calls made at once wait.
 * User-Agent: ``marketlens-mcp/<version> (+<repository>)``; for SEC and BLS,
   ``marketlens-mcp/<version> <SEC_CONTACT_EMAIL>`` (SEC's fair-access form).
   Without a contact those feeds are never requested (``tool.py`` skips them).
@@ -46,8 +49,8 @@ from urllib.parse import urljoin, urlsplit
 
 import httpx
 
-from marketlens_mcp import __version__
-from marketlens_mcp.plugin_api import ToolContext
+from marketlens_mcp import __version__, ratelimit
+from marketlens_mcp.plugin_api import RateLimiter, ToolContext
 
 from .feeds import BY_PUBLISHER, HOSTS, Feed
 from .parse import FeedRefused, RawItem, read_items
@@ -57,6 +60,11 @@ CACHE_SECONDS = 300
 MAX_BYTES = 5 * 1024 * 1024
 CONCURRENCY = 4
 PER_MINUTE = 60
+#: SEC's fair-access ceiling is 10 requests a second per client, and a host's
+#: limiter holds a minute's requests, which calls made at once could send in
+#: one second. The full-text search's limiter holds only one call's pages
+#: (search.MAX_LIMIT / PAGE), so at most 6 of its requests fall in any second.
+SEARCH_BURST = 5
 MAX_REDIRECTS = 3
 RETRY_AFTER = 1.0
 #: Seconds the whole call may take beyond one request's timeout.
@@ -220,11 +228,10 @@ def per_minute(feed: Feed) -> int:
 
 
 async def _answer(
-    ctx: ToolContext, http: httpx.AsyncClient, url: str, agent: str, timeout: int, rate: int
+    http: httpx.AsyncClient, url: str, agent: str, timeout: int, limiter: RateLimiter
 ) -> httpx.Response:
     """One GET; a 5xx is retried once after 1 s, a timeout or a connection
     failure is not (the Alpaca client's rule)."""
-    limiter = ctx.limiter(f"official:{urlsplit(url).hostname}", rate)
     for attempt in (1, 2):
         await limiter.acquire()
         try:
@@ -244,7 +251,8 @@ async def _answer(
 async def _read(ctx: ToolContext, http: httpx.AsyncClient, feed: Feed, agent: str, timeout: int) -> bytes:
     url = feed.url
     for _ in range(MAX_REDIRECTS + 1):
-        response = await _answer(ctx, http, url, agent, timeout, per_minute(feed))
+        limiter = ctx.limiter(f"official:{urlsplit(url).hostname}", per_minute(feed))
+        response = await _answer(http, url, agent, timeout, limiter)
         status = response.status_code
         if 300 <= status < 400:
             url = _redirect(url, response, feed)
@@ -311,3 +319,28 @@ def _late(feed: Feed, asked: bool, deadline: float) -> Fetched:
     if asked:
         return Fetched(feed, error=f"did not answer within this call's limit of {deadline:g} seconds")
     return Fetched(feed, error=f"was not asked: this call's limit of {deadline:g} seconds ran out first")
+
+
+async def fetch_json(ctx: ToolContext, url: str, agent: str) -> Any:
+    """One GET of SEC's full-text search under the feeds' rules: the host's
+    limiter (PER_MINUTE, at most SEARCH_BURST at once), a 5xx retried once, no
+    redirect followed, at most MAX_BYTES, uncompressed. Raises FeedFailed."""
+    settings = Settings.from_mapping(ctx.settings)
+    # ctx.limiter takes no burst; this is the same process-wide registry
+    limiter = ratelimit.get_limiter(f"official:{urlsplit(url).hostname}", PER_MINUTE, burst=SEARCH_BURST)
+    async with httpx.AsyncClient(
+        transport=_Capped(_transport.get() or httpx.AsyncHTTPTransport(), MAX_BYTES),
+        timeout=settings.timeout_seconds,
+        follow_redirects=False,
+        trust_env=False,
+        headers={"Accept": "application/json", "Accept-Encoding": "identity"},
+    ) as http:
+        response = await _answer(http, url, agent, settings.timeout_seconds, limiter)
+        if response.status_code == 429:
+            raise FeedFailed("asked this server to slow down (HTTP 429)")
+        if response.status_code != 200:
+            raise FeedFailed(f"answered HTTP {response.status_code}")
+        try:
+            return response.json()
+        except ValueError:
+            raise FeedFailed("answered with JSON that does not parse") from None
