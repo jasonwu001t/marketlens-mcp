@@ -1,0 +1,96 @@
+{
+ "absent": {},
+ "model": "marketlens.FilingEvent",
+ "notes": [],
+ "offload": "auto",
+ "pagination": null,
+ "provenance": {
+  "as_of": null,
+  "authority": [
+   "official"
+  ],
+  "cached": false,
+  "dataset": "sec.submissions,sec.filing_events",
+  "delay": "unknown",
+  "derived_from": [],
+  "environment": null,
+  "feed": null,
+  "knowledge_time": "2026-01-06T21:40:00Z",
+  "lag_days": 269.0,
+  "operation": null,
+  "pages_fetched": 2,
+  "provider": "sec",
+  "request": {
+   "as_of": null,
+   "items": null,
+   "limit": 100,
+   "since": "2024-10-02",
+   "ticker": "EVNTCO"
+  },
+  "route": "omni sec.filing_events <- sec.submissions + www.sec.gov/Archives (filing index, primary document)",
+  "schema_version": "1.1.0",
+  "stale": null,
+  "truncated": false,
+  "truncation_note": null,
+  "upstream_request_id": null
+ },
+ "risk": null,
+ "rows": [
+  {
+   "absent": null,
+   "accepted_at": "2026-01-06T21:40:00Z",
+   "accession_number": "0009999903-26-000011",
+   "cik": "0009999903",
+   "exhibits": {
+    "EX-10.1": "https://www.sec.gov/Archives/edgar/data/9999903/000999990326000011/evntco-ex101.htm",
+    "EX-4.1": "https://www.sec.gov/Archives/edgar/data/9999903/000999990326000011/evntco-ex41.htm",
+    "EX-99.1": "https://www.sec.gov/Archives/edgar/data/9999903/000999990326000011/evntco-ex991.htm"
+   },
+   "filing_date": "2026-01-07",
+   "form": "8-K",
+   "headline": "On January 6, 2026, Eventco Synthetic Inc (the “Company”) entered into a Supply Agreement with Northwind Compute LLC under which the Company will supply accelerators for Northwind’s data centers over five years. A copy of the Agreement is filed as Exhibit 10.1 hereto.",
+   "index_url": "https://www.sec.gov/Archives/edgar/data/9999903/000999990326000011/0009999903-26-000011-index.htm",
+   "item": "1.01",
+   "item_title": "Entry into a Material Definitive Agreement",
+   "knowledge_time": "2026-01-06T21:40:00Z",
+   "primary_doc_url": "https://www.sec.gov/Archives/edgar/data/9999903/000999990326000011/evntco-20260106.htm",
+   "ticker": "EVNTCO"
+  },
+  {
+   "absent": null,
+   "accepted_at": "2026-01-06T21:40:00Z",
+   "accession_number": "0009999903-26-000011",
+   "cik": "0009999903",
+   "exhibits": {
+    "EX-10.1": "https://www.sec.gov/Archives/edgar/data/9999903/000999990326000011/evntco-ex101.htm",
+    "EX-4.1": "https://www.sec.gov/Archives/edgar/data/9999903/000999990326000011/evntco-ex41.htm",
+    "EX-99.1": "https://www.sec.gov/Archives/edgar/data/9999903/000999990326000011/evntco-ex991.htm"
+   },
+   "filing_date": "2026-01-07",
+   "form": "8-K",
+   "headline": "In connection with the Agreement, the Company issued Northwind a warrant to purchase up to 12,000,000 shares of common stock at $0.01 per share, vesting in tranches tied to deliveries, in a private placement exempt under Section 4(a)(2) of the Securities Act.",
+   "index_url": "https://www.sec.gov/Archives/edgar/data/9999903/000999990326000011/0009999903-26-000011-index.htm",
+   "item": "3.02",
+   "item_title": "Unregistered Sales of Equity Securities",
+   "knowledge_time": "2026-01-06T21:40:00Z",
+   "primary_doc_url": "https://www.sec.gov/Archives/edgar/data/9999903/000999990326000011/evntco-20260106.htm",
+   "ticker": "EVNTCO"
+  },
+  {
+   "absent": null,
+   "accepted_at": "2025-11-03T21:10:00Z",
+   "accession_number": "0009999903-25-000040",
+   "cik": "0009999903",
+   "exhibits": {},
+   "filing_date": "2025-11-03",
+   "form": "8-K",
+   "headline": "On November 3, 2025, Priya Raman notified the Board of Directors of her decision to resign as Chief Financial Officer, effective December 31, 2025.",
+   "index_url": "https://www.sec.gov/Archives/edgar/data/9999903/000999990325000040/0009999903-25-000040-index.htm",
+   "item": "5.02",
+   "item_title": "Departure of Directors or Certain Officers; Election of Directors; Appointment of Certain Officers; Compensatory Arrangements of Certain Officers",
+   "knowledge_time": "2025-11-03T21:10:00Z",
+   "primary_doc_url": "https://www.sec.gov/Archives/edgar/data/9999903/000999990325000040/evntco-20251103.htm",
+   "ticker": "EVNTCO"
+  }
+ ]
+}

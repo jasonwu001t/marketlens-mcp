@@ -24,7 +24,7 @@ Conventions of base.py hold, plus:
   it mark their responses ``external_text``.
 
 FilingSearchHit is built by the built-in official provider (filings_search),
-not the extra.
+not the extra; FilingEvent by the extra's filings_events.
 """
 
 from __future__ import annotations
@@ -162,6 +162,43 @@ class FilingSearchHit(CanonicalModel):
     )
     document_url: str
     filing_url: str = Field(description="The filing's index page on www.sec.gov")
+    knowledge_time: UtcDatetime = _known()
+
+
+class FilingEvent(CanonicalModel):
+    """One material event a company filed: an 8-K item on marketlens-data's
+    allowlist (1.01, 1.02, 2.01, 2.03, 2.05, 2.06, 3.02, 5.02, 7.01, 8.01) or a
+    Form 6-K (item "6-K"), with the filing's exhibit URLs and the first 300
+    characters of the item's own section. headline is the filer's prose and
+    item_title SEC's title for the code; the headline is UNTRUSTED text."""
+
+    schema_name: ClassVar[str] = "marketlens.FilingEvent"
+    time_column: ClassVar[str | None] = "accepted_at"
+    group_column: ClassVar[str | None] = "ticker"
+
+    ticker: str = Field(description="SEC style, e.g. BRK-B")
+    cik: str = Field(description="10-digit, zero-padded")
+    form: str = Field(description="8-K, 8-K/A or 6-K")
+    filing_date: Date = Field(
+        description="SEC's filing date; an acceptance after 17:30 ET is dated the next business day"
+    )
+    accepted_at: UtcDatetime = _unit(
+        "UTC", description="EDGAR acceptance; the end of the filing day in New York when EDGAR states none"
+    )
+    accession_number: str = Field(description="0000000000-00-000000")
+    item: str = Field(description="The 8-K item code (1.01, 3.02, ...) or 6-K")
+    item_title: str = Field(description="SEC's title for the item code")
+    headline: str | None = Field(
+        default=None,
+        description="The first 300 characters of the item's section in the primary document; None when no "
+        "section was found (never invented)",
+    )
+    primary_doc_url: str | None = None
+    exhibits: dict[str, str] = Field(
+        default_factory=dict,
+        description="Exhibit type -> URL on www.sec.gov (EX-4.1, EX-10.1, EX-99.1, ...); the bodies are not stored",
+    )
+    index_url: str = Field(description="The filing's index page on www.sec.gov")
     knowledge_time: UtcDatetime = _known()
 
 
@@ -592,6 +629,7 @@ DATA_MODELS: tuple[type[CanonicalModel], ...] = (
     ReleaseScheduleEntry,
     Filing,
     FilingSearchHit,
+    FilingEvent,
     XbrlFact,
     FundamentalValue,
     EarningsRelease,

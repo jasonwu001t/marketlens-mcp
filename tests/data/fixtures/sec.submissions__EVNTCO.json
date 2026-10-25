@@ -1,0 +1,61 @@
+{
+ "_synthetic": true,
+ "cik": "9999903",
+ "entityType": "operating",
+ "sic": "3674",
+ "sicDescription": "Semiconductors & Related Devices",
+ "name": "Eventco Synthetic Inc",
+ "tickers": [
+  "EVNTCO"
+ ],
+ "exchanges": [
+  "Nasdaq"
+ ],
+ "filings": {
+  "recent": {
+   "accessionNumber": [
+    "0009999903-26-000011",
+    "0009999903-26-000010",
+    "0009999903-26-000009",
+    "0009999903-25-000040"
+   ],
+   "filingDate": [
+    "2026-01-07",
+    "2026-01-05",
+    "2026-01-02",
+    "2025-11-03"
+   ],
+   "reportDate": [
+    "2026-01-06",
+    "2025-11-30",
+    "2026-01-02",
+    "2025-11-03"
+   ],
+   "acceptanceDateTime": [
+    "2026-01-06T21:40:00.000Z",
+    "2026-01-05T20:15:00.000Z",
+    "2026-01-02T12:05:00.000Z",
+    "2025-11-03T21:10:00.000Z"
+   ],
+   "form": [
+    "8-K",
+    "10-Q",
+    "8-K",
+    "8-K"
+   ],
+   "items": [
+    "1.01,3.02,9.01",
+    "",
+    "2.02,9.01",
+    "5.02"
+   ],
+   "primaryDocument": [
+    "evntco-20260106.htm",
+    "evntco-20251130.htm",
+    "evntco-8k-q4.htm",
+    "evntco-20251103.htm"
+   ]
+  },
+  "files": []
+ }
+}

@@ -1,12 +1,13 @@
 """SEC EDGAR: filings, XBRL facts, point-in-time fundamentals, earnings
-releases and press-release EPS, insider trades, 13F holdings and fund
-N-PORT reports (capability ``filings``). Every fetch names the operator's
+releases and press-release EPS, material filing events, insider trades, 13F
+holdings and fund N-PORT reports (capability ``filings``). Every fetch names the operator's
 contact in its User-Agent (SEC_CONTACT_EMAIL), as EDGAR's fair-access rule
 asks; unset, marketlens-data sends its placeholder contact and every answer
 says so."""
 
 from __future__ import annotations
 
+import json
 import os
 import re
 from datetime import date
@@ -20,6 +21,7 @@ from marketlens_schema.data import (
     EarningsFigure,
     EarningsRelease,
     Filing,
+    FilingEvent,
     FundamentalValue,
     FundHolding,
     FundReport,
@@ -136,6 +138,22 @@ def _accession(value: str) -> str:
 
 
 Forms = Annotated[list[str], Field(min_length=1, max_length=20), AfterValidator(_forms)]
+_ITEM_CODE = re.compile(r"^(?:\d{1,2}\.\d{2}|6-K)$")
+#: The 8-K items marketlens-data keeps as events (sec.filing_events' allowlist), and 6-K.
+EVENT_ITEMS = ("1.01", "1.02", "2.01", "2.03", "2.05", "2.06", "3.02", "5.02", "7.01", "8.01", "6-K")
+
+
+def _item_codes(values: list[str]) -> list[str]:
+    out = []
+    for v in values:
+        code = v.strip().upper()
+        if not _ITEM_CODE.match(code):
+            raise ValueError(f"{v!r} is not an 8-K item code (1.01, 3.02, ...) or 6-K")
+        out.append(code)
+    return list(dict.fromkeys(out))
+
+
+ItemCodes = Annotated[list[str], Field(min_length=1, max_length=20), AfterValidator(_item_codes)]
 TICKER_DOC = "Company ticker, SEC style (brk.b becomes BRK-B)."
 
 
@@ -144,6 +162,20 @@ class FilingsInputs(Inputs):
     forms: Forms | None = Field(default=None, description="Only these forms, e.g. [10-K, 10-Q, 8-K, 4].")
     start: date | None = Field(default=None, description="First filing date. Default: 2 years ago.")
     end: date | None = Field(default=None, description="Last filing date. Default: today.")
+    as_of: AsOf | None = common.as_of_field()
+
+
+class EventsInputs(Inputs):
+    ticker: Ticker = Field(description=TICKER_DOC)
+    items: ItemCodes | None = Field(
+        default=None,
+        description="Only these item codes: 1.01, 1.02, 2.01, 2.03, 2.05, 2.06, 3.02, 5.02, 7.01, 8.01 or 6-K. "
+        "Default: every item on the allowlist.",
+    )
+    since: date | None = Field(
+        default=None, description="First filing date (SEC's filing date, inclusive). Default: 2 years ago."
+    )
+    limit: int = Field(default=100, ge=1, le=500, description="At most this many events, newest first.")
     as_of: AsOf | None = common.as_of_field()
 
 
@@ -236,6 +268,7 @@ INSUFFICIENT = AbsenceCode.INSUFFICIENT_DATA
 ROUTES = {
     "sec_filings": "omni sec.submissions <- data.sec.gov/submissions",
     "sec_xbrl_facts": "omni sec.company_facts <- data.sec.gov/api/xbrl/companyfacts",
+    "filings_events": "omni sec.filing_events <- sec.submissions + www.sec.gov/Archives (filing index, primary document)",
     "sec_fundamentals": "omni sec.fundamentals <- sec.company_facts (computed locally)",
     "sec_earnings_releases": "omni sec.earnings_releases <- data.sec.gov/submissions (8-K Item 2.02)",
     "sec_earnings_figures": "omni sec.earnings_press_release_figures <- www.sec.gov/Archives (EX-99.1)",
@@ -338,6 +371,86 @@ async def sec_filings(ctx: ToolContext, args: FilingsInputs) -> ToolOutput:
         request={"ticker": args.ticker, "forms": args.forms, "start": start, "end": end, "as_of": args.as_of},
     )
     return _output(ctx, s, Filing, rows, prov)
+
+
+def _exhibits(raw: str | None) -> dict[str, str]:
+    """The stored JSON map of exhibit type to URL, decoded; {} for anything else."""
+    if not raw:
+        return {}
+    try:
+        decoded = json.loads(raw)
+    except ValueError:
+        return {}
+    return {str(k): str(v) for k, v in decoded.items()} if isinstance(decoded, dict) else {}
+
+
+def _index_url(cik: str, accession: str) -> str:
+    return f"https://www.sec.gov/Archives/edgar/data/{int(cik)}/{accession.replace('-', '')}/{accession}-index.htm"
+
+
+async def filings_events(ctx: ToolContext, args: EventsInputs) -> ToolOutput:
+    s = _settings(ctx)
+    as_of = common.as_of_of(args.as_of)
+    today = _today(ctx)
+    since = args.since or common.years_ago(today, 2)
+    identity = {"ticker": args.ticker}
+
+    def work(session):
+        index_fresh = session.refresh("sec.submissions", identity)
+        # derived from the stored filings index: read again whenever the index was just fetched
+        session.refresh("sec.filing_events", identity, force=not index_fresh)
+        return F.records(session.read("sec.filing_events", as_of=as_of, **identity))
+
+    records, session = await common.run(ctx, s, work, source="sec", subject=("filer", args.ticker))
+    wanted = set(args.items or [])
+    rows = []
+    for r in records:
+        filed, item = F.day(r["filing_date"]), F.text(r["item"])
+        if filed is None or filed < since or (wanted and item not in wanted):
+            continue
+        cik, accession = F.text(r["cik"]), F.text(r["accession_number"])
+        rows.append(
+            common.row(
+                FilingEvent,
+                {
+                    "ticker": F.text(r["ticker"]) or args.ticker,
+                    "cik": cik,
+                    "form": F.text(r["form"]),
+                    "filing_date": filed,
+                    "accepted_at": F.instant(r["event_time"]),
+                    "accession_number": accession,
+                    "item": item,
+                    "item_title": F.text(r["item_title"]),
+                    "headline": F.text(r["headline"]),
+                    "primary_doc_url": F.text(r["primary_doc_url"]),
+                    "exhibits": _exhibits(F.text(r["exhibits"])),
+                    "index_url": _index_url(cik, accession),
+                    "knowledge_time": F.instant(r["knowledge_time"]),
+                },
+                codes={"primary_doc_url": NPS},
+            )
+        )
+    rows.sort(key=lambda r: r.item)  # within a filing, its items in code order
+    rows.sort(key=lambda r: (r.accepted_at, r.accession_number), reverse=True)
+    rows = rows[: args.limit]
+    prov = _prov(
+        ctx,
+        "filings_events",
+        datasets=("sec.submissions", "sec.filing_events"),
+        as_of=as_of,
+        rows=rows,
+        session=session,
+        request={
+            "ticker": args.ticker,
+            "items": args.items,
+            "since": since,
+            "limit": args.limit,
+            "as_of": args.as_of,
+        },
+    )
+    return _output(
+        ctx, s, FilingEvent, rows, prov
+    )  # the spec's output risk: external_text (the headline is the filer's prose)
 
 
 async def sec_xbrl_facts(ctx: ToolContext, args: FactsInputs) -> ToolOutput:
@@ -940,6 +1053,7 @@ def _spec(
 HANDLERS = {
     "sec_filings": sec_filings,
     "sec_xbrl_facts": sec_xbrl_facts,
+    "filings_events": filings_events,
     "sec_fundamentals": sec_fundamentals,
     "sec_earnings_releases": sec_earnings_releases,
     "sec_earnings_figures": sec_earnings_figures,
@@ -963,6 +1077,26 @@ SPECS: tuple[ToolSpec, ...] = (
         Filing,
         "sec",
         "omni sec.submissions <- data.sec.gov/submissions",
+    ),
+    _spec(
+        "filings_events",
+        "SEC material filing events",
+        common.describe(
+            "A company's material filing events: one row per 8-K / 8-K/A item on the allowlist (1.01 material "
+            "agreement, 1.02 termination, 2.01 acquisition or disposition, 2.03 direct financial obligation, "
+            "2.05 exit costs, 2.06 impairment, 3.02 unregistered equity sale, 5.02 officer or director change, "
+            "7.01 Reg FD, 8.01 other events) and per Form 6-K, newest first, with SEC's title for the item, "
+            "the filing's exhibit URLs (EX-4.1, EX-10.1, EX-99.1, ...) and the first 300 characters of the "
+            "item's section (null when none was found). An 8-K carrying only 2.02 and 9.01 is an earnings "
+            f"release (sec_earnings_releases), not an event. Filter by items and since. {CONTACT}",
+            "at_event",
+        ),
+        "Material 8-K items and 6-Ks of a company with their exhibit URLs",
+        EventsInputs,
+        FilingEvent,
+        "sec",
+        ROUTES["filings_events"],
+        risk="external_text",
     ),
     _spec(
         "sec_xbrl_facts",
@@ -1093,6 +1227,7 @@ SPECS: tuple[ToolSpec, ...] = (
 DATASETS: dict[str, tuple[str, ...]] = {
     "sec_filings": ("sec.submissions",),
     "sec_xbrl_facts": ("sec.company_facts",),
+    "filings_events": ("sec.submissions", "sec.filing_events"),
     "sec_fundamentals": ("sec.company_facts", "sec.fundamentals"),
     "sec_earnings_releases": ("sec.earnings_releases",),
     "sec_earnings_figures": ("sec.earnings_press_release_figures",),

@@ -1,7 +1,8 @@
 """sec_filings, sec_xbrl_facts, sec_fundamentals, sec_earnings_releases,
-sec_earnings_figures, sec_insider_trades, sec_13f_holdings, sec_fund_nport and
-sec_fund_holdings against a synthetic EDGAR: the fictional company TESTCO
-(CIK 9999901), manager CIK 9999950 and fund series S000099991 (TFUND)."""
+sec_earnings_figures, filings_events, sec_insider_trades, sec_13f_holdings,
+sec_fund_nport and sec_fund_holdings against a synthetic EDGAR: the fictional
+companies TESTCO (CIK 9999901) and EVNTCO (CIK 9999903, the material 8-Ks),
+manager CIK 9999950 and fund series S000099991 (TFUND)."""
 
 from __future__ import annotations
 
@@ -10,12 +11,24 @@ from zoneinfo import ZoneInfo
 
 import httpx
 import pytest
-from data_harness import KEYS, call, check_golden, context, fixture_json, fixture_text, refused
+from data_harness import (
+    CAPABILITIES,
+    KEYS,
+    NOW,
+    SPECS,
+    call,
+    check_golden,
+    context,
+    fixture_json,
+    fixture_text,
+    refused,
+)
 
 ARCH = r"www\.sec\.gov/Archives/edgar/data"
 #: The submissions feed of each synthetic EDGAR company, by CIK.
 FEEDS = {
     9999901: "sec.submissions__TESTCO.json",
+    9999903: "sec.submissions__EVNTCO.json",
     9999950: "sec.submissions__13F.json",
     9999951: "sec.submissions__13F_amends.json",
     9999970: "sec.submissions__FUND.json",
@@ -74,6 +87,12 @@ def sec_routes(upstream):
     j(r"data\.sec\.gov/submissions/CIK0009999950\.json", "sec.submissions__13F.json")
     j(r"data\.sec\.gov/submissions/CIK0009999970\.json", "sec.submissions__FUND.json")
     j(r"data\.sec\.gov/api/xbrl/companyfacts/CIK0009999901\.json", "sec.company_facts__TESTCO.json")
+    # EVNTCO: the material 8-Ks (filings_events), their index pages and primary documents
+    j(r"data\.sec\.gov/submissions/CIK0009999903\.json", "sec.submissions__EVNTCO.json")
+    for acc, doc in (("26-000011", "evntco-20260106"), ("25-000040", "evntco-20251103")):
+        folder = f"{ARCH}/9999903/0009999903{acc.replace('-', '')}"
+        t(rf"{folder}/0009999903-{acc}-index\.htm", f"sec.8k_index__EVNTCO_{acc}.htm")
+        t(rf"{folder}/{doc}\.htm", f"sec.8k_primary__EVNTCO_{acc}.htm")
     # the earnings press release of 0009999901-26-000009; the other release's index is gone
     t(rf"{ARCH}/9999901/000999990126000009/0009999901-26-000009-index\.htm", "sec.8k_index__26-000009.htm")
     t(rf"{ARCH}/9999901/000999990126000009/tc-ex991\.htm", "sec.ex991__26-000009.htm")
@@ -140,6 +159,7 @@ SEC_ARGS = {
     "sec_fundamentals": {"ticker": "TESTCO"},
     "sec_earnings_releases": {"ticker": "TESTCO"},
     "sec_earnings_figures": {"ticker": "TESTCO"},
+    "filings_events": {"ticker": "EVNTCO"},
     "sec_insider_trades": {"ticker": "TESTCO"},
     "sec_13f_holdings": {"filer_cik": "9999950"},
     "sec_fund_nport": {"ticker": "TFUND"},
@@ -191,6 +211,99 @@ def test_sec_tools_refuse_a_contact_that_is_not_an_email(tmp_path, upstream, mon
 def test_sec_unknown_ticker_is_not_found(tmp_path, edgar):
     err = refused("sec_filings", context(tmp_path), ticker="ZZZZ")
     assert (err.code, err.message) == ("data_not_found", "SEC EDGAR has no filer for ZZZZ.")
+
+
+# --- material filing events ---------------------------------------------------------------------
+
+EVNTCO_FOLDER = "https://www.sec.gov/Archives/edgar/data/9999903/000999990326000011"
+
+
+def test_filings_events_golden(tmp_path, edgar):
+    out = call("filings_events", context(tmp_path), ticker="evntco")
+    doc = check_golden(out, "filings_events")
+    # newest first; the earnings release (2.02, 9.01) and the 10-Q give no row
+    assert [(r["accession_number"], r["item"]) for r in doc["rows"]] == [
+        ("0009999903-26-000011", "1.01"),
+        ("0009999903-26-000011", "3.02"),
+        ("0009999903-25-000040", "5.02"),
+    ]
+    first = doc["rows"][0]
+    assert first["item_title"] == "Entry into a Material Definitive Agreement"
+    assert first["headline"].startswith("On January 6, 2026, Eventco Synthetic Inc")
+    assert first["accepted_at"] == "2026-01-06T21:40:00Z" and first["filing_date"] == "2026-01-07"
+    assert first["exhibits"] == {
+        "EX-4.1": f"{EVNTCO_FOLDER}/evntco-ex41.htm",
+        "EX-10.1": f"{EVNTCO_FOLDER}/evntco-ex101.htm",
+        "EX-99.1": f"{EVNTCO_FOLDER}/evntco-ex991.htm",
+    }
+    assert first["index_url"] == f"{EVNTCO_FOLDER}/0009999903-26-000011-index.htm"
+    officer = doc["rows"][2]
+    assert officer["exhibits"] == {} and officer["headline"].startswith("On November 3, 2025")
+    assert doc["provenance"]["dataset"] == "sec.submissions,sec.filing_events"
+    assert doc["provenance"]["authority"] == ["official"]
+    assert SPECS["filings_events"].output_risk == "external_text"  # the headline is the filer's prose
+    # the index pages and primary documents were read once, with the contact in the User-Agent
+    archive = [
+        str(r.url) for r in edgar.requests if "/Archives/" in str(r.url) and "index-headers" not in str(r.url)
+    ]
+    assert sorted(archive) == sorted(
+        [
+            f"{EVNTCO_FOLDER}/0009999903-26-000011-index.htm",
+            f"{EVNTCO_FOLDER}/evntco-20260106.htm",
+            f"{EVNTCO_FOLDER.replace('000999990326000011', '000999990325000040')}/0009999903-25-000040-index.htm",
+            f"{EVNTCO_FOLDER.replace('000999990326000011', '000999990325000040')}/evntco-20251103.htm",
+        ]
+    )
+    assert all(KEYS["SEC_CONTACT_EMAIL"] in r.headers["User-Agent"] for r in edgar.requests)
+
+
+def test_filings_events_filters(tmp_path, edgar):
+    ctx = context(tmp_path)
+    warrant = call("filings_events", ctx, ticker="EVNTCO", items=["3.02", "1.02"])
+    assert [(r.accession_number, r.item) for r in warrant.rows] == [("0009999903-26-000011", "3.02")]
+    assert warrant.provenance.request["items"] == ["3.02", "1.02"]
+    since = call("filings_events", ctx, ticker="EVNTCO", since="2026-01-07")
+    assert {r.accession_number for r in since.rows} == {"0009999903-26-000011"}
+    assert since.provenance.request["since"] == "2026-01-07"
+    assert call("filings_events", ctx, ticker="EVNTCO", since="2026-01-08").rows == []
+    one = call("filings_events", ctx, ticker="EVNTCO", limit=1)
+    assert [(r.item) for r in one.rows] == ["1.01"] and one.pagination is None
+    before = call("filings_events", ctx, ticker="EVNTCO", as_of="2026-01-06T21:39:00Z")
+    assert [r.item for r in before.rows] == ["5.02"]
+    # through the pipeline, as the server runs a call: an argument that does not validate is invalid_arguments
+    import asyncio
+
+    from marketlens_mcp import pipeline
+    from marketlens_mcp.plugin_api import ToolError
+
+    for bad in ({"items": ["earnings"]}, {"items": []}, {"limit": 0}, {"limit": 501}, {"since": "yesterday"}):
+        with pytest.raises(ToolError) as info:
+            asyncio.run(pipeline.execute(SPECS["filings_events"], ctx, {"ticker": "EVNTCO", **bad}))
+        assert info.value.code == "invalid_arguments", bad
+
+
+def test_a_filing_whose_documents_edgar_no_longer_serves_gives_no_event(tmp_path, edgar):
+    """TESTCO's one material 8-K (5.02, no acceptance time in the feed) has no index
+    page on EDGAR any more (404): marketlens-data records it and stores no row, so
+    the answer is empty rather than invented."""
+    edgar.add(rf"{ARCH}/9999901/000999990125000020/.*", httpx.Response(404))
+    out = call("filings_events", context(tmp_path), ticker="TESTCO")
+    assert out.rows == [] and out.notes == []
+    assert out.provenance.dataset == "sec.submissions,sec.filing_events"
+
+
+def test_a_large_events_answer_is_stored(tmp_path, edgar):
+    import asyncio
+
+    from marketlens_mcp.results.store import StoreLimits, StoreRoot
+    from marketlens_mcp.testing import call_tool, make_context
+
+    store = StoreRoot(tmp_path / "results", StoreLimits(inline_max_rows=2)).session("s")
+    ctx = make_context(tool="filings_events", store=store, now=NOW, capabilities=CAPABILITIES)
+    marker = asyncio.run(call_tool(SPECS["filings_events"], ctx, ticker="EVNTCO"))
+    assert marker.kind == "stored" and marker.model == "marketlens.FilingEvent"
+    assert marker.row_count == 3 and marker.preview.time_column == "accepted_at"
+    assert marker.provenance.dataset == "sec.submissions,sec.filing_events"
 
 
 # --- XBRL facts and fundamentals ------------------------------------------------------------------
