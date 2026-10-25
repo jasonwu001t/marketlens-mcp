@@ -32,11 +32,12 @@ PARITY: dict[str, Mapped | Excluded] = {
     "bls.cpi_schedule": Mapped(("macro_release_schedule",)),
     "bls.empsit_schedule": Mapped(("macro_release_schedule",)),
     # SEC EDGAR
-    "sec.submissions": Mapped(("sec_filings",)),
+    "sec.submissions": Mapped(("sec_filings", "filings_events")),
     "sec.company_facts": Mapped(("sec_xbrl_facts", "sec_fundamentals")),
     "sec.fundamentals": Mapped(("sec_fundamentals",)),
     "sec.earnings_releases": Mapped(("sec_earnings_releases",)),
     "sec.earnings_press_release_figures": Mapped(("sec_earnings_figures",)),
+    "sec.filing_events": Mapped(("filings_events",)),
     "sec_insider.transactions": Mapped(("sec_insider_trades",)),
     "sec13f.holdings": Mapped(("sec_13f_holdings",)),
     "sec.fund_nport": Mapped(("sec_fund_nport",)),

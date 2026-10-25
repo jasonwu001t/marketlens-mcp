@@ -18,6 +18,7 @@ NAMES = [
     "ReleaseScheduleEntry",
     "Filing",
     "FilingSearchHit",
+    "FilingEvent",
     "XbrlFact",
     "FundamentalValue",
     "EarningsRelease",
@@ -53,7 +54,7 @@ def test_units_added():
         assert name in UNITS
 
 
-def test_the_24_models_are_built_in():
+def test_the_25_models_are_built_in():
     assert [m.__name__ for m in d.DATA_MODELS] == NAMES
     for model in d.DATA_MODELS:
         assert model.schema_name == f"marketlens.{model.__name__}"
