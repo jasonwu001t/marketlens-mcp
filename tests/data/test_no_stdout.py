@@ -31,6 +31,9 @@ ARGS = {
     "company_ir_documents": {"ticker": "TESTCO"},
     "company_ir_targets": {"ticker": "TESTCO"},
     "sec_insider_trades": {"ticker": "TESTCO"},
+    "sec_form144": {"ticker": "TESTCO"},
+    "sec_ipo_pipeline": {},
+    "sec_daily_index": {},
     "sec_13f_holdings": {"filer_cik": "9999950"},
     "sec_fund_nport": {"ticker": "TFUND"},
     "sec_fund_holdings": {"ticker": "TFUND"},
@@ -68,7 +71,7 @@ def test_no_tool_writes_to_stdout(tmp_path, upstream, keys, frozen_clock, capsys
         answered += bool(out.rows)
     captured = capsys.readouterr()
     assert captured.out == ""
-    assert answered == 34
+    assert answered == 37
 
 
 def test_the_placeholder_contact_warning_never_reaches_stdout(

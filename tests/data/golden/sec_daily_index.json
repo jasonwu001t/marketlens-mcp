@@ -1,0 +1,105 @@
+{
+ "absent": {},
+ "model": "marketlens.DailyIndexEntry",
+ "notes": [],
+ "offload": "auto",
+ "pagination": null,
+ "provenance": {
+  "as_of": null,
+  "authority": [
+   "official"
+  ],
+  "cached": false,
+  "dataset": "sec.daily_index",
+  "delay": "unknown",
+  "derived_from": [],
+  "environment": null,
+  "feed": null,
+  "knowledge_time": "2026-10-02T02:02:00Z",
+  "lag_days": 1.0,
+  "operation": null,
+  "pages_fetched": 1,
+  "provider": "sec",
+  "request": {
+   "as_of": null,
+   "cik": null,
+   "day": "2026-10-01",
+   "forms": null
+  },
+  "route": "omni sec.daily_index <- www.sec.gov/Archives/edgar/daily-index/{YYYY}/QTR{q}/form.{YYYYMMDD}.idx",
+  "schema_version": "1.1.0",
+  "stale": null,
+  "truncated": false,
+  "truncation_note": null,
+  "upstream_request_id": null
+ },
+ "risk": null,
+ "rows": [
+  {
+   "absent": null,
+   "accession_number": "0009999902-26-000020",
+   "cik": "0009999902",
+   "company": "Otherco Synthetic Inc",
+   "date_filed": "2026-10-01",
+   "file_url": "https://www.sec.gov/Archives/edgar/data/9999902/0009999902-26-000020.txt",
+   "form": "10-Q",
+   "index_date": "2026-10-01",
+   "knowledge_time": "2026-10-02T02:02:00Z"
+  },
+  {
+   "absent": null,
+   "accession_number": "0009999901-26-000012",
+   "cik": "0009999990",
+   "company": "Example John",
+   "date_filed": "2026-10-01",
+   "file_url": "https://www.sec.gov/Archives/edgar/data/9999990/0009999901-26-000012.txt",
+   "form": "144",
+   "index_date": "2026-10-01",
+   "knowledge_time": "2026-10-02T02:02:00Z"
+  },
+  {
+   "absent": null,
+   "accession_number": "0009999901-26-000012",
+   "cik": "0009999901",
+   "company": "Testco Synthetic Corp",
+   "date_filed": "2026-10-01",
+   "file_url": "https://www.sec.gov/Archives/edgar/data/9999901/0009999901-26-000012.txt",
+   "form": "144",
+   "index_date": "2026-10-01",
+   "knowledge_time": "2026-10-02T02:02:00Z"
+  },
+  {
+   "absent": null,
+   "accession_number": "9999999995-26-000100",
+   "cik": "0009999907",
+   "company": "Ipoco Synthetic Inc",
+   "date_filed": "2026-09-30",
+   "file_url": "https://www.sec.gov/Archives/edgar/data/9999907/9999999995-26-000100.txt",
+   "form": "EFFECT",
+   "index_date": "2026-10-01",
+   "knowledge_time": "2026-10-02T02:02:00Z"
+  },
+  {
+   "absent": null,
+   "accession_number": "0009999901-26-000013",
+   "cik": "0009999901",
+   "company": "Testco Synthetic Corp",
+   "date_filed": "2026-10-01",
+   "file_url": "https://www.sec.gov/Archives/edgar/data/9999901/0009999901-26-000013.txt",
+   "form": "S-1",
+   "index_date": "2026-10-01",
+   "knowledge_time": "2026-10-02T02:02:00Z"
+  },
+  {
+   "absent": null,
+   "accession_number": "0009999907-26-000005",
+   "cik": "0009999907",
+   "company": "Ipoco Synthetic Inc",
+   "date_filed": "2026-10-01",
+   "file_url": "https://www.sec.gov/Archives/edgar/data/9999907/0009999907-26-000005.txt",
+   "form": "S-1/A",
+   "index_date": "2026-10-01",
+   "knowledge_time": "2026-10-02T02:02:00Z"
+  }
+ ]
+}

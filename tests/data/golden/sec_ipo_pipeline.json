@@ -1,0 +1,101 @@
+{
+ "absent": {},
+ "model": "marketlens.IpoFiling",
+ "notes": [
+  "New issuers only: a company with a periodic report, a 424B4 or an exchange registration (8-A) more than 30 days before the filing is left out, as is a prospectus that does not state an IPO. Ticker, exchange, price range, offer price and shares come from the prospectus cover, best effort: null when the cover does not state them."
+ ],
+ "offload": "auto",
+ "pagination": null,
+ "provenance": {
+  "as_of": null,
+  "authority": [
+   "official"
+  ],
+  "cached": false,
+  "dataset": "sec.daily_index,sec.ipo_filings",
+  "delay": "unknown",
+  "derived_from": [],
+  "environment": null,
+  "feed": null,
+  "knowledge_time": "2026-10-01T20:30:00Z",
+  "lag_days": 1.0,
+  "operation": null,
+  "pages_fetched": 6,
+  "provider": "sec",
+  "request": {
+   "as_of": null,
+   "categories": null,
+   "end": "2026-10-02",
+   "stages": null,
+   "start": "2026-09-28"
+  },
+  "route": "omni sec.ipo_filings <- sec.daily_index + data.sec.gov/submissions + www.sec.gov/Archives (S-1, F-1, EFFECT, 424B4, RW)",
+  "schema_version": "1.1.0",
+  "stale": null,
+  "truncated": false,
+  "truncation_note": null,
+  "upstream_request_id": null
+ },
+ "risk": null,
+ "rows": [
+  {
+   "absent": {
+    "effective_at": "not_applicable",
+    "offer_price": "not_applicable"
+   },
+   "accepted_at": "2026-10-01T20:30:00Z",
+   "accession_number": "0009999907-26-000005",
+   "category": "operating",
+   "cik": "0009999907",
+   "company": "Ipoco Synthetic Inc",
+   "effective_at": null,
+   "exchange": "Nasdaq Global Market",
+   "file_number": "333-299999",
+   "filing_date": "2026-10-01",
+   "form": "S-1/A",
+   "knowledge_time": "2026-10-01T20:30:00Z",
+   "offer_price": null,
+   "offered_unit": "shares",
+   "price_high": 16.0,
+   "price_low": 14.0,
+   "primary_doc_url": "https://www.sec.gov/Archives/edgar/data/9999907/000999990726000005/ipoco-s1a.htm",
+   "registration_form": "S-1/A",
+   "shares_offered": 5000000.0,
+   "sic": "2836",
+   "stage": "amended",
+   "ticker": "IPCO"
+  },
+  {
+   "absent": {
+    "exchange": "not_applicable",
+    "offer_price": "not_applicable",
+    "offered_unit": "not_applicable",
+    "price_high": "not_applicable",
+    "price_low": "not_applicable",
+    "shares_offered": "not_applicable",
+    "ticker": "not_applicable"
+   },
+   "accepted_at": "2026-10-01T04:15:00Z",
+   "accession_number": "9999999995-26-000100",
+   "category": "operating",
+   "cik": "0009999907",
+   "company": "Ipoco Synthetic Inc",
+   "effective_at": "2026-09-30T20:00:00Z",
+   "exchange": null,
+   "file_number": "333-299999",
+   "filing_date": "2026-09-30",
+   "form": "EFFECT",
+   "knowledge_time": "2026-10-01T04:15:00Z",
+   "offer_price": null,
+   "offered_unit": null,
+   "price_high": null,
+   "price_low": null,
+   "primary_doc_url": "https://www.sec.gov/Archives/edgar/data/9999907/999999999526000100/primary_doc.xml",
+   "registration_form": "S-1",
+   "shares_offered": null,
+   "sic": "2836",
+   "stage": "effective",
+   "ticker": null
+  }
+ ]
+}

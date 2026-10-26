@@ -1,5 +1,5 @@
 """The data extra as the server sees it, with or without marketlens-data
-installed: the five capabilities are always declared, the 26 tools are
+installed: the five capabilities are always declared, the 37 tools are
 registered only when omni is importable, the README always lists them, the
 config file knows their settings, and doctor says what is missing. Nothing
 here imports omni (tests/data covers the tools themselves)."""
@@ -36,6 +36,9 @@ TOOLS = {
         "sec_earnings_figures",
         "filings_events",
         "sec_insider_trades",
+        "sec_form144",
+        "sec_ipo_pipeline",
+        "sec_daily_index",
         "sec_13f_holdings",
         "sec_fund_nport",
         "sec_fund_holdings",
@@ -73,6 +76,8 @@ EXTERNAL_TEXT = {
     "sec_foreign_quarterly",
     "company_ir_documents",
     "company_ir_targets",
+    "sec_form144",
+    "sec_ipo_pipeline",
     "fed_fomc_statements",
     "calendar_economic",
 }
@@ -115,7 +120,7 @@ def test_capabilities_are_declared_either_way(monkeypatch, installed):
     assert not (set(ALL_TOOLS) & names) or installed
 
 
-def test_the_34_tools(monkeypatch):
+def test_the_37_tools(monkeypatch):
     cat = catalog(monkeypatch, installed=True)
     for cap_id, names in TOOLS.items():
         for name in names:
@@ -124,7 +129,7 @@ def test_the_34_tools(monkeypatch):
             assert entry.plugin == "builtin:data"
             assert entry.spec.output_risk == ("external_text" if name in EXTERNAL_TEXT else "api_structured")
             assert entry.spec.golden_test.startswith("tests/data/test_"), name
-    assert len([t for t in cat.tools.values() if t.plugin == "builtin:data"]) == 34
+    assert len([t for t in cat.tools.values() if t.plugin == "builtin:data"]) == 37
     specs = {s.name: s for s in tools.all_specs()}
     assert set(specs) == set(ALL_TOOLS)
     assert specs["macro_series"].env == ("FRED_API_KEY",)
@@ -145,7 +150,7 @@ def test_the_34_tools(monkeypatch):
         assert "as_of" in spec.input_model.model_fields or name == "macro_series_catalog", name
 
 
-@pytest.mark.parametrize(("installed", "count"), [(False, 51), (True, 82)])
+@pytest.mark.parametrize(("installed", "count"), [(False, 51), (True, 85)])
 def test_tools_json_counts(monkeypatch, capsys, installed, count):
     monkeypatch.setattr(runtime, "available", lambda: installed)
     assert cli.main(["tools", "--json"]) == 0
@@ -529,10 +534,10 @@ def test_readiness_in_local_mode_needs_no_key():
 
 
 def test_parity_list_shape():
-    assert len(parity.PARITY) == 94
+    assert len(parity.PARITY) == 97
     mapped = {k: v for k, v in parity.PARITY.items() if isinstance(v, parity.Mapped)}
     excluded = {k: v for k, v in parity.PARITY.items() if isinstance(v, parity.Excluded)}
-    assert (len(mapped), len(excluded)) == (36, 58)
+    assert (len(mapped), len(excluded)) == (39, 58)
     kinds = [v.kind for v in excluded.values()]
     assert {k: kinds.count(k) for k in set(kinds)} == {
         "covered": 7,

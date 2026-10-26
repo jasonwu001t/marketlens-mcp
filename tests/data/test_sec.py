@@ -1,11 +1,13 @@
 """sec_filings, sec_xbrl_facts, sec_xbrl_frames, sec_fundamentals,
 sec_earnings_releases, sec_earnings_figures, filings_events,
-sec_pay_vs_performance, sec_insider_trades, sec_13f_holdings, sec_fund_nport
-and sec_fund_holdings against a synthetic EDGAR: the fictional companies
-TESTCO (CIK 9999901), EVNTCO (CIK 9999903, the material 8-Ks) and PVPCO (CIK
-9999904, two proxies with the pay-versus-performance table), a synthetic
-Revenues frame for CY2026Q2 with EDGAR's XBRL index of 2026 Q3, manager CIK
-9999950 and fund series S000099991 (TFUND)."""
+sec_pay_vs_performance, sec_insider_trades, sec_form144, sec_ipo_pipeline,
+sec_daily_index, sec_13f_holdings, sec_fund_nport and sec_fund_holdings
+against a synthetic EDGAR: the fictional companies TESTCO (CIK 9999901),
+EVNTCO (CIK 9999903, the material 8-Ks), PVPCO (CIK 9999904, two proxies with
+the pay-versus-performance table) and IPOCO (CIK 9999907, a new issuer), a
+synthetic Revenues frame for CY2026Q2 with EDGAR's XBRL index of 2026 Q3,
+EDGAR's daily index of 2026-10-01, manager CIK 9999950 and fund series
+S000099991 (TFUND)."""
 
 from __future__ import annotations
 
@@ -138,6 +140,23 @@ def sec_routes(upstream):
     # N-PORT documents
     for acc in ("26-000005", "26-000002"):
         t(rf"{ARCH}/9999970/0009999970{acc.replace('-', '')}/primary_doc\.xml", f"sec.nport_doc__{acc}.xml")
+    # Form 144 (sec_form144): the notice's filing index page, which lists its XML
+    t(rf"{ARCH}/9999901/000999990126000004/0009999901-26-000004-index\.htm", "sec.144_index__26-000004.htm")
+    # EDGAR's daily form index (sec_daily_index, sec_ipo_pipeline): Q4's listing names
+    # 2026-10-01's file; Q3 has no listing here (a 404 lists nothing)
+    daily = r"www\.sec\.gov/Archives/edgar/daily-index/2026"
+    j(rf"{daily}/QTR4/index\.json", "sec.daily_index_listing__2026_QTR4.json")
+    t(rf"{daily}/QTR4/form\.20261001\.idx", "sec.daily_index__20261001.idx")
+    upstream.add(rf"{daily}/QTR3/index\.json", httpx.Response(404))
+    # IPOCO (CIK 9999907), a new issuer: its feed, its S-1/A's index and cover, its EFFECT notice
+    j(r"data\.sec\.gov/submissions/CIK0009999907\.json", "sec.submissions__IPOCO.json")
+    t(rf"{ARCH}/9999907/000999990726000005/0009999907-26-000005-index\.htm", "sec.ipo_index__26-000005.htm")
+    t(rf"{ARCH}/9999907/000999990726000005/ipoco-s1a\.htm", "sec.ipo_cover__26-000005.htm")
+    t(
+        rf"{ARCH}/9999907/999999999526000100/9999999995-26-000100-index\.htm",
+        "sec.effect_index__26-000100.htm",
+    )
+    t(rf"{ARCH}/9999907/999999999526000100/primary_doc\.xml", "sec.effect__26-000100.xml")
 
 
 @pytest.fixture(autouse=True)
@@ -202,6 +221,9 @@ SEC_ARGS = {
     "sec_xbrl_frames": {"tag": "Revenues", "period": "CY2026Q2"},
     "sec_pay_vs_performance": {"ticker": "PVPCO"},
     "sec_insider_trades": {"ticker": "TESTCO"},
+    "sec_form144": {"ticker": "TESTCO"},
+    "sec_ipo_pipeline": {},
+    "sec_daily_index": {},
     "sec_13f_holdings": {"filer_cik": "9999950"},
     "sec_fund_nport": {"ticker": "TFUND"},
     "sec_fund_holdings": {"ticker": "TFUND"},
@@ -599,6 +621,85 @@ def test_sec_insider_trades_golden(tmp_path, edgar):
     assert not any("000999990125000030" in str(r.url) for r in edgar.requests)
     only4 = call("sec_insider_trades", context(tmp_path), ticker="TESTCO", forms=["4"])
     assert {r.form for r in only4.rows} == {"4"}
+
+
+def test_sec_form144_golden(tmp_path, edgar):
+    out = call("sec_form144", context(tmp_path), ticker="testco")
+    doc = check_golden(out, "sec_form144")
+    assert len(doc["rows"]) == 1
+    notice = doc["rows"][0]
+    assert (notice["accession_number"], notice["line"], notice["form"]) == ("0009999901-26-000004", 1, "144")
+    assert (notice["seller_name"], notice["relationship"]) == ("Example John", "Director")
+    assert (notice["shares_to_sell"], notice["aggregate_market_value"]) == (2000.0, 101000.0)
+    assert notice["approx_sale_date"] == "2026-02-25"
+    # EDGAR's "Accepted" on the filing index page, New York time: 10:00 EST is 15:00 UTC
+    assert notice["accepted_at"] == notice["knowledge_time"] == "2026-02-20T15:00:00Z"
+    assert notice["index_url"].endswith("/9999901/000999990126000004/0009999901-26-000004-index.htm")
+    assert notice["acquisitions"] == [] and notice["has_10b5_1"] is False
+    assert doc["provenance"]["dataset"] == "sec.form144" and doc["provenance"]["authority"] == ["official"]
+    assert SPECS["sec_form144"].output_risk == "external_text"
+    # the index page, then the XML it lists: never a guessed document name
+    archive = [str(r.url) for r in edgar.requests if "000999990126000004" in str(r.url)]
+    assert archive == [
+        f"https://www.sec.gov/Archives/edgar/data/9999901/000999990126000004/{name}"
+        for name in ("0009999901-26-000004-index.htm", "primary_doc.xml")
+    ]
+    later = call("sec_form144", context(tmp_path), ticker="TESTCO", since="2026-03-01")
+    assert later.rows == []
+
+
+def test_sec_daily_index_golden(tmp_path, edgar):
+    out = call("sec_daily_index", context(tmp_path))  # the last weekday before NOW: 2026-10-01
+    doc = check_golden(out, "sec_daily_index")
+    assert [(r["form"], r["company"]) for r in doc["rows"]] == [
+        ("10-Q", "Otherco Synthetic Inc"),
+        ("144", "Example John"),
+        ("144", "Testco Synthetic Corp"),
+        ("EFFECT", "Ipoco Synthetic Inc"),
+        ("S-1", "Testco Synthetic Corp"),
+        ("S-1/A", "Ipoco Synthetic Inc"),
+    ]
+    # the listing's time (10:01:30 PM New York) rounded up: the fixture sends no Last-Modified
+    assert {r["knowledge_time"] for r in doc["rows"]} == {"2026-10-02T02:02:00Z"}
+    effect = doc["rows"][3]
+    assert (effect["index_date"], effect["date_filed"]) == ("2026-10-01", "2026-09-30")
+    assert doc["rows"][0]["file_url"] == (
+        "https://www.sec.gov/Archives/edgar/data/9999902/0009999902-26-000020.txt"
+    )
+    only = call("sec_daily_index", context(tmp_path), day="2026-10-01", forms=["144"], cik="9999901")
+    assert [(r.form, r.cik) for r in only.rows] == [("144", "0009999901")]
+    weekend = call("sec_daily_index", context(tmp_path), day="2026-10-03")
+    assert weekend.rows == [] and weekend.notes[0].startswith("EDGAR lists no form index for 2026-10-03")
+
+
+def test_sec_ipo_pipeline_golden(tmp_path, edgar):
+    out = call("sec_ipo_pipeline", context(tmp_path), start="2026-09-28", end="2026-10-02")
+    doc = check_golden(out, "sec_ipo_pipeline")
+    # TESTCO's S-1 is left out: it filed a 10-K before it
+    assert [(r["company"], r["form"], r["stage"]) for r in doc["rows"]] == [
+        ("Ipoco Synthetic Inc", "S-1/A", "amended"),
+        ("Ipoco Synthetic Inc", "EFFECT", "effective"),
+    ]
+    amended, effect = doc["rows"]
+    assert (amended["ticker"], amended["exchange"]) == ("IPCO", "Nasdaq Global Market")
+    assert (amended["price_low"], amended["price_high"], amended["shares_offered"]) == (14.0, 16.0, 5000000.0)
+    assert amended["offered_unit"] == "shares" and amended["file_number"] == "333-299999"
+    assert amended["absent"] == {"offer_price": "not_applicable", "effective_at": "not_applicable"}
+    assert (effect["registration_form"], effect["effective_at"]) == ("S-1", "2026-09-30T20:00:00Z")
+    assert effect["accepted_at"] == "2026-10-01T04:15:00Z"
+    assert doc["provenance"]["dataset"] == "sec.daily_index,sec.ipo_filings"
+    # the established company cost its feed only: none of its filing's pages were read
+    assert not any("000999990126000013" in str(r.url) for r in edgar.requests)
+    priced = call(
+        "sec_ipo_pipeline", context(tmp_path), start="2026-09-28", end="2026-10-02", stages=["priced"]
+    )
+    assert priced.rows == []
+
+
+def test_sec_ipo_pipeline_refuses_a_long_window(tmp_path, edgar):
+    err = refused("sec_ipo_pipeline", context(tmp_path), start="2026-01-01", end="2026-10-01")
+    assert err.code == "data_window"
+    assert edgar.requests == []
 
 
 def test_sec_insider_trades_leaves_out_holding_lines(tmp_path, edgar):
