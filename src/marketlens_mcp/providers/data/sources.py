@@ -131,6 +131,7 @@ SOURCES: tuple[SourceKey, ...] = (
     ),
     SourceKey("boj", "The Bank of Japan", "macro", tools=("macro_boj_series",)),
     SourceKey("boe", "The Bank of England", "macro", tools=("macro_boe_series",)),
+    SourceKey("mof", "Japan's Ministry of Finance", "macro", tools=("macro_jgb_yields",)),
     SourceKey(
         "regionalfed",
         "The Richmond and Kansas City Feds",

@@ -1,5 +1,5 @@
 """The data extra as the server sees it, with or without marketlens-data
-installed: the five capabilities are always declared, the 31 tools are
+installed: the five capabilities are always declared, the 32 tools are
 registered only when omni is importable, the README always lists them, the
 config file knows their settings, and doctor says what is missing. Nothing
 here imports omni (tests/data covers the tools themselves)."""
@@ -28,6 +28,7 @@ TOOLS = {
         "macro_census_trade",
         "macro_boj_series",
         "macro_boe_series",
+        "macro_jgb_yields",
         "macro_regional_fed_surveys",
         "credit_trace_aggregates",
     ],
@@ -100,7 +101,7 @@ def test_capabilities_are_declared_either_way(monkeypatch, installed):
     assert not (set(ALL_TOOLS) & names) or installed
 
 
-def test_the_31_tools(monkeypatch):
+def test_the_32_tools(monkeypatch):
     cat = catalog(monkeypatch, installed=True)
     for cap_id, names in TOOLS.items():
         for name in names:
@@ -109,7 +110,7 @@ def test_the_31_tools(monkeypatch):
             assert entry.plugin == "builtin:data"
             assert entry.spec.output_risk == ("external_text" if name in EXTERNAL_TEXT else "api_structured")
             assert entry.spec.golden_test.startswith("tests/data/test_"), name
-    assert len([t for t in cat.tools.values() if t.plugin == "builtin:data"]) == 31
+    assert len([t for t in cat.tools.values() if t.plugin == "builtin:data"]) == 32
     specs = {s.name: s for s in tools.all_specs()}
     assert set(specs) == set(ALL_TOOLS)
     assert specs["macro_series"].env == ("FRED_API_KEY",)
@@ -117,7 +118,7 @@ def test_the_31_tools(monkeypatch):
     assert specs["macro_bea_table"].env == ("BEA_API_KEY",)
     assert specs["macro_census_trade"].env == ("CENSUS_API_KEY",)
     assert specs["credit_trace_aggregates"].env == ("FINRA_API_CLIENT_ID", "FINRA_API_CLIENT_SECRET")
-    for name in ("macro_boj_series", "macro_boe_series", "macro_regional_fed_surveys"):
+    for name in ("macro_boj_series", "macro_boe_series", "macro_jgb_yields", "macro_regional_fed_surveys"):
         assert specs[name].env == (), name
     for name in TOOLS["filings"]:
         assert specs[name].env == ("SEC_CONTACT_EMAIL",), name
@@ -134,7 +135,7 @@ def test_the_31_tools(monkeypatch):
         assert "as_of" in spec.input_model.model_fields or name == "macro_series_catalog", name
 
 
-@pytest.mark.parametrize(("installed", "count"), [(False, 51), (True, 79)])
+@pytest.mark.parametrize(("installed", "count"), [(False, 51), (True, 80)])
 def test_tools_json_counts(monkeypatch, capsys, installed, count):
     monkeypatch.setattr(runtime, "available", lambda: installed)
     assert cli.main(["tools", "--json"]) == 0
@@ -420,6 +421,7 @@ def test_source_table_order_and_keys():
         "census",
         "boj",
         "boe",
+        "mof",
         "regionalfed",
         "finra",
     ]
@@ -429,7 +431,9 @@ def test_source_table_order_and_keys():
         ("FINRA_API_CLIENT_ID", "FINRA_API_CLIENT_SECRET"),
         True,
     )
-    assert [by[s].capability for s in ("census", "boj", "boe", "regionalfed", "finra")] == ["macro"] * 5
+    assert [by[s].capability for s in ("census", "boj", "boe", "mof", "regionalfed", "finra")] == [
+        "macro"
+    ] * 6
     assert (by["fred"].variables, by["fred"].required) == (("FRED_API_KEY",), True)
     assert (by["bls"].variables, by["bls"].required) == (("BLS_API_KEY",), False)
     assert (by["bea"].variables, by["bea"].required) == (("BEA_API_KEY",), True)
@@ -477,6 +481,7 @@ def test_readiness_lines_with_nothing_set():
         "(free key: https://api.census.gov/data/key_signup.html)",
         "data source boj: keyless",
         "data source boe: keyless",
+        "data source mof: keyless",
         "data source regionalfed: keyless",
         "data source finra: missing FINRA_API_CLIENT_ID and FINRA_API_CLIENT_SECRET; its tools will refuse "
         "until it is set (free key: https://developer.finra.org/)",
@@ -536,10 +541,10 @@ def test_readiness_in_local_mode_needs_no_key():
 
 
 def test_parity_list_shape():
-    assert len(parity.PARITY) == 91
+    assert len(parity.PARITY) == 92
     mapped = {k: v for k, v in parity.PARITY.items() if isinstance(v, parity.Mapped)}
     excluded = {k: v for k, v in parity.PARITY.items() if isinstance(v, parity.Excluded)}
-    assert (len(mapped), len(excluded)) == (33, 58)
+    assert (len(mapped), len(excluded)) == (34, 58)
     kinds = [v.kind for v in excluded.values()]
     assert {k: kinds.count(k) for k in set(kinds)} == {
         "covered": 7,

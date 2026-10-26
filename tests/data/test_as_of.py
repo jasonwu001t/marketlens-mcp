@@ -12,6 +12,7 @@ from test_calendars import earnings_routes, economic_routes, holiday_routes, sur
 from test_fed_treasury import FISCAL, fomc_routes, treasury_routes
 from test_macro import (
     BEA,
+    JGB,
     REGIONAL,
     TRACE,
     bls_routes,
@@ -19,6 +20,7 @@ from test_macro import (
     boj_routes,
     census_routes,
     fred_routes,
+    jgb_routes,
     regional_routes,
     trace_routes,
 )
@@ -57,6 +59,7 @@ CASES = [
     ("macro_census_trade", census_routes, {"hs_codes": ["8542"], "flow": "exports"}),
     ("macro_boj_series", boj_routes, {"database": "FM01", "series_codes": ["STRDCLUCON"]}),
     ("macro_boe_series", boe_routes, {"series_codes": ["IUDBEDR"]}),
+    ("macro_jgb_yields", jgb_routes, JGB),
     ("macro_regional_fed_surveys", regional_routes, REGIONAL),
     ("credit_trace_aggregates", trace_routes, TRACE),
     ("sec_filings", sec_routes, {"ticker": "TESTCO"}),
@@ -106,7 +109,7 @@ def _id(case) -> str:
 
 
 def test_every_tool_has_a_case():
-    assert {tool for tool, *_ in CASES} == set(SPECS) and len(SPECS) == 31
+    assert {tool for tool, *_ in CASES} == set(SPECS) and len(SPECS) == 32
 
 
 @pytest.fixture

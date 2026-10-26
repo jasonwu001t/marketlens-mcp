@@ -26,6 +26,7 @@ SOURCES = [
     "census",
     "boj",
     "boe",
+    "mof",
     "regionalfed",
     "finra",
 ]

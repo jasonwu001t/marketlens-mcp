@@ -22,6 +22,7 @@ from marketlens_schema.data import (
     ReleaseScheduleEntry,
     TraceAggregate,
     TradeFlow,
+    YieldCurvePoint,
 )
 
 from .. import frames as F
@@ -224,6 +225,18 @@ class BoeInputs(Inputs):
     as_of: AsOf | None = common.as_of_field()
 
 
+JGB_TENORS = ("1Y", "2Y", "3Y", "4Y", "5Y", "6Y", "7Y", "8Y", "9Y", "10Y", "15Y", "20Y", "25Y", "30Y", "40Y")
+
+
+class JgbInputs(Inputs):
+    tenors: list[Literal[JGB_TENORS]] | None = Field(  # type: ignore[valid-type]
+        default=None, description="Tenors to keep (default: all fifteen, 1Y to 40Y)."
+    )
+    start: date | None = Field(default=None, description="First date (inclusive). Default: 30 days ago.")
+    end: date | None = Field(default=None, description="Last date (inclusive). Default: today.")
+    as_of: AsOf | None = common.as_of_field()
+
+
 class RegionalSurveyInputs(Inputs):
     bank: Literal["richmond", "kansascity", "both"] = Field(default="both", description="Which Reserve Bank.")
     survey: Literal["manufacturing", "services", "both"] = Field(default="both", description="Which survey.")
@@ -264,6 +277,8 @@ ROUTES.update(
         "trade": "omni census.trade <- api.census.gov/data/timeseries/intltrade/{exports,imports}/hs",
         "boj": "omni boj.series <- www.stat-search.boj.or.jp/api/v1/getDataCode",
         "boe": "omni boe.series <- www.bankofengland.co.uk/boeapps/database/_iadb-fromshowcolumns.asp",
+        "jgb": "omni mof.jgb_yields <- www.mof.go.jp/english/policy/jgbs/reference/interest_rate "
+        "(jgbcme.csv, historical/jgbcme_all.csv, linked from index.htm)",
         "regional": "omni regionalfed.surveys <- the Richmond and Kansas City Feds' survey workbooks and "
         "release schedules (linked from their survey pages)",
         "trace": "omni finra.trace_aggregates <- api.finra.org/data/group/fixedIncomeMarket "
@@ -757,6 +772,58 @@ async def macro_boe_series(ctx: ToolContext, args: BoeInputs) -> ToolOutput:
     return await _central_bank(ctx, "boe", "IADB", args.series_codes, args)
 
 
+async def macro_jgb_yields(ctx: ToolContext, args: JgbInputs) -> ToolOutput:
+    from datetime import timedelta
+
+    s = runtime.settings_of(ctx.settings)
+    as_of = common.as_of_of(args.as_of)
+    today = ctx.now().date()
+    start, end = common.window(
+        ctx.tool, args.start, args.end, default_start=today - timedelta(days=30), default_end=today
+    )
+    tenors = set(args.tenors or JGB_TENORS)
+
+    def work(session: common.Session):
+        session.refresh("mof.jgb_yields", {})
+        if start < today.replace(day=1):  # before this month: MOF's historical file
+            session.refresh("mof.jgb_yields", {"history": "yes"})
+        return F.records(session.read("mof.jgb_yields", as_of=as_of))
+
+    records, session = await common.run(ctx, s, work, source="mof")
+    rows = []
+    for r in records:
+        tenor = F.text(r["tenor"])
+        d = F.day(r["date"])
+        if tenor not in tenors or not F.within(d, start, end):
+            continue
+        rows.append(
+            common.row(
+                YieldCurvePoint,
+                {
+                    "date": d,
+                    "tenor": tenor,
+                    "tenor_label": f"{tenor[:-1]} Yr",
+                    "rate": F.fraction(r["rate"]),
+                    "knowledge_time": F.instant(r["knowledge_time"]),
+                },
+            )
+        )
+    order = {t: i for i, t in enumerate(JGB_TENORS)}
+    rows.sort(key=lambda r: (r.date, order.get(r.tenor, 99)))
+    prov = common.provenance(
+        ctx,
+        provider="mof",
+        route=ROUTES["jgb"],
+        datasets=("mof.jgb_yields",),
+        request={"tenors": args.tenors, "start": start, "end": end, "as_of": args.as_of},
+        as_of=as_of,
+        rows=rows,
+        session=session,
+        authority=["official"],
+    )
+    return common.output(ctx, s, YieldCurvePoint, rows, prov)
+
+
 async def macro_regional_fed_surveys(ctx: ToolContext, args: RegionalSurveyInputs) -> ToolOutput:
     s = runtime.settings_of(ctx.settings)
     as_of = common.as_of_of(args.as_of)
@@ -1071,6 +1138,27 @@ SPECS = (
         golden_test=GOLDEN,
     ),
     ToolSpec(
+        name="macro_jgb_yields",
+        capability="macro",
+        title="JGB yields (Ministry of Finance)",
+        description=common.describe(
+            "Japanese Government Bond interest rates as Japan's Ministry of Finance publishes them each "
+            "business day, 1Y to 10Y, 15Y, 20Y, 25Y, 30Y and 40Y, from 1974 (each tenor from when MOF "
+            "first published it); rate is a fraction (1.25 % is 0.0125). A window before this month also "
+            "reads MOF's historical file. knowledge_time is the earliest of 12:00 JST seven days after the "
+            "day, when MOF wrote the file that holds it (its Last-Modified: the morning after, about 08:30 "
+            "JST) and the fetch. Keyless.",
+            "lagged",
+        ),
+        readme="Japanese Government Bond yields, 1Y-40Y, from the Ministry of Finance",
+        input_model=JgbInputs,
+        output_model=YieldCurvePoint,
+        provider="mof",
+        route=ROUTES["jgb"],
+        handler=macro_jgb_yields,
+        golden_test=GOLDEN,
+    ),
+    ToolSpec(
         name="macro_regional_fed_surveys",
         capability="macro",
         title="Regional Fed business surveys",
@@ -1122,6 +1210,7 @@ DATASETS: dict[str, tuple[str, ...]] = {
     "macro_census_trade": ("census.trade",),
     "macro_boj_series": ("boj.series",),
     "macro_boe_series": ("boe.series",),
+    "macro_jgb_yields": ("mof.jgb_yields",),
     "macro_regional_fed_surveys": ("regionalfed.surveys",),
     "credit_trace_aggregates": ("finra.trace_aggregates",),
     "macro_series": ("fred.series",),

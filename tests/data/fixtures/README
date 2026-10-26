@@ -13,7 +13,7 @@ and release dates, as each header comment says).
 
 The Census trade answer (census.trade__exports_8542.json), the Bank of Japan
 JSON (boj.series__STRDCLUCON.json), the Bank of England CSV
-(boe.series__IUDBEDR.csv), the Richmond Fed pages (regionalfed.*.html; the
+(boe.series__IUDBEDR.csv), the Ministry of Finance page and CSVs (mof.*), the Richmond Fed pages (regionalfed.*.html; the
 workbook is built in test_macro) and the FINRA TRACE rows
 (finra.trace__corporateMarketBreadth.json) are synthetic too: each publisher's
 shape with invented values.

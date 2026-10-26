@@ -508,6 +508,59 @@ def test_macro_boe_series_golden(tmp_path, upstream):
     assert upstream.params(0)["SeriesCodes"] == "IUDBEDR" and doc["notes"]
 
 
+# --- macro_jgb_yields --------------------------------------------------------------------------------
+
+
+def jgb_routes(upstream):
+    import httpx
+    from data_harness import fixture_text
+
+    mof = r"www\.mof\.go\.jp/english/policy/jgbs/reference/interest_rate"
+    upstream.text_file(rf"{mof}/index\.htm", "mof.interest_rate_page.html")
+    upstream.add(
+        rf"{mof}/jgbcme\.csv",
+        lambda _r: httpx.Response(
+            200,
+            text=fixture_text("mof.jgbcme.csv"),
+            headers={"Last-Modified": "Fri, 02 Oct 2026 23:30:00 GMT"},
+        ),
+    )
+    upstream.add(
+        rf"{mof}/historical/jgbcme_all\.csv",
+        lambda _r: httpx.Response(
+            200,
+            text=fixture_text("mof.jgbcme_all.csv"),
+            headers={"Last-Modified": "Thu, 01 Oct 2026 23:30:00 GMT"},
+        ),
+    )
+
+
+JGB = {"tenors": ["10Y", "40Y"], "start": "2026-09-28", "end": "2026-10-02"}
+
+
+def test_macro_jgb_yields_golden(tmp_path, upstream):
+    jgb_routes(upstream)
+    out = call("macro_jgb_yields", context(tmp_path), **JGB)
+    doc = check_golden(out, "macro_jgb_yields")
+    assert [(r["date"], r["tenor"], r["rate"]) for r in doc["rows"]] == [
+        ("2026-09-29", "10Y", 0.0308),
+        ("2026-09-30", "10Y", 0.0306),
+        ("2026-09-30", "40Y", 0.041),
+        ("2026-10-01", "10Y", 0.031),
+        ("2026-10-01", "40Y", 0.042),
+        ("2026-10-02", "10Y", 0.031),
+        ("2026-10-02", "40Y", 0.0417),
+    ]  # no 40Y on 09-29 ("-")
+    # knowable when MOF wrote the file holding the day (before 12:00 JST a week on)
+    assert doc["rows"][0]["knowledge_time"] == "2026-10-01T23:30:00Z"
+    assert doc["rows"][-1]["knowledge_time"] == "2026-10-02T23:30:00Z"
+    assert doc["rows"][0]["tenor_label"] == "10 Yr" and doc["provenance"]["authority"] == ["official"]
+    # a window within this month reads the current file only
+    upstream.requests.clear()
+    call("macro_jgb_yields", context(tmp_path), start="2026-10-01", end="2026-10-02")
+    assert not [r for r in upstream.requests if "historical" in r.url.path]
+
+
 # --- macro_regional_fed_surveys --------------------------------------------------------------------
 
 

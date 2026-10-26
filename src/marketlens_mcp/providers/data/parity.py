@@ -34,6 +34,7 @@ PARITY: dict[str, Mapped | Excluded] = {
     "census.trade": Mapped(("macro_census_trade",)),
     "boj.series": Mapped(("macro_boj_series",)),
     "boe.series": Mapped(("macro_boe_series",)),
+    "mof.jgb_yields": Mapped(("macro_jgb_yields",)),
     "regionalfed.surveys": Mapped(("macro_regional_fed_surveys",)),
     "finra.trace_aggregates": Mapped(("credit_trace_aggregates",)),
     # SEC EDGAR

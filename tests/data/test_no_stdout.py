@@ -10,6 +10,7 @@ from test_calendars import earnings_routes, economic_routes, holiday_routes, sur
 from test_fed_treasury import FISCAL, fomc_routes, treasury_routes
 from test_macro import (
     BEA,
+    JGB,
     REGIONAL,
     TRACE,
     bls_routes,
@@ -17,6 +18,7 @@ from test_macro import (
     boj_routes,
     census_routes,
     fred_routes,
+    jgb_routes,
     regional_routes,
     trace_routes,
 )
@@ -29,6 +31,7 @@ ARGS = {
     "macro_census_trade": {"hs_codes": ["8542"], "flow": "exports"},
     "macro_boj_series": {"database": "FM01", "series_codes": ["STRDCLUCON"]},
     "macro_boe_series": {"series_codes": ["IUDBEDR"]},
+    "macro_jgb_yields": JGB,
     "macro_regional_fed_surveys": REGIONAL,
     "credit_trace_aggregates": TRACE,
     "sec_filings": {"ticker": "TESTCO"},
@@ -65,7 +68,7 @@ def test_no_tool_writes_to_stdout(tmp_path, upstream, keys, frozen_clock, capsys
     earnings_routes(upstream)
     surprise_routes(upstream)
     holiday_routes(upstream)
-    for routes in (census_routes, boj_routes, boe_routes, regional_routes, trace_routes):
+    for routes in (census_routes, boj_routes, boe_routes, jgb_routes, regional_routes, trace_routes):
         routes(upstream)
     capsys.readouterr()
     answered = 0
@@ -74,7 +77,7 @@ def test_no_tool_writes_to_stdout(tmp_path, upstream, keys, frozen_clock, capsys
         answered += bool(out.rows)
     captured = capsys.readouterr()
     assert captured.out == ""
-    assert answered == 31
+    assert answered == 32
 
 
 def test_the_placeholder_contact_warning_never_reaches_stdout(
