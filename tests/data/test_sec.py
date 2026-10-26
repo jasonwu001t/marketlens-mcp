@@ -1,11 +1,15 @@
-"""sec_filings, sec_xbrl_facts, sec_fundamentals, sec_earnings_releases,
-sec_earnings_figures, filings_events, sec_insider_trades, sec_13f_holdings,
-sec_fund_nport and sec_fund_holdings against a synthetic EDGAR: the fictional
-companies TESTCO (CIK 9999901) and EVNTCO (CIK 9999903, the material 8-Ks),
-manager CIK 9999950 and fund series S000099991 (TFUND)."""
+"""sec_filings, sec_xbrl_facts, sec_xbrl_frames, sec_fundamentals,
+sec_earnings_releases, sec_earnings_figures, filings_events,
+sec_pay_vs_performance, sec_insider_trades, sec_13f_holdings, sec_fund_nport
+and sec_fund_holdings against a synthetic EDGAR: the fictional companies
+TESTCO (CIK 9999901), EVNTCO (CIK 9999903, the material 8-Ks) and PVPCO (CIK
+9999904, two proxies with the pay-versus-performance table), a synthetic
+Revenues frame for CY2026Q2 with EDGAR's XBRL index of 2026 Q3, manager CIK
+9999950 and fund series S000099991 (TFUND)."""
 
 from __future__ import annotations
 
+import gzip
 from datetime import UTC, datetime
 from zoneinfo import ZoneInfo
 
@@ -29,6 +33,7 @@ ARCH = r"www\.sec\.gov/Archives/edgar/data"
 FEEDS = {
     9999901: "sec.submissions__TESTCO.json",
     9999903: "sec.submissions__EVNTCO.json",
+    9999904: "sec.submissions__PVPCO.json",
     9999950: "sec.submissions__13F.json",
     9999951: "sec.submissions__13F_amends.json",
     9999970: "sec.submissions__FUND.json",
@@ -93,6 +98,24 @@ def sec_routes(upstream):
         folder = f"{ARCH}/9999903/0009999903{acc.replace('-', '')}"
         t(rf"{folder}/0009999903-{acc}-index\.htm", f"sec.8k_index__EVNTCO_{acc}.htm")
         t(rf"{folder}/{doc}\.htm", f"sec.8k_primary__EVNTCO_{acc}.htm")
+    # PVPCO: its two proxies (folder listing, XBRL instance)
+    j(r"data\.sec\.gov/submissions/CIK0009999904\.json", "sec.submissions__PVPCO.json")
+    for acc, doc in (("26-000007", "pvpco-def14a-2026"), ("25-000006", "pvpco-def14a-2025")):
+        folder = f"{ARCH}/9999904/0009999904{acc.replace('-', '')}"
+        j(rf"{folder}/index\.json", f"sec.pvp_index__{acc}.json")
+        t(rf"{folder}/{doc}_htm\.xml", f"sec.pvp_instance__{acc}.xml")
+    # the frames API (one synthetic frame) and EDGAR's quarterly XBRL index: 2026 Q3 only
+    upstream.add(r"data\.sec\.gov/api/xbrl/frames/.*", httpx.Response(404))  # the latest route wins
+    j(
+        r"data\.sec\.gov/api/xbrl/frames/us-gaap/Revenues/USD/CY2026Q2\.json",
+        "sec.frames__Revenues_USD_CY2026Q2.json",
+    )
+    upstream.add(r"www\.sec\.gov/Archives/edgar/full-index/\d{4}/QTR\d/index\.json", httpx.Response(404))
+    j(r"www\.sec\.gov/Archives/edgar/full-index/2026/QTR3/index\.json", "sec.full_index__2026_QTR3.json")
+    upstream.add(
+        r"www\.sec\.gov/Archives/edgar/full-index/2026/QTR3/xbrl\.gz",
+        lambda _r: gzip.compress(fixture_text("sec.xbrl_index__2026_QTR3.idx").encode("latin-1"), mtime=0),
+    )
     # the earnings press release of 0009999901-26-000009; the other release's index is gone
     t(rf"{ARCH}/9999901/000999990126000009/0009999901-26-000009-index\.htm", "sec.8k_index__26-000009.htm")
     t(rf"{ARCH}/9999901/000999990126000009/tc-ex991\.htm", "sec.ex991__26-000009.htm")
@@ -111,6 +134,18 @@ def sec_routes(upstream):
     # N-PORT documents
     for acc in ("26-000005", "26-000002"):
         t(rf"{ARCH}/9999970/0009999970{acc.replace('-', '')}/primary_doc\.xml", f"sec.nport_doc__{acc}.xml")
+
+
+@pytest.fixture(autouse=True)
+def _fresh_xbrl_index(monkeypatch, tmp_path):
+    """marketlens-data keeps each quarter's XBRL index read in its process (and a
+    closed quarter on disk): each test's EDGAR answers its own."""
+    from omni.sources import sec_xbrl_frames
+
+    monkeypatch.setattr(sec_xbrl_frames, "_index_memo", {})
+    monkeypatch.setattr(
+        sec_xbrl_frames, "_index_file", lambda y, q: tmp_path / "xbrl_index" / f"{y}Q{q}.json"
+    )
 
 
 @pytest.fixture
@@ -160,6 +195,8 @@ SEC_ARGS = {
     "sec_earnings_releases": {"ticker": "TESTCO"},
     "sec_earnings_figures": {"ticker": "TESTCO"},
     "filings_events": {"ticker": "EVNTCO"},
+    "sec_xbrl_frames": {"tag": "Revenues", "period": "CY2026Q2"},
+    "sec_pay_vs_performance": {"ticker": "PVPCO"},
     "sec_insider_trades": {"ticker": "TESTCO"},
     "sec_13f_holdings": {"filer_cik": "9999950"},
     "sec_fund_nport": {"ticker": "TFUND"},
@@ -304,6 +341,126 @@ def test_a_large_events_answer_is_stored(tmp_path, edgar):
     assert marker.kind == "stored" and marker.model == "marketlens.FilingEvent"
     assert marker.row_count == 3 and marker.preview.time_column == "accepted_at"
     assert marker.provenance.dataset == "sec.submissions,sec.filing_events"
+
+
+# --- XBRL frames ---------------------------------------------------------------------------------
+
+
+def test_sec_xbrl_frames_golden(tmp_path, edgar):
+    out = call("sec_xbrl_frames", context(tmp_path), tag="Revenues", period="cy2026q2")
+    doc = check_golden(out, "sec_xbrl_frames")
+    # by value, largest first; LATE's filing is in no XBRL index yet: held, no row
+    assert [(r["cik"], r["ticker"], r["value"]) for r in doc["rows"]] == [
+        ("0009999990", None, 800000000.0),
+        ("0009999901", "TESTCO", 500000000.0),
+        ("0009999903", "EVNTCO", 300000000.0),
+    ]
+    testco = doc["rows"][1]
+    assert testco["stamp"] == "filing_date" and testco["filing_date"] == "2026-08-05"
+    # the end of the filing date in New York (EDT), never its start
+    assert testco["knowledge_time"] == "2026-08-06T03:59:59.999999Z"
+    assert doc["rows"][2]["period_end"] == "2026-06-27"  # the filer's own quarter, as the SEC placed it
+    assert doc["provenance"]["dataset"] == "sec.xbrl_frames"
+    assert doc["provenance"]["authority"] == ["official"]
+    assert doc["provenance"]["request"]["unit"] == "USD"
+    index = [str(r.url) for r in edgar.requests if "full-index" in str(r.url)]
+    assert "https://www.sec.gov/Archives/edgar/full-index/2026/QTR3/xbrl.gz" in index
+    assert all(KEYS["SEC_CONTACT_EMAIL"] in r.headers["User-Agent"] for r in edgar.requests)
+
+
+def test_sec_xbrl_frames_filters_and_refusals(tmp_path, edgar):
+    ctx = context(tmp_path)
+    peers = call(
+        "sec_xbrl_frames",
+        ctx,
+        tag="Revenues",
+        period="CY2026Q2",
+        tickers=["evntco", "testco", "othrco"],
+        sort="asc",
+    )
+    assert [(r.ticker, r.value) for r in peers.rows] == [("EVNTCO", 300000000.0), ("TESTCO", 500000000.0)]
+    assert peers.notes == ["No Revenues value for CY2026Q2 in the frame for: OTHRCO."]
+    top = call("sec_xbrl_frames", ctx, tag="Revenues", period="CY2026Q2", limit=1)
+    assert [r.cik for r in top.rows] == ["0009999990"]
+    before = call("sec_xbrl_frames", ctx, tag="Revenues", period="CY2026Q2", as_of="2026-08-06T00:00:00Z")
+    assert before.rows == []  # every filing of the frame was dated later
+    # a frame the SEC does not have: no row
+    assert call("sec_xbrl_frames", ctx, tag="Revenues", period="CY2026Q3").rows == []
+    import asyncio
+
+    from marketlens_mcp import pipeline
+    from marketlens_mcp.plugin_api import ToolError
+
+    for bad in (
+        {"period": "2026Q2"},
+        {"period": "CY2026Q5"},
+        {"tag": "Bad/Tag"},
+        {"limit": 0},
+        {"unit": "US D"},
+        {"taxonomy": "gaap"},
+    ):
+        with pytest.raises(ToolError) as info:
+            asyncio.run(
+                pipeline.execute(
+                    SPECS["sec_xbrl_frames"], ctx, {"tag": "Revenues", "period": "CY2026Q2", **bad}
+                )
+            )
+        assert info.value.code == "invalid_arguments", bad
+
+
+# --- pay versus performance -----------------------------------------------------------------------
+
+
+def test_sec_pay_vs_performance_golden(tmp_path, edgar):
+    out = call("sec_pay_vs_performance", context(tmp_path), ticker="pvpco")
+    doc = check_golden(out, "sec_pay_vs_performance")
+    rows = {(r["fiscal_year"], r["measure"], r["executive"]): r for r in doc["rows"]}
+    # FY2025 had two PEOs, tagged per person; the filer named one of them
+    assert rows[(2025, "peo_total_comp", "AlphaMember")]["value"] == 4500000.0
+    assert rows[(2025, "peo_total_comp", "AlphaMember")]["executive_name"] == "Ms. Alpha"
+    assert rows[(2025, "peo_comp_actually_paid", "BetaMember")]["value"] == -250000.0
+    assert rows[(2025, "peo_comp_actually_paid", "BetaMember")]["executive_name"] is None
+    # FY2024 as the 2026 proxy restates it (the TSR on its own base), one PEO, untagged
+    assert rows[(2024, "company_tsr", None)]["value"] == 110.2
+    assert rows[(2024, "company_tsr", None)]["accession_number"] == "0009999904-26-000007"
+    assert rows[(2024, "peo_total_comp", None)]["executive_name"] == "Ms. Alpha"
+    assert rows[(2025, "company_selected_measure", None)]["measure_name"] == "Revenue"
+    assert rows[(2025, "net_income", None)]["concept"] == "us-gaap:NetIncomeLoss"
+    assert {r["measure"] for r in doc["rows"]} == {
+        "peo_total_comp",
+        "peo_comp_actually_paid",
+        "non_peo_neo_avg_total_comp",
+        "non_peo_neo_avg_comp_actually_paid",
+        "company_tsr",
+        "peer_group_tsr",
+        "net_income",
+        "company_selected_measure",
+    }
+    assert [r["fiscal_year"] for r in doc["rows"]] == sorted(
+        (r["fiscal_year"] for r in doc["rows"]), reverse=True
+    )
+    assert rows[(2025, "peo_total_comp", "AlphaMember")]["knowledge_time"] == "2026-03-20T20:00:00Z"
+    assert doc["provenance"]["dataset"] == "sec.submissions,sec.pay_vs_performance"
+    assert SPECS["sec_pay_vs_performance"].output_risk == "external_text"  # names are the filer's text
+
+
+def test_sec_pay_vs_performance_as_of_and_measures(tmp_path, edgar):
+    ctx = context(tmp_path)
+    tsr = call("sec_pay_vs_performance", ctx, ticker="PVPCO", measures=["company_tsr"])
+    assert [(r.fiscal_year, r.value) for r in tsr.rows] == [(2025, 131.4), (2024, 110.2), (2023, 100.0)]
+    before = call(
+        "sec_pay_vs_performance", ctx, ticker="PVPCO", measures=["company_tsr"], as_of="2026-01-01T00:00:00Z"
+    )
+    assert [(r.fiscal_year, r.value) for r in before.rows] == [(2024, 121.0), (2023, 100.0)]
+    # the DEFA14A (additional material) and the 10-K are no proxy: only the two folders were read
+    folders = {
+        str(r.url).rsplit("/", 1)[0]
+        for r in edgar.requests
+        if "/9999904/" in str(r.url) and str(r.url).endswith(("/index.json", "_htm.xml"))
+    }
+    assert folders == {
+        f"https://www.sec.gov/Archives/edgar/data/9999904/0009999904{a}" for a in ("26000007", "25000006")
+    }
 
 
 # --- XBRL facts and fundamentals ------------------------------------------------------------------

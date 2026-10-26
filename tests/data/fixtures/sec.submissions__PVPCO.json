@@ -1,0 +1,61 @@
+{
+ "_synthetic": true,
+ "cik": "9999904",
+ "entityType": "operating",
+ "sic": "7372",
+ "sicDescription": "Services-Prepackaged Software",
+ "name": "Payco Synthetic Inc",
+ "tickers": [
+  "PVPCO"
+ ],
+ "exchanges": [
+  "Nasdaq"
+ ],
+ "filings": {
+  "recent": {
+   "accessionNumber": [
+    "0009999904-26-000008",
+    "0009999904-26-000007",
+    "0009999904-26-000003",
+    "0009999904-25-000006"
+   ],
+   "filingDate": [
+    "2026-03-20",
+    "2026-03-20",
+    "2026-02-10",
+    "2025-03-21"
+   ],
+   "reportDate": [
+    "",
+    "",
+    "2025-12-31",
+    ""
+   ],
+   "acceptanceDateTime": [
+    "2026-03-20T20:05:00.000Z",
+    "2026-03-20T20:00:00.000Z",
+    "2026-02-10T21:00:00.000Z",
+    "2025-03-21T20:00:00.000Z"
+   ],
+   "form": [
+    "DEFA14A",
+    "DEF 14A",
+    "10-K",
+    "DEF 14A"
+   ],
+   "items": [
+    "",
+    "",
+    "",
+    ""
+   ],
+   "primaryDocument": [
+    "pvpco-defa14a.htm",
+    "pvpco-def14a-2026.htm",
+    "pvpco-20251231.htm",
+    "pvpco-def14a-2025.htm"
+   ]
+  },
+  "files": []
+ }
+}

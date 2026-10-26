@@ -1,0 +1,181 @@
+{
+  "$defs": {
+    "AbsenceCode": {
+      "description": "Why a value is None. Never served as 0.",
+      "enum": [
+        "not_provided_by_source",
+        "not_applicable",
+        "not_entitled",
+        "no_data",
+        "insufficient_data",
+        "not_recovered",
+        "no_match",
+        "withheld",
+        "source_error",
+        "unparseable"
+      ],
+      "title": "AbsenceCode",
+      "type": "string"
+    }
+  },
+  "$id": "urn:marketlens:schema:1:marketlens.PayVsPerformance",
+  "additionalProperties": false,
+  "description": "One measure of one fiscal year of a company's pay-versus-performance\ntable (Reg. S-K Item 402(v)), as one proxy tagged it in XBRL (ecd). Every\nproxy restates the earlier years; the read is the latest proxy at as_of.\nexecutive_name and measure_name are the filer's text: UNTRUSTED.",
+  "properties": {
+    "absent": {
+      "anyOf": [
+        {
+          "additionalProperties": {
+            "$ref": "#/$defs/AbsenceCode"
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Per-row reasons for None fields: field name -> AbsenceCode",
+      "title": "Absent"
+    },
+    "accession_number": {
+      "description": "The proxy (DEF 14A or DEFR14A)",
+      "title": "Accession Number",
+      "type": "string"
+    },
+    "cik": {
+      "title": "Cik",
+      "type": "string"
+    },
+    "concept": {
+      "description": "ecd:PeoTotalCompAmt, us-gaap:NetIncomeLoss, ...",
+      "title": "Concept",
+      "type": "string"
+    },
+    "executive": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The filer's member when a PEO figure is tagged per person (two PEOs in a year)",
+      "title": "Executive"
+    },
+    "executive_name": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The filer's own text for the PEO",
+      "title": "Executive Name"
+    },
+    "filing_date": {
+      "format": "date",
+      "title": "Filing Date",
+      "type": "string"
+    },
+    "fiscal_year": {
+      "description": "The calendar year the fiscal year ends in (a year closing in the first week of January is the year before)",
+      "title": "Fiscal Year",
+      "type": "integer"
+    },
+    "form": {
+      "title": "Form",
+      "type": "string"
+    },
+    "knowledge_time": {
+      "description": "When the value became knowable under the dataset's point-in-time policy",
+      "format": "date-time",
+      "title": "Knowledge Time",
+      "type": "string",
+      "x-role": "available",
+      "x-unit": "UTC"
+    },
+    "measure": {
+      "enum": [
+        "peo_total_comp",
+        "peo_comp_actually_paid",
+        "non_peo_neo_avg_total_comp",
+        "non_peo_neo_avg_comp_actually_paid",
+        "company_tsr",
+        "peer_group_tsr",
+        "net_income",
+        "company_selected_measure"
+      ],
+      "title": "Measure",
+      "type": "string"
+    },
+    "measure_name": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The company-selected measure's name",
+      "title": "Measure Name"
+    },
+    "period_end": {
+      "format": "date",
+      "title": "Period End",
+      "type": "string"
+    },
+    "period_start": {
+      "anyOf": [
+        {
+          "format": "date",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Period Start"
+    },
+    "ticker": {
+      "title": "Ticker",
+      "type": "string"
+    },
+    "unit": {
+      "description": "USD, USD/shares, pure, ... as tagged",
+      "title": "Unit",
+      "type": "string"
+    },
+    "value": {
+      "description": "In the row's `unit`: USD in full; a TSR is the value of $100 invested",
+      "title": "Value",
+      "type": "number",
+      "x-unit": "as_published"
+    }
+  },
+  "required": [
+    "ticker",
+    "cik",
+    "fiscal_year",
+    "measure",
+    "concept",
+    "value",
+    "unit",
+    "period_end",
+    "accession_number",
+    "form",
+    "filing_date",
+    "knowledge_time"
+  ],
+  "title": "PayVsPerformance",
+  "type": "object",
+  "x-schema-version": "1.1.0"
+}

@@ -24,7 +24,8 @@ Conventions of base.py hold, plus:
   it mark their responses ``external_text``.
 
 FilingSearchHit is built by the built-in official provider (filings_search),
-not the extra; FilingEvent by the extra's filings_events.
+not the extra; FilingEvent by the extra's filings_events, XbrlFrameValue by
+sec_xbrl_frames and PayVsPerformance by sec_pay_vs_performance.
 """
 
 from __future__ import annotations
@@ -222,6 +223,83 @@ class XbrlFact(CanonicalModel):
     form: str | None = None
     fiscal_year: int | None = None
     fiscal_period: str | None = Field(default=None, description="Q1..Q4 or FY")
+    knowledge_time: UtcDatetime = _known()
+
+
+class XbrlFrameValue(CanonicalModel):
+    """One filer's value of one XBRL concept in one calendar period, from the
+    SEC's frames API: the fact the SEC finds last filed for the period, so a
+    restated value is the restating filing's."""
+
+    schema_name: ClassVar[str] = "marketlens.XbrlFrameValue"
+    time_column: ClassVar[str | None] = "period_end"
+    group_column: ClassVar[str | None] = "cik"
+    value_columns: ClassVar[tuple[str, ...]] = ("value",)
+
+    taxonomy: str = Field(description="us-gaap, dei, ifrs-full, srt")
+    tag: str = Field(description="The XBRL concept, verbatim (Revenues, Assets, ...)")
+    unit: str = Field(description="As the frames API spells it: USD, USD-per-shares, shares, pure")
+    period: str = Field(description="CY2025 (a year), CY2025Q2 (a quarter), CY2025Q2I (an instant)")
+    cik: str = Field(description="10-digit, zero-padded")
+    ticker: str | None = Field(default=None, description="The SEC company list's first ticker for the CIK")
+    entity_name: str
+    period_start: Date | None = Field(default=None, description="The fact's own start; None for an instant")
+    period_end: Date = Field(
+        description="The fact's own end (a fiscal quarter is placed in the nearest calendar one)"
+    )
+    value: float = _unit("as_published", description="In the row's `unit`")
+    accession_number: str = Field(description="The filing that reported the value")
+    filing_date: Date | None = Field(
+        default=None, description="From EDGAR's quarterly XBRL index, when knowledge_time came from it"
+    )
+    stamp: Literal["acceptance", "filing_date"] = Field(
+        description="How knowledge_time was set: EDGAR's acceptance instant, or the end of the filing date in New York"
+    )
+    knowledge_time: UtcDatetime = _known()
+
+
+class PayVsPerformance(CanonicalModel):
+    """One measure of one fiscal year of a company's pay-versus-performance
+    table (Reg. S-K Item 402(v)), as one proxy tagged it in XBRL (ecd). Every
+    proxy restates the earlier years; the read is the latest proxy at as_of.
+    executive_name and measure_name are the filer's text: UNTRUSTED."""
+
+    schema_name: ClassVar[str] = "marketlens.PayVsPerformance"
+    time_column: ClassVar[str | None] = "period_end"
+    group_column: ClassVar[str | None] = "measure"
+    value_columns: ClassVar[tuple[str, ...]] = ("value",)
+
+    ticker: str
+    cik: str
+    fiscal_year: int = Field(
+        description="The calendar year the fiscal year ends in (a year closing in the first week of January is the year before)"
+    )
+    measure: Literal[
+        "peo_total_comp",
+        "peo_comp_actually_paid",
+        "non_peo_neo_avg_total_comp",
+        "non_peo_neo_avg_comp_actually_paid",
+        "company_tsr",
+        "peer_group_tsr",
+        "net_income",
+        "company_selected_measure",
+    ]
+    executive: str | None = Field(
+        default=None,
+        description="The filer's member when a PEO figure is tagged per person (two PEOs in a year)",
+    )
+    executive_name: str | None = Field(default=None, description="The filer's own text for the PEO")
+    concept: str = Field(description="ecd:PeoTotalCompAmt, us-gaap:NetIncomeLoss, ...")
+    value: float = _unit(
+        "as_published", description="In the row's `unit`: USD in full; a TSR is the value of $100 invested"
+    )
+    unit: str = Field(description="USD, USD/shares, pure, ... as tagged")
+    measure_name: str | None = Field(default=None, description="The company-selected measure's name")
+    period_start: Date | None = None
+    period_end: Date
+    accession_number: str = Field(description="The proxy (DEF 14A or DEFR14A)")
+    form: str
+    filing_date: Date
     knowledge_time: UtcDatetime = _known()
 
 
@@ -631,6 +709,8 @@ DATA_MODELS: tuple[type[CanonicalModel], ...] = (
     FilingSearchHit,
     FilingEvent,
     XbrlFact,
+    XbrlFrameValue,
+    PayVsPerformance,
     FundamentalValue,
     EarningsRelease,
     EarningsFigure,

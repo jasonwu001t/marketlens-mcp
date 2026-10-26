@@ -779,6 +779,7 @@
     "marketlens.Order",
     "marketlens.OrderBookLevel",
     "marketlens.OrderLeg",
+    "marketlens.PayVsPerformance",
     "marketlens.PortfolioHistoryPoint",
     "marketlens.Position",
     "marketlens.ProviderDocument",
@@ -794,6 +795,7 @@
     "marketlens.TreasuryDebt",
     "marketlens.VolatilityPoint",
     "marketlens.XbrlFact",
+    "marketlens.XbrlFrameValue",
     "marketlens.YieldCurvePoint"
    ],
    "kind": "mapping"

@@ -1,0 +1,162 @@
+{
+  "$defs": {
+    "AbsenceCode": {
+      "description": "Why a value is None. Never served as 0.",
+      "enum": [
+        "not_provided_by_source",
+        "not_applicable",
+        "not_entitled",
+        "no_data",
+        "insufficient_data",
+        "not_recovered",
+        "no_match",
+        "withheld",
+        "source_error",
+        "unparseable"
+      ],
+      "title": "AbsenceCode",
+      "type": "string"
+    }
+  },
+  "$id": "urn:marketlens:schema:1:marketlens.XbrlFrameValue",
+  "additionalProperties": false,
+  "description": "One filer's value of one XBRL concept in one calendar period, from the\nSEC's frames API: the fact the SEC finds last filed for the period, so a\nrestated value is the restating filing's.",
+  "properties": {
+    "absent": {
+      "anyOf": [
+        {
+          "additionalProperties": {
+            "$ref": "#/$defs/AbsenceCode"
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Per-row reasons for None fields: field name -> AbsenceCode",
+      "title": "Absent"
+    },
+    "accession_number": {
+      "description": "The filing that reported the value",
+      "title": "Accession Number",
+      "type": "string"
+    },
+    "cik": {
+      "description": "10-digit, zero-padded",
+      "title": "Cik",
+      "type": "string"
+    },
+    "entity_name": {
+      "title": "Entity Name",
+      "type": "string"
+    },
+    "filing_date": {
+      "anyOf": [
+        {
+          "format": "date",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "From EDGAR's quarterly XBRL index, when knowledge_time came from it",
+      "title": "Filing Date"
+    },
+    "knowledge_time": {
+      "description": "When the value became knowable under the dataset's point-in-time policy",
+      "format": "date-time",
+      "title": "Knowledge Time",
+      "type": "string",
+      "x-role": "available",
+      "x-unit": "UTC"
+    },
+    "period": {
+      "description": "CY2025 (a year), CY2025Q2 (a quarter), CY2025Q2I (an instant)",
+      "title": "Period",
+      "type": "string"
+    },
+    "period_end": {
+      "description": "The fact's own end (a fiscal quarter is placed in the nearest calendar one)",
+      "format": "date",
+      "title": "Period End",
+      "type": "string"
+    },
+    "period_start": {
+      "anyOf": [
+        {
+          "format": "date",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The fact's own start; None for an instant",
+      "title": "Period Start"
+    },
+    "stamp": {
+      "description": "How knowledge_time was set: EDGAR's acceptance instant, or the end of the filing date in New York",
+      "enum": [
+        "acceptance",
+        "filing_date"
+      ],
+      "title": "Stamp",
+      "type": "string"
+    },
+    "tag": {
+      "description": "The XBRL concept, verbatim (Revenues, Assets, ...)",
+      "title": "Tag",
+      "type": "string"
+    },
+    "taxonomy": {
+      "description": "us-gaap, dei, ifrs-full, srt",
+      "title": "Taxonomy",
+      "type": "string"
+    },
+    "ticker": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The SEC company list's first ticker for the CIK",
+      "title": "Ticker"
+    },
+    "unit": {
+      "description": "As the frames API spells it: USD, USD-per-shares, shares, pure",
+      "title": "Unit",
+      "type": "string"
+    },
+    "value": {
+      "description": "In the row's `unit`",
+      "title": "Value",
+      "type": "number",
+      "x-unit": "as_published"
+    }
+  },
+  "required": [
+    "taxonomy",
+    "tag",
+    "unit",
+    "period",
+    "cik",
+    "entity_name",
+    "period_end",
+    "value",
+    "accession_number",
+    "stamp",
+    "knowledge_time"
+  ],
+  "title": "XbrlFrameValue",
+  "type": "object",
+  "x-schema-version": "1.1.0"
+}

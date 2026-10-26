@@ -1,0 +1,21 @@
+{
+ "_synthetic": true,
+ "directory": {
+  "item": [
+   {
+    "name": "master.idx",
+    "type": "file"
+   },
+   {
+    "name": "xbrl.gz",
+    "type": "file"
+   },
+   {
+    "name": "xbrl.idx",
+    "type": "file"
+   }
+  ],
+  "name": "full-index/2026/QTR3/",
+  "parent-dir": "../"
+ }
+}
