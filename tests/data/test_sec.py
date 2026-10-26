@@ -110,6 +110,10 @@ def sec_routes(upstream):
         r"data\.sec\.gov/api/xbrl/frames/us-gaap/Revenues/USD/CY2026Q2\.json",
         "sec.frames__Revenues_USD_CY2026Q2.json",
     )
+    j(
+        r"data\.sec\.gov/api/xbrl/frames/us-gaap/RevenueFromContractWithCustomerExcludingAssessedTax/USD/CY2026Q2\.json",
+        "sec.frames__RevenueFromContractWithCustomerExcludingAssessedTax_USD_CY2026Q2.json",
+    )
     upstream.add(r"www\.sec\.gov/Archives/edgar/full-index/\d{4}/QTR\d/index\.json", httpx.Response(404))
     j(r"www\.sec\.gov/Archives/edgar/full-index/2026/QTR3/index\.json", "sec.full_index__2026_QTR3.json")
     upstream.add(
@@ -406,6 +410,28 @@ def test_sec_xbrl_frames_filters_and_refusals(tmp_path, edgar):
                 )
             )
         assert info.value.code == "invalid_arguments", bad
+
+
+def test_sec_xbrl_frames_revenue_alias(tmp_path, edgar):
+    """Per filer revenue from contracts, else Revenues; a Revenues larger by more
+    than 0.5% leads (TESTCO: 500m beside 480m); within it the part keeps the lead
+    (EVNTCO: 300m beside 299m)."""
+    out = call("sec_xbrl_frames", context(tmp_path), tag="revenue", period="CY2026Q2")
+    by = {r.cik: (r.tag, r.value) for r in out.rows}
+    rfc = "RevenueFromContractWithCustomerExcludingAssessedTax"
+    assert by == {
+        "0009999990": ("Revenues", 800000000.0),
+        "0009999992": (rfc, 650000000.0),
+        "0009999901": ("Revenues", 500000000.0),
+        "0009999903": (rfc, 299000000.0),
+    }
+    assert [r.value for r in out.rows] == sorted((r.value for r in out.rows), reverse=True)
+    assert out.notes[-1].startswith(
+        "tag revenue: per filer RevenueFromContractWithCustomerExcludingAssessedTax"
+    )
+    assert out.provenance.request["unit"] == "USD"
+    peers = call("sec_xbrl_frames", context(tmp_path), tag="revenue", period="CY2026Q2", tickers=["EVNTCO"])
+    assert [(r.ticker, r.tag) for r in peers.rows] == [("EVNTCO", rfc)]
 
 
 # --- pay versus performance -----------------------------------------------------------------------

@@ -228,7 +228,8 @@ def _frame_unit(value: str) -> str:
 
 class FramesInputs(Inputs):
     tag: Annotated[str, AfterValidator(_frame_tag)] = Field(
-        description="XBRL concept, e.g. Revenues, NetIncomeLoss, Assets, EarningsPerShareDiluted."
+        description="XBRL concept, e.g. Revenues, NetIncomeLoss, Assets, EarningsPerShareDiluted; or the alias "
+        "revenue: per filer revenue from contracts, else Revenues (a larger Revenues leads)."
     )
     period: Annotated[str, AfterValidator(_frame_period)] = Field(
         description="Calendar period: CY2025 (a year), CY2025Q2 (a quarter) or CY2025Q2I (an instant, for a "
@@ -554,16 +555,52 @@ def _frame_unit_default(tag: str, taxonomy: str) -> str:
     return spec["unit"] if spec and spec["taxonomy"] == taxonomy else "USD"
 
 
+#: The concept alias `revenue`: AlphaResearch's fundamentals revenue chain in its
+#: order (revenue from contracts, then Revenues), the two concepts marketlens-data
+#: collects frames of, and that chain's lead rule on one period (atlas
+#: routers/frames.py serves the same alias): per filer the first concept it states;
+#: revenue from contracts, a part of the revenue where a filer also states a
+#: total, yields to Revenues when that is larger by more than 0.5%.
+REVENUE_ALIAS = ("RevenueFromContractWithCustomerExcludingAssessedTax", "Revenues")
+_LARGER = 0.005
+
+
+def _revenue_lead(records: list[dict]) -> list[dict]:
+    """One record per filer: the alias's concept for it (REVENUE_ALIAS)."""
+    by_cik: dict[str, dict[str, dict]] = {}
+    for r in records:
+        by_cik.setdefault(F.text(r["cik"]) or "", {})[F.text(r["tag"]) or ""] = r
+    out = []
+    for stated in by_cik.values():
+        part, total = (stated.get(t) for t in REVENUE_ALIAS)
+        lead = part or total
+        larger = (
+            part is not None
+            and total is not None
+            and ((F.number(total["value"]) or 0) > (F.number(part["value"]) or 0) * (1 + _LARGER))
+        )
+        if larger:
+            lead = total
+        out.append(lead)
+    return out
+
+
 async def sec_xbrl_frames(ctx: ToolContext, args: FramesInputs) -> ToolOutput:
     s = _settings(ctx)
     as_of = common.as_of_of(args.as_of)
-    unit = args.unit or _frame_unit_default(args.tag, args.taxonomy)
-    identity = {"taxonomy": args.taxonomy, "tag": args.tag, "unit": unit, "period": args.period}
+    alias = args.tag == "revenue"
+    unit = args.unit or ("USD" if alias else _frame_unit_default(args.tag, args.taxonomy))
+    tags = REVENUE_ALIAS if alias else (args.tag,)
+    identities = [{"taxonomy": args.taxonomy, "tag": t, "unit": unit, "period": args.period} for t in tags]
     asked = list(dict.fromkeys(args.tickers or []))
 
     def work(session):
-        session.refresh("sec.xbrl_frames", identity)
-        records = F.records(session.read("sec.xbrl_frames", as_of=as_of, **identity))
+        records = []
+        for identity in identities:
+            session.refresh("sec.xbrl_frames", identity)
+            records += F.records(session.read("sec.xbrl_frames", as_of=as_of, **identity))
+        if alias:
+            records = _revenue_lead(records)
         ciks = {}
         if asked:
             sec_source = session.module("omni.sources.sec")
@@ -614,6 +651,11 @@ async def sec_xbrl_frames(ctx: ToolContext, args: FramesInputs) -> ToolOutput:
     notes = (
         [f"No {args.tag} value for {args.period} in the frame for: {', '.join(missing)}."] if missing else []
     )
+    if alias:
+        notes.append(
+            "tag revenue: per filer RevenueFromContractWithCustomerExcludingAssessedTax, or Revenues where the "
+            "filer states only that or a Revenues larger by more than 0.5%; each row's tag names its concept."
+        )
     prov = _prov(
         ctx,
         "sec_xbrl_frames",

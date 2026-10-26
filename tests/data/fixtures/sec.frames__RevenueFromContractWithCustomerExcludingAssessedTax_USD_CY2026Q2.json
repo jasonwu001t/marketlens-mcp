@@ -1,0 +1,39 @@
+{
+ "_synthetic": true,
+ "taxonomy": "us-gaap",
+ "tag": "RevenueFromContractWithCustomerExcludingAssessedTax",
+ "ccp": "CY2026Q2",
+ "uom": "USD",
+ "label": "Revenue from Contract with Customer, Excluding Assessed Tax",
+ "description": "Synthetic frame in the shape of data.sec.gov/api/xbrl/frames.",
+ "pts": 3,
+ "data": [
+  {
+   "accn": "0009999901-26-000020",
+   "cik": 9999901,
+   "entityName": "TESTCO SYNTHETIC CORP",
+   "loc": "US-CA",
+   "start": "2026-04-01",
+   "end": "2026-06-30",
+   "val": 480000000
+  },
+  {
+   "accn": "0009999903-26-000021",
+   "cik": 9999903,
+   "entityName": "EVENTCO SYNTHETIC INC",
+   "loc": "US-NY",
+   "start": "2026-03-29",
+   "end": "2026-06-27",
+   "val": 299000000
+  },
+  {
+   "accn": "0009999992-26-000007",
+   "cik": 9999992,
+   "entityName": "CONTRACTS ONLY SYNTHETIC INC",
+   "loc": "US-WA",
+   "start": "2026-04-01",
+   "end": "2026-06-30",
+   "val": 650000000
+  }
+ ]
+}
