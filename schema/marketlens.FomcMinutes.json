@@ -1,0 +1,93 @@
+{
+  "$defs": {
+    "AbsenceCode": {
+      "description": "Why a value is None. Never served as 0.",
+      "enum": [
+        "not_provided_by_source",
+        "not_applicable",
+        "not_entitled",
+        "no_data",
+        "insufficient_data",
+        "not_recovered",
+        "no_match",
+        "withheld",
+        "source_error",
+        "unparseable"
+      ],
+      "title": "AbsenceCode",
+      "type": "string"
+    }
+  },
+  "$id": "urn:marketlens:schema:1:marketlens.FomcMinutes",
+  "additionalProperties": false,
+  "description": "The minutes of an FOMC meeting. ``text`` is UNTRUSTED third-party text.",
+  "properties": {
+    "absent": {
+      "anyOf": [
+        {
+          "additionalProperties": {
+            "$ref": "#/$defs/AbsenceCode"
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Per-row reasons for None fields: field name -> AbsenceCode",
+      "title": "Absent"
+    },
+    "knowledge_time": {
+      "description": "When the value became knowable under the dataset's point-in-time policy",
+      "format": "date-time",
+      "title": "Knowledge Time",
+      "type": "string",
+      "x-role": "available",
+      "x-unit": "UTC"
+    },
+    "meeting_date": {
+      "description": "The meeting's last day",
+      "format": "date",
+      "title": "Meeting Date",
+      "type": "string"
+    },
+    "n_paragraphs": {
+      "title": "N Paragraphs",
+      "type": "integer",
+      "x-unit": "count"
+    },
+    "release_date": {
+      "description": "The release date the Fed prints beside the link",
+      "format": "date",
+      "title": "Release Date",
+      "type": "string"
+    },
+    "text": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Text"
+    },
+    "url": {
+      "title": "Url",
+      "type": "string"
+    }
+  },
+  "required": [
+    "meeting_date",
+    "release_date",
+    "url",
+    "n_paragraphs",
+    "knowledge_time"
+  ],
+  "title": "FomcMinutes",
+  "type": "object",
+  "x-schema-version": "1.1.0"
+}

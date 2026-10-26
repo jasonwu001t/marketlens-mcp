@@ -1,0 +1,234 @@
+{
+  "$defs": {
+    "AbsenceCode": {
+      "description": "Why a value is None. Never served as 0.",
+      "enum": [
+        "not_provided_by_source",
+        "not_applicable",
+        "not_entitled",
+        "no_data",
+        "insufficient_data",
+        "not_recovered",
+        "no_match",
+        "withheld",
+        "source_error",
+        "unparseable"
+      ],
+      "title": "AbsenceCode",
+      "type": "string"
+    }
+  },
+  "$id": "urn:marketlens:schema:1:marketlens.BankIndustrySummary",
+  "additionalProperties": false,
+  "description": "The FDIC's annual aggregates of insured institutions for one year-end,\nlocation and charter class.",
+  "properties": {
+    "absent": {
+      "anyOf": [
+        {
+          "additionalProperties": {
+            "$ref": "#/$defs/AbsenceCode"
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Per-row reasons for None fields: field name -> AbsenceCode",
+      "title": "Absent"
+    },
+    "branches": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Branches",
+      "x-unit": "count"
+    },
+    "charter_class": {
+      "description": "Commercial banks or savings institutions",
+      "enum": [
+        "CB",
+        "SI"
+      ],
+      "title": "Charter Class",
+      "type": "string"
+    },
+    "gross_loans": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Gross Loans",
+      "x-unit": "USD"
+    },
+    "institutions": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Institutions",
+      "x-unit": "count"
+    },
+    "knowledge_time": {
+      "description": "When the value became knowable under the dataset's point-in-time policy",
+      "format": "date-time",
+      "title": "Knowledge Time",
+      "type": "string",
+      "x-role": "available",
+      "x-unit": "UTC"
+    },
+    "location": {
+      "description": "A state or territory, or All States and Territories",
+      "title": "Location",
+      "type": "string"
+    },
+    "net_charge_offs": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Net Charge Offs",
+      "x-unit": "USD"
+    },
+    "net_income": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Net Income",
+      "x-unit": "USD"
+    },
+    "net_interest_income": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Net Interest Income",
+      "x-unit": "USD"
+    },
+    "net_loans": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Net Loans",
+      "x-unit": "USD"
+    },
+    "noncurrent_loans": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Noncurrent Loans",
+      "x-unit": "USD"
+    },
+    "offices": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Offices",
+      "x-unit": "count"
+    },
+    "total_assets": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Total Assets",
+      "x-unit": "USD"
+    },
+    "total_deposits": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Total Deposits",
+      "x-unit": "USD"
+    },
+    "total_equity": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Total Equity",
+      "x-unit": "USD"
+    },
+    "year_end": {
+      "format": "date",
+      "title": "Year End",
+      "type": "string"
+    }
+  },
+  "required": [
+    "year_end",
+    "location",
+    "charter_class",
+    "knowledge_time"
+  ],
+  "title": "BankIndustrySummary",
+  "type": "object",
+  "x-schema-version": "1.1.0"
+}

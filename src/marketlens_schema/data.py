@@ -916,6 +916,168 @@ class TreasuryCashBalance(CanonicalModel):
     knowledge_time: UtcDatetime = _known()
 
 
+class FomcProjection(CanonicalModel):
+    """One cell of the FOMC's Summary of Economic Projections. ``kind`` summary:
+    Table 1 (median, central tendency and range of the participants'
+    projections; ``midpoint`` and ``participants`` not applicable). ``kind``
+    dots: Figure 2, the dot plot (how many participants put the appropriate
+    federal funds rate for ``horizon`` at ``midpoint``; the summary fields not
+    applicable)."""
+
+    schema_name: ClassVar[str] = "marketlens.FomcProjection"
+    time_column: ClassVar[str | None] = "meeting_date"
+    group_column: ClassVar[str | None] = "variable"
+    value_columns: ClassVar[tuple[str, ...]] = ("median",)
+
+    meeting_date: Date = Field(description="The meeting's last day")
+    release_date: Date
+    kind: Literal["summary", "dots"]
+    variable: Literal[
+        "gdp_growth", "unemployment_rate", "pce_inflation", "core_pce_inflation", "fed_funds_rate"
+    ]
+    horizon: str = Field(description="A year (2026) or longer_run")
+    horizon_year: int | None = Field(default=None, description="None for longer_run")
+    median: float | None = _unit("fraction", default=None)
+    central_tendency_low: float | None = _unit("fraction", default=None)
+    central_tendency_high: float | None = _unit("fraction", default=None)
+    range_low: float | None = _unit("fraction", default=None)
+    range_high: float | None = _unit("fraction", default=None)
+    midpoint: float | None = _unit(
+        "fraction_per_year", default=None, description="A dot's federal funds rate"
+    )
+    participants: int | None = _unit("count", default=None)
+    url: str
+    knowledge_time: UtcDatetime = _known()
+
+
+class FomcMinutes(CanonicalModel):
+    """The minutes of an FOMC meeting. ``text`` is UNTRUSTED third-party text."""
+
+    schema_name: ClassVar[str] = "marketlens.FomcMinutes"
+    time_column: ClassVar[str | None] = "meeting_date"
+
+    meeting_date: Date = Field(description="The meeting's last day")
+    release_date: Date = Field(description="The release date the Fed prints beside the link")
+    url: str
+    text: str | None = None
+    n_paragraphs: int = _unit("count")
+    knowledge_time: UtcDatetime = _known()
+
+
+class BeigeBookSection(CanonicalModel):
+    """One district's report (or the national summary) of a Beige Book edition.
+    ``text`` is UNTRUSTED third-party text."""
+
+    schema_name: ClassVar[str] = "marketlens.BeigeBookSection"
+    time_column: ClassVar[str | None] = "release_date"
+    group_column: ClassVar[str | None] = "district"
+
+    release_date: Date
+    edition: str = Field(description="The page's own stamp (202610); not the release month")
+    district: str = Field(description="national_summary or a Reserve Bank (boston ... san_francisco)")
+    url: str
+    text: str | None = None
+    n_paragraphs: int = _unit("count")
+    knowledge_time: UtcDatetime = _known()
+
+
+# --- banks and money market funds -----------------------------------------------------------
+
+
+class BankFinancials(CanonicalModel):
+    """One insured bank's Call Report quarter, from the FDIC's BankFind."""
+
+    schema_name: ClassVar[str] = "marketlens.BankFinancials"
+    time_column: ClassVar[str | None] = "report_date"
+    group_column: ClassVar[str | None] = "name"
+    value_columns: ClassVar[tuple[str, ...]] = ("total_assets", "total_deposits", "net_income_ytd")
+
+    cert: int = Field(description="FDIC certificate number")
+    report_date: Date = Field(description="The quarter's end")
+    ticker: str | None = Field(default=None, description="The listed holder the bank was mapped from")
+    name: str
+    holding_company: str | None = Field(default=None, description="The FDIC's regulatory top holder")
+    total_assets: float | None = _unit("USD", default=None)
+    total_deposits: float | None = _unit("USD", default=None)
+    domestic_deposits: float | None = _unit("USD", default=None)
+    insured_deposits_est: float | None = _unit("USD", default=None)
+    uninsured_deposits_est: float | None = _unit("USD", default=None)
+    gross_loans: float | None = _unit("USD", default=None)
+    net_loans: float | None = _unit("USD", default=None)
+    total_equity: float | None = _unit("USD", default=None)
+    net_income_ytd: float | None = _unit("USD", default=None, description="Year to date")
+    net_interest_income_ytd: float | None = _unit("USD", default=None)
+    net_charge_offs_ytd: float | None = _unit("USD", default=None)
+    noncurrent_loans: float | None = _unit("USD", default=None)
+    htm_securities_amortized_cost: float | None = _unit("USD", default=None)
+    htm_securities_fair_value: float | None = _unit("USD", default=None)
+    afs_securities_amortized_cost: float | None = _unit("USD", default=None)
+    afs_securities_fair_value: float | None = _unit("USD", default=None)
+    htm_unrealized_gain: float | None = _unit(
+        "USD", default=None, description="Fair value less cost; < 0 a loss"
+    )
+    afs_unrealized_gain: float | None = _unit(
+        "USD", default=None, description="Fair value less cost; < 0 a loss"
+    )
+    net_interest_margin: float | None = _unit("fraction_per_year", default=None)
+    roa: float | None = _unit("fraction_per_year", default=None)
+    roe: float | None = _unit("fraction_per_year", default=None)
+    leverage_ratio: float | None = _unit("fraction", default=None)
+    tier1_capital_ratio: float | None = _unit("fraction", default=None)
+    cet1_ratio: float | None = _unit("fraction", default=None)
+    total_capital_ratio: float | None = _unit("fraction", default=None)
+    noncurrent_loans_ratio: float | None = _unit("fraction", default=None)
+    net_charge_off_ratio: float | None = _unit("fraction_per_year", default=None)
+    knowledge_time: UtcDatetime = _known()
+
+
+class BankIndustrySummary(CanonicalModel):
+    """The FDIC's annual aggregates of insured institutions for one year-end,
+    location and charter class."""
+
+    schema_name: ClassVar[str] = "marketlens.BankIndustrySummary"
+    time_column: ClassVar[str | None] = "year_end"
+    group_column: ClassVar[str | None] = "charter_class"
+    value_columns: ClassVar[tuple[str, ...]] = ("total_assets", "net_income")
+
+    year_end: Date
+    location: str = Field(description="A state or territory, or All States and Territories")
+    charter_class: Literal["CB", "SI"] = Field(description="Commercial banks or savings institutions")
+    institutions: int | None = _unit("count", default=None)
+    offices: int | None = _unit("count", default=None)
+    branches: int | None = _unit("count", default=None)
+    total_assets: float | None = _unit("USD", default=None)
+    total_deposits: float | None = _unit("USD", default=None)
+    gross_loans: float | None = _unit("USD", default=None)
+    net_loans: float | None = _unit("USD", default=None)
+    total_equity: float | None = _unit("USD", default=None)
+    net_income: float | None = _unit("USD", default=None)
+    net_interest_income: float | None = _unit("USD", default=None)
+    noncurrent_loans: float | None = _unit("USD", default=None)
+    net_charge_offs: float | None = _unit("USD", default=None)
+    knowledge_time: UtcDatetime = _known()
+
+
+class MoneyMarketFundStatistic(CanonicalModel):
+    """One value of the SEC's monthly Money Market Fund Statistics (Form N-MFP
+    aggregates)."""
+
+    schema_name: ClassVar[str] = "marketlens.MoneyMarketFundStatistic"
+    time_column: ClassVar[str | None] = "month"
+    group_column: ClassVar[str | None] = "item"
+    value_columns: ClassVar[tuple[str, ...]] = ("value",)
+
+    table: str = Field(description="The workbook's table: 2.1 net assets, 7.1 holdings, 8.2 Fed repo, ...")
+    table_title: str
+    category: str = Field(description="Government, Prime, Tax Exempt, Total; or an investment group")
+    item: str = Field(description="A fund type or investment category; Subtotal, Total")
+    month: Date = Field(description="The reporting month (its first day)")
+    value: float | None = _unit("as_published", default=None, description="In the row's `unit`")
+    unit: Literal["USD", "fraction", "days"]
+    file: str = Field(description="The workbook that first stated the value")
+    knowledge_time: UtcDatetime = _known()
+
+
 # --- calendars ------------------------------------------------------------------------------
 
 
@@ -1033,11 +1195,17 @@ DATA_MODELS: tuple[type[CanonicalModel], ...] = (
     FundHolding,
     FomcMeeting,
     FomcStatement,
+    FomcProjection,
+    FomcMinutes,
+    BeigeBookSection,
     ReferenceRate,
     YieldCurvePoint,
     TreasuryAuction,
     TreasuryDebt,
     TreasuryCashBalance,
+    BankFinancials,
+    BankIndustrySummary,
+    MoneyMarketFundStatistic,
     EconomicEvent,
     EarningsCalendarEntry,
     EarningsSurprise,

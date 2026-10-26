@@ -1,0 +1,116 @@
+{
+  "$defs": {
+    "AbsenceCode": {
+      "description": "Why a value is None. Never served as 0.",
+      "enum": [
+        "not_provided_by_source",
+        "not_applicable",
+        "not_entitled",
+        "no_data",
+        "insufficient_data",
+        "not_recovered",
+        "no_match",
+        "withheld",
+        "source_error",
+        "unparseable"
+      ],
+      "title": "AbsenceCode",
+      "type": "string"
+    }
+  },
+  "$id": "urn:marketlens:schema:1:marketlens.MoneyMarketFundStatistic",
+  "additionalProperties": false,
+  "description": "One value of the SEC's monthly Money Market Fund Statistics (Form N-MFP\naggregates).",
+  "properties": {
+    "absent": {
+      "anyOf": [
+        {
+          "additionalProperties": {
+            "$ref": "#/$defs/AbsenceCode"
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Per-row reasons for None fields: field name -> AbsenceCode",
+      "title": "Absent"
+    },
+    "category": {
+      "description": "Government, Prime, Tax Exempt, Total; or an investment group",
+      "title": "Category",
+      "type": "string"
+    },
+    "file": {
+      "description": "The workbook that first stated the value",
+      "title": "File",
+      "type": "string"
+    },
+    "item": {
+      "description": "A fund type or investment category; Subtotal, Total",
+      "title": "Item",
+      "type": "string"
+    },
+    "knowledge_time": {
+      "description": "When the value became knowable under the dataset's point-in-time policy",
+      "format": "date-time",
+      "title": "Knowledge Time",
+      "type": "string",
+      "x-role": "available",
+      "x-unit": "UTC"
+    },
+    "month": {
+      "description": "The reporting month (its first day)",
+      "format": "date",
+      "title": "Month",
+      "type": "string"
+    },
+    "table": {
+      "description": "The workbook's table: 2.1 net assets, 7.1 holdings, 8.2 Fed repo, ...",
+      "title": "Table",
+      "type": "string"
+    },
+    "table_title": {
+      "title": "Table Title",
+      "type": "string"
+    },
+    "unit": {
+      "enum": [
+        "USD",
+        "fraction",
+        "days"
+      ],
+      "title": "Unit",
+      "type": "string"
+    },
+    "value": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "In the row's `unit`",
+      "title": "Value",
+      "x-unit": "as_published"
+    }
+  },
+  "required": [
+    "table",
+    "table_title",
+    "category",
+    "item",
+    "month",
+    "unit",
+    "file",
+    "knowledge_time"
+  ],
+  "title": "MoneyMarketFundStatistic",
+  "type": "object",
+  "x-schema-version": "1.1.0"
+}

@@ -8,8 +8,9 @@ from __future__ import annotations
 
 import pytest
 from data_harness import SPECS, call, context
+from test_banks import fdic_routes, mmf_routes
 from test_calendars import earnings_routes, economic_routes, holiday_routes, surprise_routes
-from test_fed_treasury import FISCAL, fomc_routes, treasury_routes
+from test_fed_treasury import FISCAL, fomc_document_routes, fomc_routes, treasury_routes
 from test_macro import BEA, bls_routes, fred_routes
 from test_sec import sec_routes
 from test_sec_research import IR_LIST, research_routes
@@ -68,6 +69,12 @@ CASES = [
     ("sec_fund_holdings", sec_routes, {"ticker": "TFUND"}),
     ("fed_fomc_meetings", fomc_routes, {}),
     ("fed_fomc_statements", fomc_routes, {}),
+    ("fed_fomc_projections", fomc_document_routes, {"start": "2026-09-01"}),
+    ("fed_fomc_minutes", fomc_document_routes, {"start": "2026-09-01"}),
+    ("fed_beige_book", fomc_document_routes, {"start": "2026-10-01", "end": "2026-10-31"}),
+    ("bank_fdic_financials", fdic_routes, {"tickers": ["EXBK"]}),
+    ("bank_fdic_industry", fdic_routes, {}),
+    ("funds_mmf_statistics", mmf_routes, {}),
     (
         "fed_reference_rates",
         file_route(r"markets\.newyorkfed\.org/api/rates/all/search\.json", "nyfed.reference_rates.json"),
@@ -102,7 +109,7 @@ def _id(case) -> str:
 
 
 def test_every_tool_has_a_case():
-    assert {tool for tool, *_ in CASES} == set(SPECS) and len(SPECS) == 37
+    assert {tool for tool, *_ in CASES} == set(SPECS) and len(SPECS) == 43
 
 
 @pytest.fixture

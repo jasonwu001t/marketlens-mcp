@@ -66,11 +66,18 @@ PARITY: dict[str, Mapped | Excluded] = {
     # the Federal Reserve and the Treasury
     "fomc.meetings": Mapped(("fed_fomc_meetings",)),
     "fomc.statement": Mapped(("fed_fomc_statements",)),
+    "fomc.projections": Mapped(("fed_fomc_projections",)),
+    "fomc.minutes": Mapped(("fed_fomc_minutes",)),
+    "fomc.beige_book": Mapped(("fed_beige_book",)),
     "nyfed.reference_rates": Mapped(("fed_reference_rates",)),
     "treasury.yield_curve": Mapped(("treasury_yield_curve",)),
     "fiscaldata.auctions": Mapped(("treasury_auctions",)),
     "fiscaldata.debt_to_penny": Mapped(("treasury_debt",)),
     "fiscaldata.tga_balance": Mapped(("treasury_tga",)),
+    # banks and money market funds
+    "fdic.financials": Mapped(("bank_fdic_financials",)),
+    "fdic.industry_summary": Mapped(("bank_fdic_industry",)),
+    "sec.mmf_statistics": Mapped(("funds_mmf_statistics",)),
     # calendars
     "nasdaq.economic_events": Mapped(("calendar_economic",)),
     "nasdaq.earnings": Mapped(("calendar_earnings",)),

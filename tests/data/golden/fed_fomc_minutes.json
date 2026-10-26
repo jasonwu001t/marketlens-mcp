@@ -1,0 +1,48 @@
+{
+ "absent": {},
+ "model": "marketlens.FomcMinutes",
+ "notes": [],
+ "offload": "auto",
+ "pagination": null,
+ "provenance": {
+  "as_of": null,
+  "authority": [
+   "official"
+  ],
+  "cached": false,
+  "dataset": "fomc.minutes",
+  "delay": "unknown",
+  "derived_from": [],
+  "environment": null,
+  "feed": null,
+  "knowledge_time": "2026-10-07T19:00:00Z",
+  "lag_days": 40.0,
+  "operation": null,
+  "pages_fetched": 2,
+  "provider": "fomc",
+  "request": {
+   "as_of": null,
+   "end": "2026-10-26",
+   "include_text": true,
+   "start": "2026-09-01"
+  },
+  "route": "omni fomc.minutes <- www.federalreserve.gov (minutes linked from the FOMC calendar and year pages)",
+  "schema_version": "1.1.0",
+  "stale": null,
+  "truncated": false,
+  "truncation_note": null,
+  "upstream_request_id": null
+ },
+ "risk": null,
+ "rows": [
+  {
+   "absent": null,
+   "knowledge_time": "2026-10-07T19:00:00Z",
+   "meeting_date": "2026-09-16",
+   "n_paragraphs": 41,
+   "release_date": "2026-10-07",
+   "text": "September 15–16, 2026 (synthetic minutes)\n\nParagraph 1: participants discussed the economic outlook, inflation, the labor market and the appropriate path of the federal funds rate in this synthetic text written for the tests.\n\nParagraph 2: participants discussed the economic outlook, inflation, the labor market and the appropriate path of the federal funds rate in this synthetic text written for the tests.\n\nParagraph 3: participants discussed the economic outlook, inflation, the labor market and the appropriate path of the federal funds rate in this synthetic text written for the tests. 1\n\nParagraph 4: participants discussed the economic outlook, inflation, the labor market and the appropriate path of the federal funds rate in this synthetic text written for the tests.\n\nParagraph 5: participants discussed the economic outlook, inflation, the labor market and the appropriate path of the federal funds rate in this synthetic text written for the tests.\n\nParagraph 6: participants discussed the economic outlook, inflation, the labor market and the appropriate path of the federal funds rate in this synthetic text written for the tests.\n\nParagraph 7: participants discussed the economic outlook, inflation, the labor market and the appropriate path of the federal funds rate in this synthetic text written for the tests.\n\nParagraph 8: participants discussed the economic outlook, inflation, the labor market and the appropriate path of the federal funds rate in this synthetic text written for the tests.\n\nParagraph 9: participants discussed the economic outlook, inflation, the labor market and the appropriate path of the federal funds rate in this synthetic text written for the tests.\n\nParagraph 10: participants discussed the economic outlook, inflation, the labor market and the appropriate path of the federal funds rate in this synthetic text written for the tests.\n\nParagraph 11: participants discussed the economic outlook, inflation, the labor market and the appropriate path of the federal funds rate in this synthetic text written for the tests.\n\nParagraph 12: participants discussed the economic outlook, inflation, the labor market and the appropriate path of the federal funds rate in this synthetic text written for the tests.\n\nParagraph 13: participants discussed the economic outlook, inflation, the labor market and the appropriate path of the federal funds rate in this synthetic text written for the tests.\n\nParagraph 14: participants discussed the economic outlook, inflation, the labor market and the appropriate path of the federal funds rate in this synthetic text written for the tests.\n\nParagraph 15: participants discussed the economic outlook, inflation, the labor market and the appropriate path of the federal funds rate in this synthetic text written for the tests.\n\nParagraph 16: participants discussed the economic outlook, inflation, the labor market and the appropriate path of the federal funds rate in this synthetic text written for the tests.\n\nParagraph 17: participants discussed the economic outlook, inflation, the labor market and the appropriate path of the federal funds rate in this synthetic text written for the tests.\n\nParagraph 18: participants discussed the economic outlook, inflation, the labor market and the appropriate path of the federal funds rate in this synthetic text written for the tests.\n\nParagraph 19: participants discussed the economic outlook, inflation, the labor market and the appropriate path of the federal funds rate in this synthetic text written for the tests.\n\nParagraph 20: participants discussed the economic outlook, inflation, the labor market and the appropriate path of the federal funds rate in this synthetic text written for the tests.\n\nParagraph 21: participants discussed the economic outlook, inflation, the labor market and the appropriate path of the federal funds rate in this synthetic text written for the tests.\n\nParagraph 22: participants discussed the economic outlook, inflation, the labor market and the appropriate path of the federal funds rate in this synthetic text written for the tests.\n\nParagraph 23: participants discussed the economic outlook, inflation, the labor market and the appropriate path of the federal funds rate in this synthetic text written for the tests.\n\nParagraph 24: participants discussed the economic outlook, inflation, the labor market and the appropriate path of the federal funds rate in this synthetic text written for the tests.\n\nParagraph 25: participants discussed the economic outlook, inflation, the labor market and the appropriate path of the federal funds rate in this synthetic text written for the tests.\n\nParagraph 26: participants discussed the economic outlook, inflation, the labor market and the appropriate path of the federal funds rate in this synthetic text written for the tests.\n\nParagraph 27: participants discussed the economic outlook, inflation, the labor market and the appropriate path of the federal funds rate in this synthetic text written for the tests.\n\nParagraph 28: participants discussed the economic outlook, inflation, the labor market and the appropriate path of the federal funds rate in this synthetic text written for the tests.\n\nParagraph 29: participants discussed the economic outlook, inflation, the labor market and the appropriate path of the federal funds rate in this synthetic text written for the tests.\n\nParagraph 30: participants discussed the economic outlook, inflation, the labor market and the appropriate path of the federal funds rate in this synthetic text written for the tests.\n\nParagraph 31: participants discussed the economic outlook, inflation, the labor market and the appropriate path of the federal funds rate in this synthetic text written for the tests.\n\nParagraph 32: participants discussed the economic outlook, inflation, the labor market and the appropriate path of the federal funds rate in this synthetic text written for the tests.\n\nParagraph 33: participants discussed the economic outlook, inflation, the labor market and the appropriate path of the federal funds rate in this synthetic text written for the tests.\n\nParagraph 34: participants discussed the economic outlook, inflation, the labor market and the appropriate path of the federal funds rate in this synthetic text written for the tests.\n\nParagraph 35: participants discussed the economic outlook, inflation, the labor market and the appropriate path of the federal funds rate in this synthetic text written for the tests.\n\nParagraph 36: participants discussed the economic outlook, inflation, the labor market and the appropriate path of the federal funds rate in this synthetic text written for the tests.\n\nParagraph 37: participants discussed the economic outlook, inflation, the labor market and the appropriate path of the federal funds rate in this synthetic text written for the tests.\n\nParagraph 38: participants discussed the economic outlook, inflation, the labor market and the appropriate path of the federal funds rate in this synthetic text written for the tests.\n\nParagraph 39: participants discussed the economic outlook, inflation, the labor market and the appropriate path of the federal funds rate in this synthetic text written for the tests.\n\nParagraph 40: participants discussed the economic outlook, inflation, the labor market and the appropriate path of the federal funds rate in this synthetic text written for the tests.",
+   "url": "https://www.federalreserve.gov/monetarypolicy/fomcminutes20260916.htm"
+  }
+ ]
+}

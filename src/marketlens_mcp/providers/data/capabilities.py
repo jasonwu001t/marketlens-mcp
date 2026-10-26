@@ -29,8 +29,10 @@ FILINGS = CapabilitySpec(
 FED_TREASURY = CapabilitySpec(
     "fed_treasury",
     "Federal Reserve and Treasury",
-    "FOMC meetings and statements, NY Fed reference rates (SOFR, EFFR, ...), the Treasury par yield "
-    f"curve, Treasury auctions, debt to the penny and the Treasury's cash balance. {NEEDS}",
+    "FOMC meetings, statements, economic projections with the dot plot, minutes and the Beige Book, NY Fed "
+    "reference rates (SOFR, EFFR, ...), the Treasury par yield curve, Treasury auctions, debt to the penny "
+    "and the Treasury's cash balance; the FDIC's bank financials and industry aggregates and the SEC's money "
+    f"market fund statistics. {NEEDS}",
     True,
 )
 HOLIDAYS = CapabilitySpec(
