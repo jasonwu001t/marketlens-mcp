@@ -1,5 +1,5 @@
 """The data extra as the server sees it, with or without marketlens-data
-installed: the five capabilities are always declared, the 26 tools are
+installed: the five capabilities are always declared, the 27 tools are
 registered only when omni is importable, the README always lists them, the
 config file knows their settings, and doctor says what is missing. Nothing
 here imports omni (tests/data covers the tools themselves)."""
@@ -33,6 +33,7 @@ TOOLS = {
         "sec_earnings_releases",
         "sec_earnings_figures",
         "filings_events",
+        "twse_monthly_revenue",
         "sec_insider_trades",
         "sec_13f_holdings",
         "sec_fund_nport",
@@ -55,7 +56,13 @@ TOOLS = {
     ],
 }
 ALL_TOOLS = [t for names in TOOLS.values() for t in names]
-EXTERNAL_TEXT = {"sec_earnings_figures", "filings_events", "fed_fomc_statements", "calendar_economic"}
+EXTERNAL_TEXT = {
+    "sec_earnings_figures",
+    "filings_events",
+    "twse_monthly_revenue",
+    "fed_fomc_statements",
+    "calendar_economic",
+}
 
 
 def catalog(monkeypatch, *, installed: bool):
@@ -95,7 +102,7 @@ def test_capabilities_are_declared_either_way(monkeypatch, installed):
     assert not (set(ALL_TOOLS) & names) or installed
 
 
-def test_the_26_tools(monkeypatch):
+def test_the_27_tools(monkeypatch):
     cat = catalog(monkeypatch, installed=True)
     for cap_id, names in TOOLS.items():
         for name in names:
@@ -104,13 +111,15 @@ def test_the_26_tools(monkeypatch):
             assert entry.plugin == "builtin:data"
             assert entry.spec.output_risk == ("external_text" if name in EXTERNAL_TEXT else "api_structured")
             assert entry.spec.golden_test.startswith("tests/data/test_"), name
-    assert len([t for t in cat.tools.values() if t.plugin == "builtin:data"]) == 26
+    assert len([t for t in cat.tools.values() if t.plugin == "builtin:data"]) == 27
     specs = {s.name: s for s in tools.all_specs()}
     assert set(specs) == set(ALL_TOOLS)
     assert specs["macro_series"].env == ("FRED_API_KEY",)
     assert specs["macro_bls_series"].env == ("BLS_API_KEY",)
     assert specs["macro_bea_table"].env == ("BEA_API_KEY",)
-    for name in TOOLS["filings"]:
+    # TWSE's monthly revenue is keyless; every other filings tool reads SEC EDGAR
+    assert specs["twse_monthly_revenue"].env == ()
+    for name in (n for n in TOOLS["filings"] if n != "twse_monthly_revenue"):
         assert specs[name].env == ("SEC_CONTACT_EMAIL",), name
         # the contact is optional: unset, a placeholder is sent and the answer says so
         assert "Fetching needs" not in specs[name].description, name
@@ -125,7 +134,7 @@ def test_the_26_tools(monkeypatch):
         assert "as_of" in spec.input_model.model_fields or name == "macro_series_catalog", name
 
 
-@pytest.mark.parametrize(("installed", "count"), [(False, 51), (True, 74)])
+@pytest.mark.parametrize(("installed", "count"), [(False, 51), (True, 75)])
 def test_tools_json_counts(monkeypatch, capsys, installed, count):
     monkeypatch.setattr(runtime, "available", lambda: installed)
     assert cli.main(["tools", "--json"]) == 0
@@ -408,6 +417,7 @@ def test_source_table_order_and_keys():
         "nyse",
         "sifma",
         "opm",
+        "twse",
     ]
     by = {s.source: s for s in sources.SOURCES}
     assert (by["fred"].variables, by["fred"].required) == (("FRED_API_KEY",), True)
@@ -453,6 +463,7 @@ def test_readiness_lines_with_nothing_set():
         "(optional cross-check of NYSE's calendar)",
         "data source sifma: keyless",
         "data source opm: keyless",
+        "data source twse: keyless",
     ]
 
 
@@ -477,12 +488,14 @@ def test_readiness_lines_with_keys_and_capabilities_off():
         "data source nyse: capability holidays is off",
         "data source sifma: capability holidays is off",
         "data source opm: capability holidays is off",
+        "data source twse: keyless",
     ]
     assert lines(env, enabled={"holidays"})[8:] == [
         "data source nasdaq: capability calendars is off",
         "data source nyse: ready (ALPACA_API_KEY and ALPACA_SECRET_KEY set)",
         "data source sifma: keyless",
         "data source opm: keyless",
+        "data source twse: capability filings is off",
     ]
     for value in env.values():
         assert not any(value in line for line in out)
@@ -509,10 +522,10 @@ def test_readiness_in_local_mode_needs_no_key():
 
 
 def test_parity_list_shape():
-    assert len(parity.PARITY) == 86
+    assert len(parity.PARITY) == 87
     mapped = {k: v for k, v in parity.PARITY.items() if isinstance(v, parity.Mapped)}
     excluded = {k: v for k, v in parity.PARITY.items() if isinstance(v, parity.Excluded)}
-    assert (len(mapped), len(excluded)) == (28, 58)
+    assert (len(mapped), len(excluded)) == (29, 58)
     kinds = [v.kind for v in excluded.values()]
     assert {k: kinds.count(k) for k in set(kinds)} == {
         "covered": 7,

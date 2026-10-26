@@ -23,6 +23,7 @@ SOURCES = [
     "nyse",
     "sifma",
     "opm",
+    "twse",
 ]
 
 
@@ -60,6 +61,7 @@ def test_doctor_with_the_extra_and_keys(capsys, keys, tmp_path, monkeypatch):
         "(optional cross-check of NYSE's calendar)",
         "data source sifma: keyless",
         "data source opm: keyless",
+        "data source twse: keyless",
     ]
     assert "environment FRED_API_KEY: set" in out
     for value in KEYS.values():

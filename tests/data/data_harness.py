@@ -155,12 +155,13 @@ def freeze_clocks(monkeypatch, now: datetime = NOW) -> None:
     """Capture clocks of the snapshot and schedule sources, and the store's sync stamp."""
     import importlib
 
-    from omni.sources import nasdaq, nyse, opm, sifma
+    from omni.sources import nasdaq, nyse, opm, sifma, twse
 
     router = importlib.import_module("omni.query.router")  # omni.query is also the query function
 
     for module in (nasdaq, nyse, sifma, opm):
         monkeypatch.setattr(module, "_utcnow", lambda: now)
+    monkeypatch.setattr(twse, "_now", lambda: now)  # which months a TWSE read plans
     monkeypatch.setattr(router, "utcnow", lambda: now)
 
 

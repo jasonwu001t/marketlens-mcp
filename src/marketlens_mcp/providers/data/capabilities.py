@@ -19,8 +19,9 @@ FILINGS = CapabilitySpec(
     "filings",
     "SEC EDGAR",
     "SEC filings, XBRL facts and point-in-time fundamentals, earnings releases and press-release EPS, "
-    "insider trades, 13F holdings and fund N-PORT reports, and SEC EDGAR full-text search. Filing text is "
-    "marked untrusted. The sec_ tools need the data extra (marketlens-mcp[data]); filings_search is built in.",
+    "insider trades, 13F holdings and fund N-PORT reports, and SEC EDGAR full-text search; and the monthly "
+    "revenue Taiwan-listed companies file on MOPS (TWSE / TPEx). Filing text is marked untrusted. The sec_ "
+    "and twse_ tools need the data extra (marketlens-mcp[data]); filings_search is built in.",
     True,
 )
 FED_TREASURY = CapabilitySpec(

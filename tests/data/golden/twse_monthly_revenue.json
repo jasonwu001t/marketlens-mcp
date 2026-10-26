@@ -1,0 +1,114 @@
+{
+ "absent": {},
+ "model": "marketlens.TaiwanMonthlyRevenue",
+ "notes": [],
+ "offload": "auto",
+ "pagination": null,
+ "provenance": {
+  "as_of": null,
+  "authority": [
+   "exchange"
+  ],
+  "cached": false,
+  "dataset": "twse.monthly_revenue",
+  "delay": "unknown",
+  "derived_from": [],
+  "environment": null,
+  "feed": null,
+  "knowledge_time": "2026-10-12T15:59:59Z",
+  "lag_days": 55.0,
+  "operation": null,
+  "pages_fetched": 1,
+  "provider": "twse",
+  "request": {
+   "as_of": null,
+   "end": "2026-10-01",
+   "start": "2026-09-01",
+   "tickers": [
+    "TSM",
+    "2317",
+    "6669.TW"
+   ]
+  },
+  "route": "omni twse.monthly_revenue <- mopsov.twse.com.tw/nas/t21 (MOPS monthly summaries) + openapi.twse.com.tw/v1/opendata/t187ap05_L",
+  "schema_version": "1.1.0",
+  "stale": null,
+  "truncated": false,
+  "truncation_note": null,
+  "upstream_request_id": null
+ },
+ "risk": null,
+ "rows": [
+  {
+   "absent": {
+    "adr": "not_applicable",
+    "note": "no_data"
+   },
+   "adr": null,
+   "company_code": "2317",
+   "company_name": "鴻海",
+   "industry": "其他電子業",
+   "knowledge_time": "2026-10-12T15:59:59Z",
+   "market": "sii",
+   "mom_change": 0.2569,
+   "month": "2026-09-01",
+   "note": null,
+   "publication": "mops_summary",
+   "revenue": 1158633235.0,
+   "revenue_prev_month": 921766023.0,
+   "revenue_year_ago": 837067572.0,
+   "revenue_ytd": 7669772510.0,
+   "revenue_ytd_year_ago": 5496964888.0,
+   "stamp_estimated": true,
+   "unit": "TWD_thousands",
+   "yoy_change": 0.3841,
+   "ytd_yoy_change": 0.3952
+  },
+  {
+   "absent": null,
+   "adr": "TSM",
+   "company_code": "2330",
+   "company_name": "台積電",
+   "industry": "半導體業",
+   "knowledge_time": "2026-10-12T15:59:59Z",
+   "market": "sii",
+   "mom_change": -0.0057,
+   "month": "2026-09-01",
+   "note": "因先進製程產品需求增加所致。",
+   "publication": "mops_summary",
+   "revenue": 511857399.0,
+   "revenue_prev_month": 514805337.0,
+   "revenue_year_ago": 330980920.0,
+   "revenue_ytd": 3898726974.0,
+   "revenue_ytd_year_ago": 2762963851.0,
+   "stamp_estimated": true,
+   "unit": "TWD_thousands",
+   "yoy_change": 0.5464,
+   "ytd_yoy_change": 0.411
+  },
+  {
+   "absent": {
+    "adr": "not_applicable"
+   },
+   "adr": null,
+   "company_code": "6669",
+   "company_name": "緯穎",
+   "industry": "電腦及週邊設備業",
+   "knowledge_time": "2026-10-12T15:59:59Z",
+   "market": "sii",
+   "mom_change": 0.1961,
+   "month": "2026-09-01",
+   "note": "主要係客戶需求強勁",
+   "publication": "mops_summary",
+   "revenue": 172620352.0,
+   "revenue_prev_month": 144311808.0,
+   "revenue_year_ago": 86316601.0,
+   "revenue_ytd": 989278016.0,
+   "revenue_ytd_year_ago": 658222829.0,
+   "stamp_estimated": true,
+   "unit": "TWD_thousands",
+   "yoy_change": 0.9998,
+   "ytd_yoy_change": 0.5029
+  }
+ ]
+}

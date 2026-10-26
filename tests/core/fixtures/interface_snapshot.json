@@ -788,6 +788,7 @@
     "marketlens.ReturnPoint",
     "marketlens.Snapshot",
     "marketlens.StockExchange",
+    "marketlens.TaiwanMonthlyRevenue",
     "marketlens.Trade",
     "marketlens.TreasuryAuction",
     "marketlens.TreasuryCashBalance",

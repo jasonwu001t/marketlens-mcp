@@ -24,7 +24,8 @@ Conventions of base.py hold, plus:
   it mark their responses ``external_text``.
 
 FilingSearchHit is built by the built-in official provider (filings_search),
-not the extra; FilingEvent by the extra's filings_events.
+not the extra; FilingEvent by the extra's filings_events; TaiwanMonthlyRevenue by
+its twse_monthly_revenue.
 """
 
 from __future__ import annotations
@@ -199,6 +200,48 @@ class FilingEvent(CanonicalModel):
         description="Exhibit type -> URL on www.sec.gov (EX-4.1, EX-10.1, EX-99.1, ...); the bodies are not stored",
     )
     index_url: str = Field(description="The filing's index page on www.sec.gov")
+    knowledge_time: UtcDatetime = _known()
+
+
+class TaiwanMonthlyRevenue(CanonicalModel):
+    """One month's revenue of a company listed on TWSE (sii) or TPEx (otc), as
+    it filed it by the 10th of the next month (MOPS, the market's filing
+    system; TWSE's OpenAPI): the month, the month before, the same month a year
+    before and the year to date, New Taiwan dollars in thousands as published.
+    note is the company's own explanation: UNTRUSTED text."""
+
+    schema_name: ClassVar[str] = "marketlens.TaiwanMonthlyRevenue"
+    time_column: ClassVar[str | None] = "month"
+    group_column: ClassVar[str | None] = "company_code"
+    value_columns: ClassVar[tuple[str, ...]] = ("revenue",)
+
+    company_code: str = Field(description="TWSE / TPEx code, e.g. 2330")
+    adr: str | None = Field(
+        default=None, description="The US ADR ticker marketlens-data maps to the code (TSM)"
+    )
+    company_name: str = Field(description="As the filing writes it, e.g. 台積電")
+    market: Literal["sii", "otc"] = Field(description="sii: listed on TWSE; otc: on TPEx")
+    industry: str | None = Field(default=None, description="The exchange's industry (產業別)")
+    month: Date = Field(description="First day of the month the revenue is for")
+    unit: str = Field(description="TWD_thousands: thousands of New Taiwan dollars, as published")
+    revenue: float | None = _unit("as_published", default=None, description="The month's revenue, in `unit`")
+    revenue_prev_month: float | None = _unit("as_published", default=None, description="The month before")
+    revenue_year_ago: float | None = _unit(
+        "as_published", default=None, description="The month a year before"
+    )
+    revenue_ytd: float | None = _unit("as_published", default=None, description="January to the month")
+    revenue_ytd_year_ago: float | None = _unit(
+        "as_published", default=None, description="January to the month, a year before"
+    )
+    mom_change: float | None = _unit("fraction", default=None, description="As the filing states it")
+    yoy_change: float | None = _unit("fraction", default=None, description="As the filing states it")
+    ytd_yoy_change: float | None = _unit("fraction", default=None, description="As the filing states it")
+    note: str | None = Field(default=None, description="The company's note (備註); untrusted text")
+    publication: Literal["mops_summary", "twse_openapi"]
+    stamp_estimated: bool = Field(
+        description="knowledge_time is the statutory deadline (the first TWSE trading day from the 10th of the "
+        "next month, 23:59:59 Taipei), not a date read"
+    )
     knowledge_time: UtcDatetime = _known()
 
 
@@ -630,6 +673,7 @@ DATA_MODELS: tuple[type[CanonicalModel], ...] = (
     Filing,
     FilingSearchHit,
     FilingEvent,
+    TaiwanMonthlyRevenue,
     XbrlFact,
     FundamentalValue,
     EarningsRelease,

@@ -1,0 +1,257 @@
+{
+  "$defs": {
+    "AbsenceCode": {
+      "description": "Why a value is None. Never served as 0.",
+      "enum": [
+        "not_provided_by_source",
+        "not_applicable",
+        "not_entitled",
+        "no_data",
+        "insufficient_data",
+        "not_recovered",
+        "no_match",
+        "withheld",
+        "source_error",
+        "unparseable"
+      ],
+      "title": "AbsenceCode",
+      "type": "string"
+    }
+  },
+  "$id": "urn:marketlens:schema:1:marketlens.TaiwanMonthlyRevenue",
+  "additionalProperties": false,
+  "description": "One month's revenue of a company listed on TWSE (sii) or TPEx (otc), as\nit filed it by the 10th of the next month (MOPS, the market's filing\nsystem; TWSE's OpenAPI): the month, the month before, the same month a year\nbefore and the year to date, New Taiwan dollars in thousands as published.\nnote is the company's own explanation: UNTRUSTED text.",
+  "properties": {
+    "absent": {
+      "anyOf": [
+        {
+          "additionalProperties": {
+            "$ref": "#/$defs/AbsenceCode"
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Per-row reasons for None fields: field name -> AbsenceCode",
+      "title": "Absent"
+    },
+    "adr": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The US ADR ticker marketlens-data maps to the code (TSM)",
+      "title": "Adr"
+    },
+    "company_code": {
+      "description": "TWSE / TPEx code, e.g. 2330",
+      "title": "Company Code",
+      "type": "string"
+    },
+    "company_name": {
+      "description": "As the filing writes it, e.g. \u53f0\u7a4d\u96fb",
+      "title": "Company Name",
+      "type": "string"
+    },
+    "industry": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The exchange's industry (\u7522\u696d\u5225)",
+      "title": "Industry"
+    },
+    "knowledge_time": {
+      "description": "When the value became knowable under the dataset's point-in-time policy",
+      "format": "date-time",
+      "title": "Knowledge Time",
+      "type": "string",
+      "x-role": "available",
+      "x-unit": "UTC"
+    },
+    "market": {
+      "description": "sii: listed on TWSE; otc: on TPEx",
+      "enum": [
+        "sii",
+        "otc"
+      ],
+      "title": "Market",
+      "type": "string"
+    },
+    "mom_change": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "As the filing states it",
+      "title": "Mom Change",
+      "x-unit": "fraction"
+    },
+    "month": {
+      "description": "First day of the month the revenue is for",
+      "format": "date",
+      "title": "Month",
+      "type": "string"
+    },
+    "note": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The company's note (\u5099\u8a3b); untrusted text",
+      "title": "Note"
+    },
+    "publication": {
+      "enum": [
+        "mops_summary",
+        "twse_openapi"
+      ],
+      "title": "Publication",
+      "type": "string"
+    },
+    "revenue": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The month's revenue, in `unit`",
+      "title": "Revenue",
+      "x-unit": "as_published"
+    },
+    "revenue_prev_month": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The month before",
+      "title": "Revenue Prev Month",
+      "x-unit": "as_published"
+    },
+    "revenue_year_ago": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The month a year before",
+      "title": "Revenue Year Ago",
+      "x-unit": "as_published"
+    },
+    "revenue_ytd": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "January to the month",
+      "title": "Revenue Ytd",
+      "x-unit": "as_published"
+    },
+    "revenue_ytd_year_ago": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "January to the month, a year before",
+      "title": "Revenue Ytd Year Ago",
+      "x-unit": "as_published"
+    },
+    "stamp_estimated": {
+      "description": "knowledge_time is the statutory deadline (the first TWSE trading day from the 10th of the next month, 23:59:59 Taipei), not a date read",
+      "title": "Stamp Estimated",
+      "type": "boolean"
+    },
+    "unit": {
+      "description": "TWD_thousands: thousands of New Taiwan dollars, as published",
+      "title": "Unit",
+      "type": "string"
+    },
+    "yoy_change": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "As the filing states it",
+      "title": "Yoy Change",
+      "x-unit": "fraction"
+    },
+    "ytd_yoy_change": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "As the filing states it",
+      "title": "Ytd Yoy Change",
+      "x-unit": "fraction"
+    }
+  },
+  "required": [
+    "company_code",
+    "company_name",
+    "market",
+    "month",
+    "unit",
+    "publication",
+    "stamp_estimated",
+    "knowledge_time"
+  ],
+  "title": "TaiwanMonthlyRevenue",
+  "type": "object",
+  "x-schema-version": "1.1.0"
+}

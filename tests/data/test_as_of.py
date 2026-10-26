@@ -12,6 +12,7 @@ from test_calendars import earnings_routes, economic_routes, holiday_routes, sur
 from test_fed_treasury import FISCAL, fomc_routes, treasury_routes
 from test_macro import BEA, bls_routes, fred_routes
 from test_sec import sec_routes
+from test_twse import twse_routes
 
 from marketlens_mcp.providers.data.tools import datasets_by_tool
 from marketlens_mcp.providers.data.tools.common import parse_instant
@@ -50,6 +51,7 @@ CASES = [
     ("sec_earnings_releases", sec_routes, {"ticker": "TESTCO"}),
     ("sec_earnings_figures", sec_routes, {"ticker": "TESTCO"}),
     ("filings_events", sec_routes, {"ticker": "EVNTCO"}),
+    ("twse_monthly_revenue", twse_routes, {"tickers": ["TSM"], "start": "2026-09-01"}),
     ("sec_insider_trades", sec_routes, {"ticker": "TESTCO"}),
     ("sec_13f_holdings", sec_routes, {"filer_cik": "9999950"}),
     ("sec_fund_nport", sec_routes, {"ticker": "TFUND"}),
@@ -90,7 +92,7 @@ def _id(case) -> str:
 
 
 def test_every_tool_has_a_case():
-    assert {tool for tool, *_ in CASES} == set(SPECS) and len(SPECS) == 26
+    assert {tool for tool, *_ in CASES} == set(SPECS) and len(SPECS) == 27
 
 
 @pytest.fixture
