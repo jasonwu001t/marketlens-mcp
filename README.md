@@ -127,7 +127,7 @@ Package layout:
 | SEC EDGAR full-text search (filings since 2001) | built-in `official` provider | `SEC_CONTACT_EMAIL` (refused without it) | `filings` |
 | FRED/ALFRED, BLS, BEA | `data` extra (marketlens-data) | `FRED_API_KEY`, `BEA_API_KEY`, `BLS_API_KEY` (optional) | `macro` |
 | SEC EDGAR (submissions, XBRL company facts, Archives) | `data` extra | `SEC_CONTACT_EMAIL` (recommended) | `filings` |
-| Federal Reserve (FOMC), NY Fed, U.S. Treasury, FiscalData | `data` extra | keyless | `fed_treasury` |
+| Federal Reserve (FOMC), NY Fed, U.S. Treasury, FiscalData, FDIC BankFind; SEC money market fund statistics | `data` extra | keyless (the SEC's and the FDIC tool's ticker list: `SEC_CONTACT_EMAIL`) | `fed_treasury` |
 | NYSE, SIFMA, OPM holiday calendars | `data` extra | keyless | `holidays` |
 | Nasdaq calendars (unofficial endpoint) | `data` extra | keyless | `calendars` (off) |
 | Your own computations | local DuckDB | none | `analytics`, `results` |
@@ -333,7 +333,7 @@ Each tool belongs to one capability. Turn capabilities on or off in the config f
 | `provider.docs` | off | Search the data provider's documentation service (an outbound call to a third party). Third-party text, marked untrusted. |
 | `macro` | on | FRED/ALFRED, BLS and BEA series with vintages and as-of reads, BLS release schedules, the FRED series catalogue. Needs the `data` extra. |
 | `filings` | on | SEC EDGAR filings, XBRL facts, point-in-time fundamentals, earnings releases and press-release EPS, insider trades, 13F holdings, fund N-PORT reports, material 8-K items and 6-Ks with their exhibits (`filings_events`), SEC EDGAR full-text search (`filings_search`, built in). The `sec_` tools and `filings_events` need the `data` extra. |
-| `fed_treasury` | on | FOMC meetings and statements, NY Fed reference rates, the Treasury yield curve, auctions, debt and cash balance. Needs the `data` extra. |
+| `fed_treasury` | on | FOMC meetings, statements, economic projections (dot plot), minutes and the Beige Book, NY Fed reference rates, the Treasury yield curve, auctions, debt and cash balance; FDIC bank financials and industry aggregates, SEC money market fund statistics. Needs the `data` extra. |
 | `holidays` | on | US market holidays and early closes from their publishers: NYSE (stocks), SIFMA (bonds), OPM (federal). Keyless. Needs the `data` extra. |
 | `calendars` | off | Nasdaq's economic calendar (PMI and other actual and consensus figures), earnings calendar and history. Off by default: the Nasdaq endpoint is unofficial and may change or refuse without notice. Needs the `data` extra. |
 
@@ -435,11 +435,11 @@ The `analytics_*` tools take result handles and compute in DuckDB: simple and lo
 
 ## Official data (the data extra)
 
-The `data` extra (marketlens-data installed beside marketlens-mcp; it is not on PyPI yet, see [Install](#install)) adds a built-in provider over marketlens-data (import name `omni`), which fetches each publisher's own data and keeps it, point in time, in a local DuckDB + Parquet store. 26 tools under five capabilities:
+The `data` extra (marketlens-data installed beside marketlens-mcp; it is not on PyPI yet, see [Install](#install)) adds a built-in provider over marketlens-data (import name `omni`), which fetches each publisher's own data and keeps it, point in time, in a local DuckDB + Parquet store. 32 tools under five capabilities:
 
 - `macro`: FRED/ALFRED series with every vintage (`macro_series`), BLS series (`macro_bls_series`), BEA NIPA tables (`macro_bea_table`; BEA states a level's measure and multiplier apart from its value, and the `units` of a `Level` row carry both: `Level, millions of Current Dollars`. A row marketlens-data stored before it kept the multiplier has `units` `Level` alone, so its scale is not known: NIPA dollar levels are usually millions of dollars, and the answer's note says so), BLS release schedules for the CPI and the jobs report (`macro_release_schedule`), and the FRED series catalogue (`macro_series_catalog`).
 - `filings`: SEC EDGAR filings (`sec_filings`), XBRL facts with restatements (`sec_xbrl_facts`), 23 point-in-time fundamentals computed from them (`sec_fundamentals`), 8-K Item 2.02 earnings releases (`sec_earnings_releases`) and the EPS their press releases state (`sec_earnings_figures`), material 8-K items and 6-Ks with their exhibit URLs and headline (`filings_events`), Form 4 and 144 insider transactions (`sec_insider_trades`), 13F holdings (`sec_13f_holdings`), fund N-PORT reports and holdings (`sec_fund_nport`, `sec_fund_holdings`).
-- `fed_treasury`: FOMC meetings and statements, NY Fed reference rates (SOFR, EFFR, OBFR, TGCR, BGCR), the Treasury par yield curve, Treasury auctions, debt to the penny and the Treasury General Account.
+- `fed_treasury`: FOMC meetings and statements, the Summary of Economic Projections with the dot plot (`fed_fomc_projections`), the minutes (`fed_fomc_minutes`, stamped at the release date the Fed prints) and the Beige Book per district (`fed_beige_book`), NY Fed reference rates (SOFR, EFFR, OBFR, TGCR, BGCR), the Treasury par yield curve, Treasury auctions, debt to the penny and the Treasury General Account; the FDIC's Call Report financials of the banks a listed company owns (`bank_fdic_financials`: deposits insured and uninsured, unrealized securities gains, capital ratios) and its annual industry aggregates (`bank_fdic_industry`), and the SEC's monthly money market fund statistics (`funds_mmf_statistics`: assets, flows, holdings by category, repos with the Fed).
 - `holidays`: US market holidays and early closes from NYSE, SIFMA and OPM (`calendar_us_holidays`), keyless.
 - `calendars` (off by default): Nasdaq's economic calendar, earnings calendar and earnings history.
 
@@ -585,9 +585,15 @@ Generated from the built-in tool manifest (`make readme`). `marketlens-mcp tools
 | `sec_fundamentals` | filings (on) | `omni sec.fundamentals <- sec.company_facts (computed locally)` (sec) | marketlens.FundamentalValue | SEC_CONTACT_EMAIL | TTM and balance-sheet fundamentals from XBRL, point in time; needs the data extra |
 | `sec_insider_trades` | filings (on) | `omni sec_insider.transactions <- www.sec.gov/Archives (Forms 4 and 144)` (sec_insider) | marketlens.InsiderTransaction | SEC_CONTACT_EMAIL | Form 4 and Form 144 insider transactions; needs the data extra |
 | `sec_xbrl_facts` | filings (on) | `omni sec.company_facts <- data.sec.gov/api/xbrl/companyfacts` (sec) | marketlens.XbrlFact | SEC_CONTACT_EMAIL | XBRL facts as filed, with restatement vintages; needs the data extra |
+| `bank_fdic_financials` | fed_treasury (on) | `omni fdic.financials <- api.fdic.gov/banks/financials (the CERTs of /banks/institutions' regulatory top holders)` (fdic) | marketlens.BankFinancials | SEC_CONTACT_EMAIL | Call Report financials of the banks a company owns; needs the data extra |
+| `bank_fdic_industry` | fed_treasury (on) | `omni fdic.industry_summary <- api.fdic.gov/banks/summary` (fdic) | marketlens.BankIndustrySummary | - | Annual FDIC industry aggregates; needs the data extra |
+| `fed_beige_book` | fed_treasury (on) | `omni fomc.beige_book <- www.federalreserve.gov (editions linked from the Beige Book pages)` (fomc) | marketlens.BeigeBookSection | - | untrusted text; needs the data extra |
 | `fed_fomc_meetings` | fed_treasury (on) | `omni fomc.meetings <- www.federalreserve.gov/monetarypolicy/fomccalendars.htm` (fomc) | marketlens.FomcMeeting | - | FOMC meeting calendar; needs the data extra |
+| `fed_fomc_minutes` | fed_treasury (on) | `omni fomc.minutes <- www.federalreserve.gov (minutes linked from the FOMC calendar and year pages)` (fomc) | marketlens.FomcMinutes | - | untrusted text; needs the data extra |
+| `fed_fomc_projections` | fed_treasury (on) | `omni fomc.projections <- www.federalreserve.gov (SEP pages linked from the FOMC calendar)` (fomc) | marketlens.FomcProjection | - | FOMC Summary of Economic Projections with the dot plot; needs the data extra |
 | `fed_fomc_statements` | fed_treasury (on) | `omni fomc.statement <- www.federalreserve.gov (statements linked from the FOMC calendar)` (fomc) | marketlens.FomcStatement | - | untrusted text; needs the data extra |
 | `fed_reference_rates` | fed_treasury (on) | `omni nyfed.reference_rates <- markets.newyorkfed.org/api/rates/all/search.json` (nyfed) | marketlens.ReferenceRate | - | SOFR, EFFR, OBFR, TGCR, BGCR; needs the data extra |
+| `funds_mmf_statistics` | fed_treasury (on) | `omni sec.mmf_statistics <- www.sec.gov (Money Market Fund Statistics supporting-data workbooks)` (sec) | marketlens.MoneyMarketFundStatistic | SEC_CONTACT_EMAIL | SEC money market fund statistics (N-MFP); needs the data extra |
 | `treasury_auctions` | fed_treasury (on) | `omni fiscaldata.auctions <- api.fiscaldata.treasury.gov/v1/accounting/od/auctions_query` (fiscaldata) | marketlens.TreasuryAuction | - | Treasury auction results; needs the data extra |
 | `treasury_debt` | fed_treasury (on) | `omni fiscaldata.debt_to_penny <- api.fiscaldata.treasury.gov/v2/accounting/od/debt_to_penny` (fiscaldata) | marketlens.TreasuryDebt | - | Total public debt per day; needs the data extra |
 | `treasury_tga` | fed_treasury (on) | `omni fiscaldata.tga_balance <- api.fiscaldata.treasury.gov/v1/accounting/dts/operating_cash_balance` (fiscaldata) | marketlens.TreasuryCashBalance | - | Treasury cash balance (TGA) per day; needs the data extra |

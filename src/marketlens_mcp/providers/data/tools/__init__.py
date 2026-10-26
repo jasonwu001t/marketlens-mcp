@@ -8,7 +8,7 @@ import importlib
 
 from marketlens_mcp.plugin_api import ToolSpec
 
-MODULES: tuple[str, ...] = ("macro", "sec", "fed_treasury", "calendars")
+MODULES: tuple[str, ...] = ("macro", "sec", "fed_treasury", "banks", "calendars")
 
 
 def all_specs() -> tuple[ToolSpec, ...]:

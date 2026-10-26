@@ -1,0 +1,56 @@
+{
+ "_synthetic": true,
+ "meta": {
+  "total": 4,
+  "index": {
+   "name": "institutions_synthetic",
+   "createTimestamp": "2026-10-23T11:54:56Z"
+  }
+ },
+ "data": [
+  {
+   "data": {
+    "CERT": 99001,
+    "NAME": "Example Bank, National Association",
+    "NAMEHCR": "EXAMPLE BCORP INC",
+    "RSSDHCR": "9900001",
+    "ASSET": 500000000,
+    "ID": "99001"
+   },
+   "score": 0
+  },
+  {
+   "data": {
+    "CERT": 99002,
+    "NAME": "Example Trust Company",
+    "NAMEHCR": "EXAMPLE BCORP INC",
+    "RSSDHCR": "9900001",
+    "ASSET": 20000000,
+    "ID": "99002"
+   },
+   "score": 0
+  },
+  {
+   "data": {
+    "CERT": 99003,
+    "NAME": "Selfheld Bancorporation, N.A.",
+    "NAMEHCR": "",
+    "RSSDHCR": "",
+    "ASSET": 80000000,
+    "ID": "99003"
+   },
+   "score": 0
+  },
+  {
+   "data": {
+    "CERT": 99004,
+    "NAME": "Unrelated Savings Bank",
+    "NAMEHCR": "UNRELATED HOLDINGS LLC",
+    "RSSDHCR": "9900004",
+    "ASSET": 1000000,
+    "ID": "99004"
+   },
+   "score": 0
+  }
+ ]
+}

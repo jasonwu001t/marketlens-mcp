@@ -1,9 +1,12 @@
-"""fed_fomc_meetings, fed_fomc_statements, fed_reference_rates,
-treasury_yield_curve, treasury_auctions, treasury_debt and treasury_tga
-against synthetic Federal Reserve, NY Fed, Treasury and FiscalData payloads.
-Every source here is keyless."""
+"""fed_fomc_meetings, fed_fomc_statements, fed_fomc_projections,
+fed_fomc_minutes, fed_beige_book, fed_reference_rates, treasury_yield_curve,
+treasury_auctions, treasury_debt and treasury_tga against synthetic Federal
+Reserve, NY Fed, Treasury and FiscalData payloads. Every source here is
+keyless."""
 
 from __future__ import annotations
+
+from datetime import UTC, datetime
 
 import pytest
 from data_harness import call, check_golden, context, fixture_text, refused
@@ -166,3 +169,102 @@ def test_treasury_tga_golden(tmp_path, upstream):
 def test_start_after_end_is_refused(tmp_path, tool):
     err = refused(tool, context(tmp_path), start="2026-02-01", end="2026-01-01")
     assert err.code == "invalid_arguments"
+
+
+# --- the FOMC's projections, minutes and Beige Book ------------------------------------------
+# A later clock than the harness's NOW: the September SEP, its minutes (released 2026-10-07)
+# and the October Beige Book (2026-10-14) are all out by then.
+
+LATE = datetime(2026, 10, 26, 20, 0, tzinfo=UTC)
+DISTRICT_NAMES = {
+    "new-york": "New York",
+    "st-louis": "St. Louis",
+    "kansas-city": "Kansas City",
+    "san-francisco": "San Francisco",
+}
+
+
+def fomc_document_routes(upstream):
+    upstream.text_file(rf"{FED}/monetarypolicy/fomccalendars\.htm", "fomc.calendar_documents.html")
+    upstream.text_file(rf"{FED}/monetarypolicy/fomcprojtabl20260916\.htm", "fomc.projections__20260916.html")
+    upstream.text_file(rf"{FED}/monetarypolicy/fomcminutes20260916\.htm", "fomc.minutes__20260916.html")
+    upstream.text_file(rf"{FED}/monetarypolicy/publications/beige-book-default\.htm", "fomc.beige_book.html")
+
+    def district(request):
+        slug = request.url.path.split("beigebook202610-", 1)[1].removesuffix(".htm")
+        name = DISTRICT_NAMES.get(slug, slug.capitalize())
+        return fixture_text("fomc.beige_book_district__202610.html").replace("{NAME}", name)
+
+    upstream.add(rf"{FED}/monetarypolicy/beigebook202610-[a-z-]+\.htm", district)
+    upstream.text_file(
+        rf"{FED}/monetarypolicy/beigebook202610-summary\.htm", "fomc.beige_book_summary__202610.html"
+    )
+
+
+def test_fed_fomc_projections_golden(tmp_path, upstream):
+    fomc_document_routes(upstream)
+    ctx = context(tmp_path, now=LATE)
+    out = call("fed_fomc_projections", ctx, start="2026-09-01")
+    doc = check_golden(out, "fed_fomc_projections")
+    paths = [r.url.path for r in upstream.requests]
+    assert paths == [
+        "/monetarypolicy/fomccalendars.htm",
+        "/monetarypolicy/fomcprojtabl20260916.htm",
+        "/monetarypolicy/fomccalendars.htm",
+    ], "the window's SEP, not June's"
+    ff = next(
+        r
+        for r in doc["rows"]
+        if r["kind"] == "summary" and r["variable"] == "fed_funds_rate" and r["horizon"] == "2026"
+    )
+    assert (ff["median"], ff["central_tendency_low"], ff["range_high"]) == (0.041, 0.041, 0.044)
+    assert ff["absent"] == {"midpoint": "not_applicable", "participants": "not_applicable"}
+    dots = [(r["horizon"], r["midpoint"], r["participants"]) for r in doc["rows"] if r["kind"] == "dots"]
+    assert dots[:3] == [("2026", 0.04375, 4), ("2026", 0.04125, 12), ("2026", 0.03875, 2)]
+    assert all(r["knowledge_time"] == "2026-09-16T19:00:00Z" for r in doc["rows"])
+    core = [r for r in doc["rows"] if r["variable"] == "core_pce_inflation"]
+    assert [r["horizon"] for r in core] == ["2026", "2027"], "no longer-run core PCE"
+    only = call("fed_fomc_projections", ctx, start="2026-09-01", kind="dots")
+    assert {r.kind for r in only.rows} == {"dots"}
+    gdp = call("fed_fomc_projections", ctx, start="2026-09-01", kind="summary", variables=["gdp_growth"])
+    assert [(r.horizon, r.median) for r in gdp.rows] == [
+        ("2026", 0.023),
+        ("2027", 0.024),
+        ("longer_run", 0.02),
+    ]
+    early = call("fed_fomc_projections", ctx, start="2026-09-01", as_of="2026-09-16T18:59:00Z")
+    assert early.rows == []
+
+
+def test_fed_fomc_minutes_golden(tmp_path, upstream):
+    fomc_document_routes(upstream)
+    ctx = context(tmp_path, now=LATE)
+    out = call("fed_fomc_minutes", ctx, start="2026-09-01")
+    doc = check_golden(out, "fed_fomc_minutes")
+    (row,) = doc["rows"]
+    assert (row["meeting_date"], row["release_date"], row["knowledge_time"]) == (
+        "2026-09-16",
+        "2026-10-07",
+        "2026-10-07T19:00:00Z",
+    )
+    assert row["text"].startswith("September 15–16, 2026") and "Return to text" not in row["text"]
+    bare = call("fed_fomc_minutes", ctx, start="2026-09-01", include_text=False)
+    assert bare.rows[0].text is None and bare.rows[0].absent == {"text": "withheld"}
+    # released three weeks after the meeting, never stamped at the meeting
+    assert call("fed_fomc_minutes", ctx, start="2026-09-01", as_of="2026-10-01").rows == []
+
+
+def test_fed_beige_book_golden(tmp_path, upstream):
+    fomc_document_routes(upstream)
+    ctx = context(tmp_path, now=LATE)
+    out = call("fed_beige_book", ctx, start="2026-10-01", districts=["national_summary", "boston"])
+    doc = check_golden(out, "fed_beige_book")
+    assert [(r["district"], r["edition"], r["release_date"]) for r in doc["rows"]] == [
+        ("national_summary", "202610", "2026-10-14"),
+        ("boston", "202610", "2026-10-14"),
+    ]
+    assert doc["rows"][1]["text"].startswith("Federal Reserve Bank of Boston")
+    assert sum("beigebook202610-" in r.url.path for r in upstream.requests) == 13
+    every = call("fed_beige_book", ctx, start="2026-10-01", include_text=False)
+    assert len(every.rows) == 13 and every.rows[0].district == "national_summary"
+    assert call("fed_beige_book", ctx, start="2026-10-01", as_of="2026-10-14T18:00:00Z").rows == []

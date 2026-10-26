@@ -6,8 +6,9 @@ from __future__ import annotations
 import logging
 
 from data_harness import SPECS, call, context
+from test_banks import fdic_routes, mmf_routes
 from test_calendars import earnings_routes, economic_routes, holiday_routes, surprise_routes
-from test_fed_treasury import FISCAL, fomc_routes, treasury_routes
+from test_fed_treasury import FISCAL, fomc_document_routes, fomc_routes, treasury_routes
 from test_macro import BEA, bls_routes, fred_routes
 from test_sec import sec_routes
 
@@ -25,13 +26,19 @@ ARGS = {
     "sec_13f_holdings": {"filer_cik": "9999950"},
     "sec_fund_nport": {"ticker": "TFUND"},
     "sec_fund_holdings": {"ticker": "TFUND"},
+    "fed_fomc_projections": {"start": "2026-09-01"},
+    "fed_fomc_minutes": {"start": "2026-09-01"},
+    "fed_beige_book": {"start": "2026-10-01", "end": "2026-10-31"},
+    "bank_fdic_financials": {"tickers": ["EXBK"]},
+    "bank_fdic_industry": {"start_year": 2024},
+    "funds_mmf_statistics": {"start": "2026-07-01"},
     "calendar_economic": {"start": "2026-10-01", "end": "2026-10-02"},
     "calendar_earnings": {"start": "2026-10-01", "end": "2026-10-02"},
     "calendar_earnings_history": {"tickers": ["TESTCO"]},
 }
 
 
-def test_no_tool_writes_to_stdout(tmp_path, upstream, keys, frozen_clock, capsys):
+def test_no_tool_writes_to_stdout(tmp_path, upstream, keys, frozen_clock, capsys, monkeypatch):
     fred_routes(upstream)
     bls_routes(upstream)
     upstream.json_file(BEA, "bea.nipa__T10101.json")
@@ -49,6 +56,9 @@ def test_no_tool_writes_to_stdout(tmp_path, upstream, keys, frozen_clock, capsys
     earnings_routes(upstream)
     surprise_routes(upstream)
     holiday_routes(upstream)
+    fomc_document_routes(upstream)  # a superset of fomc_routes' calendar
+    fdic_routes(upstream, monkeypatch)  # SEC's ticker list with two banks' holders added
+    mmf_routes(upstream)
     capsys.readouterr()
     answered = 0
     for name in SPECS:
@@ -56,7 +66,7 @@ def test_no_tool_writes_to_stdout(tmp_path, upstream, keys, frozen_clock, capsys
         answered += bool(out.rows)
     captured = capsys.readouterr()
     assert captured.out == ""
-    assert answered == 26
+    assert answered == 32
 
 
 def test_the_placeholder_contact_warning_never_reaches_stdout(

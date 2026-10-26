@@ -1,0 +1,63 @@
+{
+ "absent": {},
+ "model": "marketlens.BeigeBookSection",
+ "notes": [],
+ "offload": "auto",
+ "pagination": null,
+ "provenance": {
+  "as_of": null,
+  "authority": [
+   "official"
+  ],
+  "cached": false,
+  "dataset": "fomc.beige_book",
+  "delay": "unknown",
+  "derived_from": [],
+  "environment": null,
+  "feed": null,
+  "knowledge_time": "2026-10-14T19:00:00Z",
+  "lag_days": 12.0,
+  "operation": null,
+  "pages_fetched": 2,
+  "provider": "fomc",
+  "request": {
+   "as_of": null,
+   "districts": [
+    "national_summary",
+    "boston"
+   ],
+   "end": "2026-10-26",
+   "include_text": true,
+   "start": "2026-10-01"
+  },
+  "route": "omni fomc.beige_book <- www.federalreserve.gov (editions linked from the Beige Book pages)",
+  "schema_version": "1.1.0",
+  "stale": null,
+  "truncated": false,
+  "truncation_note": null,
+  "upstream_request_id": null
+ },
+ "risk": null,
+ "rows": [
+  {
+   "absent": null,
+   "district": "national_summary",
+   "edition": "202610",
+   "knowledge_time": "2026-10-14T19:00:00Z",
+   "n_paragraphs": 6,
+   "release_date": "2026-10-14",
+   "text": "National Summary\n\nOverall Economic Activity\n\nSynthetic national summary paragraph 1: two of the twelve Districts reported slight growth, most reported little change, and contacts expected activity to be flat in the coming months.\n\nSynthetic national summary paragraph 2: two of the twelve Districts reported slight growth, most reported little change, and contacts expected activity to be flat in the coming months.\n\nSynthetic national summary paragraph 3: two of the twelve Districts reported slight growth, most reported little change, and contacts expected activity to be flat in the coming months.\n\nSynthetic national summary paragraph 4: two of the twelve Districts reported slight growth, most reported little change, and contacts expected activity to be flat in the coming months.",
+   "url": "https://www.federalreserve.gov/monetarypolicy/beigebook202610-summary.htm"
+  },
+  {
+   "absent": null,
+   "district": "boston",
+   "edition": "202610",
+   "knowledge_time": "2026-10-14T19:00:00Z",
+   "n_paragraphs": 6,
+   "release_date": "2026-10-14",
+   "text": "Federal Reserve Bank of Boston\n\nSummary of Economic Activity\n\nSynthetic district paragraph 1: economic activity expanded slightly, employment was flat, prices rose modestly and contacts were cautious about the outlook.\n\nSynthetic district paragraph 2: economic activity expanded slightly, employment was flat, prices rose modestly and contacts were cautious about the outlook.\n\nSynthetic district paragraph 3: economic activity expanded slightly, employment was flat, prices rose modestly and contacts were cautious about the outlook.\n\nSynthetic district paragraph 4: economic activity expanded slightly, employment was flat, prices rose modestly and contacts were cautious about the outlook.",
+   "url": "https://www.federalreserve.gov/monetarypolicy/beigebook202610-boston.htm"
+  }
+ ]
+}

@@ -1,0 +1,27 @@
+{
+ "0": {
+  "cik_str": 9999901,
+  "ticker": "TESTCO",
+  "title": "Testco Synthetic Corp"
+ },
+ "1": {
+  "cik_str": 9999902,
+  "ticker": "OTHRCO",
+  "title": "Otherco Synthetic Inc"
+ },
+ "2": {
+  "cik_str": 9999903,
+  "ticker": "EVNTCO",
+  "title": "Eventco Synthetic Inc"
+ },
+ "3": {
+  "cik_str": 9999960,
+  "ticker": "EXBK",
+  "title": "EXAMPLE BANCORP, INC. /DE/"
+ },
+ "4": {
+  "cik_str": 9999961,
+  "ticker": "SELF",
+  "title": "SELFHELD BANCORPORATION, NATIONAL ASSOCIATION /UT/"
+ }
+}

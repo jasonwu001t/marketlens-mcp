@@ -1,5 +1,5 @@
 """The data extra as the server sees it, with or without marketlens-data
-installed: the five capabilities are always declared, the 26 tools are
+installed: the five capabilities are always declared, the 32 tools are
 registered only when omni is importable, the README always lists them, the
 config file knows their settings, and doctor says what is missing. Nothing
 here imports omni (tests/data covers the tools themselves)."""
@@ -41,11 +41,17 @@ TOOLS = {
     "fed_treasury": [
         "fed_fomc_meetings",
         "fed_fomc_statements",
+        "fed_fomc_projections",
+        "fed_fomc_minutes",
+        "fed_beige_book",
         "fed_reference_rates",
         "treasury_yield_curve",
         "treasury_auctions",
         "treasury_debt",
         "treasury_tga",
+        "bank_fdic_financials",
+        "bank_fdic_industry",
+        "funds_mmf_statistics",
     ],
     "holidays": ["calendar_us_holidays"],
     "calendars": [
@@ -55,7 +61,15 @@ TOOLS = {
     ],
 }
 ALL_TOOLS = [t for names in TOOLS.values() for t in names]
-EXTERNAL_TEXT = {"sec_earnings_figures", "filings_events", "fed_fomc_statements", "calendar_economic"}
+CONTACT = "Without SEC_CONTACT_EMAIL a placeholder contact is sent"
+EXTERNAL_TEXT = {
+    "sec_earnings_figures",
+    "filings_events",
+    "fed_fomc_statements",
+    "fed_fomc_minutes",
+    "fed_beige_book",
+    "calendar_economic",
+}
 
 
 def catalog(monkeypatch, *, installed: bool):
@@ -95,7 +109,7 @@ def test_capabilities_are_declared_either_way(monkeypatch, installed):
     assert not (set(ALL_TOOLS) & names) or installed
 
 
-def test_the_26_tools(monkeypatch):
+def test_the_32_tools(monkeypatch):
     cat = catalog(monkeypatch, installed=True)
     for cap_id, names in TOOLS.items():
         for name in names:
@@ -104,7 +118,7 @@ def test_the_26_tools(monkeypatch):
             assert entry.plugin == "builtin:data"
             assert entry.spec.output_risk == ("external_text" if name in EXTERNAL_TEXT else "api_structured")
             assert entry.spec.golden_test.startswith("tests/data/test_"), name
-    assert len([t for t in cat.tools.values() if t.plugin == "builtin:data"]) == 26
+    assert len([t for t in cat.tools.values() if t.plugin == "builtin:data"]) == 32
     specs = {s.name: s for s in tools.all_specs()}
     assert set(specs) == set(ALL_TOOLS)
     assert specs["macro_series"].env == ("FRED_API_KEY",)
@@ -118,14 +132,17 @@ def test_the_26_tools(monkeypatch):
     assert specs["calendar_us_holidays"].env == ()  # the Alpaca cross-check is optional
     assert specs["macro_series_catalog"].env == ()
     for name in TOOLS["fed_treasury"]:
-        assert specs[name].env == (), name
+        # the FDIC tool reads SEC's ticker list, the MMF tool SEC's own page
+        sec = name in ("bank_fdic_financials", "funds_mmf_statistics")
+        assert specs[name].env == (("SEC_CONTACT_EMAIL",) if sec else ()), name
+        assert (CONTACT in specs[name].description) is sec, name
     assert "PMI" in specs["calendar_economic"].description
     assert "no free official PMI source" in specs["calendar_economic"].description
     for name, spec in specs.items():
         assert "as_of" in spec.input_model.model_fields or name == "macro_series_catalog", name
 
 
-@pytest.mark.parametrize(("installed", "count"), [(False, 51), (True, 74)])
+@pytest.mark.parametrize(("installed", "count"), [(False, 51), (True, 80)])
 def test_tools_json_counts(monkeypatch, capsys, installed, count):
     monkeypatch.setattr(runtime, "available", lambda: installed)
     assert cli.main(["tools", "--json"]) == 0
@@ -509,10 +526,10 @@ def test_readiness_in_local_mode_needs_no_key():
 
 
 def test_parity_list_shape():
-    assert len(parity.PARITY) == 86
+    assert len(parity.PARITY) == 92
     mapped = {k: v for k, v in parity.PARITY.items() if isinstance(v, parity.Mapped)}
     excluded = {k: v for k, v in parity.PARITY.items() if isinstance(v, parity.Excluded)}
-    assert (len(mapped), len(excluded)) == (28, 58)
+    assert (len(mapped), len(excluded)) == (34, 58)
     kinds = [v.kind for v in excluded.values()]
     assert {k: kinds.count(k) for k in set(kinds)} == {
         "covered": 7,

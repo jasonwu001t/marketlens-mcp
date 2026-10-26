@@ -4,7 +4,9 @@ release schedule pages, BEA NIPA JSON, SEC EDGAR submissions, company facts,
 filing indexes, an 8-K's EX-99.1 press release, Form 4/144 XML, 13F
 information tables and cover pages, N-PORT documents (each filing's EDGAR index
 headers are built from its submissions feed by test_sec.index_headers),
-the Federal Reserve's FOMC calendar and statements, NY Fed JSON, Treasury CSV,
+the Federal Reserve's FOMC calendar, statements, Summary of Economic
+Projections, minutes and Beige Book pages, FDIC BankFind JSON, the SEC's Money
+Market Fund Statistics page (its workbooks are built in tests/data/test_banks.py), NY Fed JSON, Treasury CSV,
 FiscalData JSON, Nasdaq calendar JSON, NYSE, SIFMA and OPM holiday pages). The
 two exceptions are bls.release_archive__empsit.html and
 bls.release_archive__eci.html, trimmed from BLS's public archive pages of
@@ -21,6 +23,8 @@ rates (LNS14000000) in the bls.timeseries files. Structured files carry
 "_synthetic": true where the format allows it; the SEC ticker lists and the
 Treasury CSVs carry none (each keeps the publisher's exact shape) and are
 listed here instead: sec.company_tickers.json, sec.company_tickers_mf.json,
+fdic.company_tickers.json (sec.company_tickers.json with two invented bank
+holders, EXBK and SELF),
 treasury.yield_curve__2025.csv and treasury.yield_curve__2026.csv. Page
 fixtures say "synthetic" in a comment.
 
