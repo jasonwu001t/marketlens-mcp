@@ -12,6 +12,7 @@ from test_fed_treasury import FISCAL, fomc_document_routes, fomc_routes, treasur
 from test_macro import BEA, bls_routes, fred_routes
 from test_sec import sec_routes
 from test_sec_research import IR_LIST, research_routes
+from test_twse import twse_routes
 
 ARGS = {
     "macro_series": {"series_ids": ["CPIAUCSL"]},
@@ -31,6 +32,7 @@ ARGS = {
     "sec_foreign_quarterly": {"ticker": "FPICO"},
     "company_ir_documents": {"ticker": "TESTCO"},
     "company_ir_targets": {"ticker": "TESTCO"},
+    "twse_monthly_revenue": {"tickers": ["TSM"], "start": "2026-09-01"},
     "sec_insider_trades": {"ticker": "TESTCO"},
     "sec_form144": {"ticker": "TESTCO"},
     "sec_ipo_pipeline": {},
@@ -74,6 +76,7 @@ def test_no_tool_writes_to_stdout(tmp_path, upstream, keys, frozen_clock, capsys
     fomc_document_routes(upstream)  # a superset of fomc_routes' calendar
     fdic_routes(upstream, monkeypatch)  # SEC's ticker list with two banks' holders added
     mmf_routes(upstream)
+    twse_routes(upstream)
     capsys.readouterr()
     answered = 0
     for name in SPECS:
@@ -81,7 +84,7 @@ def test_no_tool_writes_to_stdout(tmp_path, upstream, keys, frozen_clock, capsys
         answered += bool(out.rows)
     captured = capsys.readouterr()
     assert captured.out == ""
-    assert answered == 43
+    assert answered == 44
 
 
 def test_the_placeholder_contact_warning_never_reaches_stdout(

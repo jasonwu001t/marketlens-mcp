@@ -1,4 +1,4 @@
-Every file in this folder but two is SYNTHETIC: written by hand for these tests
+Every file in this folder but six is SYNTHETIC: written by hand for these tests
 in the shape of each publisher's payload (FRED/ALFRED JSON, BLS v2 JSON, BLS
 release schedule pages, BEA NIPA JSON, SEC EDGAR submissions, company facts,
 filing indexes, an 8-K's EX-99.1 press release, an XBRL frame, EDGAR's quarterly
@@ -9,11 +9,12 @@ headers are built from its submissions feed by test_sec.index_headers),
 the Federal Reserve's FOMC calendar, statements, Summary of Economic
 Projections, minutes and Beige Book pages, FDIC BankFind JSON, the SEC's Money
 Market Fund Statistics page (its workbooks are built in tests/data/test_banks.py), NY Fed JSON, Treasury CSV,
-FiscalData JSON, Nasdaq calendar JSON, NYSE, SIFMA and OPM holiday pages). The
-two exceptions are bls.release_archive__empsit.html and
+FiscalData JSON, Nasdaq calendar JSON, NYSE, SIFMA and OPM holiday pages). Two
+exceptions are bls.release_archive__empsit.html and
 bls.release_archive__eci.html, trimmed from BLS's public archive pages of
 Employment Situation and Employment Cost Index releases (their own list items
-and release dates, as each header comment says).
+and release dates, as each header comment says); the other four are TWSE's
+and MOPS's (below).
 
 No other file is a recording of a live response. The companies (TESTCO, OTHRCO,
 LOSSCO, EVNTCO, PVPCO, and the frame's other filers), the managers (CIKs 9999950 and 9999951), the fund (series S000099991,
@@ -29,6 +30,15 @@ fdic.company_tickers.json (sec.company_tickers.json with two invented bank
 holders, EXBK and SELF),
 treasury.yield_curve__2025.csv and treasury.yield_curve__2026.csv. Page
 fixtures say "synthetic" in a comment.
+
+Four more are recordings, trimmed (test_twse.py): twse.t187ap05_L.json, eight
+rows of TWSE's OpenAPI t187ap05_L (2026-09 revenue, captured 2026-10-26);
+twse.mops__sii_115_9_0.html, MOPS's 2026-09 summary page of TWSE-listed
+domestic companies with nine company rows kept, in the Big5 (cp950) bytes MOPS
+serves; twse.mops__no_data.html, MOPS's whole page for a month it has not
+compiled (查無資料); twse.fmtqik__202610.json, TWSE's daily market summary of
+October 2026 to the 22nd, whole. Their figures are the companies' public
+filings.
 
 No key appears anywhere: the tests use the obvious fakes in data_harness.KEYS.
 

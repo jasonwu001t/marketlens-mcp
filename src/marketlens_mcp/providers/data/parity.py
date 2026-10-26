@@ -63,6 +63,8 @@ PARITY: dict[str, Mapped | Excluded] = {
     "sec13f.holdings": Mapped(("sec_13f_holdings",)),
     "sec.fund_nport": Mapped(("sec_fund_nport",)),
     "sec.fund_nport_holdings": Mapped(("sec_fund_holdings",)),
+    # TWSE / MOPS
+    "twse.monthly_revenue": Mapped(("twse_monthly_revenue",)),
     # the Federal Reserve and the Treasury
     "fomc.meetings": Mapped(("fed_fomc_meetings",)),
     "fomc.statement": Mapped(("fed_fomc_statements",)),

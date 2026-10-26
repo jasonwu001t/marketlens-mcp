@@ -75,6 +75,7 @@
     "marketlens.SegmentFact": "marketlens.SegmentFact.json",
     "marketlens.Snapshot": "marketlens.Snapshot.json",
     "marketlens.StockExchange": "marketlens.StockExchange.json",
+    "marketlens.TaiwanMonthlyRevenue": "marketlens.TaiwanMonthlyRevenue.json",
     "marketlens.Trade": "marketlens.Trade.json",
     "marketlens.TreasuryAuction": "marketlens.TreasuryAuction.json",
     "marketlens.TreasuryCashBalance": "marketlens.TreasuryCashBalance.json",

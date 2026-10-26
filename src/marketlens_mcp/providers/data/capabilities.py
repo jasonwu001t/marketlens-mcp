@@ -22,8 +22,9 @@ FILINGS = CapabilitySpec(
     "earnings releases with their press-release EPS, guidance and non-GAAP reconciliation, segment facts, a "
     "foreign issuer's 6-K quarters, pay versus performance, insider trades, Form 144 notices, the IPO "
     "pipeline, EDGAR's daily form index, 13F holdings, fund N-PORT reports, the company documents the "
-    "operator lists with their targets, and SEC EDGAR full-text search. Filing text is marked untrusted. "
-    "The sec_ and company_ tools need the data extra (marketlens-mcp[data]); filings_search is built in.",
+    "operator lists with their targets, and SEC EDGAR full-text search; and the monthly revenue "
+    "Taiwan-listed companies file on MOPS (TWSE / TPEx). Filing text is marked untrusted. The sec_, "
+    "company_ and twse_ tools need the data extra (marketlens-mcp[data]); filings_search is built in.",
     True,
 )
 FED_TREASURY = CapabilitySpec(
