@@ -1,0 +1,80 @@
+{
+ "absent": {},
+ "model": "marketlens.Form144Notice",
+ "notes": [
+  "A Form 144 announces a proposed sale under Rule 144; it is not a trade (sec_insider_trades has Form 4s)."
+ ],
+ "offload": "auto",
+ "pagination": null,
+ "provenance": {
+  "as_of": null,
+  "authority": [
+   "official"
+  ],
+  "cached": false,
+  "dataset": "sec.form144",
+  "delay": "unknown",
+  "derived_from": [],
+  "environment": null,
+  "feed": null,
+  "knowledge_time": "2026-02-20T15:00:00Z",
+  "lag_days": 224.0,
+  "operation": null,
+  "pages_fetched": 1,
+  "provider": "sec",
+  "request": {
+   "as_of": null,
+   "limit": 100,
+   "since": "2025-10-02",
+   "ticker": "TESTCO"
+  },
+  "route": "omni sec.form144 <- data.sec.gov/submissions + www.sec.gov/Archives (Form 144 XML)",
+  "schema_version": "1.1.0",
+  "stale": null,
+  "truncated": false,
+  "truncation_note": null,
+  "upstream_request_id": null
+ },
+ "risk": null,
+ "rows": [
+  {
+   "absent": {
+    "broker_name": "no_data",
+    "exchange": "no_data",
+    "filer_cik": "not_provided_by_source",
+    "nothing_sold_past_3_months": "no_data",
+    "notice_date": "no_data",
+    "plan_adoption_date": "not_applicable",
+    "remarks": "no_data",
+    "shares_outstanding": "no_data"
+   },
+   "accepted_at": "2026-02-20T15:00:00Z",
+   "accession_number": "0009999901-26-000004",
+   "acquisitions": [],
+   "aggregate_market_value": 101000.0,
+   "approx_sale_date": "2026-02-25",
+   "broker_name": null,
+   "exchange": null,
+   "filer_cik": null,
+   "filing_date": "2026-02-20",
+   "form": "144",
+   "has_10b5_1": false,
+   "index_url": "https://www.sec.gov/Archives/edgar/data/9999901/000999990126000004/0009999901-26-000004-index.htm",
+   "issuer_cik": "0009999901",
+   "issuer_name": "Testco Synthetic Corp",
+   "knowledge_time": "2026-02-20T15:00:00Z",
+   "line": 1,
+   "nothing_sold_past_3_months": null,
+   "notice_date": null,
+   "plan_adoption_date": null,
+   "relationship": "Director",
+   "remarks": null,
+   "sales_past_3_months": [],
+   "security_class": "Common",
+   "seller_name": "Example John",
+   "shares_outstanding": null,
+   "shares_to_sell": 2000.0,
+   "ticker": "TESTCO"
+  }
+ ]
+}

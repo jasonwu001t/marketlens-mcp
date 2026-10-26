@@ -202,6 +202,108 @@ class FilingEvent(CanonicalModel):
     knowledge_time: UtcDatetime = _known()
 
 
+class DailyIndexEntry(CanonicalModel):
+    """One line of EDGAR's daily form index: a filing EDGAR disseminated that
+    business day, listed under one of its companies (a filing made by several,
+    a Form 144's issuer and seller or co-registrants, has a line for each)."""
+
+    schema_name: ClassVar[str] = "marketlens.DailyIndexEntry"
+    time_column: ClassVar[str | None] = "date_filed"
+    group_column: ClassVar[str | None] = "form"
+
+    index_date: Date = Field(description="The day of the index file (form.YYYYMMDD.idx)")
+    form: str = Field(description="Form type as the index states it (cut at 16 characters)")
+    company: str = Field(description="The company the line lists the filing under")
+    cik: str = Field(description="10-digit, zero-padded")
+    date_filed: Date = Field(
+        description="As the line states it (an EFFECT notice is in the next day's index)"
+    )
+    accession_number: str = Field(description="0000000000-00-000000")
+    file_url: str = Field(description="The filing's complete submission text file on www.sec.gov")
+    knowledge_time: UtcDatetime = _known()
+
+
+class Form144Notice(CanonicalModel):
+    """One securitiesInformation block of a Form 144 notice of proposed sale (a class
+    and a broker), with the notice's seller, relationship, plan date and its
+    acquisitions and past-three-month sales. A notice announces a sale; it is not one.
+    seller_name, relationship, remarks and the lists are the filer's text: UNTRUSTED."""
+
+    schema_name: ClassVar[str] = "marketlens.Form144Notice"
+    time_column: ClassVar[str | None] = "accepted_at"
+    group_column: ClassVar[str | None] = "ticker"
+    value_columns: ClassVar[tuple[str, ...]] = ("aggregate_market_value",)
+
+    ticker: str | None = Field(default=None, description="The issuer's ticker, SEC style")
+    issuer_cik: str = Field(description="10-digit, zero-padded")
+    issuer_name: str | None = None
+    accession_number: str
+    line: int = _unit("ordinal", description="Position of the block in the notice (1 = first)")
+    form: str = Field(description="144 or 144/A")
+    filing_date: Date
+    accepted_at: UtcDatetime = _unit("UTC", description="EDGAR acceptance of the notice")
+    filer_cik: str | None = None
+    seller_name: str = Field(description="The person for whose account the securities are to be sold")
+    relationship: str | None = Field(default=None, description="Relationship to the issuer as filed")
+    security_class: str | None = None
+    broker_name: str | None = None
+    shares_to_sell: float | None = _unit("shares", default=None)
+    aggregate_market_value: float | None = _unit("USD", default=None, description="As filed")
+    shares_outstanding: float | None = _unit("shares", default=None)
+    approx_sale_date: Date | None = Field(default=None, description="The intended sale date, as filed")
+    exchange: str | None = None
+    has_10b5_1: bool = Field(description="The notice gives a Rule 10b5-1 plan adoption date")
+    plan_adoption_date: Date | None = None
+    notice_date: Date | None = None
+    acquisitions: list[dict[str, Any]] = Field(
+        default_factory=list,
+        description="How the securities were acquired: class, acquired_date, nature_of_acquisition, "
+        "acquired_from, is_gift, amount, payment_date, nature_of_payment",
+    )
+    sales_past_3_months: list[dict[str, Any]] = Field(
+        default_factory=list, description="seller, security_class, sale_date, amount, gross_proceeds (USD)"
+    )
+    nothing_sold_past_3_months: bool | None = None
+    remarks: str | None = None
+    index_url: str = Field(description="The filing's index page on www.sec.gov")
+    knowledge_time: UtcDatetime = _known()
+
+
+class IpoFiling(CanonicalModel):
+    """One IPO filing of a new issuer: an S-1 / F-1 (filed), an amendment (amended),
+    the SEC's EFFECT notice (effective), the 424B4 final prospectus (priced) or an RW
+    withdrawal (withdrawn), with what the prospectus cover states (best effort)."""
+
+    schema_name: ClassVar[str] = "marketlens.IpoFiling"
+    time_column: ClassVar[str | None] = "accepted_at"
+    group_column: ClassVar[str | None] = "cik"
+    value_columns: ClassVar[tuple[str, ...]] = ("offer_price",)
+
+    cik: str = Field(description="10-digit, zero-padded")
+    company: str
+    form: str = Field(description="S-1, S-1/A, F-1, F-1/A, EFFECT, 424B4 or RW")
+    stage: Literal["filed", "amended", "effective", "priced", "withdrawn"]
+    filing_date: Date
+    accepted_at: UtcDatetime = _unit("UTC", description="EDGAR acceptance")
+    accession_number: str
+    file_number: str | None = Field(default=None, description="The registration's 333- number")
+    registration_form: str | None = Field(default=None, description="EFFECT / RW: the form it concerns")
+    ticker: str | None = Field(default=None, description="Proposed, from the prospectus cover")
+    exchange: str | None = Field(default=None, description="As the cover names it")
+    price_low: float | None = _unit("USD_per_share", default=None, description="Per share, ADS or unit")
+    price_high: float | None = _unit("USD_per_share", default=None, description="Per share, ADS or unit")
+    offer_price: float | None = _unit("USD_per_share", default=None, description="424B4: the priced offering")
+    shares_offered: float | None = Field(default=None, description="In offered_unit")
+    offered_unit: Literal["shares", "ADSs", "units"] | None = None
+    effective_at: UtcDatetime | None = _unit(
+        "UTC", default=None, description="EFFECT: when it became effective"
+    )
+    category: Literal["operating", "spac", "trust"]
+    sic: str | None = None
+    primary_doc_url: str | None = None
+    knowledge_time: UtcDatetime = _known()
+
+
 class XbrlFact(CanonicalModel):
     """One XBRL fact from EDGAR company facts, as filed."""
 
@@ -635,6 +737,9 @@ DATA_MODELS: tuple[type[CanonicalModel], ...] = (
     EarningsRelease,
     EarningsFigure,
     InsiderTransaction,
+    DailyIndexEntry,
+    Form144Notice,
+    IpoFiling,
     InstitutionalHolding,
     FundReport,
     FundHolding,

@@ -1,0 +1,100 @@
+{
+  "$defs": {
+    "AbsenceCode": {
+      "description": "Why a value is None. Never served as 0.",
+      "enum": [
+        "not_provided_by_source",
+        "not_applicable",
+        "not_entitled",
+        "no_data",
+        "insufficient_data",
+        "not_recovered",
+        "no_match",
+        "withheld",
+        "source_error",
+        "unparseable"
+      ],
+      "title": "AbsenceCode",
+      "type": "string"
+    }
+  },
+  "$id": "urn:marketlens:schema:1:marketlens.DailyIndexEntry",
+  "additionalProperties": false,
+  "description": "One line of EDGAR's daily form index: a filing EDGAR disseminated that\nbusiness day, listed under one of its companies (a filing made by several,\na Form 144's issuer and seller or co-registrants, has a line for each).",
+  "properties": {
+    "absent": {
+      "anyOf": [
+        {
+          "additionalProperties": {
+            "$ref": "#/$defs/AbsenceCode"
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Per-row reasons for None fields: field name -> AbsenceCode",
+      "title": "Absent"
+    },
+    "accession_number": {
+      "description": "0000000000-00-000000",
+      "title": "Accession Number",
+      "type": "string"
+    },
+    "cik": {
+      "description": "10-digit, zero-padded",
+      "title": "Cik",
+      "type": "string"
+    },
+    "company": {
+      "description": "The company the line lists the filing under",
+      "title": "Company",
+      "type": "string"
+    },
+    "date_filed": {
+      "description": "As the line states it (an EFFECT notice is in the next day's index)",
+      "format": "date",
+      "title": "Date Filed",
+      "type": "string"
+    },
+    "file_url": {
+      "description": "The filing's complete submission text file on www.sec.gov",
+      "title": "File Url",
+      "type": "string"
+    },
+    "form": {
+      "description": "Form type as the index states it (cut at 16 characters)",
+      "title": "Form",
+      "type": "string"
+    },
+    "index_date": {
+      "description": "The day of the index file (form.YYYYMMDD.idx)",
+      "format": "date",
+      "title": "Index Date",
+      "type": "string"
+    },
+    "knowledge_time": {
+      "description": "When the value became knowable under the dataset's point-in-time policy",
+      "format": "date-time",
+      "title": "Knowledge Time",
+      "type": "string",
+      "x-role": "available",
+      "x-unit": "UTC"
+    }
+  },
+  "required": [
+    "index_date",
+    "form",
+    "company",
+    "cik",
+    "date_filed",
+    "accession_number",
+    "file_url",
+    "knowledge_time"
+  ],
+  "title": "DailyIndexEntry",
+  "type": "object",
+  "x-schema-version": "1.1.0"
+}

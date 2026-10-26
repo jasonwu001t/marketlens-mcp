@@ -25,3 +25,11 @@ treasury.yield_curve__2025.csv and treasury.yield_curve__2026.csv. Page
 fixtures say "synthetic" in a comment.
 
 No key appears anywhere: the tests use the obvious fakes in data_harness.KEYS.
+
+Round 5 (sec_form144, sec_ipo_pipeline, sec_daily_index): the daily form index of
+2026-10-01 (sec.daily_index__20261001.idx) and its quarter's listing
+(sec.daily_index_listing__2026_QTR4.json) are synthetic files in EDGAR's layout, as
+are IPOCO (CIK 9999904, a new issuer: its submissions feed, its S-1/A's filing index
+and cover, its EFFECT notice's index and XML) and the filing index page of TESTCO's
+Form 144 (sec.144_index__26-000004.htm). Every name, number and date in them is
+invented.

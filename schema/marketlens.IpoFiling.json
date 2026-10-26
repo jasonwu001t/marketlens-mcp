@@ -1,0 +1,277 @@
+{
+  "$defs": {
+    "AbsenceCode": {
+      "description": "Why a value is None. Never served as 0.",
+      "enum": [
+        "not_provided_by_source",
+        "not_applicable",
+        "not_entitled",
+        "no_data",
+        "insufficient_data",
+        "not_recovered",
+        "no_match",
+        "withheld",
+        "source_error",
+        "unparseable"
+      ],
+      "title": "AbsenceCode",
+      "type": "string"
+    }
+  },
+  "$id": "urn:marketlens:schema:1:marketlens.IpoFiling",
+  "additionalProperties": false,
+  "description": "One IPO filing of a new issuer: an S-1 / F-1 (filed), an amendment (amended),\nthe SEC's EFFECT notice (effective), the 424B4 final prospectus (priced) or an RW\nwithdrawal (withdrawn), with what the prospectus cover states (best effort).",
+  "properties": {
+    "absent": {
+      "anyOf": [
+        {
+          "additionalProperties": {
+            "$ref": "#/$defs/AbsenceCode"
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Per-row reasons for None fields: field name -> AbsenceCode",
+      "title": "Absent"
+    },
+    "accepted_at": {
+      "description": "EDGAR acceptance",
+      "format": "date-time",
+      "title": "Accepted At",
+      "type": "string",
+      "x-unit": "UTC"
+    },
+    "accession_number": {
+      "title": "Accession Number",
+      "type": "string"
+    },
+    "category": {
+      "enum": [
+        "operating",
+        "spac",
+        "trust"
+      ],
+      "title": "Category",
+      "type": "string"
+    },
+    "cik": {
+      "description": "10-digit, zero-padded",
+      "title": "Cik",
+      "type": "string"
+    },
+    "company": {
+      "title": "Company",
+      "type": "string"
+    },
+    "effective_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "EFFECT: when it became effective",
+      "title": "Effective At",
+      "x-unit": "UTC"
+    },
+    "exchange": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "As the cover names it",
+      "title": "Exchange"
+    },
+    "file_number": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The registration's 333- number",
+      "title": "File Number"
+    },
+    "filing_date": {
+      "format": "date",
+      "title": "Filing Date",
+      "type": "string"
+    },
+    "form": {
+      "description": "S-1, S-1/A, F-1, F-1/A, EFFECT, 424B4 or RW",
+      "title": "Form",
+      "type": "string"
+    },
+    "knowledge_time": {
+      "description": "When the value became knowable under the dataset's point-in-time policy",
+      "format": "date-time",
+      "title": "Knowledge Time",
+      "type": "string",
+      "x-role": "available",
+      "x-unit": "UTC"
+    },
+    "offer_price": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "424B4: the priced offering",
+      "title": "Offer Price",
+      "x-unit": "USD_per_share"
+    },
+    "offered_unit": {
+      "anyOf": [
+        {
+          "enum": [
+            "shares",
+            "ADSs",
+            "units"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Offered Unit"
+    },
+    "price_high": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Per share, ADS or unit",
+      "title": "Price High",
+      "x-unit": "USD_per_share"
+    },
+    "price_low": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Per share, ADS or unit",
+      "title": "Price Low",
+      "x-unit": "USD_per_share"
+    },
+    "primary_doc_url": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Primary Doc Url"
+    },
+    "registration_form": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "EFFECT / RW: the form it concerns",
+      "title": "Registration Form"
+    },
+    "shares_offered": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "In offered_unit",
+      "title": "Shares Offered"
+    },
+    "sic": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Sic"
+    },
+    "stage": {
+      "enum": [
+        "filed",
+        "amended",
+        "effective",
+        "priced",
+        "withdrawn"
+      ],
+      "title": "Stage",
+      "type": "string"
+    },
+    "ticker": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Proposed, from the prospectus cover",
+      "title": "Ticker"
+    }
+  },
+  "required": [
+    "cik",
+    "company",
+    "form",
+    "stage",
+    "filing_date",
+    "accepted_at",
+    "accession_number",
+    "category",
+    "knowledge_time"
+  ],
+  "title": "IpoFiling",
+  "type": "object",
+  "x-schema-version": "1.1.0"
+}

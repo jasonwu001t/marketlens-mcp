@@ -1,0 +1,320 @@
+{
+  "$defs": {
+    "AbsenceCode": {
+      "description": "Why a value is None. Never served as 0.",
+      "enum": [
+        "not_provided_by_source",
+        "not_applicable",
+        "not_entitled",
+        "no_data",
+        "insufficient_data",
+        "not_recovered",
+        "no_match",
+        "withheld",
+        "source_error",
+        "unparseable"
+      ],
+      "title": "AbsenceCode",
+      "type": "string"
+    }
+  },
+  "$id": "urn:marketlens:schema:1:marketlens.Form144Notice",
+  "additionalProperties": false,
+  "description": "One securitiesInformation block of a Form 144 notice of proposed sale (a class\nand a broker), with the notice's seller, relationship, plan date and its\nacquisitions and past-three-month sales. A notice announces a sale; it is not one.\nseller_name, relationship, remarks and the lists are the filer's text: UNTRUSTED.",
+  "properties": {
+    "absent": {
+      "anyOf": [
+        {
+          "additionalProperties": {
+            "$ref": "#/$defs/AbsenceCode"
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Per-row reasons for None fields: field name -> AbsenceCode",
+      "title": "Absent"
+    },
+    "accepted_at": {
+      "description": "EDGAR acceptance of the notice",
+      "format": "date-time",
+      "title": "Accepted At",
+      "type": "string",
+      "x-unit": "UTC"
+    },
+    "accession_number": {
+      "title": "Accession Number",
+      "type": "string"
+    },
+    "acquisitions": {
+      "description": "How the securities were acquired: class, acquired_date, nature_of_acquisition, acquired_from, is_gift, amount, payment_date, nature_of_payment",
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "title": "Acquisitions",
+      "type": "array"
+    },
+    "aggregate_market_value": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "As filed",
+      "title": "Aggregate Market Value",
+      "x-unit": "USD"
+    },
+    "approx_sale_date": {
+      "anyOf": [
+        {
+          "format": "date",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The intended sale date, as filed",
+      "title": "Approx Sale Date"
+    },
+    "broker_name": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Broker Name"
+    },
+    "exchange": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Exchange"
+    },
+    "filer_cik": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Filer Cik"
+    },
+    "filing_date": {
+      "format": "date",
+      "title": "Filing Date",
+      "type": "string"
+    },
+    "form": {
+      "description": "144 or 144/A",
+      "title": "Form",
+      "type": "string"
+    },
+    "has_10b5_1": {
+      "description": "The notice gives a Rule 10b5-1 plan adoption date",
+      "title": "Has 10B5 1",
+      "type": "boolean"
+    },
+    "index_url": {
+      "description": "The filing's index page on www.sec.gov",
+      "title": "Index Url",
+      "type": "string"
+    },
+    "issuer_cik": {
+      "description": "10-digit, zero-padded",
+      "title": "Issuer Cik",
+      "type": "string"
+    },
+    "issuer_name": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Issuer Name"
+    },
+    "knowledge_time": {
+      "description": "When the value became knowable under the dataset's point-in-time policy",
+      "format": "date-time",
+      "title": "Knowledge Time",
+      "type": "string",
+      "x-role": "available",
+      "x-unit": "UTC"
+    },
+    "line": {
+      "description": "Position of the block in the notice (1 = first)",
+      "title": "Line",
+      "type": "integer",
+      "x-unit": "ordinal"
+    },
+    "nothing_sold_past_3_months": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Nothing Sold Past 3 Months"
+    },
+    "notice_date": {
+      "anyOf": [
+        {
+          "format": "date",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Notice Date"
+    },
+    "plan_adoption_date": {
+      "anyOf": [
+        {
+          "format": "date",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Plan Adoption Date"
+    },
+    "relationship": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Relationship to the issuer as filed",
+      "title": "Relationship"
+    },
+    "remarks": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Remarks"
+    },
+    "sales_past_3_months": {
+      "description": "seller, security_class, sale_date, amount, gross_proceeds (USD)",
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "title": "Sales Past 3 Months",
+      "type": "array"
+    },
+    "security_class": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Security Class"
+    },
+    "seller_name": {
+      "description": "The person for whose account the securities are to be sold",
+      "title": "Seller Name",
+      "type": "string"
+    },
+    "shares_outstanding": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Shares Outstanding",
+      "x-unit": "shares"
+    },
+    "shares_to_sell": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Shares To Sell",
+      "x-unit": "shares"
+    },
+    "ticker": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The issuer's ticker, SEC style",
+      "title": "Ticker"
+    }
+  },
+  "required": [
+    "issuer_cik",
+    "accession_number",
+    "line",
+    "form",
+    "filing_date",
+    "accepted_at",
+    "seller_name",
+    "has_10b5_1",
+    "index_url",
+    "knowledge_time"
+  ],
+  "title": "Form144Notice",
+  "type": "object",
+  "x-schema-version": "1.1.0"
+}

@@ -1,6 +1,7 @@
 """SEC EDGAR: filings, XBRL facts, point-in-time fundamentals, earnings
-releases and press-release EPS, material filing events, insider trades, 13F
-holdings and fund N-PORT reports (capability ``filings``). Every fetch names the operator's
+releases and press-release EPS, material filing events, insider trades, Form 144
+notices, the IPO pipeline, EDGAR's daily form index, 13F holdings and fund
+N-PORT reports (capability ``filings``). Every fetch names the operator's
 contact in its User-Agent (SEC_CONTACT_EMAIL), as EDGAR's fair-access rule
 asks; unset, marketlens-data sends its placeholder contact and every answer
 says so."""
@@ -10,7 +11,7 @@ from __future__ import annotations
 import json
 import os
 import re
-from datetime import date
+from datetime import date, timedelta
 from typing import Annotated, Literal
 
 from pydantic import AfterValidator, Field
@@ -18,15 +19,18 @@ from pydantic import AfterValidator, Field
 from marketlens_mcp.plugin_api import ToolContext, ToolOutput, ToolSpec
 from marketlens_schema import AbsenceCode
 from marketlens_schema.data import (
+    DailyIndexEntry,
     EarningsFigure,
     EarningsRelease,
     Filing,
     FilingEvent,
+    Form144Notice,
     FundamentalValue,
     FundHolding,
     FundReport,
     InsiderTransaction,
     InstitutionalHolding,
+    IpoFiling,
     XbrlFact,
 )
 
@@ -179,6 +183,49 @@ class EventsInputs(Inputs):
     as_of: AsOf | None = common.as_of_field()
 
 
+class DailyIndexInputs(Inputs):
+    day: date | None = Field(
+        default=None,
+        description="The index day (EDGAR posts a business day's index at about 22:01 ET). "
+        "Default: the last weekday before today.",
+    )
+    forms: Forms | None = Field(default=None, description="Only these forms, e.g. [144, S-1, 424B4].")
+    cik: Annotated[str, AfterValidator(_cik)] | None = Field(
+        default=None, description="Only the lines of this company (CIK, 1-10 digits)."
+    )
+    as_of: AsOf | None = common.as_of_field()
+
+
+class Form144Inputs(Inputs):
+    ticker: Ticker = Field(description="The issuer's ticker, SEC style (brk.b becomes BRK-B).")
+    since: date | None = Field(
+        default=None, description="First filing date (SEC's filing date, inclusive). Default: a year ago."
+    )
+    limit: int = Field(default=100, ge=1, le=500, description="At most this many notices, newest first.")
+    as_of: AsOf | None = common.as_of_field()
+
+
+IPO_STAGES = ("filed", "amended", "effective", "priced", "withdrawn")
+IPO_MAX_DAYS = 31
+
+
+class IpoInputs(Inputs):
+    start: date | None = Field(default=None, description="First filing date. Default: 14 days ago.")
+    end: date | None = Field(
+        default=None,
+        description=f"Last filing date. Default: today. At most {IPO_MAX_DAYS} days after start.",
+    )
+    stages: list[Literal["filed", "amended", "effective", "priced", "withdrawn"]] | None = Field(
+        default=None, min_length=1, description="Only these stages. Default: all."
+    )
+    categories: list[Literal["operating", "spac", "trust"]] | None = Field(
+        default=None,
+        min_length=1,
+        description="operating companies, SPACs (SIC 6770), trusts (SIC 6221 ETPs).",
+    )
+    as_of: AsOf | None = common.as_of_field()
+
+
 class FactsInputs(Inputs):
     ticker: Ticker = Field(description=TICKER_DOC)
     metrics: Annotated[list[str], Field(max_length=50), AfterValidator(_concepts)] | None = Field(
@@ -273,6 +320,10 @@ ROUTES = {
     "sec_earnings_releases": "omni sec.earnings_releases <- data.sec.gov/submissions (8-K Item 2.02)",
     "sec_earnings_figures": "omni sec.earnings_press_release_figures <- www.sec.gov/Archives (EX-99.1)",
     "sec_insider_trades": "omni sec_insider.transactions <- www.sec.gov/Archives (Forms 4 and 144)",
+    "sec_daily_index": "omni sec.daily_index <- www.sec.gov/Archives/edgar/daily-index/{YYYY}/QTR{q}/form.{YYYYMMDD}.idx",
+    "sec_form144": "omni sec.form144 <- data.sec.gov/submissions + www.sec.gov/Archives (Form 144 XML)",
+    "sec_ipo_pipeline": "omni sec.ipo_filings <- sec.daily_index + data.sec.gov/submissions + www.sec.gov/Archives "
+    "(S-1, F-1, EFFECT, 424B4, RW)",
     "sec_13f_holdings": "omni sec13f.holdings <- www.sec.gov/Archives (13F-HR)",
     "sec_fund_nport": "omni sec.fund_nport <- www.sec.gov/Archives (N-PORT)",
     "sec_fund_holdings": "omni sec.fund_nport_holdings <- www.sec.gov/Archives (N-PORT)",
@@ -794,6 +845,244 @@ async def sec_insider_trades(ctx: ToolContext, args: InsiderInputs) -> ToolOutpu
     return _output(ctx, s, InsiderTransaction, rows, prov)
 
 
+def _last_weekday_before(d: date) -> date:
+    d -= timedelta(days=1)
+    while d.weekday() >= 5:
+        d -= timedelta(days=1)
+    return d
+
+
+async def sec_daily_index(ctx: ToolContext, args: DailyIndexInputs) -> ToolOutput:
+    s = _settings(ctx)
+    as_of = common.as_of_of(args.as_of)
+    day = args.day or _last_weekday_before(_today(ctx))
+    identity = {"index_date": day.isoformat()}
+
+    def work(session):
+        session.refresh("sec.daily_index", identity)
+        filters = {"index_date": day}
+        if args.forms:
+            filters["form"] = list(args.forms)
+        if args.cik:
+            filters["cik"] = args.cik
+        return F.records(session.read("sec.daily_index", as_of=as_of, **filters))
+
+    records, session = await common.run(ctx, s, work, source="sec")
+    rows = [
+        common.row(
+            DailyIndexEntry,
+            {
+                "index_date": F.day(r["index_date"]),
+                "form": F.text(r["form"]),
+                "company": F.text(r["company"]),
+                "cik": F.text(r["cik"]),
+                "date_filed": F.day(r["date_filed"]),
+                "accession_number": F.text(r["accession_number"]),
+                "file_url": f"https://www.sec.gov/Archives/{F.text(r['file_name'])}",
+                "knowledge_time": F.instant(r["knowledge_time"]),
+            },
+        )
+        for r in records
+    ]
+    rows.sort(key=lambda r: (r.form, r.company, r.accession_number, r.cik))
+    notes = []
+    if not rows:
+        notes.append(
+            f"EDGAR lists no form index for {day.isoformat()} (a weekend, a federal holiday, or a day "
+            "not posted yet: EDGAR posts a business day's index at about 22:01 ET)."
+        )
+    prov = _prov(
+        ctx,
+        "sec_daily_index",
+        datasets=("sec.daily_index",),
+        as_of=as_of,
+        rows=rows,
+        session=session,
+        request={"day": day, "forms": args.forms, "cik": args.cik, "as_of": args.as_of},
+    )
+    return _output(ctx, s, DailyIndexEntry, rows, prov, notes=notes)
+
+
+def _json_list(raw: str | None) -> list[dict]:
+    """A stored JSON list of objects, decoded; [] for anything else."""
+    if not raw:
+        return []
+    try:
+        decoded = json.loads(raw)
+    except ValueError:
+        return []
+    return [d for d in decoded if isinstance(d, dict)] if isinstance(decoded, list) else []
+
+
+async def sec_form144(ctx: ToolContext, args: Form144Inputs) -> ToolOutput:
+    s = _settings(ctx)
+    as_of = common.as_of_of(args.as_of)
+    since = args.since or common.years_ago(_today(ctx), 1)
+    identity = {"ticker": args.ticker}
+
+    def work(session):
+        session.refresh("sec.form144", identity)
+        return F.records(session.read("sec.form144", as_of=as_of, **identity))
+
+    records, session = await common.run(ctx, s, work, source="sec", subject=("issuer", args.ticker))
+    rows = []
+    for r in records:
+        filed = F.day(r["filing_date"])
+        if filed is None or filed < since:
+            continue
+        cik, accession = F.text(r["issuer_cik"]), F.text(r["accession_number"])
+        sold = F.flag(r["nothing_sold_past_3_months"])
+        rows.append(
+            common.row(
+                Form144Notice,
+                {
+                    "ticker": F.text(r["ticker"]) or args.ticker,
+                    "issuer_cik": cik,
+                    "issuer_name": F.text(r["issuer_name"]),
+                    "accession_number": accession,
+                    "line": (F.integer(r["line"]) or 0) + 1,
+                    "form": F.text(r["form"]),
+                    "filing_date": filed,
+                    "accepted_at": F.instant(r["event_time"]),
+                    "filer_cik": F.text(r["filer_cik"]),
+                    "seller_name": F.text(r["seller_name"]) or "(unnamed)",
+                    "relationship": F.text(r["relationship"]),
+                    "security_class": F.text(r["security_class"]),
+                    "broker_name": F.text(r["broker_name"]),
+                    "shares_to_sell": F.number(r["shares_to_sell"]),
+                    "aggregate_market_value": F.number(r["aggregate_market_value"]),
+                    "shares_outstanding": F.number(r["shares_outstanding"]),
+                    "approx_sale_date": F.day(r["approx_sale_date"]),
+                    "exchange": F.text(r["exchange"]),
+                    "has_10b5_1": bool(F.flag(r["has_10b5_1"])),
+                    "plan_adoption_date": F.day(r["plan_adoption_date"]),
+                    "notice_date": F.day(r["notice_date"]),
+                    "acquisitions": _json_list(F.text(r["acquisitions"])),
+                    "sales_past_3_months": _json_list(F.text(r["sales_past_3_months"])),
+                    "nothing_sold_past_3_months": sold,
+                    "remarks": F.text(r["remarks"]),
+                    "index_url": _index_url(cik, accession),
+                    "knowledge_time": F.instant(r["knowledge_time"]),
+                },
+                codes={"plan_adoption_date": NA, "filer_cik": NPS},
+            )
+        )
+    rows.sort(key=lambda r: r.line)
+    rows.sort(key=lambda r: (r.accepted_at, r.accession_number), reverse=True)
+    kept = list(dict.fromkeys(r.accession_number for r in rows))[: args.limit]
+    rows = [r for r in rows if r.accession_number in set(kept)]
+    prov = _prov(
+        ctx,
+        "sec_form144",
+        datasets=("sec.form144",),
+        as_of=as_of,
+        rows=rows,
+        session=session,
+        request={"ticker": args.ticker, "since": since, "limit": args.limit, "as_of": args.as_of},
+    )
+    notes = [
+        "A Form 144 announces a proposed sale under Rule 144; it is not a trade (sec_insider_trades has Form 4s)."
+    ]
+    return _output(ctx, s, Form144Notice, rows, prov, notes=notes)  # external_text: the filer's words
+
+
+async def sec_ipo_pipeline(ctx: ToolContext, args: IpoInputs) -> ToolOutput:
+    s = _settings(ctx)
+    as_of = common.as_of_of(args.as_of)
+    today = _today(ctx)
+    start, end = common.window(
+        ctx.tool,
+        args.start,
+        args.end,
+        default_start=today - timedelta(days=14),
+        default_end=today,
+        max_days=IPO_MAX_DAYS,
+    )
+    days = [start + timedelta(days=i) for i in range((end - start).days + 1)]
+
+    def work(session):
+        # the pipeline is read from the stored daily index: each weekday's file first
+        fetched = False
+        for d in days:
+            if d.weekday() < 5 and d <= today:
+                fetched |= not session.refresh("sec.daily_index", {"index_date": d.isoformat()})
+        session.refresh("sec.ipo_filings", {"since": start.isoformat()}, force=fetched)
+        return F.records(session.read("sec.ipo_filings", as_of=as_of))
+
+    records, session = await common.run(ctx, s, work, source="sec")
+    stages, categories = (
+        set(args.stages or IPO_STAGES),
+        set(args.categories or ("operating", "spac", "trust")),
+    )
+    rows = []
+    for r in records:
+        filed, stage, category = F.day(r["filing_date"]), F.text(r["stage"]), F.text(r["category"])
+        if not F.within(filed, start, end) or stage not in stages or category not in categories:
+            continue
+        form = F.text(r["form"])
+        notice = form in ("EFFECT", "RW")
+        rows.append(
+            common.row(
+                IpoFiling,
+                {
+                    "cik": F.text(r["cik"]),
+                    "company": F.text(r["company"]),
+                    "form": form,
+                    "stage": stage,
+                    "filing_date": filed,
+                    "accepted_at": F.instant(r["event_time"]),
+                    "accession_number": F.text(r["accession_number"]),
+                    "file_number": F.text(r["file_number"]),
+                    "registration_form": F.text(r["registration_form"]),
+                    "ticker": F.text(r["ticker"]),
+                    "exchange": F.text(r["exchange"]),
+                    "price_low": F.number(r["price_low"]),
+                    "price_high": F.number(r["price_high"]),
+                    "offer_price": F.number(r["offer_price"]),
+                    "shares_offered": F.number(r["shares_offered"]),
+                    "offered_unit": F.text(r["offered_unit"]),
+                    "effective_at": F.instant(r["effective_at"]),
+                    "category": category,
+                    "sic": F.text(r["sic"]),
+                    "primary_doc_url": F.text(r["primary_doc_url"]),
+                    "knowledge_time": F.instant(r["knowledge_time"]),
+                },
+                codes={
+                    **dict.fromkeys(
+                        ("ticker", "exchange", "price_low", "price_high", "shares_offered", "offered_unit"),
+                        NA if notice else AbsenceCode.NO_DATA,
+                    ),
+                    "offer_price": AbsenceCode.NO_DATA if form == "424B4" else NA,
+                    "effective_at": AbsenceCode.NO_DATA if form == "EFFECT" else NA,
+                    "sic": NPS,
+                },
+            )
+        )
+    rows.sort(key=lambda r: (r.accepted_at, r.accession_number, r.cik), reverse=True)
+    prov = _prov(
+        ctx,
+        "sec_ipo_pipeline",
+        datasets=("sec.daily_index", "sec.ipo_filings"),
+        as_of=as_of,
+        rows=rows,
+        session=session,
+        request={
+            "start": start,
+            "end": end,
+            "stages": args.stages,
+            "categories": args.categories,
+            "as_of": args.as_of,
+        },
+    )
+    notes = [
+        "New issuers only: a company with a periodic report, a 424B4 or an exchange registration (8-A) more "
+        "than 30 days before the filing is left out, as is a prospectus that does not state an IPO. Ticker, "
+        "exchange, price range, offer price and shares come from the prospectus cover, best effort: null "
+        "when the cover does not state them."
+    ]
+    return _output(ctx, s, IpoFiling, rows, prov, notes=notes)  # external_text: company names, covers
+
+
 def _filings(rows: list[dict], amendment_type: str) -> list[tuple]:
     """(filing_date, knowledge_time, accession) of each filing of that amendment type, in filing order."""
     return sorted(
@@ -1058,6 +1347,9 @@ HANDLERS = {
     "sec_earnings_releases": sec_earnings_releases,
     "sec_earnings_figures": sec_earnings_figures,
     "sec_insider_trades": sec_insider_trades,
+    "sec_form144": sec_form144,
+    "sec_ipo_pipeline": sec_ipo_pipeline,
+    "sec_daily_index": sec_daily_index,
     "sec_13f_holdings": sec_13f_holdings,
     "sec_fund_nport": sec_fund_nport,
     "sec_fund_holdings": sec_fund_holdings,
@@ -1176,6 +1468,60 @@ SPECS: tuple[ToolSpec, ...] = (
         "omni sec_insider.transactions <- www.sec.gov/Archives (Forms 4 and 144)",
     ),
     _spec(
+        "sec_form144",
+        "SEC Form 144 notices",
+        common.describe(
+            "A company's Form 144 notices of proposed sale (144 and 144/A), every field the notice states, one "
+            "row per class and broker it lists: seller and relationship to the issuer as filed, class, broker, "
+            "shares to be sold, aggregate market value (USD), shares outstanding, approximate sale date, exchange, "
+            "Rule 10b5-1 plan adoption date, notice date, remarks, how the securities were acquired and what the "
+            "seller sold in the past three months. A notice announces a sale; it is not one. accepted_at is "
+            f"EDGAR's acceptance. History from filings of 2026-01-01 on a first fetch. {CONTACT}",
+            "at_event",
+        ),
+        "Form 144 notices of proposed sale of a company's stock",
+        Form144Inputs,
+        Form144Notice,
+        "sec",
+        ROUTES["sec_form144"],
+        risk="external_text",
+    ),
+    _spec(
+        "sec_ipo_pipeline",
+        "SEC IPO pipeline",
+        common.describe(
+            "The US IPO pipeline from EDGAR, by filing date (at most 31 days a call): new issuers' S-1 and F-1 "
+            "(stage filed), their amendments (amended), the SEC's EFFECT notice (effective), the 424B4 final "
+            "prospectus (priced) and RW withdrawals (withdrawn), with the cover's proposed ticker, exchange, "
+            "price range, offer price and shares offered (best effort; null when not stated), the "
+            "registration's file number and the category (operating, spac, trust). Read from EDGAR's daily "
+            f"form index; a company that already files periodic reports is left out. {CONTACT}",
+            "at_event",
+        ),
+        "IPO filings of new issuers: filed, amended, effective, priced, withdrawn",
+        IpoInputs,
+        IpoFiling,
+        "sec",
+        ROUTES["sec_ipo_pipeline"],
+        risk="external_text",
+    ),
+    _spec(
+        "sec_daily_index",
+        "EDGAR daily form index",
+        common.describe(
+            "Every filing EDGAR disseminated on one business day, from its daily form index: form, company, "
+            "CIK, date filed, accession number and the filing's text file URL, one line per filing and company "
+            "it is listed under. Filter by forms and cik. knowledge_time is when EDGAR posted the index (about "
+            f"22:01 ET), after each filing's own acceptance. {CONTACT}",
+            "lagged",
+        ),
+        "Every filing of a business day from EDGAR's daily form index",
+        DailyIndexInputs,
+        DailyIndexEntry,
+        "sec",
+        ROUTES["sec_daily_index"],
+    ),
+    _spec(
         "sec_13f_holdings",
         "SEC 13F holdings",
         common.describe(
@@ -1232,6 +1578,10 @@ DATASETS: dict[str, tuple[str, ...]] = {
     "sec_earnings_releases": ("sec.earnings_releases",),
     "sec_earnings_figures": ("sec.earnings_press_release_figures",),
     "sec_insider_trades": ("sec_insider.transactions",),
+    "sec_form144": ("sec.form144",),
+    # read from the stored daily index, which it refreshes first; it reads only the pipeline
+    "sec_ipo_pipeline": ("sec.ipo_filings",),
+    "sec_daily_index": ("sec.daily_index",),
     "sec_13f_holdings": ("sec13f.holdings",),
     "sec_fund_nport": ("sec.fund_nport",),
     "sec_fund_holdings": ("sec.fund_nport_holdings",),
