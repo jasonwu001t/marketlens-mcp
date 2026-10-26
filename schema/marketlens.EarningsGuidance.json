@@ -1,0 +1,176 @@
+{
+  "$defs": {
+    "AbsenceCode": {
+      "description": "Why a value is None. Never served as 0.",
+      "enum": [
+        "not_provided_by_source",
+        "not_applicable",
+        "not_entitled",
+        "no_data",
+        "insufficient_data",
+        "not_recovered",
+        "no_match",
+        "withheld",
+        "source_error",
+        "unparseable"
+      ],
+      "title": "AbsenceCode",
+      "type": "string"
+    }
+  },
+  "$id": "urn:marketlens:schema:1:marketlens.EarningsGuidance",
+  "additionalProperties": false,
+  "description": "One guidance statement of an earnings press release (EX-99.1): the\ncompany's own outlook for one metric over one period, from its prose or its\nguidance table by a named rule; ``source_text`` is UNTRUSTED company text.\nA margin or tax rate is a fraction (56 % is 0.56).",
+  "properties": {
+    "absent": {
+      "anyOf": [
+        {
+          "additionalProperties": {
+            "$ref": "#/$defs/AbsenceCode"
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Per-row reasons for None fields: field name -> AbsenceCode",
+      "title": "Absent"
+    },
+    "accepted_at": {
+      "description": "The 8-K's (or 6-K's) EDGAR acceptance",
+      "format": "date-time",
+      "title": "Accepted At",
+      "type": "string",
+      "x-unit": "UTC"
+    },
+    "accession_number": {
+      "title": "Accession Number",
+      "type": "string"
+    },
+    "basis": {
+      "description": "gaap or non_gaap, the sentence's own word",
+      "title": "Basis",
+      "type": "string"
+    },
+    "cik": {
+      "title": "Cik",
+      "type": "string"
+    },
+    "exhibit": {
+      "description": "EX-99.1, EX-99, ...",
+      "title": "Exhibit",
+      "type": "string"
+    },
+    "exhibit_url": {
+      "title": "Exhibit Url",
+      "type": "string"
+    },
+    "fiscal_quarter": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Fiscal Quarter"
+    },
+    "fiscal_year": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Fiscal Year"
+    },
+    "high": {
+      "description": "In the row's `unit`",
+      "title": "High",
+      "type": "number",
+      "x-unit": "as_published"
+    },
+    "knowledge_time": {
+      "description": "When the value became knowable under the dataset's point-in-time policy",
+      "format": "date-time",
+      "title": "Knowledge Time",
+      "type": "string",
+      "x-role": "available",
+      "x-unit": "UTC"
+    },
+    "low": {
+      "description": "In the row's `unit`",
+      "title": "Low",
+      "type": "number",
+      "x-unit": "as_published"
+    },
+    "metric": {
+      "description": "revenue, gross_margin, operating_margin, operating_income, opex, tax_rate, capex, eps",
+      "title": "Metric",
+      "type": "string"
+    },
+    "mid": {
+      "description": "(low + high) / 2; a point estimate has low = high = mid",
+      "title": "Mid",
+      "type": "number",
+      "x-unit": "as_published"
+    },
+    "parse_rule": {
+      "title": "Parse Rule",
+      "type": "string"
+    },
+    "period_kind": {
+      "description": "next_quarter or fiscal_year",
+      "title": "Period Kind",
+      "type": "string"
+    },
+    "period_label": {
+      "description": "As stated: third quarter of 2026, full year 2026",
+      "title": "Period Label",
+      "type": "string"
+    },
+    "source_text": {
+      "description": "The sentence or table row (untrusted text)",
+      "title": "Source Text",
+      "type": "string"
+    },
+    "ticker": {
+      "title": "Ticker",
+      "type": "string"
+    },
+    "unit": {
+      "description": "USD (full dollars), fraction (a margin or rate) or USD/share",
+      "title": "Unit",
+      "type": "string"
+    }
+  },
+  "required": [
+    "ticker",
+    "cik",
+    "accession_number",
+    "accepted_at",
+    "exhibit",
+    "exhibit_url",
+    "metric",
+    "period_kind",
+    "period_label",
+    "low",
+    "high",
+    "mid",
+    "unit",
+    "basis",
+    "source_text",
+    "parse_rule",
+    "knowledge_time"
+  ],
+  "title": "EarningsGuidance",
+  "type": "object",
+  "x-schema-version": "1.1.0"
+}

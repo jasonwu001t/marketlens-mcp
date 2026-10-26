@@ -1,0 +1,89 @@
+{
+ "absent": {},
+ "model": "marketlens.IrTarget",
+ "notes": [],
+ "offload": "auto",
+ "pagination": null,
+ "provenance": {
+  "as_of": null,
+  "authority": [
+   "company"
+  ],
+  "cached": false,
+  "dataset": "sec.submissions,company.ir_documents,company.ir_targets",
+  "delay": "unknown",
+  "derived_from": [],
+  "environment": null,
+  "feed": null,
+  "knowledge_time": "2026-10-02T20:00:00Z",
+  "lag_days": 143.0,
+  "operation": null,
+  "pages_fetched": 3,
+  "provider": "company",
+  "request": {
+   "as_of": null,
+   "ticker": "TESTCO"
+  },
+  "route": "omni company.ir_targets <- company.ir_documents (sentence rules, computed locally)",
+  "schema_version": "1.1.0",
+  "stale": null,
+  "truncated": false,
+  "truncation_note": null,
+  "upstream_request_id": null
+ },
+ "risk": null,
+ "rows": [
+  {
+   "absent": {
+    "edgar_accession": "not_applicable"
+   },
+   "authority": "company",
+   "basis": "non_gaap",
+   "document_url": "https://ir.testco.example.com/news/investor-day-2026",
+   "edgar_accession": null,
+   "high": 0.3,
+   "horizon": "by 2029",
+   "horizon_end": 2029,
+   "horizon_start": 2026,
+   "kind": "investor_day",
+   "knowledge_time": "2026-10-02T20:00:00Z",
+   "low": 0.3,
+   "metric": "operating_margin",
+   "mid": 0.3,
+   "parse_rule": "sentence.approx.percent",
+   "published": "2026-05-12",
+   "served_url": "https://ir.testco.example.com/news/investor-day-2026",
+   "source_text": "The company targets non-GAAP operating margin of approximately 30% by 2029.",
+   "ticker": "TESTCO",
+   "title": "Testco Synthetic Corp Investor Day 2026",
+   "unit": "fraction"
+  },
+  {
+   "absent": {
+    "edgar_accession": "not_applicable",
+    "high": "not_applicable",
+    "mid": "not_applicable"
+   },
+   "authority": "company",
+   "basis": "unstated",
+   "document_url": "https://ir.testco.example.com/news/investor-day-2026",
+   "edgar_accession": null,
+   "high": null,
+   "horizon": "Over the next three to five years",
+   "horizon_end": 2031,
+   "horizon_start": 2026,
+   "kind": "investor_day",
+   "knowledge_time": "2026-10-02T20:00:00Z",
+   "low": 0.2,
+   "metric": "revenue_cagr",
+   "mid": null,
+   "parse_rule": "sentence.floor.percent",
+   "published": "2026-05-12",
+   "served_url": "https://ir.testco.example.com/news/investor-day-2026",
+   "source_text": "Over the next three to five years, Testco expects revenue growth greater than 20% CAGR.",
+   "ticker": "TESTCO",
+   "title": "Testco Synthetic Corp Investor Day 2026",
+   "unit": "fraction"
+  }
+ ]
+}

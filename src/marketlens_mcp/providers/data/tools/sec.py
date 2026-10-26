@@ -555,12 +555,11 @@ def _frame_unit_default(tag: str, taxonomy: str) -> str:
     return spec["unit"] if spec and spec["taxonomy"] == taxonomy else "USD"
 
 
-#: The concept alias `revenue`: AlphaResearch's fundamentals revenue chain in its
-#: order (revenue from contracts, then Revenues), the two concepts marketlens-data
-#: collects frames of, and that chain's lead rule on one period (atlas
-#: routers/frames.py serves the same alias): per filer the first concept it states;
-#: revenue from contracts, a part of the revenue where a filer also states a
-#: total, yields to Revenues when that is larger by more than 0.5%.
+#: The concept alias `revenue`: a revenue fallback chain in its order (revenue
+#: from contracts, then Revenues), the two concepts marketlens-data collects
+#: frames of, with a lead rule on one period: per filer the first concept it
+#: states; revenue from contracts, a part of the revenue where a filer also
+#: states a total, yields to Revenues when that is larger by more than 0.5%.
 REVENUE_ALIAS = ("RevenueFromContractWithCustomerExcludingAssessedTax", "Revenues")
 _LARGER = 0.005
 

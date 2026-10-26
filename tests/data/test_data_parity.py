@@ -12,7 +12,7 @@ from marketlens_mcp.providers.data.tools import all_specs, common, datasets_by_t
 def test_every_dataset_is_mapped_or_excluded():
     assert set(omni.list_datasets()) == set(parity.PARITY)
     mapped = [d for d, e in parity.PARITY.items() if isinstance(e, parity.Mapped)]
-    assert len(mapped) == 30
+    assert len(mapped) == 36
 
 
 def test_each_tool_describes_the_point_in_time_rule_of_its_datasets():
@@ -24,4 +24,6 @@ def test_each_tool_describes_the_point_in_time_rule_of_its_datasets():
             policy = resolve(dataset_id)[1].pit
             assert common.PIT[policy] in specs[tool].description, (tool, dataset_id, policy)
             if dataset_id != "fred.series":
-                assert authority_of(dataset_id) in ("official", "exchange", "third-party"), dataset_id
+                assert authority_of(dataset_id) in ("official", "exchange", "third-party", "company"), (
+                    dataset_id
+                )

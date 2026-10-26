@@ -1,0 +1,190 @@
+{
+  "$defs": {
+    "AbsenceCode": {
+      "description": "Why a value is None. Never served as 0.",
+      "enum": [
+        "not_provided_by_source",
+        "not_applicable",
+        "not_entitled",
+        "no_data",
+        "insufficient_data",
+        "not_recovered",
+        "no_match",
+        "withheld",
+        "source_error",
+        "unparseable"
+      ],
+      "title": "AbsenceCode",
+      "type": "string"
+    }
+  },
+  "$id": "urn:marketlens:schema:1:marketlens.ForeignQuarterlyFigure",
+  "additionalProperties": false,
+  "description": "One figure of a foreign private issuer's results 6-K exhibits (press\nrelease table, slides, management report, interim statements' revenue\nnote), in the issuer's unit at its scale as stated.",
+  "properties": {
+    "absent": {
+      "anyOf": [
+        {
+          "additionalProperties": {
+            "$ref": "#/$defs/AbsenceCode"
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Per-row reasons for None fields: field name -> AbsenceCode",
+      "title": "Absent"
+    },
+    "accession_number": {
+      "title": "Accession Number",
+      "type": "string"
+    },
+    "axis": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "platform, technology, ... for a segment",
+      "title": "Axis"
+    },
+    "cik": {
+      "title": "Cik",
+      "type": "string"
+    },
+    "exhibit": {
+      "title": "Exhibit",
+      "type": "string"
+    },
+    "exhibit_url": {
+      "title": "Exhibit Url",
+      "type": "string"
+    },
+    "fiscal_period": {
+      "description": "Q1..Q4 or FY",
+      "title": "Fiscal Period",
+      "type": "string"
+    },
+    "fiscal_year": {
+      "title": "Fiscal Year",
+      "type": "integer"
+    },
+    "form": {
+      "title": "Form",
+      "type": "string"
+    },
+    "knowledge_time": {
+      "description": "When the value became knowable under the dataset's point-in-time policy",
+      "format": "date-time",
+      "title": "Knowledge Time",
+      "type": "string",
+      "x-role": "available",
+      "x-unit": "UTC"
+    },
+    "line": {
+      "description": "The KPI id (revenue, operating_income, ...); revenue_share for a segment",
+      "title": "Line",
+      "type": "string"
+    },
+    "member": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The segment or node as stated (HPC, 3nm)",
+      "title": "Member"
+    },
+    "parse_rule": {
+      "title": "Parse Rule",
+      "type": "string"
+    },
+    "period_end": {
+      "format": "date",
+      "title": "Period End",
+      "type": "string"
+    },
+    "period_label": {
+      "description": "The column's label as stated: 3Q26, 2025",
+      "title": "Period Label",
+      "type": "string"
+    },
+    "period_start": {
+      "anyOf": [
+        {
+          "format": "date",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Period Start"
+    },
+    "scale": {
+      "description": "The power of ten the value is scaled by: 6 millions, 9 billions",
+      "title": "Scale",
+      "type": "integer"
+    },
+    "source_text": {
+      "description": "The row's label as stated (untrusted text)",
+      "title": "Source Text",
+      "type": "string"
+    },
+    "statement": {
+      "description": "income, balance, cash_flow, segments or kpi",
+      "title": "Statement",
+      "type": "string"
+    },
+    "ticker": {
+      "title": "Ticker",
+      "type": "string"
+    },
+    "unit": {
+      "description": "TWD, USD, TWD/share, fraction, wafers_12in_equiv",
+      "title": "Unit",
+      "type": "string"
+    },
+    "value": {
+      "description": "In `unit` at 10**scale; a share is a fraction",
+      "title": "Value",
+      "type": "number",
+      "x-unit": "as_published"
+    }
+  },
+  "required": [
+    "ticker",
+    "cik",
+    "form",
+    "accession_number",
+    "exhibit",
+    "exhibit_url",
+    "statement",
+    "line",
+    "value",
+    "unit",
+    "scale",
+    "period_label",
+    "period_end",
+    "fiscal_year",
+    "fiscal_period",
+    "source_text",
+    "parse_rule",
+    "knowledge_time"
+  ],
+  "title": "ForeignQuarterlyFigure",
+  "type": "object",
+  "x-schema-version": "1.1.0"
+}

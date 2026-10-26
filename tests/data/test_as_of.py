@@ -12,6 +12,7 @@ from test_calendars import earnings_routes, economic_routes, holiday_routes, sur
 from test_fed_treasury import FISCAL, fomc_routes, treasury_routes
 from test_macro import BEA, bls_routes, fred_routes
 from test_sec import sec_routes
+from test_sec_research import IR_LIST, research_routes
 
 from marketlens_mcp.providers.data.tools import datasets_by_tool
 from marketlens_mcp.providers.data.tools.common import parse_instant
@@ -52,6 +53,12 @@ CASES = [
     ("filings_events", sec_routes, {"ticker": "EVNTCO"}),
     ("sec_xbrl_frames", sec_routes, {"tag": "Revenues", "period": "CY2026Q2"}),
     ("sec_pay_vs_performance", sec_routes, {"ticker": "PVPCO"}),
+    ("sec_earnings_guidance", research_routes, {"ticker": "GUIDCO"}),
+    ("sec_earnings_non_gaap", research_routes, {"ticker": "GUIDCO"}),
+    ("sec_segment_facts", research_routes, {"ticker": "TESTCO"}),
+    ("sec_foreign_quarterly", research_routes, {"ticker": "FPICO"}),
+    ("company_ir_documents", research_routes, {"ticker": "TESTCO"}),
+    ("company_ir_targets", research_routes, {"ticker": "TESTCO"}),
     ("sec_insider_trades", sec_routes, {"ticker": "TESTCO"}),
     ("sec_13f_holdings", sec_routes, {"filer_cik": "9999950"}),
     ("sec_fund_nport", sec_routes, {"ticker": "TFUND"}),
@@ -92,7 +99,7 @@ def _id(case) -> str:
 
 
 def test_every_tool_has_a_case():
-    assert {tool for tool, *_ in CASES} == set(SPECS) and len(SPECS) == 28
+    assert {tool for tool, *_ in CASES} == set(SPECS) and len(SPECS) == 34
 
 
 @pytest.fixture
@@ -114,6 +121,14 @@ def reads(monkeypatch):
     spy("query")
     spy("read_raw")
     return seen
+
+
+@pytest.fixture(autouse=True)
+def _ir_list(monkeypatch):
+    """The operator's company-document list the research tools' case reads."""
+    from omni import config
+
+    monkeypatch.setattr(config, "ir_documents_config", lambda: IR_LIST)
 
 
 @pytest.mark.parametrize("case", CASES, ids=[_id(c) for c in CASES])

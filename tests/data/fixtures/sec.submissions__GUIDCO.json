@@ -1,0 +1,40 @@
+{
+ "_synthetic": true,
+ "cik": "9999905",
+ "entityType": "operating",
+ "sic": "3674",
+ "sicDescription": "Semiconductors & Related Devices",
+ "name": "Guidco Synthetic Inc",
+ "tickers": [
+  "GUIDCO"
+ ],
+ "exchanges": [
+  "Nasdaq"
+ ],
+ "filings": {
+  "recent": {
+   "accessionNumber": [
+    "0009999905-26-000031"
+   ],
+   "filingDate": [
+    "2026-08-04"
+   ],
+   "reportDate": [
+    "2026-08-04"
+   ],
+   "acceptanceDateTime": [
+    "2026-08-04T20:05:00.000Z"
+   ],
+   "form": [
+    "8-K"
+   ],
+   "items": [
+    "2.02,9.01"
+   ],
+   "primaryDocument": [
+    "gc-8k.htm"
+   ]
+  },
+  "files": []
+ }
+}

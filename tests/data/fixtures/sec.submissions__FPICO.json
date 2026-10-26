@@ -1,0 +1,40 @@
+{
+ "_synthetic": true,
+ "cik": "9999906",
+ "entityType": "operating",
+ "sic": "3674",
+ "sicDescription": "Semiconductors & Related Devices",
+ "name": "Fpico Synthetic Foundry Ltd",
+ "tickers": [
+  "FPICO"
+ ],
+ "exchanges": [
+  "NYSE"
+ ],
+ "filings": {
+  "recent": {
+   "accessionNumber": [
+    "0009999906-26-000044"
+   ],
+   "filingDate": [
+    "2026-10-16"
+   ],
+   "reportDate": [
+    "2026-09-30"
+   ],
+   "acceptanceDateTime": [
+    "2026-10-16T09:30:00.000Z"
+   ],
+   "form": [
+    "6-K"
+   ],
+   "items": [
+    ""
+   ],
+   "primaryDocument": [
+    "fp-6k.htm"
+   ]
+  },
+  "files": []
+ }
+}

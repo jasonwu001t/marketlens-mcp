@@ -10,6 +10,7 @@ from test_calendars import earnings_routes, economic_routes, holiday_routes, sur
 from test_fed_treasury import FISCAL, fomc_routes, treasury_routes
 from test_macro import BEA, bls_routes, fred_routes
 from test_sec import sec_routes
+from test_sec_research import IR_LIST, research_routes
 
 ARGS = {
     "macro_series": {"series_ids": ["CPIAUCSL"]},
@@ -23,6 +24,12 @@ ARGS = {
     "filings_events": {"ticker": "EVNTCO"},
     "sec_xbrl_frames": {"tag": "Revenues", "period": "CY2026Q2"},
     "sec_pay_vs_performance": {"ticker": "PVPCO"},
+    "sec_earnings_guidance": {"ticker": "GUIDCO"},
+    "sec_earnings_non_gaap": {"ticker": "GUIDCO"},
+    "sec_segment_facts": {"ticker": "TESTCO"},
+    "sec_foreign_quarterly": {"ticker": "FPICO"},
+    "company_ir_documents": {"ticker": "TESTCO"},
+    "company_ir_targets": {"ticker": "TESTCO"},
     "sec_insider_trades": {"ticker": "TESTCO"},
     "sec_13f_holdings": {"filer_cik": "9999950"},
     "sec_fund_nport": {"ticker": "TFUND"},
@@ -33,14 +40,17 @@ ARGS = {
 }
 
 
-def test_no_tool_writes_to_stdout(tmp_path, upstream, keys, frozen_clock, capsys):
+def test_no_tool_writes_to_stdout(tmp_path, upstream, keys, frozen_clock, capsys, monkeypatch):
     fred_routes(upstream)
     bls_routes(upstream)
     upstream.json_file(BEA, "bea.nipa__T10101.json")
     upstream.text_file(r"www\.bls\.gov/schedule/news_release/cpi\.htm", "bls.cpi_schedule.html")
     upstream.text_file(r"www\.bls\.gov/schedule/news_release/empsit\.htm", "bls.empsit_schedule.html")
     upstream.text_file(r"www\.bls\.gov/schedule/\d{4}/\d{2}_sched_list\.htm", "bls.schedule_month_list.html")
-    sec_routes(upstream)
+    research_routes(upstream)  # sec_routes and the research tools' filings
+    from omni import config
+
+    monkeypatch.setattr(config, "ir_documents_config", lambda: IR_LIST)
     fomc_routes(upstream)
     upstream.json_file(r"markets\.newyorkfed\.org/api/rates/all/search\.json", "nyfed.reference_rates.json")
     treasury_routes(upstream)
@@ -58,7 +68,7 @@ def test_no_tool_writes_to_stdout(tmp_path, upstream, keys, frozen_clock, capsys
         answered += bool(out.rows)
     captured = capsys.readouterr()
     assert captured.out == ""
-    assert answered == 28
+    assert answered == 34
 
 
 def test_the_placeholder_contact_warning_never_reaches_stdout(

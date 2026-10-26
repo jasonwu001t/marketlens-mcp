@@ -1,0 +1,209 @@
+{
+  "$defs": {
+    "AbsenceCode": {
+      "description": "Why a value is None. Never served as 0.",
+      "enum": [
+        "not_provided_by_source",
+        "not_applicable",
+        "not_entitled",
+        "no_data",
+        "insufficient_data",
+        "not_recovered",
+        "no_match",
+        "withheld",
+        "source_error",
+        "unparseable"
+      ],
+      "title": "AbsenceCode",
+      "type": "string"
+    }
+  },
+  "$id": "urn:marketlens:schema:1:marketlens.IrTarget",
+  "additionalProperties": false,
+  "description": "One multi-year target a company document states (a revenue CAGR, a\nmargin, EPS, capex, free cash flow), by a named sentence rule, never from a\ntable. A margin or CAGR is a fraction (35 % is 0.35); ``source_text`` is\nUNTRUSTED company text.",
+  "properties": {
+    "absent": {
+      "anyOf": [
+        {
+          "additionalProperties": {
+            "$ref": "#/$defs/AbsenceCode"
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Per-row reasons for None fields: field name -> AbsenceCode",
+      "title": "Absent"
+    },
+    "authority": {
+      "enum": [
+        "official",
+        "company"
+      ],
+      "title": "Authority",
+      "type": "string"
+    },
+    "basis": {
+      "description": "gaap, non_gaap or unstated, the sentence's own word",
+      "title": "Basis",
+      "type": "string"
+    },
+    "document_url": {
+      "title": "Document Url",
+      "type": "string"
+    },
+    "edgar_accession": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Edgar Accession"
+    },
+    "high": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "A ceiling has a high and no low",
+      "title": "High",
+      "x-unit": "as_published"
+    },
+    "horizon": {
+      "description": "As stated: the next three to five years, 2024-2029, long-term",
+      "title": "Horizon",
+      "type": "string"
+    },
+    "horizon_end": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Horizon End"
+    },
+    "horizon_start": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Horizon Start"
+    },
+    "kind": {
+      "title": "Kind",
+      "type": "string"
+    },
+    "knowledge_time": {
+      "description": "When the value became knowable under the dataset's point-in-time policy",
+      "format": "date-time",
+      "title": "Knowledge Time",
+      "type": "string",
+      "x-role": "available",
+      "x-unit": "UTC"
+    },
+    "low": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "A floor has a low and no high",
+      "title": "Low",
+      "x-unit": "as_published"
+    },
+    "metric": {
+      "description": "revenue_cagr, gross_margin, operating_margin, eps, capex, free_cash_flow",
+      "title": "Metric",
+      "type": "string"
+    },
+    "mid": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "(low + high) / 2 when both are stated",
+      "title": "Mid",
+      "x-unit": "as_published"
+    },
+    "parse_rule": {
+      "title": "Parse Rule",
+      "type": "string"
+    },
+    "published": {
+      "format": "date",
+      "title": "Published",
+      "type": "string"
+    },
+    "served_url": {
+      "title": "Served Url",
+      "type": "string"
+    },
+    "source_text": {
+      "description": "The sentence (untrusted text)",
+      "title": "Source Text",
+      "type": "string"
+    },
+    "ticker": {
+      "title": "Ticker",
+      "type": "string"
+    },
+    "title": {
+      "title": "Title",
+      "type": "string"
+    },
+    "unit": {
+      "description": "fraction, USD (full dollars) or USD/share",
+      "title": "Unit",
+      "type": "string"
+    }
+  },
+  "required": [
+    "ticker",
+    "document_url",
+    "published",
+    "title",
+    "kind",
+    "authority",
+    "served_url",
+    "metric",
+    "horizon",
+    "unit",
+    "basis",
+    "source_text",
+    "parse_rule",
+    "knowledge_time"
+  ],
+  "title": "IrTarget",
+  "type": "object",
+  "x-schema-version": "1.1.0"
+}

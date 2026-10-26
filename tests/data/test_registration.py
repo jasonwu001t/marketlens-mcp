@@ -19,10 +19,10 @@ def test_the_extra_is_importable_here():
     assert runtime.available() and runtime.api_problems() == []
 
 
-def test_28_specs_register_and_satisfy_the_manifest():
+def test_34_specs_register_and_satisfy_the_manifest():
     cat = registry.build_catalog(cfg.load_config(), discover=list)
     data = {n: e for n, e in cat.tools.items() if e.plugin == "builtin:data"}
-    assert len(data) == 28 and set(data) == {s.name for s in all_specs()}
+    assert len(data) == 34 and set(data) == {s.name for s in all_specs()}
     for name, entry in data.items():
         spec = entry.spec
         assert spec.input_model.model_config["extra"] == "forbid"
@@ -33,10 +33,10 @@ def test_28_specs_register_and_satisfy_the_manifest():
         assert set(entry.env) >= set(spec.env) and "OMNI_DATA_DIR" in entry.env
 
 
-def test_tools_json_lists_76_with_defaults_and_79_with_calendars(capsys, tmp_path):
+def test_tools_json_lists_82_with_defaults_and_85_with_calendars(capsys, tmp_path):
     assert cli.main(["tools", "--json"]) == 0
     body = json.loads(capsys.readouterr().out)
-    assert len(body["tools"]) == 76
+    assert len(body["tools"]) == 82
     listed = {t["name"]: t for t in body["tools"] if t["name"].startswith("calendar_")}
     assert list(listed) == ["calendar_us_holidays"]
     assert listed["calendar_us_holidays"]["capability"] == "holidays"
@@ -45,7 +45,7 @@ def test_tools_json_lists_76_with_defaults_and_79_with_calendars(capsys, tmp_pat
     p.write_text("capabilities:\n  calendars: true\n", encoding="utf-8")
     assert cli.main(["tools", "--json"]) == 0
     tools = {t["name"]: t for t in json.loads(capsys.readouterr().out)["tools"]}
-    assert len(tools) == 79
+    assert len(tools) == 85
     assert tools["calendar_economic"] == {
         "name": "calendar_economic",
         "capability": "calendars",

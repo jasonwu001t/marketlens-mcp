@@ -1,0 +1,245 @@
+{
+  "$defs": {
+    "AbsenceCode": {
+      "description": "Why a value is None. Never served as 0.",
+      "enum": [
+        "not_provided_by_source",
+        "not_applicable",
+        "not_entitled",
+        "no_data",
+        "insufficient_data",
+        "not_recovered",
+        "no_match",
+        "withheld",
+        "source_error",
+        "unparseable"
+      ],
+      "title": "AbsenceCode",
+      "type": "string"
+    }
+  },
+  "$id": "urn:marketlens:schema:1:marketlens.SegmentFact",
+  "additionalProperties": false,
+  "description": "One dimensional XBRL fact of a 10-K or 10-Q: a concept's value for one\nbusiness segment, product, region or revenue-disaggregation line, as the\nfiling tags it (the companyfacts API drops every dimension).",
+  "properties": {
+    "absent": {
+      "anyOf": [
+        {
+          "additionalProperties": {
+            "$ref": "#/$defs/AbsenceCode"
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Per-row reasons for None fields: field name -> AbsenceCode",
+      "title": "Absent"
+    },
+    "accession_number": {
+      "title": "Accession Number",
+      "type": "string"
+    },
+    "axis": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The segmenting axes, ';'-joined",
+      "title": "Axis"
+    },
+    "axis_kind": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "segment, geography, disaggregation or other",
+      "title": "Axis Kind"
+    },
+    "cik": {
+      "title": "Cik",
+      "type": "string"
+    },
+    "concept": {
+      "description": "The XBRL concept, verbatim",
+      "title": "Concept",
+      "type": "string"
+    },
+    "consolidation": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Operating Segments, Intersegment Eliminations, ...",
+      "title": "Consolidation"
+    },
+    "filed": {
+      "format": "date",
+      "title": "Filed",
+      "type": "string"
+    },
+    "fiscal_period": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The filing's fiscal period focus: Q1..Q3 or FY",
+      "title": "Fiscal Period"
+    },
+    "fiscal_year": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The filing's fiscal year focus",
+      "title": "Fiscal Year"
+    },
+    "form": {
+      "title": "Form",
+      "type": "string"
+    },
+    "knowledge_time": {
+      "description": "When the value became knowable under the dataset's point-in-time policy",
+      "format": "date-time",
+      "title": "Knowledge Time",
+      "type": "string",
+      "x-role": "available",
+      "x-unit": "UTC"
+    },
+    "member": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The members' labels as filed",
+      "title": "Member"
+    },
+    "member_key": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The label reduced to letters and digits",
+      "title": "Member Key"
+    },
+    "member_label": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The filer's own name for the member",
+      "title": "Member Label"
+    },
+    "period_end": {
+      "description": "The period end, rounded to the nearest month end",
+      "format": "date",
+      "title": "Period End",
+      "type": "string"
+    },
+    "period_start": {
+      "anyOf": [
+        {
+          "format": "date",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "None for an instant",
+      "title": "Period Start"
+    },
+    "quarters": {
+      "description": "The duration in whole quarters; 0 for an instant",
+      "title": "Quarters",
+      "type": "integer"
+    },
+    "source": {
+      "description": "The read it came from: a data set (2026_08_notes) or edgar:<accession>",
+      "title": "Source",
+      "type": "string"
+    },
+    "ticker": {
+      "title": "Ticker",
+      "type": "string"
+    },
+    "unit": {
+      "description": "USD, shares, ...",
+      "title": "Unit",
+      "type": "string"
+    },
+    "value": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "In the row's `unit`",
+      "title": "Value",
+      "x-unit": "as_published"
+    }
+  },
+  "required": [
+    "ticker",
+    "cik",
+    "accession_number",
+    "form",
+    "filed",
+    "concept",
+    "period_end",
+    "quarters",
+    "unit",
+    "source",
+    "knowledge_time"
+  ],
+  "title": "SegmentFact",
+  "type": "object",
+  "x-schema-version": "1.1.0"
+}
