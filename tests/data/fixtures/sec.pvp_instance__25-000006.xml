@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- synthetic: a pay-versus-performance instance in the shape EDGAR extracts from an inline XBRL proxy -->
+<xbrl xmlns="http://www.xbrl.org/2003/instance" xmlns:pvpco="http://example.com/pvpco/20250321"
+  xmlns:dei="http://xbrl.sec.gov/dei/2025" xmlns:ecd="http://xbrl.sec.gov/ecd/2025"
+  xmlns:iso4217="http://www.xbrl.org/2003/iso4217" xmlns:us-gaap="http://fasb.org/us-gaap/2025"
+  xmlns:xbrldi="http://xbrl.org/2006/xbrldi">
+  <unit id="USD"><measure>iso4217:USD</measure></unit>
+  <context id="FY24"><entity><identifier scheme="http://www.sec.gov/CIK">0009999904</identifier></entity><period><startDate>2024-01-01</startDate><endDate>2024-12-31</endDate></period></context>
+  <context id="FY23"><entity><identifier scheme="http://www.sec.gov/CIK">0009999904</identifier></entity><period><startDate>2023-01-01</startDate><endDate>2023-12-31</endDate></period></context>
+  <dei:DocumentType contextRef="FY24">DEF 14A</dei:DocumentType>
+  <ecd:PeoTotalCompAmt contextRef="FY24" unitRef="USD" decimals="0">4000000</ecd:PeoTotalCompAmt>
+  <ecd:PeoActuallyPaidCompAmt contextRef="FY24" unitRef="USD" decimals="0">4400000</ecd:PeoActuallyPaidCompAmt>
+  <ecd:TotalShareholderRtnAmt contextRef="FY24" unitRef="USD" decimals="2">121.00</ecd:TotalShareholderRtnAmt>
+  <ecd:PeerGroupTotalShareholderRtnAmt contextRef="FY24" unitRef="USD" decimals="2">109.00</ecd:PeerGroupTotalShareholderRtnAmt>
+  <us-gaap:NetIncomeLoss contextRef="FY24" unitRef="USD" decimals="-6">61000000</us-gaap:NetIncomeLoss>
+  <ecd:CoSelectedMeasureAmt contextRef="FY24" unitRef="USD" decimals="-6">780000000</ecd:CoSelectedMeasureAmt>
+  <ecd:PeoTotalCompAmt contextRef="FY23" unitRef="USD" decimals="0">3600000</ecd:PeoTotalCompAmt>
+  <ecd:PeoActuallyPaidCompAmt contextRef="FY23" unitRef="USD" decimals="0">2900000</ecd:PeoActuallyPaidCompAmt>
+  <ecd:TotalShareholderRtnAmt contextRef="FY23" unitRef="USD" decimals="2">100.00</ecd:TotalShareholderRtnAmt>
+  <ecd:PeerGroupTotalShareholderRtnAmt contextRef="FY23" unitRef="USD" decimals="2">100.00</ecd:PeerGroupTotalShareholderRtnAmt>
+  <us-gaap:NetIncomeLoss contextRef="FY23" unitRef="USD" decimals="-6">40000000</us-gaap:NetIncomeLoss>
+  <ecd:CoSelectedMeasureAmt contextRef="FY23" unitRef="USD" decimals="-6">650000000</ecd:CoSelectedMeasureAmt>
+  <ecd:CoSelectedMeasureName contextRef="FY24">Revenue</ecd:CoSelectedMeasureName>
+</xbrl>

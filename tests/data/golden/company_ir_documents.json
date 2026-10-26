@@ -1,0 +1,59 @@
+{
+ "absent": {},
+ "model": "marketlens.IrDocument",
+ "notes": [],
+ "offload": "auto",
+ "pagination": null,
+ "provenance": {
+  "as_of": null,
+  "authority": [
+   "company"
+  ],
+  "cached": false,
+  "dataset": "sec.submissions,company.ir_documents",
+  "delay": "unknown",
+  "derived_from": [],
+  "environment": null,
+  "feed": null,
+  "knowledge_time": "2026-10-02T20:00:00Z",
+  "lag_days": 143.0,
+  "operation": null,
+  "pages_fetched": 2,
+  "provider": "company",
+  "request": {
+   "as_of": null,
+   "ticker": "TESTCO"
+  },
+  "route": "omni company.ir_documents <- the company's site (operator's list) + www.sec.gov/Archives",
+  "schema_version": "1.1.0",
+  "stale": null,
+  "truncated": false,
+  "truncation_note": null,
+  "upstream_request_id": null
+ },
+ "risk": null,
+ "rows": [
+  {
+   "absent": {
+    "edgar_accession": "not_applicable",
+    "edgar_form": "not_applicable"
+   },
+   "authority": "company",
+   "cik": "0009999901",
+   "content_type": "html",
+   "document_url": "https://ir.testco.example.com/news/investor-day-2026",
+   "edgar_accession": null,
+   "edgar_form": null,
+   "kind": "investor_day",
+   "knowledge_time": "2026-10-02T20:00:00Z",
+   "published": "2026-05-12",
+   "served_url": "https://ir.testco.example.com/news/investor-day-2026",
+   "sha256": "85e24cdb778bb5fa97b92ef156b67b366e2259ef624c371a8a6c9fdceb5886c3",
+   "text": "Testco Synthetic Corp Hosts Investor Day 2026\nSAN JOSE, Calif., May 12, 2026 -- Testco Synthetic Corp today hosted its Investor Day 2026 and outlined its long-term financial model.\nOver the next three to five years, Testco expects revenue growth greater than 20% CAGR.\nThe company targets non-GAAP operating margin of approximately 30% by 2029.\nThese statements are forward-looking.",
+   "text_chars": 382,
+   "ticker": "TESTCO",
+   "title": "Testco Synthetic Corp Investor Day 2026",
+   "truncated": false
+  }
+ ]
+}

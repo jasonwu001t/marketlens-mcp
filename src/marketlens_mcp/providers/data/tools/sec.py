@@ -1,6 +1,7 @@
-"""SEC EDGAR: filings, XBRL facts, point-in-time fundamentals, earnings
-releases and press-release EPS, material filing events, insider trades, 13F
-holdings and fund N-PORT reports (capability ``filings``). Every fetch names the operator's
+"""SEC EDGAR: filings, XBRL facts, XBRL frames (one concept across filers),
+point-in-time fundamentals, earnings releases and press-release EPS, material
+filing events, pay versus performance, insider trades, 13F holdings and fund
+N-PORT reports (capability ``filings``). Every fetch names the operator's
 contact in its User-Agent (SEC_CONTACT_EMAIL), as EDGAR's fair-access rule
 asks; unset, marketlens-data sends its placeholder contact and every answer
 says so."""
@@ -27,7 +28,9 @@ from marketlens_schema.data import (
     FundReport,
     InsiderTransaction,
     InstitutionalHolding,
+    PayVsPerformance,
     XbrlFact,
+    XbrlFrameValue,
 )
 
 from .. import frames as F
@@ -197,6 +200,92 @@ class FactsInputs(Inputs):
     )
 
 
+_FRAME_TAG = re.compile(r"^[A-Za-z][A-Za-z0-9]{1,149}$")
+_FRAME_PERIOD = re.compile(r"^CY\d{4}(?:Q[1-4]I?)?$")
+_FRAME_UNIT = re.compile(r"^[A-Za-z][A-Za-z0-9_-]{0,39}$")
+
+
+def _frame_tag(value: str) -> str:
+    if not _FRAME_TAG.match(value):
+        raise ValueError(f"{value!r} is not an XBRL concept name (e.g. Revenues, Assets)")
+    return value
+
+
+def _frame_period(value: str) -> str:
+    s = value.strip().upper()
+    if not _FRAME_PERIOD.match(s):
+        raise ValueError(
+            f"{value!r} is not a frames period: CY2025 (a year), CY2025Q2 (a quarter), CY2025Q2I (an instant)"
+        )
+    return s
+
+
+def _frame_unit(value: str) -> str:
+    if not _FRAME_UNIT.match(value):
+        raise ValueError(f"{value!r} is not a frames unit (USD, USD-per-shares, shares, pure)")
+    return value
+
+
+class FramesInputs(Inputs):
+    tag: Annotated[str, AfterValidator(_frame_tag)] = Field(
+        description="XBRL concept, e.g. Revenues, NetIncomeLoss, Assets, EarningsPerShareDiluted; or the alias "
+        "revenue: per filer revenue from contracts, else Revenues (a larger Revenues leads)."
+    )
+    period: Annotated[str, AfterValidator(_frame_period)] = Field(
+        description="Calendar period: CY2025 (a year), CY2025Q2 (a quarter) or CY2025Q2I (an instant, for a "
+        "balance such as Assets). A fiscal period is placed in the calendar period it most nearly fits."
+    )
+    taxonomy: Literal["us-gaap", "dei", "ifrs-full", "srt"] = Field(
+        default="us-gaap", description="The concept's taxonomy (dei for EntityCommonStockSharesOutstanding)."
+    )
+    unit: Annotated[str, AfterValidator(_frame_unit)] | None = Field(
+        default=None,
+        description="As the frames API spells it: USD, USD-per-shares, shares, pure. Default: the unit "
+        "marketlens-data configures for the concept, else USD.",
+    )
+    tickers: Annotated[list[Ticker], Field(min_length=1, max_length=200)] | None = Field(
+        default=None, description="Only these companies (matched by the SEC's CIK). Default: every filer."
+    )
+    sort: Literal["desc", "asc"] = Field(default="desc", description="By value.")
+    limit: int = Field(default=100, ge=1, le=10000, description="At most this many rows, after sorting.")
+    as_of: AsOf | None = common.as_of_field()
+
+
+PVP_MEASURES = (
+    "peo_total_comp",
+    "peo_comp_actually_paid",
+    "non_peo_neo_avg_total_comp",
+    "non_peo_neo_avg_comp_actually_paid",
+    "company_tsr",
+    "peer_group_tsr",
+    "net_income",
+    "company_selected_measure",
+)
+
+
+class PayVsPerformanceInputs(Inputs):
+    ticker: Ticker = Field(description=TICKER_DOC)
+    measures: (
+        Annotated[
+            list[
+                Literal[
+                    "peo_total_comp",
+                    "peo_comp_actually_paid",
+                    "non_peo_neo_avg_total_comp",
+                    "non_peo_neo_avg_comp_actually_paid",
+                    "company_tsr",
+                    "peer_group_tsr",
+                    "net_income",
+                    "company_selected_measure",
+                ]
+            ],
+            Field(min_length=1, max_length=8),
+        ]
+        | None
+    ) = Field(default=None, description="Only these measures. Default: all eight.")
+    as_of: AsOf | None = common.as_of_field()
+
+
 class FundamentalsInputs(Inputs):
     ticker: Ticker = Field(description=TICKER_DOC)
     metrics: list[FundamentalMetric] | None = Field(
@@ -268,6 +357,8 @@ INSUFFICIENT = AbsenceCode.INSUFFICIENT_DATA
 ROUTES = {
     "sec_filings": "omni sec.submissions <- data.sec.gov/submissions",
     "sec_xbrl_facts": "omni sec.company_facts <- data.sec.gov/api/xbrl/companyfacts",
+    "sec_xbrl_frames": "omni sec.xbrl_frames <- data.sec.gov/api/xbrl/frames + www.sec.gov/Archives/edgar/full-index (XBRL index)",
+    "sec_pay_vs_performance": "omni sec.pay_vs_performance <- sec.submissions + www.sec.gov/Archives (proxy XBRL)",
     "filings_events": "omni sec.filing_events <- sec.submissions + www.sec.gov/Archives (filing index, primary document)",
     "sec_fundamentals": "omni sec.fundamentals <- sec.company_facts (computed locally)",
     "sec_earnings_releases": "omni sec.earnings_releases <- data.sec.gov/submissions (8-K Item 2.02)",
@@ -451,6 +542,191 @@ async def filings_events(ctx: ToolContext, args: EventsInputs) -> ToolOutput:
     return _output(
         ctx, s, FilingEvent, rows, prov
     )  # the spec's output risk: external_text (the headline is the filer's prose)
+
+
+def _frame_unit_default(tag: str, taxonomy: str) -> str:
+    """The unit marketlens-data configures for a concept it collects, else USD."""
+    try:
+        from omni.sources import sec_xbrl_frames
+
+        spec = sec_xbrl_frames.concepts().get(tag)
+    except Exception:  # no configuration readable: the caller's unit or USD
+        spec = None
+    return spec["unit"] if spec and spec["taxonomy"] == taxonomy else "USD"
+
+
+#: The concept alias `revenue`: a revenue fallback chain in its order (revenue
+#: from contracts, then Revenues), the two concepts marketlens-data collects
+#: frames of, with a lead rule on one period: per filer the first concept it
+#: states; revenue from contracts, a part of the revenue where a filer also
+#: states a total, yields to Revenues when that is larger by more than 0.5%.
+REVENUE_ALIAS = ("RevenueFromContractWithCustomerExcludingAssessedTax", "Revenues")
+_LARGER = 0.005
+
+
+def _revenue_lead(records: list[dict]) -> list[dict]:
+    """One record per filer: the alias's concept for it (REVENUE_ALIAS)."""
+    by_cik: dict[str, dict[str, dict]] = {}
+    for r in records:
+        by_cik.setdefault(F.text(r["cik"]) or "", {})[F.text(r["tag"]) or ""] = r
+    out = []
+    for stated in by_cik.values():
+        part, total = (stated.get(t) for t in REVENUE_ALIAS)
+        lead = part or total
+        larger = (
+            part is not None
+            and total is not None
+            and ((F.number(total["value"]) or 0) > (F.number(part["value"]) or 0) * (1 + _LARGER))
+        )
+        if larger:
+            lead = total
+        out.append(lead)
+    return out
+
+
+async def sec_xbrl_frames(ctx: ToolContext, args: FramesInputs) -> ToolOutput:
+    s = _settings(ctx)
+    as_of = common.as_of_of(args.as_of)
+    alias = args.tag == "revenue"
+    unit = args.unit or ("USD" if alias else _frame_unit_default(args.tag, args.taxonomy))
+    tags = REVENUE_ALIAS if alias else (args.tag,)
+    identities = [{"taxonomy": args.taxonomy, "tag": t, "unit": unit, "period": args.period} for t in tags]
+    asked = list(dict.fromkeys(args.tickers or []))
+
+    def work(session):
+        records = []
+        for identity in identities:
+            session.refresh("sec.xbrl_frames", identity)
+            records += F.records(session.read("sec.xbrl_frames", as_of=as_of, **identity))
+        if alias:
+            records = _revenue_lead(records)
+        ciks = {}
+        if asked:
+            sec_source = session.module("omni.sources.sec")
+            errors = session.module("omni.errors")
+            for t in asked:
+                try:
+                    ciks[t] = f"{sec_source.cik_for(t):010d}"
+                except errors.PermanentError:  # not an SEC filer: named in the note as missing
+                    ciks[t] = None
+        return records, ciks
+
+    (records, ciks), session = await common.run(
+        ctx, s, work, source="sec", subject=("frame", f"{args.tag} {args.period}")
+    )
+    by_cik = {c: t for t, c in ciks.items() if c is not None}
+    rows = []
+    for r in records:
+        cik = F.text(r["cik"])
+        if asked and cik not in by_cik:
+            continue
+        rows.append(
+            common.row(
+                XbrlFrameValue,
+                {
+                    "taxonomy": F.text(r["taxonomy"]),
+                    "tag": F.text(r["tag"]),
+                    "unit": F.text(r["unit"]),
+                    "period": F.text(r["period"]),
+                    "cik": cik,
+                    "ticker": by_cik.get(cik) or F.text(r["ticker"]),
+                    "entity_name": F.text(r["entity_name"]),
+                    "period_start": F.day(r["period_start"]),
+                    "period_end": F.day(r["period_end"]),
+                    "value": F.number(r["value"]),
+                    "accession_number": F.text(r["accession_number"]),
+                    "filing_date": F.day(r["filing_date"]),
+                    "stamp": F.text(r["stamp"]),
+                    "knowledge_time": F.instant(r["knowledge_time"]),
+                },
+                codes={"ticker": NPS, "period_start": NA, "filing_date": NA},
+            )
+        )
+    rows.sort(key=lambda r: r.cik)
+    rows.sort(key=lambda r: r.value, reverse=args.sort == "desc")
+    rows = rows[: args.limit]
+    found = {r.cik for r in rows}
+    missing = [t for t in asked if ciks.get(t) not in found]
+    notes = (
+        [f"No {args.tag} value for {args.period} in the frame for: {', '.join(missing)}."] if missing else []
+    )
+    if alias:
+        notes.append(
+            "tag revenue: per filer RevenueFromContractWithCustomerExcludingAssessedTax, or Revenues where the "
+            "filer states only that or a Revenues larger by more than 0.5%; each row's tag names its concept."
+        )
+    prov = _prov(
+        ctx,
+        "sec_xbrl_frames",
+        datasets=("sec.xbrl_frames",),
+        as_of=as_of,
+        rows=rows,
+        session=session,
+        request={
+            "tag": args.tag,
+            "period": args.period,
+            "taxonomy": args.taxonomy,
+            "unit": unit,
+            "tickers": args.tickers,
+            "sort": args.sort,
+            "limit": args.limit,
+            "as_of": args.as_of,
+        },
+    )
+    return _output(ctx, s, XbrlFrameValue, rows, prov, notes=notes)
+
+
+async def sec_pay_vs_performance(ctx: ToolContext, args: PayVsPerformanceInputs) -> ToolOutput:
+    s = _settings(ctx)
+    as_of = common.as_of_of(args.as_of)
+    identity = {"ticker": args.ticker}
+
+    def work(session):
+        index_fresh = session.refresh("sec.submissions", identity)
+        # derived from the stored filings index: read again whenever the index was just fetched
+        session.refresh("sec.pay_vs_performance", identity, force=not index_fresh)
+        return F.records(session.read("sec.pay_vs_performance", as_of=as_of, **identity))
+
+    records, session = await common.run(ctx, s, work, source="sec", subject=("filer", args.ticker))
+    wanted = set(args.measures or PVP_MEASURES)
+    rows = [
+        common.row(
+            PayVsPerformance,
+            {
+                "ticker": F.text(r["ticker"]) or args.ticker,
+                "cik": F.text(r["cik"]),
+                "fiscal_year": F.integer(r["fiscal_year"]),
+                "measure": F.text(r["measure"]),
+                "executive": F.text(r["executive"]),
+                "executive_name": F.text(r["executive_name"]),
+                "concept": F.text(r["concept"]),
+                "value": F.number(r["value"]),
+                "unit": F.text(r["unit"]),
+                "measure_name": F.text(r["measure_name"]),
+                "period_start": F.day(r["period_start"]),
+                "period_end": F.day(r["period_end"]),
+                "accession_number": F.text(r["accession_number"]),
+                "form": F.text(r["form"]),
+                "filing_date": F.day(r["filing_date"]),
+                "knowledge_time": F.instant(r["knowledge_time"]),
+            },
+            codes={"executive": NA, "executive_name": NPS, "measure_name": NA},
+        )
+        for r in records
+        if F.text(r["measure"]) in wanted
+    ]
+    rows.sort(key=lambda r: (PVP_MEASURES.index(r.measure), r.executive or ""))
+    rows.sort(key=lambda r: r.fiscal_year, reverse=True)
+    prov = _prov(
+        ctx,
+        "sec_pay_vs_performance",
+        datasets=("sec.submissions", "sec.pay_vs_performance"),
+        as_of=as_of,
+        rows=rows,
+        session=session,
+        request={"ticker": args.ticker, "measures": args.measures, "as_of": args.as_of},
+    )
+    return _output(ctx, s, PayVsPerformance, rows, prov)
 
 
 async def sec_xbrl_facts(ctx: ToolContext, args: FactsInputs) -> ToolOutput:
@@ -1053,7 +1329,9 @@ def _spec(
 HANDLERS = {
     "sec_filings": sec_filings,
     "sec_xbrl_facts": sec_xbrl_facts,
+    "sec_xbrl_frames": sec_xbrl_frames,
     "filings_events": filings_events,
+    "sec_pay_vs_performance": sec_pay_vs_performance,
     "sec_fundamentals": sec_fundamentals,
     "sec_earnings_releases": sec_earnings_releases,
     "sec_earnings_figures": sec_earnings_figures,
@@ -1112,6 +1390,45 @@ SPECS: tuple[ToolSpec, ...] = (
         XbrlFact,
         "sec",
         "omni sec.company_facts <- data.sec.gov/api/xbrl/companyfacts",
+    ),
+    _spec(
+        "sec_xbrl_frames",
+        "SEC XBRL frames",
+        common.describe(
+            "One XBRL concept for every filer in one calendar period, from the SEC's frames API (a peer "
+            "comparison): per filer the value of the fact the SEC finds last filed for the period, the filer's "
+            "name and ticker, the fact's own period and the reporting filing, sorted by value. Period CY2025, "
+            "CY2025Q2 or CY2025Q2I (an instant, for balances). knowledge_time is the reporting filing's EDGAR "
+            "acceptance, or the end of its filing date from EDGAR's quarterly XBRL index (stamp says which; the "
+            "first read of a filing year downloads that index, about 0.5 MB a quarter); a restated value is "
+            f"served from the restating filing. {CONTACT}",
+            "vintage",
+        ),
+        "One XBRL concept across filers in a calendar period",
+        FramesInputs,
+        XbrlFrameValue,
+        "sec",
+        ROUTES["sec_xbrl_frames"],
+    ),
+    _spec(
+        "sec_pay_vs_performance",
+        "SEC pay versus performance",
+        common.describe(
+            "A company's pay-versus-performance table from its proxies' XBRL (Reg. S-K Item 402(v), DEF 14A "
+            "and DEFR14A since 2023): per fiscal year the PEO's Summary Compensation Table total and "
+            "compensation actually paid (one row per PEO when the year had two), the other named executives' "
+            "averages, company and peer-group TSR (value of $100 invested at the start of the proxy's first "
+            "year), net income and the company-selected measure with its name (filer text: untrusted). Every "
+            f"proxy restates the earlier years; as_of reads the proxy known then. {CONTACT} "
+            + common.PIT["at_event"],
+            "vintage",
+        ),
+        "Pay versus performance from proxy statements",
+        PayVsPerformanceInputs,
+        PayVsPerformance,
+        "sec",
+        ROUTES["sec_pay_vs_performance"],
+        risk="external_text",
     ),
     _spec(
         "sec_fundamentals",
@@ -1227,7 +1544,9 @@ SPECS: tuple[ToolSpec, ...] = (
 DATASETS: dict[str, tuple[str, ...]] = {
     "sec_filings": ("sec.submissions",),
     "sec_xbrl_facts": ("sec.company_facts",),
+    "sec_xbrl_frames": ("sec.xbrl_frames",),
     "filings_events": ("sec.submissions", "sec.filing_events"),
+    "sec_pay_vs_performance": ("sec.submissions", "sec.pay_vs_performance"),
     "sec_fundamentals": ("sec.company_facts", "sec.fundamentals"),
     "sec_earnings_releases": ("sec.earnings_releases",),
     "sec_earnings_figures": ("sec.earnings_press_release_figures",),

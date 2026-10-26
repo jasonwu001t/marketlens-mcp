@@ -1,0 +1,83 @@
+{
+ "absent": {},
+ "model": "marketlens.EarningsGuidance",
+ "notes": [],
+ "offload": "auto",
+ "pagination": null,
+ "provenance": {
+  "as_of": null,
+  "authority": [
+   "official"
+  ],
+  "cached": false,
+  "dataset": "sec.earnings_guidance",
+  "delay": "unknown",
+  "derived_from": [],
+  "environment": null,
+  "feed": null,
+  "knowledge_time": "2026-08-04T20:05:00Z",
+  "lag_days": 59.0,
+  "operation": null,
+  "pages_fetched": 1,
+  "provider": "sec",
+  "request": {
+   "as_of": null,
+   "end": "2026-10-02",
+   "start": "2023-10-02",
+   "ticker": "GUIDCO"
+  },
+  "route": "omni sec.earnings_guidance <- www.sec.gov/Archives (EX-99.1 prose and guidance tables)",
+  "schema_version": "1.1.0",
+  "stale": null,
+  "truncated": false,
+  "truncation_note": null,
+  "upstream_request_id": null
+ },
+ "risk": null,
+ "rows": [
+  {
+   "absent": null,
+   "accepted_at": "2026-08-04T20:05:00Z",
+   "accession_number": "0009999905-26-000031",
+   "basis": "non_gaap",
+   "cik": "0009999905",
+   "exhibit": "EX-99.1",
+   "exhibit_url": "https://www.sec.gov/Archives/edgar/data/9999905/000999990526000031/gc-ex991.htm",
+   "fiscal_quarter": 3,
+   "fiscal_year": 2026,
+   "high": 0.56,
+   "knowledge_time": "2026-08-04T20:05:00Z",
+   "low": 0.56,
+   "metric": "gross_margin",
+   "mid": 0.56,
+   "parse_rule": "sentence.approx.percent",
+   "period_kind": "next_quarter",
+   "period_label": "third quarter of 2026",
+   "source_text": "Non-GAAP gross margin is expected to be approximately 56%.",
+   "ticker": "GUIDCO",
+   "unit": "fraction"
+  },
+  {
+   "absent": null,
+   "accepted_at": "2026-08-04T20:05:00Z",
+   "accession_number": "0009999905-26-000031",
+   "basis": "gaap",
+   "cik": "0009999905",
+   "exhibit": "EX-99.1",
+   "exhibit_url": "https://www.sec.gov/Archives/edgar/data/9999905/000999990526000031/gc-ex991.htm",
+   "fiscal_quarter": 3,
+   "fiscal_year": 2026,
+   "high": 13300000000.0,
+   "knowledge_time": "2026-08-04T20:05:00Z",
+   "low": 12700000000.0,
+   "metric": "revenue",
+   "mid": 13000000000.0,
+   "parse_rule": "sentence.approx_plus_minus.usd",
+   "period_kind": "next_quarter",
+   "period_label": "third quarter of 2026",
+   "source_text": "For the third quarter of 2026, Guidco expects revenue to be approximately $13 billion, plus or minus $300 million.",
+   "ticker": "GUIDCO",
+   "unit": "USD"
+  }
+ ]
+}

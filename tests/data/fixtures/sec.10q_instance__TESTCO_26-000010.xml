@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- synthetic: a 10-Q's XBRL instance with segment facts, in the shape EDGAR extracts from inline XBRL -->
+<xbrl xmlns="http://www.xbrl.org/2003/instance" xmlns:tc="http://example.com/testco/20260630"
+  xmlns:dei="http://xbrl.sec.gov/dei/2025" xmlns:us-gaap="http://fasb.org/us-gaap/2025" xmlns:srt="http://fasb.org/srt/2025"
+  xmlns:country="http://xbrl.sec.gov/country/2025" xmlns:iso4217="http://www.xbrl.org/2003/iso4217" xmlns:xbrldi="http://xbrl.org/2006/xbrldi">
+  <unit id="USD"><measure>iso4217:USD</measure></unit>
+  <context id="D"><entity><identifier scheme="http://www.sec.gov/CIK">0009999901</identifier></entity><period><startDate>2026-04-01</startDate><endDate>2026-06-30</endDate></period></context>
+  <context id="Q2_cloud"><entity><identifier scheme="http://www.sec.gov/CIK">0009999901</identifier><segment><xbrldi:explicitMember dimension="us-gaap:StatementBusinessSegmentsAxis">tc:CloudMember</xbrldi:explicitMember></segment></entity><period><startDate>2026-04-01</startDate><endDate>2026-06-30</endDate></period></context>
+  <context id="Q2_devices"><entity><identifier scheme="http://www.sec.gov/CIK">0009999901</identifier><segment><xbrldi:explicitMember dimension="us-gaap:StatementBusinessSegmentsAxis">tc:DevicesMember</xbrldi:explicitMember></segment></entity><period><startDate>2026-04-01</startDate><endDate>2026-06-30</endDate></period></context>
+  <context id="H1_cloud"><entity><identifier scheme="http://www.sec.gov/CIK">0009999901</identifier><segment><xbrldi:explicitMember dimension="us-gaap:StatementBusinessSegmentsAxis">tc:CloudMember</xbrldi:explicitMember></segment></entity><period><startDate>2026-01-01</startDate><endDate>2026-06-30</endDate></period></context>
+  <context id="Q2_us"><entity><identifier scheme="http://www.sec.gov/CIK">0009999901</identifier><segment><xbrldi:explicitMember dimension="srt:StatementGeographicalAxis">country:US</xbrldi:explicitMember></segment></entity><period><startDate>2026-04-01</startDate><endDate>2026-06-30</endDate></period></context>
+  <context id="Q2_sub"><entity><identifier scheme="http://www.sec.gov/CIK">0009999901</identifier><segment><xbrldi:explicitMember dimension="srt:ProductOrServiceAxis">tc:SubscriptionMember</xbrldi:explicitMember></segment></entity><period><startDate>2026-04-01</startDate><endDate>2026-06-30</endDate></period></context>
+  <dei:DocumentType contextRef="D">10-Q</dei:DocumentType>
+  <dei:DocumentPeriodEndDate contextRef="D">2026-06-30</dei:DocumentPeriodEndDate>
+  <dei:DocumentFiscalYearFocus contextRef="D">2026</dei:DocumentFiscalYearFocus>
+  <dei:DocumentFiscalPeriodFocus contextRef="D">Q2</dei:DocumentFiscalPeriodFocus>
+  <us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax contextRef="D" unitRef="USD" decimals="-6">500000000</us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax>
+  <us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax contextRef="Q2_cloud" unitRef="USD" decimals="-6">320000000</us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax>
+  <us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax contextRef="Q2_devices" unitRef="USD" decimals="-6">180000000</us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax>
+  <us-gaap:OperatingIncomeLoss contextRef="Q2_cloud" unitRef="USD" decimals="-6">96000000</us-gaap:OperatingIncomeLoss>
+  <us-gaap:OperatingIncomeLoss contextRef="Q2_devices" unitRef="USD" decimals="-6">-12000000</us-gaap:OperatingIncomeLoss>
+  <us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax contextRef="H1_cloud" unitRef="USD" decimals="-6">610000000</us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax>
+  <us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax contextRef="Q2_us" unitRef="USD" decimals="-6">275000000</us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax>
+  <us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax contextRef="Q2_sub" unitRef="USD" decimals="-6">210000000</us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax>
+</xbrl>

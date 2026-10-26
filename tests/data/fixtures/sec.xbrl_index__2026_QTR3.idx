@@ -1,0 +1,14 @@
+Description:           XBRL Index of EDGAR Dissemination Feed (synthetic)
+Last Data Received:    September 30, 2026
+Comments:              webmaster@sec.gov
+Anonymous FTP:         ftp://ftp.sec.gov/edgar/
+
+
+
+
+CIK|Company Name|Form Type|Date Filed|Filename
+--------------------------------------------------------------------------------
+9999901|TESTCO SYNTHETIC CORP|10-Q|2026-08-05|edgar/data/9999901/0009999901-26-000020.txt
+9999903|EVENTCO SYNTHETIC INC|10-Q|2026-08-06|edgar/data/9999903/0009999903-26-000021.txt
+9999990|UNLISTED SYNTHETIC LLC|10-Q|2026-08-14|edgar/data/9999990/0009999990-26-000005.txt
+9999992|CONTRACTS ONLY SYNTHETIC INC|10-Q|2026-08-12|edgar/data/9999992/0009999992-26-000007.txt

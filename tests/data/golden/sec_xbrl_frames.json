@@ -1,0 +1,96 @@
+{
+ "absent": {},
+ "model": "marketlens.XbrlFrameValue",
+ "notes": [],
+ "offload": "auto",
+ "pagination": null,
+ "provenance": {
+  "as_of": null,
+  "authority": [
+   "official"
+  ],
+  "cached": false,
+  "dataset": "sec.xbrl_frames",
+  "delay": "unknown",
+  "derived_from": [],
+  "environment": null,
+  "feed": null,
+  "knowledge_time": "2026-08-15T03:59:59.999999Z",
+  "lag_days": 94.0,
+  "operation": null,
+  "pages_fetched": 1,
+  "provider": "sec",
+  "request": {
+   "as_of": null,
+   "limit": 100,
+   "period": "CY2026Q2",
+   "sort": "desc",
+   "tag": "Revenues",
+   "taxonomy": "us-gaap",
+   "tickers": null,
+   "unit": "USD"
+  },
+  "route": "omni sec.xbrl_frames <- data.sec.gov/api/xbrl/frames + www.sec.gov/Archives/edgar/full-index (XBRL index)",
+  "schema_version": "1.1.0",
+  "stale": null,
+  "truncated": false,
+  "truncation_note": null,
+  "upstream_request_id": null
+ },
+ "risk": null,
+ "rows": [
+  {
+   "absent": {
+    "ticker": "not_provided_by_source"
+   },
+   "accession_number": "0009999990-26-000005",
+   "cik": "0009999990",
+   "entity_name": "UNLISTED SYNTHETIC LLC",
+   "filing_date": "2026-08-14",
+   "knowledge_time": "2026-08-15T03:59:59.999999Z",
+   "period": "CY2026Q2",
+   "period_end": "2026-06-30",
+   "period_start": "2026-04-01",
+   "stamp": "filing_date",
+   "tag": "Revenues",
+   "taxonomy": "us-gaap",
+   "ticker": null,
+   "unit": "USD",
+   "value": 800000000.0
+  },
+  {
+   "absent": null,
+   "accession_number": "0009999901-26-000020",
+   "cik": "0009999901",
+   "entity_name": "TESTCO SYNTHETIC CORP",
+   "filing_date": "2026-08-05",
+   "knowledge_time": "2026-08-06T03:59:59.999999Z",
+   "period": "CY2026Q2",
+   "period_end": "2026-06-30",
+   "period_start": "2026-04-01",
+   "stamp": "filing_date",
+   "tag": "Revenues",
+   "taxonomy": "us-gaap",
+   "ticker": "TESTCO",
+   "unit": "USD",
+   "value": 500000000.0
+  },
+  {
+   "absent": null,
+   "accession_number": "0009999903-26-000021",
+   "cik": "0009999903",
+   "entity_name": "EVENTCO SYNTHETIC INC",
+   "filing_date": "2026-08-06",
+   "knowledge_time": "2026-08-07T03:59:59.999999Z",
+   "period": "CY2026Q2",
+   "period_end": "2026-06-27",
+   "period_start": "2026-03-29",
+   "stamp": "filing_date",
+   "tag": "Revenues",
+   "taxonomy": "us-gaap",
+   "ticker": "EVNTCO",
+   "unit": "USD",
+   "value": 300000000.0
+  }
+ ]
+}

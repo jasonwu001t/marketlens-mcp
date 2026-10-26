@@ -24,7 +24,10 @@ Conventions of base.py hold, plus:
   it mark their responses ``external_text``.
 
 FilingSearchHit is built by the built-in official provider (filings_search),
-not the extra; FilingEvent by the extra's filings_events.
+not the extra; FilingEvent by the extra's filings_events, XbrlFrameValue by
+sec_xbrl_frames, PayVsPerformance by sec_pay_vs_performance, EarningsGuidance,
+NonGaapFigure, SegmentFact, ForeignQuarterlyFigure, IrDocument and IrTarget by
+the tools of the same datasets.
 """
 
 from __future__ import annotations
@@ -225,6 +228,83 @@ class XbrlFact(CanonicalModel):
     knowledge_time: UtcDatetime = _known()
 
 
+class XbrlFrameValue(CanonicalModel):
+    """One filer's value of one XBRL concept in one calendar period, from the
+    SEC's frames API: the fact the SEC finds last filed for the period, so a
+    restated value is the restating filing's."""
+
+    schema_name: ClassVar[str] = "marketlens.XbrlFrameValue"
+    time_column: ClassVar[str | None] = "period_end"
+    group_column: ClassVar[str | None] = "cik"
+    value_columns: ClassVar[tuple[str, ...]] = ("value",)
+
+    taxonomy: str = Field(description="us-gaap, dei, ifrs-full, srt")
+    tag: str = Field(description="The XBRL concept, verbatim (Revenues, Assets, ...)")
+    unit: str = Field(description="As the frames API spells it: USD, USD-per-shares, shares, pure")
+    period: str = Field(description="CY2025 (a year), CY2025Q2 (a quarter), CY2025Q2I (an instant)")
+    cik: str = Field(description="10-digit, zero-padded")
+    ticker: str | None = Field(default=None, description="The SEC company list's first ticker for the CIK")
+    entity_name: str
+    period_start: Date | None = Field(default=None, description="The fact's own start; None for an instant")
+    period_end: Date = Field(
+        description="The fact's own end (a fiscal quarter is placed in the nearest calendar one)"
+    )
+    value: float = _unit("as_published", description="In the row's `unit`")
+    accession_number: str = Field(description="The filing that reported the value")
+    filing_date: Date | None = Field(
+        default=None, description="From EDGAR's quarterly XBRL index, when knowledge_time came from it"
+    )
+    stamp: Literal["acceptance", "filing_date"] = Field(
+        description="How knowledge_time was set: EDGAR's acceptance instant, or the end of the filing date in New York"
+    )
+    knowledge_time: UtcDatetime = _known()
+
+
+class PayVsPerformance(CanonicalModel):
+    """One measure of one fiscal year of a company's pay-versus-performance
+    table (Reg. S-K Item 402(v)), as one proxy tagged it in XBRL (ecd). Every
+    proxy restates the earlier years; the read is the latest proxy at as_of.
+    executive_name and measure_name are the filer's text: UNTRUSTED."""
+
+    schema_name: ClassVar[str] = "marketlens.PayVsPerformance"
+    time_column: ClassVar[str | None] = "period_end"
+    group_column: ClassVar[str | None] = "measure"
+    value_columns: ClassVar[tuple[str, ...]] = ("value",)
+
+    ticker: str
+    cik: str
+    fiscal_year: int = Field(
+        description="The calendar year the fiscal year ends in (a year closing in the first week of January is the year before)"
+    )
+    measure: Literal[
+        "peo_total_comp",
+        "peo_comp_actually_paid",
+        "non_peo_neo_avg_total_comp",
+        "non_peo_neo_avg_comp_actually_paid",
+        "company_tsr",
+        "peer_group_tsr",
+        "net_income",
+        "company_selected_measure",
+    ]
+    executive: str | None = Field(
+        default=None,
+        description="The filer's member when a PEO figure is tagged per person (two PEOs in a year)",
+    )
+    executive_name: str | None = Field(default=None, description="The filer's own text for the PEO")
+    concept: str = Field(description="ecd:PeoTotalCompAmt, us-gaap:NetIncomeLoss, ...")
+    value: float = _unit(
+        "as_published", description="In the row's `unit`: USD in full; a TSR is the value of $100 invested"
+    )
+    unit: str = Field(description="USD, USD/shares, pure, ... as tagged")
+    measure_name: str | None = Field(default=None, description="The company-selected measure's name")
+    period_start: Date | None = None
+    period_end: Date
+    accession_number: str = Field(description="The proxy (DEF 14A or DEFR14A)")
+    form: str
+    filing_date: Date
+    knowledge_time: UtcDatetime = _known()
+
+
 class FundamentalValue(CanonicalModel):
     """One point-in-time fundamentals figure computed from the stored XBRL facts."""
 
@@ -294,6 +374,206 @@ class EarningsFigure(CanonicalModel):
     unit: str = Field(description="As the parser states it: USD/share")
     basis: str = Field(description="gaap or non_gaap")
     source_text: str = Field(description="The table row the figure came from (untrusted text)")
+    parse_rule: str
+    knowledge_time: UtcDatetime = _known()
+
+
+class EarningsGuidance(CanonicalModel):
+    """One guidance statement of an earnings press release (EX-99.1): the
+    company's own outlook for one metric over one period, from its prose or its
+    guidance table by a named rule; ``source_text`` is UNTRUSTED company text.
+    A margin or tax rate is a fraction (56 % is 0.56)."""
+
+    schema_name: ClassVar[str] = "marketlens.EarningsGuidance"
+    time_column: ClassVar[str | None] = "accepted_at"
+    group_column: ClassVar[str | None] = "metric"
+    value_columns: ClassVar[tuple[str, ...]] = ("low", "high", "mid")
+
+    ticker: str
+    cik: str
+    accession_number: str
+    accepted_at: UtcDatetime = _unit("UTC", description="The 8-K's (or 6-K's) EDGAR acceptance")
+    exhibit: str = Field(description="EX-99.1, EX-99, ...")
+    exhibit_url: str
+    metric: str = Field(
+        description="revenue, gross_margin, operating_margin, operating_income, opex, tax_rate, capex, eps"
+    )
+    period_kind: str = Field(description="next_quarter or fiscal_year")
+    period_label: str = Field(description="As stated: third quarter of 2026, full year 2026")
+    fiscal_year: int | None = None
+    fiscal_quarter: int | None = None
+    low: float = _unit("as_published", description="In the row's `unit`")
+    high: float = _unit("as_published", description="In the row's `unit`")
+    mid: float = _unit("as_published", description="(low + high) / 2; a point estimate has low = high = mid")
+    unit: str = Field(description="USD (full dollars), fraction (a margin or rate) or USD/share")
+    basis: str = Field(description="gaap or non_gaap, the sentence's own word")
+    source_text: str = Field(description="The sentence or table row (untrusted text)")
+    parse_rule: str
+    knowledge_time: UtcDatetime = _known()
+
+
+class NonGaapFigure(CanonicalModel):
+    """One line of an earnings press release's GAAP to non-GAAP reconciliation
+    table: a GAAP or non-GAAP figure, or a bridge line between them, in the
+    column of the release's quarter. ``source_text`` is UNTRUSTED company text."""
+
+    schema_name: ClassVar[str] = "marketlens.NonGaapFigure"
+    time_column: ClassVar[str | None] = "accepted_at"
+    group_column: ClassVar[str | None] = "metric"
+    value_columns: ClassVar[tuple[str, ...]] = ("value",)
+
+    ticker: str
+    cik: str
+    accession_number: str
+    accepted_at: UtcDatetime = _unit("UTC", description="The 8-K's EDGAR acceptance")
+    exhibit: str
+    exhibit_url: str
+    metric: str = Field(
+        description="gross_profit, gross_margin, operating_expenses, operating_income, operating_margin, "
+        "net_income, eps_diluted, stock_based_compensation, amortization_acquisition_intangibles, restructuring"
+    )
+    basis: str = Field(description="gaap, non_gaap or adjustment (a bridge line)")
+    reconciles: str = Field(description="The GAAP line this row belongs to (a bridge line's target)")
+    fiscal_period_label: str | None = Field(default=None, description="The table column's header, as stated")
+    value: float = _unit("as_published", description="In the row's `unit`")
+    unit: str = Field(description="USD (full dollars), fraction (a margin) or USD/share")
+    source_text: str = Field(description="The table row (untrusted text)")
+    parse_rule: str
+    knowledge_time: UtcDatetime = _known()
+
+
+class SegmentFact(CanonicalModel):
+    """One dimensional XBRL fact of a 10-K or 10-Q: a concept's value for one
+    business segment, product, region or revenue-disaggregation line, as the
+    filing tags it (the companyfacts API drops every dimension)."""
+
+    schema_name: ClassVar[str] = "marketlens.SegmentFact"
+    time_column: ClassVar[str | None] = "period_end"
+    group_column: ClassVar[str | None] = "member_key"
+    value_columns: ClassVar[tuple[str, ...]] = ("value",)
+
+    ticker: str
+    cik: str
+    accession_number: str
+    form: str
+    filed: Date
+    fiscal_year: int | None = Field(default=None, description="The filing's fiscal year focus")
+    fiscal_period: str | None = Field(
+        default=None, description="The filing's fiscal period focus: Q1..Q3 or FY"
+    )
+    concept: str = Field(description="The XBRL concept, verbatim")
+    axis: str | None = Field(default=None, description="The segmenting axes, ';'-joined")
+    axis_kind: str | None = Field(default=None, description="segment, geography, disaggregation or other")
+    member: str | None = Field(default=None, description="The members' labels as filed")
+    member_key: str | None = Field(default=None, description="The label reduced to letters and digits")
+    member_label: str | None = Field(default=None, description="The filer's own name for the member")
+    consolidation: str | None = Field(
+        default=None, description="Operating Segments, Intersegment Eliminations, ..."
+    )
+    period_start: Date | None = Field(default=None, description="None for an instant")
+    period_end: Date = Field(description="The period end, rounded to the nearest month end")
+    quarters: int = Field(description="The duration in whole quarters; 0 for an instant")
+    value: float | None = _unit("as_published", default=None, description="In the row's `unit`")
+    unit: str = Field(description="USD, shares, ...")
+    source: str = Field(description="The read it came from: a data set (2026_08_notes) or edgar:<accession>")
+    knowledge_time: UtcDatetime = _known()
+
+
+class ForeignQuarterlyFigure(CanonicalModel):
+    """One figure of a foreign private issuer's results 6-K exhibits (press
+    release table, slides, management report, interim statements' revenue
+    note), in the issuer's unit at its scale as stated."""
+
+    schema_name: ClassVar[str] = "marketlens.ForeignQuarterlyFigure"
+    time_column: ClassVar[str | None] = "period_end"
+    group_column: ClassVar[str | None] = "line"
+    value_columns: ClassVar[tuple[str, ...]] = ("value",)
+
+    ticker: str
+    cik: str
+    form: str
+    accession_number: str
+    exhibit: str
+    exhibit_url: str
+    statement: str = Field(description="income, balance, cash_flow, segments or kpi")
+    line: str = Field(description="The KPI id (revenue, operating_income, ...); revenue_share for a segment")
+    member: str | None = Field(default=None, description="The segment or node as stated (HPC, 3nm)")
+    axis: str | None = Field(default=None, description="platform, technology, ... for a segment")
+    value: float = _unit("as_published", description="In `unit` at 10**scale; a share is a fraction")
+    unit: str = Field(description="TWD, USD, TWD/share, fraction, wafers_12in_equiv")
+    scale: int = Field(description="The power of ten the value is scaled by: 6 millions, 9 billions")
+    period_label: str = Field(description="The column's label as stated: 3Q26, 2025")
+    period_start: Date | None = None
+    period_end: Date
+    fiscal_year: int
+    fiscal_period: str = Field(description="Q1..Q4 or FY")
+    source_text: str = Field(description="The row's label as stated (untrusted text)")
+    parse_rule: str
+    knowledge_time: UtcDatetime = _known()
+
+
+class IrDocument(CanonicalModel):
+    """One company-published document the operator lists for a ticker (an
+    investor-day release, an outlook, a letter): its text (UNTRUSTED) and sha,
+    served from EDGAR (authority official) when the company also filed it."""
+
+    schema_name: ClassVar[str] = "marketlens.IrDocument"
+    time_column: ClassVar[str | None] = "published"
+    group_column: ClassVar[str | None] = "ticker"
+
+    ticker: str
+    cik: str | None = None
+    document_url: str
+    published: Date
+    kind: str = Field(description="investor_day, outlook, letter or presentation")
+    title: str
+    authority: Literal["official", "company"] = Field(
+        description="official when the EDGAR copy is served, else company (the company's own site)"
+    )
+    served_url: str
+    edgar_accession: str | None = None
+    edgar_form: str | None = None
+    content_type: str = Field(description="html, pdf or text, of the served copy")
+    sha256: str
+    text: str = Field(description="The served copy's text, capped (untrusted text)")
+    text_chars: int = _unit("count", description="The text's length before the cap")
+    truncated: bool
+    knowledge_time: UtcDatetime = _known()
+
+
+class IrTarget(CanonicalModel):
+    """One multi-year target a company document states (a revenue CAGR, a
+    margin, EPS, capex, free cash flow), by a named sentence rule, never from a
+    table. A margin or CAGR is a fraction (35 % is 0.35); ``source_text`` is
+    UNTRUSTED company text."""
+
+    schema_name: ClassVar[str] = "marketlens.IrTarget"
+    time_column: ClassVar[str | None] = "published"
+    group_column: ClassVar[str | None] = "metric"
+    value_columns: ClassVar[tuple[str, ...]] = ("low", "high", "mid")
+
+    ticker: str
+    document_url: str
+    published: Date
+    title: str
+    kind: str
+    authority: Literal["official", "company"]
+    served_url: str
+    edgar_accession: str | None = None
+    metric: str = Field(
+        description="revenue_cagr, gross_margin, operating_margin, eps, capex, free_cash_flow"
+    )
+    horizon: str = Field(description="As stated: the next three to five years, 2024-2029, long-term")
+    horizon_start: int | None = None
+    horizon_end: int | None = None
+    low: float | None = _unit("as_published", default=None, description="A floor has a low and no high")
+    high: float | None = _unit("as_published", default=None, description="A ceiling has a high and no low")
+    mid: float | None = _unit(
+        "as_published", default=None, description="(low + high) / 2 when both are stated"
+    )
+    unit: str = Field(description="fraction, USD (full dollars) or USD/share")
+    basis: str = Field(description="gaap, non_gaap or unstated, the sentence's own word")
+    source_text: str = Field(description="The sentence (untrusted text)")
     parse_rule: str
     knowledge_time: UtcDatetime = _known()
 
@@ -631,9 +911,17 @@ DATA_MODELS: tuple[type[CanonicalModel], ...] = (
     FilingSearchHit,
     FilingEvent,
     XbrlFact,
+    XbrlFrameValue,
+    PayVsPerformance,
     FundamentalValue,
     EarningsRelease,
     EarningsFigure,
+    EarningsGuidance,
+    NonGaapFigure,
+    SegmentFact,
+    ForeignQuarterlyFigure,
+    IrDocument,
+    IrTarget,
     InsiderTransaction,
     InstitutionalHolding,
     FundReport,

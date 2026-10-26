@@ -10,5 +10,17 @@
  "2": {"cik_str": 9999903,
   "ticker": "EVNTCO",
   "title": "Eventco Synthetic Inc"
+ },
+ "3": {"cik_str": 9999904,
+  "ticker": "PVPCO",
+  "title": "Payco Synthetic Inc"
+ },
+ "4": {"cik_str": 9999905,
+  "ticker": "GUIDCO",
+  "title": "Guidco Synthetic Inc"
+ },
+ "5": {"cik_str": 9999906,
+  "ticker": "FPICO",
+  "title": "Fpico Synthetic Foundry Ltd"
  }
 }

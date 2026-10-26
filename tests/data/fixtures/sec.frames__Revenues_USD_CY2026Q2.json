@@ -1,0 +1,48 @@
+{
+ "_synthetic": true,
+ "taxonomy": "us-gaap",
+ "tag": "Revenues",
+ "ccp": "CY2026Q2",
+ "uom": "USD",
+ "label": "Revenues",
+ "description": "Synthetic frame in the shape of data.sec.gov/api/xbrl/frames.",
+ "pts": 4,
+ "data": [
+  {
+   "accn": "0009999901-26-000020",
+   "cik": 9999901,
+   "entityName": "TESTCO SYNTHETIC CORP",
+   "loc": "US-CA",
+   "start": "2026-04-01",
+   "end": "2026-06-30",
+   "val": 500000000
+  },
+  {
+   "accn": "0009999903-26-000021",
+   "cik": 9999903,
+   "entityName": "EVENTCO SYNTHETIC INC",
+   "loc": "US-NY",
+   "start": "2026-03-29",
+   "end": "2026-06-27",
+   "val": 300000000
+  },
+  {
+   "accn": "0009999990-26-000005",
+   "cik": 9999990,
+   "entityName": "UNLISTED SYNTHETIC LLC",
+   "loc": "-",
+   "start": "2026-04-01",
+   "end": "2026-06-30",
+   "val": 800000000
+  },
+  {
+   "accn": "0009999991-26-000099",
+   "cik": 9999991,
+   "entityName": "LATE SYNTHETIC CO",
+   "loc": "US-TX",
+   "start": "2026-04-01",
+   "end": "2026-06-30",
+   "val": 50000000
+  }
+ ]
+}

@@ -1,7 +1,9 @@
 Every file in this folder but two is SYNTHETIC: written by hand for these tests
 in the shape of each publisher's payload (FRED/ALFRED JSON, BLS v2 JSON, BLS
 release schedule pages, BEA NIPA JSON, SEC EDGAR submissions, company facts,
-filing indexes, an 8-K's EX-99.1 press release, Form 4/144 XML, 13F
+filing indexes, an 8-K's EX-99.1 press release, an XBRL frame, EDGAR's quarterly
+XBRL index (sec.xbrl_index__2026_QTR3.idx, gzipped by the test), proxy XBRL
+instances with the pay-versus-performance table, Form 4/144 XML, 13F
 information tables and cover pages, N-PORT documents (each filing's EDGAR index
 headers are built from its submissions feed by test_sec.index_headers),
 the Federal Reserve's FOMC calendar and statements, NY Fed JSON, Treasury CSV,
@@ -12,7 +14,7 @@ Employment Situation and Employment Cost Index releases (their own list items
 and release dates, as each header comment says).
 
 No other file is a recording of a live response. The companies (TESTCO, OTHRCO,
-LOSSCO), the managers (CIKs 9999950 and 9999951), the fund (series S000099991,
+LOSSCO, EVNTCO, PVPCO, and the frame's other filers), the managers (CIKs 9999950 and 9999951), the fund (series S000099991,
 TFUND), and every CIK, CUSIP, accession number, name, figure and statement in
 the SEC filings are invented. The other fixtures are hand-written too, but some
 of their values are public ones: FOMC meeting and holiday dates, CPIAUCSL's
