@@ -1,0 +1,83 @@
+{
+ "absent": {},
+ "model": "marketlens.CentralBankObservation",
+ "notes": [
+  "The Bank of England's CSV states no unit: each series' unit is in its description on the Bank's database (rates and yields in percent per annum, M4 and lending in sterling millions)."
+ ],
+ "offload": "auto",
+ "pagination": null,
+ "provenance": {
+  "as_of": null,
+  "authority": [
+   "official"
+  ],
+  "cached": false,
+  "dataset": "boe.series",
+  "delay": "unknown",
+  "derived_from": [],
+  "environment": null,
+  "feed": null,
+  "knowledge_time": "2025-10-01T00:00:00Z",
+  "lag_days": 373.0,
+  "operation": null,
+  "pages_fetched": 1,
+  "provider": "boe",
+  "request": {
+   "as_of": null,
+   "database": "IADB",
+   "end": null,
+   "series_codes": [
+    "IUDBEDR"
+   ],
+   "start": null
+  },
+  "route": "omni boe.series <- www.bankofengland.co.uk/boeapps/database/_iadb-fromshowcolumns.asp",
+  "schema_version": "1.1.0",
+  "stale": null,
+  "truncated": false,
+  "truncation_note": null,
+  "upstream_request_id": null
+ },
+ "risk": null,
+ "rows": [
+  {
+   "absent": {
+    "units": "not_provided_by_source"
+   },
+   "bank": "boe",
+   "database": "IADB",
+   "date": "2025-09-22",
+   "knowledge_time": "2025-09-29T00:00:00Z",
+   "period": "2025-09-22",
+   "series_code": "IUDBEDR",
+   "units": null,
+   "value": 4.0
+  },
+  {
+   "absent": {
+    "units": "not_provided_by_source"
+   },
+   "bank": "boe",
+   "database": "IADB",
+   "date": "2025-09-23",
+   "knowledge_time": "2025-09-30T00:00:00Z",
+   "period": "2025-09-23",
+   "series_code": "IUDBEDR",
+   "units": null,
+   "value": 4.0
+  },
+  {
+   "absent": {
+    "units": "not_provided_by_source"
+   },
+   "bank": "boe",
+   "database": "IADB",
+   "date": "2025-09-24",
+   "knowledge_time": "2025-10-01T00:00:00Z",
+   "period": "2025-09-24",
+   "series_code": "IUDBEDR",
+   "units": null,
+   "value": 4.0
+  }
+ ]
+}

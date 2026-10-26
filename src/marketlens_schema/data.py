@@ -76,6 +76,91 @@ class EconomicObservation(CanonicalModel):
     )
 
 
+class TradeFlow(CanonicalModel):
+    """US goods trade in one HS commodity with one partner for one month (Census)."""
+
+    schema_name: ClassVar[str] = "marketlens.TradeFlow"
+    time_column: ClassVar[str | None] = "month"
+    group_column: ClassVar[str | None] = "country_code"
+    value_columns: ClassVar[tuple[str, ...]] = ("value_usd",)
+
+    flow: Literal["exports", "imports"] = Field(description="Exports (total value) or general imports")
+    hs_code: str = Field(description="Harmonized System code, e.g. 8542 (integrated circuits)")
+    hs_level: str | None = Field(default=None, description="HS2, HS4, HS6 or HS10")
+    description: str | None = Field(default=None, description="Census's short description of the code")
+    country_code: str = Field(description="Census country code (5700 China); TOTAL for all countries")
+    country_name: str | None = None
+    summary_level: str | None = Field(default=None, description="DET a country, CGP a country group")
+    month: Date = Field(description="First day of the statistical month")
+    value_usd: float | None = _unit("USD", default=None, description="Not seasonally adjusted")
+    value_field: str = Field(description="Census's variable: ALL_VAL_MO (exports), GEN_VAL_MO (imports)")
+    quantity: float | None = _unit(
+        "as_published", default=None, description="First quantity, in `quantity_unit` (HS10 codes only)"
+    )
+    quantity_unit: str | None = Field(default=None, description="Census's unit code: NO, KG, ...")
+    stamp_estimated: bool = Field(description="knowledge_time is an estimate, not the calendar's release")
+    knowledge_time: UtcDatetime = _known()
+
+
+class CentralBankObservation(CanonicalModel):
+    """One observation of a Bank of Japan or Bank of England statistical series."""
+
+    schema_name: ClassVar[str] = "marketlens.CentralBankObservation"
+    time_column: ClassVar[str | None] = "date"
+    group_column: ClassVar[str | None] = "series_code"
+    value_columns: ClassVar[tuple[str, ...]] = ("value",)
+
+    bank: Literal["boj", "boe"]
+    database: str = Field(description="The BoJ database (FM01, MD01, CO, ...) or IADB for the BoE")
+    series_code: str = Field(description="The bank's series code, e.g. STRDCLUCON or IUDBEDR")
+    period: str = Field(description="2026-10-22 (daily), 2026-09 (monthly), 2026-Q3 (quarterly)")
+    date: Date = Field(description="First day of the period")
+    value: float | None = _unit("as_published", default=None, description="In the row's `units`")
+    units: str | None = Field(default=None, description="The bank's unit text (BoJ); the BoE states none")
+    knowledge_time: UtcDatetime = _known()
+
+
+class RegionalSurveyIndex(CanonicalModel):
+    """One Richmond or Kansas City Fed business survey index for one month."""
+
+    schema_name: ClassVar[str] = "marketlens.RegionalSurveyIndex"
+    time_column: ClassVar[str | None] = "month"
+    group_column: ClassVar[str | None] = "series"
+    value_columns: ClassVar[tuple[str, ...]] = ("value",)
+
+    bank: Literal["richmond", "kansascity"]
+    survey: Literal["manufacturing", "services"]
+    series: str = Field(
+        description="Richmond's column name (sa_mfg_composite) or index_heading (Kansas City)"
+    )
+    label: str = Field(description="The index as the bank's workbook words it")
+    seasonally_adjusted: bool
+    month: Date = Field(description="First day of the survey month")
+    value: float | None = _unit("as_published", default=None, description="In the row's `unit`")
+    unit: str = Field(description="diffusion_index (percent up less percent down) or percent")
+    release: UtcDatetime = _unit("UTC", description="The month's release on the bank's schedule")
+    release_estimated: bool = Field(description="No schedule lists the month: `release` is an estimate")
+    knowledge_time: UtcDatetime = _known()
+
+
+class TraceAggregate(CanonicalModel):
+    """One metric of a FINRA TRACE market aggregate row."""
+
+    schema_name: ClassVar[str] = "marketlens.TraceAggregate"
+    time_column: ClassVar[str | None] = "date"
+    group_column: ClassVar[str | None] = "metric"
+    value_columns: ClassVar[tuple[str, ...]] = ("value",)
+
+    report: str = Field(description="FINRA's dataset: corporateMarketBreadth, treasuryDailyAggregates, ...")
+    date: Date = Field(description="Trade (report) date; a monthly report's first day")
+    product_category: str = Field(description="FINRA's productCategory")
+    breakdown: str = Field(description="Trade type, or 'years to maturity | benchmark', or empty")
+    metric: str = Field(description="FINRA's field: advances, totalVolume, dealerCustomerVolume, ...")
+    value: float | None = _unit("as_published", default=None, description="A count, volume or price")
+    stamp_estimated: bool = Field(description="knowledge_time is marketlens-data's conservative rule")
+    knowledge_time: UtcDatetime = _known()
+
+
 class EconomicSeriesInfo(CanonicalModel):
     """One series of the FRED catalogue marketlens-data ships."""
 
@@ -627,6 +712,10 @@ DATA_MODELS: tuple[type[CanonicalModel], ...] = (
     EconomicObservation,
     EconomicSeriesInfo,
     ReleaseScheduleEntry,
+    TradeFlow,
+    CentralBankObservation,
+    RegionalSurveyIndex,
+    TraceAggregate,
     Filing,
     FilingSearchHit,
     FilingEvent,

@@ -1,0 +1,88 @@
+{
+ "absent": {},
+ "model": "marketlens.TraceAggregate",
+ "notes": [],
+ "offload": "auto",
+ "pagination": null,
+ "provenance": {
+  "as_of": null,
+  "authority": [
+   "official"
+  ],
+  "cached": false,
+  "dataset": "finra.trace_aggregates",
+  "delay": "unknown",
+  "derived_from": [],
+  "environment": null,
+  "feed": null,
+  "knowledge_time": "2025-09-27T03:59:00Z",
+  "lag_days": 372.0,
+  "operation": null,
+  "pages_fetched": 1,
+  "provider": "finra",
+  "request": {
+   "as_of": null,
+   "end": "2025-09-25",
+   "metrics": [
+    "advances",
+    "declines"
+   ],
+   "product_category": null,
+   "report": "corporateMarketBreadth",
+   "start": "2025-09-24"
+  },
+  "route": "omni finra.trace_aggregates <- api.finra.org/data/group/fixedIncomeMarket (OAuth token from ews.fintech.finra.org)",
+  "schema_version": "1.1.0",
+  "stale": null,
+  "truncated": false,
+  "truncation_note": null,
+  "upstream_request_id": null
+ },
+ "risk": null,
+ "rows": [
+  {
+   "absent": null,
+   "breakdown": "",
+   "date": "2025-09-24",
+   "knowledge_time": "2025-09-26T03:59:00Z",
+   "metric": "advances",
+   "product_category": "All Securities",
+   "report": "corporateMarketBreadth",
+   "stamp_estimated": true,
+   "value": 3000.0
+  },
+  {
+   "absent": null,
+   "breakdown": "",
+   "date": "2025-09-24",
+   "knowledge_time": "2025-09-26T03:59:00Z",
+   "metric": "declines",
+   "product_category": "All Securities",
+   "report": "corporateMarketBreadth",
+   "stamp_estimated": true,
+   "value": 3500.0
+  },
+  {
+   "absent": null,
+   "breakdown": "",
+   "date": "2025-09-25",
+   "knowledge_time": "2025-09-27T03:59:00Z",
+   "metric": "advances",
+   "product_category": "All Securities",
+   "report": "corporateMarketBreadth",
+   "stamp_estimated": true,
+   "value": 3600.0
+  },
+  {
+   "absent": null,
+   "breakdown": "",
+   "date": "2025-09-25",
+   "knowledge_time": "2025-09-27T03:59:00Z",
+   "metric": "declines",
+   "product_category": "All Securities",
+   "report": "corporateMarketBreadth",
+   "stamp_estimated": true,
+   "value": 3100.0
+  }
+ ]
+}

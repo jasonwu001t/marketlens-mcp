@@ -325,11 +325,14 @@ def map_error(
     label = sources.label(source)
     if isinstance(exc, omni_config.MissingCredential):
         key = sources.BY_SOURCE.get(source)
-        var = key.variables[0] if key and key.variables else "its key"
+        # A source keyed by a pair (FINRA's API client id and secret) names both.
+        names = key.variables if key and key.variables else ("its key",)
+        var = " and ".join(names)
         url = key.url if key and key.url else "the publisher's site"
         return ToolError(
             "data_key_missing",
-            f"{label} needs {var}, which is not set in this server's environment.",
+            f"{label} needs {var}, which {'are' if len(names) > 1 else 'is'} not set in this server's "
+            "environment.",
             hint=f"Get a free key at {url} and add {var} to the env block of this server in your MCP "
             "client's configuration.",
         )

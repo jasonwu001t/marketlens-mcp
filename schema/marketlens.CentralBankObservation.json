@@ -1,0 +1,117 @@
+{
+  "$defs": {
+    "AbsenceCode": {
+      "description": "Why a value is None. Never served as 0.",
+      "enum": [
+        "not_provided_by_source",
+        "not_applicable",
+        "not_entitled",
+        "no_data",
+        "insufficient_data",
+        "not_recovered",
+        "no_match",
+        "withheld",
+        "source_error",
+        "unparseable"
+      ],
+      "title": "AbsenceCode",
+      "type": "string"
+    }
+  },
+  "$id": "urn:marketlens:schema:1:marketlens.CentralBankObservation",
+  "additionalProperties": false,
+  "description": "One observation of a Bank of Japan or Bank of England statistical series.",
+  "properties": {
+    "absent": {
+      "anyOf": [
+        {
+          "additionalProperties": {
+            "$ref": "#/$defs/AbsenceCode"
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Per-row reasons for None fields: field name -> AbsenceCode",
+      "title": "Absent"
+    },
+    "bank": {
+      "enum": [
+        "boj",
+        "boe"
+      ],
+      "title": "Bank",
+      "type": "string"
+    },
+    "database": {
+      "description": "The BoJ database (FM01, MD01, CO, ...) or IADB for the BoE",
+      "title": "Database",
+      "type": "string"
+    },
+    "date": {
+      "description": "First day of the period",
+      "format": "date",
+      "title": "Date",
+      "type": "string"
+    },
+    "knowledge_time": {
+      "description": "When the value became knowable under the dataset's point-in-time policy",
+      "format": "date-time",
+      "title": "Knowledge Time",
+      "type": "string",
+      "x-role": "available",
+      "x-unit": "UTC"
+    },
+    "period": {
+      "description": "2026-10-22 (daily), 2026-09 (monthly), 2026-Q3 (quarterly)",
+      "title": "Period",
+      "type": "string"
+    },
+    "series_code": {
+      "description": "The bank's series code, e.g. STRDCLUCON or IUDBEDR",
+      "title": "Series Code",
+      "type": "string"
+    },
+    "units": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The bank's unit text (BoJ); the BoE states none",
+      "title": "Units"
+    },
+    "value": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "In the row's `units`",
+      "title": "Value",
+      "x-unit": "as_published"
+    }
+  },
+  "required": [
+    "bank",
+    "database",
+    "series_code",
+    "period",
+    "date",
+    "knowledge_time"
+  ],
+  "title": "CentralBankObservation",
+  "type": "object",
+  "x-schema-version": "1.1.0"
+}

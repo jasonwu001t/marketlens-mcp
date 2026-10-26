@@ -23,6 +23,11 @@ SOURCES = [
     "nyse",
     "sifma",
     "opm",
+    "census",
+    "boj",
+    "boe",
+    "regionalfed",
+    "finra",
 ]
 
 
@@ -54,7 +59,7 @@ def test_doctor_with_the_extra_and_keys(capsys, keys, tmp_path, monkeypatch):
     assert [line.split(":")[0] for line in source_lines] == [f"data source {s}" for s in SOURCES]
     assert source_lines[0] == "data source fred: ready (FRED_API_KEY set)"
     assert source_lines[3] == "data source sec: ready (SEC_CONTACT_EMAIL set)"
-    assert source_lines[8:] == [
+    assert source_lines[8:12] == [
         "data source nasdaq: capability calendars is off",
         "data source nyse: optional ALPACA_API_KEY and ALPACA_SECRET_KEY not set "
         "(optional cross-check of NYSE's calendar)",

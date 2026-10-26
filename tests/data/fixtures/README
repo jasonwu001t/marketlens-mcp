@@ -11,6 +11,13 @@ bls.release_archive__eci.html, trimmed from BLS's public archive pages of
 Employment Situation and Employment Cost Index releases (their own list items
 and release dates, as each header comment says).
 
+The Census trade answer (census.trade__exports_8542.json), the Bank of Japan
+JSON (boj.series__STRDCLUCON.json), the Bank of England CSV
+(boe.series__IUDBEDR.csv), the Richmond Fed pages (regionalfed.*.html; the
+workbook is built in test_macro) and the FINRA TRACE rows
+(finra.trace__corporateMarketBreadth.json) are synthetic too: each publisher's
+shape with invented values.
+
 No other file is a recording of a live response. The companies (TESTCO, OTHRCO,
 LOSSCO), the managers (CIKs 9999950 and 9999951), the fund (series S000099991,
 TFUND), and every CIK, CUSIP, accession number, name, figure and statement in

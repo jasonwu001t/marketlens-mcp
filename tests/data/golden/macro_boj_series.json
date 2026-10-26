@@ -1,0 +1,75 @@
+{
+ "absent": {},
+ "model": "marketlens.CentralBankObservation",
+ "notes": [],
+ "offload": "auto",
+ "pagination": null,
+ "provenance": {
+  "as_of": null,
+  "authority": [
+   "official"
+  ],
+  "cached": false,
+  "dataset": "boj.series",
+  "delay": "unknown",
+  "derived_from": [],
+  "environment": null,
+  "feed": null,
+  "knowledge_time": "2025-09-30T14:59:59Z",
+  "lag_days": 368.0,
+  "operation": null,
+  "pages_fetched": 1,
+  "provider": "boj",
+  "request": {
+   "as_of": null,
+   "database": "FM01",
+   "end": null,
+   "series_codes": [
+    "STRDCLUCON"
+   ],
+   "start": null
+  },
+  "route": "omni boj.series <- www.stat-search.boj.or.jp/api/v1/getDataCode",
+  "schema_version": "1.1.0",
+  "stale": null,
+  "truncated": false,
+  "truncation_note": null,
+  "upstream_request_id": null
+ },
+ "risk": null,
+ "rows": [
+  {
+   "absent": null,
+   "bank": "boj",
+   "database": "FM01",
+   "date": "2025-09-25",
+   "knowledge_time": "2025-09-30T14:59:59Z",
+   "period": "2025-09-25",
+   "series_code": "STRDCLUCON",
+   "units": "percent per annum",
+   "value": 0.477
+  },
+  {
+   "absent": null,
+   "bank": "boj",
+   "database": "FM01",
+   "date": "2025-09-26",
+   "knowledge_time": "2025-09-30T14:59:59Z",
+   "period": "2025-09-26",
+   "series_code": "STRDCLUCON",
+   "units": "percent per annum",
+   "value": 0.478
+  },
+  {
+   "absent": null,
+   "bank": "boj",
+   "database": "FM01",
+   "date": "2025-09-29",
+   "knowledge_time": "2025-09-30T14:59:59Z",
+   "period": "2025-09-29",
+   "series_code": "STRDCLUCON",
+   "units": "percent per annum",
+   "value": 0.477
+  }
+ ]
+}

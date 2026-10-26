@@ -1,5 +1,8 @@
-"""macro_series, macro_series_catalog, macro_bls_series, macro_bea_table and
-macro_release_schedule against synthetic FRED, BLS and BEA payloads."""
+"""macro_series, macro_series_catalog, macro_bls_series, macro_bea_table,
+macro_release_schedule, macro_census_trade, macro_boj_series, macro_boe_series,
+macro_regional_fed_surveys and credit_trace_aggregates against synthetic FRED,
+BLS, BEA, Census, Bank of Japan, Bank of England, Richmond Fed and FINRA
+payloads."""
 
 from __future__ import annotations
 
@@ -412,3 +415,228 @@ def test_macro_release_schedule_golden(tmp_path, upstream, frozen_clock):
     )
     only = call("macro_release_schedule", context(tmp_path), releases=["cpi"], start="2026-10-01")
     assert [r.start_date.isoformat() for r in only.rows] == ["2026-10-15", "2026-11-13"]
+
+
+# --- macro_census_trade --------------------------------------------------------------------------
+
+CENSUS_TRADE = r"api\.census\.gov/data/timeseries/intltrade/(exports|imports)/hs"
+
+
+def census_routes(upstream):
+    upstream.json_file(CENSUS_TRADE, "census.trade__exports_8542.json")
+
+
+def boj_routes(upstream):
+    upstream.json_file(r"www\.stat-search\.boj\.or\.jp/api/v1/getDataCode", "boj.series__STRDCLUCON.json")
+
+
+def boe_routes(upstream):
+    upstream.text_file(
+        r"www\.bankofengland\.co\.uk/boeapps/database/_iadb-fromshowcolumns\.asp", "boe.series__IUDBEDR.csv"
+    )
+
+
+def test_macro_census_trade_golden(tmp_path, upstream, keys):
+    census_routes(upstream)
+    out = call("macro_census_trade", context(tmp_path), hs_codes=["8542"], flow="exports")
+    doc = check_golden(out, "macro_census_trade")
+    china = [r for r in doc["rows"] if r["country_code"] == "5700"]
+    assert [(r["month"], r["value_usd"]) for r in china] == [
+        ("2025-01-01", 1000000000.0),
+        ("2025-02-01", 1100000000.0),
+    ]
+    # the total for all countries ("-" upstream) is TOTAL; 2025 is revised, so knowable at the revision
+    assert {r["country_code"] for r in doc["rows"]} == {"TOTAL", "5700", "0003"}
+    assert china[0]["knowledge_time"] == "2026-07-01T03:59:00Z" and china[0]["stamp_estimated"] is True
+    assert china[0]["quantity"] is None and china[0]["absent"]["quantity"] == "not_applicable"
+    assert upstream.params(0)["E_COMMODITY"] == "8542"
+    assert doc["provenance"]["authority"] == ["official"]
+    only = call(
+        "macro_census_trade",
+        context(tmp_path),
+        hs_codes=["8542"],
+        flow="exports",
+        country_codes=["0003"],
+        start="2025-02-01",
+    )
+    assert [(r.country_code, r.month.isoformat()) for r in only.rows] == [
+        ("0003", "2025-02-01"),
+        ("0003", "2025-03-01"),
+    ]
+
+
+def test_macro_census_trade_needs_the_census_key(tmp_path, upstream, monkeypatch):
+    monkeypatch.delenv("CENSUS_API_KEY", raising=False)
+    err = refused("macro_census_trade", context(tmp_path), hs_codes=["8542"], flow="exports")
+    assert err.code == "data_key_missing" and "CENSUS_API_KEY" in err.message
+    with pytest.raises(ValueError, match="not a valid code"):
+        call("macro_census_trade", context(tmp_path), hs_codes=["chips"])
+
+
+# --- macro_boj_series and macro_boe_series ---------------------------------------------------------
+
+
+def test_macro_boj_series_golden(tmp_path, upstream):
+    boj_routes(upstream)
+    out = call("macro_boj_series", context(tmp_path), database="fm01", series_codes=["STRDCLUCON"])
+    doc = check_golden(out, "macro_boj_series")
+    assert [(r["period"], r["value"]) for r in doc["rows"]] == [
+        ("2025-09-25", 0.477),
+        ("2025-09-26", 0.478),
+        ("2025-09-29", 0.477),
+    ]  # a weekend's null is no observation
+    assert doc["rows"][0]["units"] == "percent per annum" and doc["rows"][0]["bank"] == "boj"
+    # a day: knowable a week on, or at the end of the series' last update (2025-09-30, JST)
+    assert [r["knowledge_time"] for r in doc["rows"]] == [
+        "2025-09-30T14:59:59Z",
+        "2025-09-30T14:59:59Z",
+        "2025-09-30T14:59:59Z",
+    ]
+    assert upstream.params(0) == {"format": "json", "lang": "en", "db": "FM01", "code": "STRDCLUCON"}
+
+
+def test_macro_boe_series_golden(tmp_path, upstream):
+    boe_routes(upstream)
+    out = call("macro_boe_series", context(tmp_path), series_codes=["iudbedr"])
+    doc = check_golden(out, "macro_boe_series")
+    assert [(r["date"], r["value"], r["knowledge_time"]) for r in doc["rows"]] == [
+        ("2025-09-22", 4.0, "2025-09-29T00:00:00Z"),
+        ("2025-09-23", 4.0, "2025-09-30T00:00:00Z"),
+        ("2025-09-24", 4.0, "2025-10-01T00:00:00Z"),
+    ]
+    assert doc["rows"][0]["absent"] == {"units": "not_provided_by_source"}
+    assert upstream.params(0)["SeriesCodes"] == "IUDBEDR" and doc["notes"]
+
+
+# --- macro_regional_fed_surveys --------------------------------------------------------------------
+
+
+def _richmond_workbook() -> bytes:
+    """A synthetic mfg_historicaldata.xlsx with every column marketlens-data collects."""
+    import io
+
+    import openpyxl
+    from omni import config
+
+    columns = list(config.source_config("regionalfed")["series"]["richmond"]["manufacturing"])
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.append(["date", *columns])
+    from datetime import datetime
+
+    for month, value in ((7, 5), (8, 4), (9, -2)):
+        ws.append([datetime(2025, month, 1), *[value] * len(columns)])
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
+def regional_routes(upstream):
+    rich = r"www\.richmondfed\.org"
+    upstream.text_file(
+        rf"{rich}/region_communities/regional_data_analysis/business_surveys/manufacturing",
+        "regionalfed.richmond_manufacturing.html",
+    )
+    upstream.text_file(
+        rf"{rich}/region_communities/regional_data_analysis/business_surveys/about",
+        "regionalfed.richmond_about.html",
+    )
+    book = _richmond_workbook()
+    upstream.add(rf"{rich}/-/media/.+/mfg_historicaldata\.xlsx", lambda _r: book)
+
+
+REGIONAL = {"bank": "richmond", "survey": "manufacturing"}
+
+
+def test_macro_regional_fed_surveys_golden(tmp_path, upstream):
+    regional_routes(upstream)
+    out = call(
+        "macro_regional_fed_surveys",
+        context(tmp_path),
+        bank="richmond",
+        survey="manufacturing",
+        series=["sa_mfg_composite", "nsa_mfg_pct_chg_prcs_pd_c"],
+    )
+    doc = check_golden(out, "macro_regional_fed_surveys")
+    composite = [r for r in doc["rows"] if r["series"] == "sa_mfg_composite"]
+    assert [(r["month"], r["value"]) for r in composite] == [
+        ("2025-07-01", 5.0),
+        ("2025-08-01", 4.0),
+        ("2025-09-01", -2.0),
+    ]
+    # September is on the schedule (10:10 ET); July and August are estimated a week after the month
+    assert (composite[2]["knowledge_time"], composite[2]["release_estimated"]) == (
+        "2025-09-23T14:10:00Z",
+        False,
+    )
+    assert (composite[0]["knowledge_time"], composite[0]["release_estimated"]) == (
+        "2025-08-08T03:59:00Z",
+        True,
+    )
+    assert {r["unit"] for r in doc["rows"] if r["series"] == "nsa_mfg_pct_chg_prcs_pd_c"} == {"percent"}
+
+
+# --- credit_trace_aggregates -----------------------------------------------------------------------
+
+
+def trace_routes(upstream):
+    upstream.add(
+        r"ews\.fintech\.finra\.org/fip/rest/ews/oauth2/access_token",
+        {"access_token": "synthetictoken", "token_type": "Bearer", "expires_in": 1800},
+        method="POST",
+    )
+
+    def respond(request):
+        from data_harness import fixture_json
+
+        return (
+            fixture_json("finra.trace__corporateMarketBreadth.json")["rows"]
+            if (json.loads(request.content)["offset"] == 0)
+            else []
+        )
+
+    upstream.add(
+        r"api\.finra\.org/data/group/fixedIncomeMarket/name/corporateMarketBreadth", respond, method="POST"
+    )
+
+
+TRACE = {"report": "corporateMarketBreadth", "start": "2025-09-24", "end": "2025-09-25"}
+
+
+def test_credit_trace_aggregates_golden(tmp_path, upstream, keys):
+    trace_routes(upstream)
+    out = call(
+        "credit_trace_aggregates",
+        context(tmp_path),
+        report="corporateMarketBreadth",
+        start="2025-09-24",
+        end="2025-09-25",
+        metrics=["advances", "declines"],
+    )
+    doc = check_golden(out, "credit_trace_aggregates")
+    assert [(r["date"], r["metric"], r["value"]) for r in doc["rows"]] == [
+        ("2025-09-24", "advances", 3000.0),
+        ("2025-09-24", "declines", 3500.0),
+        ("2025-09-25", "advances", 3600.0),
+        ("2025-09-25", "declines", 3100.0),
+    ]
+    # Wednesday's statistics: 23:59 ET of Thursday, flagged as the rule's estimate
+    assert doc["rows"][0]["knowledge_time"] == "2025-09-26T03:59:00Z" and doc["rows"][0]["stamp_estimated"]
+    body = json.loads(upstream.requests[1].content)
+    assert body["dateRangeFilters"][0] == {
+        "fieldName": "tradeReportDate",
+        "startDate": "2025-09-24",
+        "endDate": body["dateRangeFilters"][0]["endDate"],
+    }
+    assert upstream.requests[1].headers["Authorization"] == "Bearer synthetictoken"
+    for secret in ("finrasyntheticid", "finrasyntheticsecret", "synthetictoken"):
+        assert secret not in json.dumps(doc)
+
+
+def test_credit_trace_aggregates_needs_finras_api_client(tmp_path, upstream, monkeypatch):
+    for name in ("FINRA_API_CLIENT_ID", "FINRA_API_CLIENT_SECRET"):
+        monkeypatch.delenv(name, raising=False)
+    err = refused("credit_trace_aggregates", context(tmp_path), report="treasuryDailyAggregates")
+    assert err.code == "data_key_missing"
+    assert "FINRA_API_CLIENT_ID and FINRA_API_CLIENT_SECRET" in err.message
+    assert upstream.requests == []

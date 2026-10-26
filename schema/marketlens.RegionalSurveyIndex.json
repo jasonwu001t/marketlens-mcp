@@ -1,0 +1,132 @@
+{
+  "$defs": {
+    "AbsenceCode": {
+      "description": "Why a value is None. Never served as 0.",
+      "enum": [
+        "not_provided_by_source",
+        "not_applicable",
+        "not_entitled",
+        "no_data",
+        "insufficient_data",
+        "not_recovered",
+        "no_match",
+        "withheld",
+        "source_error",
+        "unparseable"
+      ],
+      "title": "AbsenceCode",
+      "type": "string"
+    }
+  },
+  "$id": "urn:marketlens:schema:1:marketlens.RegionalSurveyIndex",
+  "additionalProperties": false,
+  "description": "One Richmond or Kansas City Fed business survey index for one month.",
+  "properties": {
+    "absent": {
+      "anyOf": [
+        {
+          "additionalProperties": {
+            "$ref": "#/$defs/AbsenceCode"
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Per-row reasons for None fields: field name -> AbsenceCode",
+      "title": "Absent"
+    },
+    "bank": {
+      "enum": [
+        "richmond",
+        "kansascity"
+      ],
+      "title": "Bank",
+      "type": "string"
+    },
+    "knowledge_time": {
+      "description": "When the value became knowable under the dataset's point-in-time policy",
+      "format": "date-time",
+      "title": "Knowledge Time",
+      "type": "string",
+      "x-role": "available",
+      "x-unit": "UTC"
+    },
+    "label": {
+      "description": "The index as the bank's workbook words it",
+      "title": "Label",
+      "type": "string"
+    },
+    "month": {
+      "description": "First day of the survey month",
+      "format": "date",
+      "title": "Month",
+      "type": "string"
+    },
+    "release": {
+      "description": "The month's release on the bank's schedule",
+      "format": "date-time",
+      "title": "Release",
+      "type": "string",
+      "x-unit": "UTC"
+    },
+    "release_estimated": {
+      "description": "No schedule lists the month: `release` is an estimate",
+      "title": "Release Estimated",
+      "type": "boolean"
+    },
+    "seasonally_adjusted": {
+      "title": "Seasonally Adjusted",
+      "type": "boolean"
+    },
+    "series": {
+      "description": "Richmond's column name (sa_mfg_composite) or index_heading (Kansas City)",
+      "title": "Series",
+      "type": "string"
+    },
+    "survey": {
+      "enum": [
+        "manufacturing",
+        "services"
+      ],
+      "title": "Survey",
+      "type": "string"
+    },
+    "unit": {
+      "description": "diffusion_index (percent up less percent down) or percent",
+      "title": "Unit",
+      "type": "string"
+    },
+    "value": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "In the row's `unit`",
+      "title": "Value",
+      "x-unit": "as_published"
+    }
+  },
+  "required": [
+    "bank",
+    "survey",
+    "series",
+    "label",
+    "seasonally_adjusted",
+    "month",
+    "unit",
+    "release",
+    "release_estimated",
+    "knowledge_time"
+  ],
+  "title": "RegionalSurveyIndex",
+  "type": "object",
+  "x-schema-version": "1.1.0"
+}

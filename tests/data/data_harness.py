@@ -50,6 +50,9 @@ KEYS = {
     "BEA_API_KEY": "beasyntheticuserid0000",
     "BLS_API_KEY": "blssyntheticregistration0000",
     "SEC_CONTACT_EMAIL": "tests@example.com",
+    "CENSUS_API_KEY": "censussynthetickey0000",
+    "FINRA_API_CLIENT_ID": "finrasyntheticid",
+    "FINRA_API_CLIENT_SECRET": "finrasyntheticsecret",
 }
 CAPABILITIES = (
     "market",
