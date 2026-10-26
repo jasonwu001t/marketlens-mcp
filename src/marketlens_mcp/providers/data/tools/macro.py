@@ -1,5 +1,8 @@
 """Economic series: FRED/ALFRED with vintages, BLS, BEA NIPA tables, BLS
-release schedules and the FRED series catalogue (capability ``macro``)."""
+release schedules and the FRED series catalogue; US trade by commodity and
+partner (Census), the Bank of Japan's and the Bank of England's series, the
+Richmond and Kansas City Fed business surveys and FINRA's TRACE market
+aggregates (capability ``macro``)."""
 
 from __future__ import annotations
 
@@ -11,7 +14,16 @@ from pydantic import AfterValidator, Field
 
 from marketlens_mcp.plugin_api import ToolContext, ToolOutput, ToolSpec
 from marketlens_schema import AbsenceCode
-from marketlens_schema.data import EconomicObservation, EconomicSeriesInfo, ReleaseScheduleEntry
+from marketlens_schema.data import (
+    CentralBankObservation,
+    EconomicObservation,
+    EconomicSeriesInfo,
+    RegionalSurveyIndex,
+    ReleaseScheduleEntry,
+    TraceAggregate,
+    TradeFlow,
+    YieldCurvePoint,
+)
 
 from .. import frames as F
 from .. import runtime
@@ -113,6 +125,143 @@ class ScheduleInputs(Inputs):
     as_of: AsOf | None = common.as_of_field()
 
 
+_HS = re.compile(r"^\d{2,10}$")
+_CTY = re.compile(r"^(TOTAL|\d{4}|\dXXX)$")
+_BOJ_DB = re.compile(r"^[A-Z]{2}\d{0,2}$")
+_BOJ_CODE = re.compile(r"^[A-Z0-9@_.]{2,40}$")
+_BOE_CODE = re.compile(r"^[A-Z][A-Z0-9]{4,11}$")
+TRACE_REPORTS = (
+    "corporateMarketBreadth",
+    "corporateMarketSentiment",
+    "corporate144AMarketBreadth",
+    "corporate144AMarketSentiment",
+    "agencyMarketBreadth",
+    "agencyMarketSentiment",
+    "treasuryDailyAggregates",
+    "treasuryMonthlyAggregates",
+)
+
+
+def _codes(pattern: re.Pattern[str], example: str, *, upper: bool = True):
+    def check(values: list[str]) -> list[str]:
+        out = []
+        for v in values:
+            c = v.strip().upper() if upper else v.strip()
+            if not pattern.match(c):
+                raise ValueError(f"{v!r} is not a valid code (e.g. {example})")
+            out.append(c)
+        return list(dict.fromkeys(out))
+
+    return check
+
+
+class TradeInputs(Inputs):
+    hs_codes: Annotated[
+        list[str],
+        Field(
+            min_length=1,
+            max_length=6,
+            description="HS commodity codes (1-6), 2 to 10 digits, e.g. 8542 (integrated circuits), 8541, "
+            "8471 (computers), 8473, 8486 (semiconductor equipment), 8517.",
+        ),
+        AfterValidator(_codes(_HS, "8542")),
+    ]
+    flow: Literal["exports", "imports", "both"] = Field(
+        default="both", description="US exports, imports or both."
+    )
+    country_codes: Annotated[
+        list[str] | None,
+        Field(
+            default=None,
+            max_length=25,
+            description="Census country codes to keep (default: every stored partner), e.g. 5700 China, "
+            "5830 Taiwan, 5800 Korea, 5880 Japan, 2010 Mexico, 0003 EU, 0027 ASEAN, TOTAL all countries.",
+        ),
+        AfterValidator(lambda v: None if v is None else _codes(_CTY, "5700")(v)),
+    ] = None
+    start: date | None = Field(default=None, description="First month (inclusive). Default: all (2010 on).")
+    end: date | None = Field(default=None, description="Last month (inclusive). Default: all.")
+    as_of: AsOf | None = common.as_of_field()
+
+
+class BojInputs(Inputs):
+    database: Annotated[
+        str,
+        Field(
+            description="The BoJ database: FM01 (call rate), FM08 (FX), FM09 (effective FX), MD01 (monetary "
+            "base), BS01 (the Bank's accounts), CO (Tankan), ..."
+        ),
+        AfterValidator(lambda v: _codes(_BOJ_DB, "FM01")([v])[0]),
+    ]
+    series_codes: Annotated[
+        list[str],
+        Field(
+            min_length=1,
+            max_length=20,
+            description="Series codes of that database (1-20), e.g. STRDCLUCON (call rate), FXERD01 "
+            "(USD/JPY 9:00), MABS1AN11 (monetary base), MABJMTA (total assets), TK99F1000601GCQ01000 (Tankan "
+            "large manufacturers DI).",
+        ),
+        AfterValidator(_codes(_BOJ_CODE, "STRDCLUCON")),
+    ]
+    start: date | None = Field(default=None, description="First period start (inclusive). Default: all.")
+    end: date | None = Field(default=None, description="Last period start (inclusive). Default: all.")
+    as_of: AsOf | None = common.as_of_field()
+
+
+class BoeInputs(Inputs):
+    series_codes: Annotated[
+        list[str],
+        Field(
+            min_length=1,
+            max_length=20,
+            description="Bank of England database series codes (1-20), e.g. IUDBEDR (Bank Rate), IUDSOIA "
+            "(SONIA), IUDMNPY (10-year gilt par yield), LPMAUYN (M4), XUDLUSS (USD per GBP).",
+        ),
+        AfterValidator(_codes(_BOE_CODE, "IUDBEDR")),
+    ]
+    start: date | None = Field(default=None, description="First period start (inclusive). Default: all.")
+    end: date | None = Field(default=None, description="Last period start (inclusive). Default: all.")
+    as_of: AsOf | None = common.as_of_field()
+
+
+JGB_TENORS = ("1Y", "2Y", "3Y", "4Y", "5Y", "6Y", "7Y", "8Y", "9Y", "10Y", "15Y", "20Y", "25Y", "30Y", "40Y")
+
+
+class JgbInputs(Inputs):
+    tenors: list[Literal[JGB_TENORS]] | None = Field(  # type: ignore[valid-type]
+        default=None, description="Tenors to keep (default: all fifteen, 1Y to 40Y)."
+    )
+    start: date | None = Field(default=None, description="First date (inclusive). Default: 30 days ago.")
+    end: date | None = Field(default=None, description="Last date (inclusive). Default: today.")
+    as_of: AsOf | None = common.as_of_field()
+
+
+class RegionalSurveyInputs(Inputs):
+    bank: Literal["richmond", "kansascity", "both"] = Field(default="both", description="Which Reserve Bank.")
+    survey: Literal["manufacturing", "services", "both"] = Field(default="both", description="Which survey.")
+    series: list[str] | None = Field(
+        default=None,
+        max_length=40,
+        description="Series to keep (default: all), e.g. sa_mfg_composite (Richmond), composite_index_month_sa "
+        "(Kansas City).",
+    )
+    start: date | None = Field(default=None, description="First month (inclusive). Default: all.")
+    end: date | None = Field(default=None, description="Last month (inclusive). Default: all.")
+    as_of: AsOf | None = common.as_of_field()
+
+
+class TraceInputs(Inputs):
+    report: Literal[TRACE_REPORTS] = Field(description="FINRA's TRACE aggregate report.")  # type: ignore[valid-type]
+    start: date | None = Field(default=None, description="First date (inclusive). Default: 30 days ago.")
+    end: date | None = Field(default=None, description="Last date (inclusive). Default: today.")
+    product_category: str | None = Field(default=None, max_length=80, description="Keep one productCategory.")
+    metrics: list[str] | None = Field(
+        default=None, max_length=20, description="Keep these metrics (FINRA's field names), e.g. advances."
+    )
+    as_of: AsOf | None = common.as_of_field()
+
+
 NPS = AbsenceCode.NOT_PROVIDED_BY_SOURCE
 NA = AbsenceCode.NOT_APPLICABLE
 ROUTES = {
@@ -123,6 +272,19 @@ ROUTES = {
     "schedule": "omni bls.cpi_schedule, bls.empsit_schedule <- www.bls.gov/schedule/news_release, "
     "schedule/{year}/{MM}_sched_list.htm (this and next month's releases)",
 }
+ROUTES.update(
+    {
+        "trade": "omni census.trade <- api.census.gov/data/timeseries/intltrade/{exports,imports}/hs",
+        "boj": "omni boj.series <- www.stat-search.boj.or.jp/api/v1/getDataCode",
+        "boe": "omni boe.series <- www.bankofengland.co.uk/boeapps/database/_iadb-fromshowcolumns.asp",
+        "jgb": "omni mof.jgb_yields <- www.mof.go.jp/english/policy/jgbs/reference/interest_rate "
+        "(jgbcme.csv, historical/jgbcme_all.csv, linked from index.htm)",
+        "regional": "omni regionalfed.surveys <- the Richmond and Kansas City Feds' survey workbooks and "
+        "release schedules (linked from their survey pages)",
+        "trace": "omni finra.trace_aggregates <- api.finra.org/data/group/fixedIncomeMarket "
+        "(OAuth token from ews.fintech.finra.org)",
+    }
+)
 SCHEDULES = {"cpi": "bls.cpi_schedule", "employment_situation": "bls.empsit_schedule"}
 #: marketlens-data keeps BEA's CL_UNIT (`unit`), METRIC_NAME (`metric_name`) and UNIT_MULT
 #: (`unit_mult`), but rows it stored before it kept the last two have neither: their scale is lost.
@@ -472,6 +634,328 @@ async def macro_release_schedule(ctx: ToolContext, args: ScheduleInputs) -> Tool
     return common.output(ctx, s, ReleaseScheduleEntry, rows, prov)
 
 
+async def macro_census_trade(ctx: ToolContext, args: TradeInputs) -> ToolOutput:
+    s = runtime.settings_of(ctx.settings)
+    as_of = common.as_of_of(args.as_of)
+    _window_check(args.start, args.end)
+    flows = ["exports", "imports"] if args.flow == "both" else [args.flow]
+    keep = set(args.country_codes or [])
+
+    def work(session: common.Session):
+        out = []
+        for flow in flows:
+            for hs in args.hs_codes:
+                session.refresh("census.trade", {"flow": flow, "hs": hs})
+                out.extend(F.records(session.read("census.trade", as_of=as_of, flow=flow, hs_code=hs)))
+        return out
+
+    records, session = await common.run(ctx, s, work, source="census")
+    rows = []
+    for r in records:
+        month = F.day(r["month"])
+        code = F.text(r["country_code"]) or ""
+        if not F.within(month, args.start, args.end) or (keep and code not in keep):
+            continue
+        rows.append(
+            common.row(
+                TradeFlow,
+                {
+                    "flow": F.text(r["flow"]),
+                    "hs_code": F.text(r["hs_code"]),
+                    "hs_level": F.text(r["hs_level"]),
+                    "description": F.text(r["description"]),
+                    "country_code": code,
+                    "country_name": F.text(r["country_name"]),
+                    "summary_level": F.text(r["summary_level"]),
+                    "month": month,
+                    "value_usd": F.number(r["value"]),
+                    "value_field": F.text(r["value_field"]),
+                    "quantity": F.number(r["quantity"]),
+                    "quantity_unit": F.text(r["quantity_unit"]),
+                    "stamp_estimated": bool(F.flag(r["stamp_estimated"])),
+                    "knowledge_time": F.instant(r["knowledge_time"]),
+                },
+                codes={"quantity": NA, "quantity_unit": NA},
+            )
+        )
+    rows.sort(key=lambda r: (r.flow, r.hs_code, r.country_code, r.month))
+    prov = common.provenance(
+        ctx,
+        provider="census",
+        route=ROUTES["trade"],
+        datasets=("census.trade",),
+        request={
+            "hs_codes": args.hs_codes,
+            "flow": args.flow,
+            "country_codes": args.country_codes,
+            "start": args.start,
+            "end": args.end,
+            "as_of": args.as_of,
+        },
+        as_of=as_of,
+        rows=rows,
+        session=session,
+        authority=["official"],
+    )
+    return common.output(ctx, s, TradeFlow, rows, prov)
+
+
+async def _central_bank(ctx: ToolContext, bank: str, database: str, codes: list[str], args) -> ToolOutput:
+    s = runtime.settings_of(ctx.settings)
+    as_of = common.as_of_of(args.as_of)
+    _window_check(args.start, args.end)
+    dataset = f"{bank}.series"
+
+    def work(session: common.Session):
+        out = []
+        for code in codes:
+            session.refresh(dataset, {"flow": database, "key": code})
+            out.append(F.records(session.read(dataset, as_of=as_of, flow=database, series_key=code)))
+        return out
+
+    found, session = await common.run(ctx, s, work, source=bank)
+    rows = []
+    for order, records in enumerate(found):
+        for r in records:
+            d = F.day(r["date"])
+            if not F.within(d, args.start, args.end):
+                continue
+            row = common.row(
+                CentralBankObservation,
+                {
+                    "bank": bank,
+                    "database": database,
+                    "series_code": F.text(r["series_key"]),
+                    "period": F.text(r["period"]),
+                    "date": d,
+                    "value": F.number(r["value"]),
+                    "units": F.text(r["unit"]),
+                    "knowledge_time": F.instant(r["knowledge_time"]),
+                },
+                codes={"units": NPS},
+            )
+            rows.append((order, row))
+    ordered = [r for _, r in sorted(rows, key=lambda x: (x[0], x[1].date))]
+    prov = common.provenance(
+        ctx,
+        provider=bank,
+        route=ROUTES[bank],
+        datasets=(dataset,),
+        request={
+            "database": database,
+            "series_codes": codes,
+            "start": args.start,
+            "end": args.end,
+            "as_of": args.as_of,
+        },
+        as_of=as_of,
+        rows=ordered,
+        session=session,
+        authority=["official"],
+    )
+    notes = (
+        [
+            "The Bank of England's CSV states no unit: each series' unit is in its description on the Bank's "
+            "database (rates and yields in percent per annum, M4 and lending in sterling millions)."
+        ]
+        if bank == "boe" and ordered
+        else []
+    )
+    return common.output(ctx, s, CentralBankObservation, ordered, prov, notes=notes)
+
+
+async def macro_boj_series(ctx: ToolContext, args: BojInputs) -> ToolOutput:
+    return await _central_bank(ctx, "boj", args.database, args.series_codes, args)
+
+
+async def macro_boe_series(ctx: ToolContext, args: BoeInputs) -> ToolOutput:
+    return await _central_bank(ctx, "boe", "IADB", args.series_codes, args)
+
+
+async def macro_jgb_yields(ctx: ToolContext, args: JgbInputs) -> ToolOutput:
+    from datetime import timedelta
+
+    s = runtime.settings_of(ctx.settings)
+    as_of = common.as_of_of(args.as_of)
+    today = ctx.now().date()
+    start, end = common.window(
+        ctx.tool, args.start, args.end, default_start=today - timedelta(days=30), default_end=today
+    )
+    tenors = set(args.tenors or JGB_TENORS)
+
+    def work(session: common.Session):
+        session.refresh("mof.jgb_yields", {})
+        if start < today.replace(day=1):  # before this month: MOF's historical file
+            session.refresh("mof.jgb_yields", {"history": "yes"})
+        return F.records(session.read("mof.jgb_yields", as_of=as_of))
+
+    records, session = await common.run(ctx, s, work, source="mof")
+    rows = []
+    for r in records:
+        tenor = F.text(r["tenor"])
+        d = F.day(r["date"])
+        if tenor not in tenors or not F.within(d, start, end):
+            continue
+        rows.append(
+            common.row(
+                YieldCurvePoint,
+                {
+                    "date": d,
+                    "tenor": tenor,
+                    "tenor_label": f"{tenor[:-1]} Yr",
+                    "rate": F.fraction(r["rate"]),
+                    "knowledge_time": F.instant(r["knowledge_time"]),
+                },
+            )
+        )
+    order = {t: i for i, t in enumerate(JGB_TENORS)}
+    rows.sort(key=lambda r: (r.date, order.get(r.tenor, 99)))
+    prov = common.provenance(
+        ctx,
+        provider="mof",
+        route=ROUTES["jgb"],
+        datasets=("mof.jgb_yields",),
+        request={"tenors": args.tenors, "start": start, "end": end, "as_of": args.as_of},
+        as_of=as_of,
+        rows=rows,
+        session=session,
+        authority=["official"],
+    )
+    return common.output(ctx, s, YieldCurvePoint, rows, prov)
+
+
+async def macro_regional_fed_surveys(ctx: ToolContext, args: RegionalSurveyInputs) -> ToolOutput:
+    s = runtime.settings_of(ctx.settings)
+    as_of = common.as_of_of(args.as_of)
+    _window_check(args.start, args.end)
+    banks = ["richmond", "kansascity"] if args.bank == "both" else [args.bank]
+    surveys = ["manufacturing", "services"] if args.survey == "both" else [args.survey]
+    keep = {x.strip() for x in args.series or []}
+
+    def work(session: common.Session):
+        out = []
+        for bank in banks:
+            for survey in surveys:
+                session.refresh("regionalfed.surveys", {"bank": bank, "survey": survey})
+                out.extend(
+                    F.records(session.read("regionalfed.surveys", as_of=as_of, bank=bank, survey=survey))
+                )
+        return out
+
+    records, session = await common.run(ctx, s, work, source="regionalfed")
+    rows = []
+    for r in records:
+        month = F.day(r["month"])
+        series = F.text(r["series"]) or ""
+        if not F.within(month, args.start, args.end) or (keep and series not in keep):
+            continue
+        rows.append(
+            common.row(
+                RegionalSurveyIndex,
+                {
+                    "bank": F.text(r["bank"]),
+                    "survey": F.text(r["survey"]),
+                    "series": series,
+                    "label": F.text(r["label"]) or series,
+                    "seasonally_adjusted": bool(F.flag(r["seasonally_adjusted"])),
+                    "month": month,
+                    "value": F.number(r["value"]),
+                    "unit": F.text(r["unit"]) or "diffusion_index",
+                    "release": F.instant(r["release"]),
+                    "release_estimated": bool(F.flag(r["release_estimated"])),
+                    "knowledge_time": F.instant(r["knowledge_time"]),
+                },
+            )
+        )
+    rows.sort(key=lambda r: (r.bank, r.survey, r.series, r.month))
+    prov = common.provenance(
+        ctx,
+        provider="regionalfed",
+        route=ROUTES["regional"],
+        datasets=("regionalfed.surveys",),
+        request={
+            "bank": args.bank,
+            "survey": args.survey,
+            "series": args.series,
+            "start": args.start,
+            "end": args.end,
+            "as_of": args.as_of,
+        },
+        as_of=as_of,
+        rows=rows,
+        session=session,
+        authority=["official"],
+    )
+    return common.output(ctx, s, RegionalSurveyIndex, rows, prov)
+
+
+async def credit_trace_aggregates(ctx: ToolContext, args: TraceInputs) -> ToolOutput:
+    from datetime import timedelta
+
+    s = runtime.settings_of(ctx.settings)
+    as_of = common.as_of_of(args.as_of)
+    today = ctx.now().date()
+    start, end = common.window(
+        ctx.tool,
+        args.start,
+        args.end,
+        default_start=today - timedelta(days=30),
+        default_end=today,
+        max_days=3660,
+    )
+    metrics = set(args.metrics or [])
+
+    def work(session: common.Session):
+        session.refresh("finra.trace_aggregates", {"report": args.report, "since": start.isoformat()})
+        return F.records(session.read("finra.trace_aggregates", as_of=as_of, report=args.report))
+
+    records, session = await common.run(ctx, s, work, source="finra")
+    rows = []
+    for r in records:
+        d = F.day(r["date"])
+        category = F.text(r["product_category"]) or ""
+        metric = F.text(r["metric"]) or ""
+        if not F.within(d, start, end) or (metrics and metric not in metrics):
+            continue
+        if args.product_category and category != args.product_category:
+            continue
+        rows.append(
+            common.row(
+                TraceAggregate,
+                {
+                    "report": args.report,
+                    "date": d,
+                    "product_category": category,
+                    "breakdown": F.text(r["breakdown"]) or "",
+                    "metric": metric,
+                    "value": F.number(r["value"]),
+                    "stamp_estimated": bool(F.flag(r["stamp_estimated"])),
+                    "knowledge_time": F.instant(r["knowledge_time"]),
+                },
+            )
+        )
+    rows.sort(key=lambda r: (r.date, r.product_category, r.breakdown, r.metric))
+    prov = common.provenance(
+        ctx,
+        provider="finra",
+        route=ROUTES["trace"],
+        datasets=("finra.trace_aggregates",),
+        request={
+            "report": args.report,
+            "start": start,
+            "end": end,
+            "product_category": args.product_category,
+            "metrics": args.metrics,
+            "as_of": args.as_of,
+        },
+        as_of=as_of,
+        rows=rows,
+        session=session,
+        authority=["official"],
+    )
+    return common.output(ctx, s, TraceAggregate, rows, prov)
+
+
 SPECS: tuple[ToolSpec, ...] = (
     ToolSpec(
         name="macro_series",
@@ -585,7 +1069,150 @@ SPECS: tuple[ToolSpec, ...] = (
     ),
 )
 
+SPECS = (
+    *SPECS,
+    ToolSpec(
+        name="macro_census_trade",
+        capability="macro",
+        title="US trade by commodity and partner (Census)",
+        description=common.describe(
+            "US goods exports (total value) and general imports by Harmonized System code and partner "
+            "country, monthly from 2010, in US dollars, not seasonally adjusted, from the Census Bureau's "
+            "international trade API: e.g. HS 8542 integrated circuits to China (5700), Taiwan (5830), the EU "
+            "(0003) or all countries (TOTAL); the quantity where the code is HS10. knowledge_time is the "
+            "FT-900 release of the month (08:30 ET, Census's calendar), or for a year Census has revised "
+            "(the annual revision with April's statistics in June) that revision; stamp_estimated marks a "
+            "month the calendar does not date. Needs CENSUS_API_KEY (free).",
+            "lagged",
+        ),
+        readme="US exports and imports by HS commodity and partner country (semis and hardware codes)",
+        input_model=TradeInputs,
+        output_model=TradeFlow,
+        provider="census",
+        route=ROUTES["trade"],
+        handler=macro_census_trade,
+        golden_test=GOLDEN,
+        env=("CENSUS_API_KEY",),
+    ),
+    ToolSpec(
+        name="macro_boj_series",
+        capability="macro",
+        title="Bank of Japan series",
+        description=common.describe(
+            "Bank of Japan Time-Series Data Search series by database and code: the uncollateralized "
+            "overnight call rate, the 9:00 dollar/yen rate, effective exchange rates, the monetary base, the "
+            "Bank's balance sheet (total assets, JGB and ETF holdings) and the Tankan business conditions DIs "
+            "(actual and next-quarter forecast). value is in the Bank's own unit (units: percent per annum, "
+            "100 million yen, % points). JGB yields are not in this database. knowledge_time is the earliest "
+            "of period end + 35 days (a daily value + 7), the end of the series' last-update date (JST) and "
+            "the fetch; a revision from the update that states it. Keyless.",
+            "lagged",
+        ),
+        readme="Bank of Japan series: call rate, yen, monetary base, balance sheet, Tankan",
+        input_model=BojInputs,
+        output_model=CentralBankObservation,
+        provider="boj",
+        route=ROUTES["boj"],
+        handler=macro_boj_series,
+        golden_test=GOLDEN,
+    ),
+    ToolSpec(
+        name="macro_boe_series",
+        capability="macro",
+        title="Bank of England series",
+        description=common.describe(
+            "Bank of England database (IADB) series by code: Bank Rate (IUDBEDR), SONIA (IUDSOIA), the 5-, "
+            "10- and 20-year nominal par gilt yields (IUDSNPY, IUDMNPY, IUDLNPY), M4 (LPMAUYN) and lending, "
+            "the spot dollar and euro rates and the sterling ERI. The CSV states no unit (units is null: "
+            "rates and yields are percent per annum, M4 and lending sterling millions). knowledge_time is "
+            "the earlier of period end + 40 days (a daily value + 7) and the fetch that saw it; a revision "
+            "from the fetch. Keyless.",
+            "lagged",
+        ),
+        readme="Bank of England series: Bank Rate, SONIA, gilt yields, M4, sterling FX",
+        input_model=BoeInputs,
+        output_model=CentralBankObservation,
+        provider="boe",
+        route=ROUTES["boe"],
+        handler=macro_boe_series,
+        golden_test=GOLDEN,
+    ),
+    ToolSpec(
+        name="macro_jgb_yields",
+        capability="macro",
+        title="JGB yields (Ministry of Finance)",
+        description=common.describe(
+            "Japanese Government Bond interest rates as Japan's Ministry of Finance publishes them each "
+            "business day, 1Y to 10Y, 15Y, 20Y, 25Y, 30Y and 40Y, from 1974 (each tenor from when MOF "
+            "first published it); rate is a fraction (1.25 % is 0.0125). A window before this month also "
+            "reads MOF's historical file. knowledge_time is the earliest of 12:00 JST seven days after the "
+            "day, when MOF wrote the file that holds it (its Last-Modified: the morning after, about 08:30 "
+            "JST) and the fetch. Keyless.",
+            "lagged",
+        ),
+        readme="Japanese Government Bond yields, 1Y-40Y, from the Ministry of Finance",
+        input_model=JgbInputs,
+        output_model=YieldCurvePoint,
+        provider="mof",
+        route=ROUTES["jgb"],
+        handler=macro_jgb_yields,
+        golden_test=GOLDEN,
+    ),
+    ToolSpec(
+        name="macro_regional_fed_surveys",
+        capability="macro",
+        title="Regional Fed business surveys",
+        description=common.describe(
+            "The Richmond Fed's manufacturing and non-manufacturing surveys and the Kansas City Fed's "
+            "manufacturing and services surveys, monthly diffusion indexes (composite, shipments or "
+            "production, new orders, employment, prices; Kansas City versus a month ago, a year ago and "
+            "expected in six months), official stand-ins for the licensed PMIs (Empire State, Dallas: "
+            "macro_series). knowledge_time is the release on the bank's schedule "
+            "(Richmond 10:10 ET, Kansas City the end of the listed date), history the schedules no longer "
+            "list a week after the month (release_estimated), and a seasonally adjusted month of an earlier "
+            "year than the newest at the newest year's January release (new seasonal factors). Keyless.",
+            "lagged",
+        ),
+        readme="Richmond and Kansas City Fed manufacturing and services surveys",
+        input_model=RegionalSurveyInputs,
+        output_model=RegionalSurveyIndex,
+        provider="regionalfed",
+        route=ROUTES["regional"],
+        handler=macro_regional_fed_surveys,
+        golden_test=GOLDEN,
+    ),
+    ToolSpec(
+        name="credit_trace_aggregates",
+        capability="macro",
+        title="FINRA TRACE market aggregates",
+        description=common.describe(
+            "FINRA's TRACE bond market statistics, one row per metric: corporate, 144A and agency market "
+            "breadth (issues traded, advances, declines, unchanged, 52-week highs and lows, volume) and "
+            "sentiment (by trade type), Treasury daily and monthly aggregates (securities traded and dollar "
+            "volume, ATS/inter-dealer and dealer-to-customer, by years to maturity and benchmark). "
+            "knowledge_time is a conservative rule (stamp_estimated): 23:59 ET of the next business day "
+            "(Treasury daily: the second; monthly: the end of the next month), never after the fetch. Needs "
+            "FINRA_API_CLIENT_ID and FINRA_API_CLIENT_SECRET (a free FINRA developer account's API client).",
+            "lagged",
+        ),
+        readme="FINRA TRACE bond market breadth, sentiment and Treasury aggregates",
+        input_model=TraceInputs,
+        output_model=TraceAggregate,
+        provider="finra",
+        route=ROUTES["trace"],
+        handler=credit_trace_aggregates,
+        golden_test=GOLDEN,
+        env=("FINRA_API_CLIENT_ID", "FINRA_API_CLIENT_SECRET"),
+    ),
+)
+
 DATASETS: dict[str, tuple[str, ...]] = {
+    "macro_census_trade": ("census.trade",),
+    "macro_boj_series": ("boj.series",),
+    "macro_boe_series": ("boe.series",),
+    "macro_jgb_yields": ("mof.jgb_yields",),
+    "macro_regional_fed_surveys": ("regionalfed.surveys",),
+    "credit_trace_aggregates": ("finra.trace_aggregates",),
     "macro_series": ("fred.series",),
     "macro_series_catalog": (),
     "macro_bls_series": ("bls.timeseries",),

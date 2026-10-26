@@ -1,0 +1,107 @@
+{
+  "$defs": {
+    "AbsenceCode": {
+      "description": "Why a value is None. Never served as 0.",
+      "enum": [
+        "not_provided_by_source",
+        "not_applicable",
+        "not_entitled",
+        "no_data",
+        "insufficient_data",
+        "not_recovered",
+        "no_match",
+        "withheld",
+        "source_error",
+        "unparseable"
+      ],
+      "title": "AbsenceCode",
+      "type": "string"
+    }
+  },
+  "$id": "urn:marketlens:schema:1:marketlens.TraceAggregate",
+  "additionalProperties": false,
+  "description": "One metric of a FINRA TRACE market aggregate row.",
+  "properties": {
+    "absent": {
+      "anyOf": [
+        {
+          "additionalProperties": {
+            "$ref": "#/$defs/AbsenceCode"
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Per-row reasons for None fields: field name -> AbsenceCode",
+      "title": "Absent"
+    },
+    "breakdown": {
+      "description": "Trade type, or 'years to maturity | benchmark', or empty",
+      "title": "Breakdown",
+      "type": "string"
+    },
+    "date": {
+      "description": "Trade (report) date; a monthly report's first day",
+      "format": "date",
+      "title": "Date",
+      "type": "string"
+    },
+    "knowledge_time": {
+      "description": "When the value became knowable under the dataset's point-in-time policy",
+      "format": "date-time",
+      "title": "Knowledge Time",
+      "type": "string",
+      "x-role": "available",
+      "x-unit": "UTC"
+    },
+    "metric": {
+      "description": "FINRA's field: advances, totalVolume, dealerCustomerVolume, ...",
+      "title": "Metric",
+      "type": "string"
+    },
+    "product_category": {
+      "description": "FINRA's productCategory",
+      "title": "Product Category",
+      "type": "string"
+    },
+    "report": {
+      "description": "FINRA's dataset: corporateMarketBreadth, treasuryDailyAggregates, ...",
+      "title": "Report",
+      "type": "string"
+    },
+    "stamp_estimated": {
+      "description": "knowledge_time is marketlens-data's conservative rule",
+      "title": "Stamp Estimated",
+      "type": "boolean"
+    },
+    "value": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "A count, volume or price",
+      "title": "Value",
+      "x-unit": "as_published"
+    }
+  },
+  "required": [
+    "report",
+    "date",
+    "product_category",
+    "breakdown",
+    "metric",
+    "stamp_estimated",
+    "knowledge_time"
+  ],
+  "title": "TraceAggregate",
+  "type": "object",
+  "x-schema-version": "1.1.0"
+}

@@ -1,0 +1,27 @@
+{
+ "_synthetic": true,
+ "rows": [
+  {
+   "tradeReportDate": "2025-09-24",
+   "productCategory": "All Securities",
+   "totalTrades": 7000,
+   "advances": 3000,
+   "declines": 3500,
+   "unchanged": 120,
+   "fiftyTwoWeekHigh": 80,
+   "fiftyTwoWeekLow": 50,
+   "totalVolume": 30000.5
+  },
+  {
+   "tradeReportDate": "2025-09-25",
+   "productCategory": "All Securities",
+   "totalTrades": 7100,
+   "advances": 3600,
+   "declines": 3100,
+   "unchanged": 110,
+   "fiftyTwoWeekHigh": 90,
+   "fiftyTwoWeekLow": 40,
+   "totalVolume": 31000.0
+  }
+ ]
+}

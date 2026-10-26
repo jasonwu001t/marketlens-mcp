@@ -1,0 +1,98 @@
+{
+ "absent": {},
+ "model": "marketlens.YieldCurvePoint",
+ "notes": [],
+ "offload": "auto",
+ "pagination": null,
+ "provenance": {
+  "as_of": null,
+  "authority": [
+   "official"
+  ],
+  "cached": false,
+  "dataset": "mof.jgb_yields",
+  "delay": "unknown",
+  "derived_from": [],
+  "environment": null,
+  "feed": null,
+  "knowledge_time": "2026-10-02T23:30:00Z",
+  "lag_days": 0.0,
+  "operation": null,
+  "pages_fetched": 2,
+  "provider": "mof",
+  "request": {
+   "as_of": null,
+   "end": "2026-10-02",
+   "start": "2026-09-28",
+   "tenors": [
+    "10Y",
+    "40Y"
+   ]
+  },
+  "route": "omni mof.jgb_yields <- www.mof.go.jp/english/policy/jgbs/reference/interest_rate (jgbcme.csv, historical/jgbcme_all.csv, linked from index.htm)",
+  "schema_version": "1.1.0",
+  "stale": null,
+  "truncated": false,
+  "truncation_note": null,
+  "upstream_request_id": null
+ },
+ "risk": null,
+ "rows": [
+  {
+   "absent": null,
+   "date": "2026-09-29",
+   "knowledge_time": "2026-10-01T23:30:00Z",
+   "rate": 0.0308,
+   "tenor": "10Y",
+   "tenor_label": "10 Yr"
+  },
+  {
+   "absent": null,
+   "date": "2026-09-30",
+   "knowledge_time": "2026-10-01T23:30:00Z",
+   "rate": 0.0306,
+   "tenor": "10Y",
+   "tenor_label": "10 Yr"
+  },
+  {
+   "absent": null,
+   "date": "2026-09-30",
+   "knowledge_time": "2026-10-01T23:30:00Z",
+   "rate": 0.041,
+   "tenor": "40Y",
+   "tenor_label": "40 Yr"
+  },
+  {
+   "absent": null,
+   "date": "2026-10-01",
+   "knowledge_time": "2026-10-02T23:30:00Z",
+   "rate": 0.031,
+   "tenor": "10Y",
+   "tenor_label": "10 Yr"
+  },
+  {
+   "absent": null,
+   "date": "2026-10-01",
+   "knowledge_time": "2026-10-02T23:30:00Z",
+   "rate": 0.042,
+   "tenor": "40Y",
+   "tenor_label": "40 Yr"
+  },
+  {
+   "absent": null,
+   "date": "2026-10-02",
+   "knowledge_time": "2026-10-02T23:30:00Z",
+   "rate": 0.031,
+   "tenor": "10Y",
+   "tenor_label": "10 Yr"
+  },
+  {
+   "absent": null,
+   "date": "2026-10-02",
+   "knowledge_time": "2026-10-02T23:30:00Z",
+   "rate": 0.0417,
+   "tenor": "40Y",
+   "tenor_label": "40 Yr"
+  }
+ ]
+}

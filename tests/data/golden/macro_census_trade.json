@@ -1,0 +1,203 @@
+{
+ "absent": {},
+ "model": "marketlens.TradeFlow",
+ "notes": [],
+ "offload": "auto",
+ "pagination": null,
+ "provenance": {
+  "as_of": null,
+  "authority": [
+   "official"
+  ],
+  "cached": false,
+  "dataset": "census.trade",
+  "delay": "unknown",
+  "derived_from": [],
+  "environment": null,
+  "feed": null,
+  "knowledge_time": "2026-07-01T03:59:00Z",
+  "lag_days": 580.0,
+  "operation": null,
+  "pages_fetched": 1,
+  "provider": "census",
+  "request": {
+   "as_of": null,
+   "country_codes": null,
+   "end": null,
+   "flow": "exports",
+   "hs_codes": [
+    "8542"
+   ],
+   "start": null
+  },
+  "route": "omni census.trade <- api.census.gov/data/timeseries/intltrade/{exports,imports}/hs",
+  "schema_version": "1.1.0",
+  "stale": null,
+  "truncated": false,
+  "truncation_note": null,
+  "upstream_request_id": null
+ },
+ "risk": null,
+ "rows": [
+  {
+   "absent": {
+    "quantity": "not_applicable",
+    "quantity_unit": "not_applicable"
+   },
+   "country_code": "0003",
+   "country_name": "EUROPEAN UNION",
+   "description": "ELECTRONIC INTEGRATED CIRCUITS & MICROASSEMBL, PTS",
+   "flow": "exports",
+   "hs_code": "8542",
+   "hs_level": "HS4",
+   "knowledge_time": "2026-07-01T03:59:00Z",
+   "month": "2025-01-01",
+   "quantity": null,
+   "quantity_unit": null,
+   "stamp_estimated": true,
+   "summary_level": "CGP",
+   "value_field": "ALL_VAL_MO",
+   "value_usd": 300000000.0
+  },
+  {
+   "absent": {
+    "quantity": "not_applicable",
+    "quantity_unit": "not_applicable"
+   },
+   "country_code": "0003",
+   "country_name": "EUROPEAN UNION",
+   "description": "ELECTRONIC INTEGRATED CIRCUITS & MICROASSEMBL, PTS",
+   "flow": "exports",
+   "hs_code": "8542",
+   "hs_level": "HS4",
+   "knowledge_time": "2026-07-01T03:59:00Z",
+   "month": "2025-02-01",
+   "quantity": null,
+   "quantity_unit": null,
+   "stamp_estimated": true,
+   "summary_level": "CGP",
+   "value_field": "ALL_VAL_MO",
+   "value_usd": 310000000.0
+  },
+  {
+   "absent": {
+    "quantity": "not_applicable",
+    "quantity_unit": "not_applicable"
+   },
+   "country_code": "0003",
+   "country_name": "EUROPEAN UNION",
+   "description": "ELECTRONIC INTEGRATED CIRCUITS & MICROASSEMBL, PTS",
+   "flow": "exports",
+   "hs_code": "8542",
+   "hs_level": "HS4",
+   "knowledge_time": "2026-07-01T03:59:00Z",
+   "month": "2025-03-01",
+   "quantity": null,
+   "quantity_unit": null,
+   "stamp_estimated": true,
+   "summary_level": "CGP",
+   "value_field": "ALL_VAL_MO",
+   "value_usd": 320000000.0
+  },
+  {
+   "absent": {
+    "quantity": "not_applicable",
+    "quantity_unit": "not_applicable"
+   },
+   "country_code": "5700",
+   "country_name": "CHINA",
+   "description": "ELECTRONIC INTEGRATED CIRCUITS & MICROASSEMBL, PTS",
+   "flow": "exports",
+   "hs_code": "8542",
+   "hs_level": "HS4",
+   "knowledge_time": "2026-07-01T03:59:00Z",
+   "month": "2025-01-01",
+   "quantity": null,
+   "quantity_unit": null,
+   "stamp_estimated": true,
+   "summary_level": "DET",
+   "value_field": "ALL_VAL_MO",
+   "value_usd": 1000000000.0
+  },
+  {
+   "absent": {
+    "quantity": "not_applicable",
+    "quantity_unit": "not_applicable"
+   },
+   "country_code": "5700",
+   "country_name": "CHINA",
+   "description": "ELECTRONIC INTEGRATED CIRCUITS & MICROASSEMBL, PTS",
+   "flow": "exports",
+   "hs_code": "8542",
+   "hs_level": "HS4",
+   "knowledge_time": "2026-07-01T03:59:00Z",
+   "month": "2025-02-01",
+   "quantity": null,
+   "quantity_unit": null,
+   "stamp_estimated": true,
+   "summary_level": "DET",
+   "value_field": "ALL_VAL_MO",
+   "value_usd": 1100000000.0
+  },
+  {
+   "absent": {
+    "quantity": "not_applicable",
+    "quantity_unit": "not_applicable"
+   },
+   "country_code": "TOTAL",
+   "country_name": "TOTAL FOR ALL COUNTRIES",
+   "description": "ELECTRONIC INTEGRATED CIRCUITS & MICROASSEMBL, PTS",
+   "flow": "exports",
+   "hs_code": "8542",
+   "hs_level": "HS4",
+   "knowledge_time": "2026-07-01T03:59:00Z",
+   "month": "2025-01-01",
+   "quantity": null,
+   "quantity_unit": null,
+   "stamp_estimated": true,
+   "summary_level": "DET",
+   "value_field": "ALL_VAL_MO",
+   "value_usd": 4100000000.0
+  },
+  {
+   "absent": {
+    "quantity": "not_applicable",
+    "quantity_unit": "not_applicable"
+   },
+   "country_code": "TOTAL",
+   "country_name": "TOTAL FOR ALL COUNTRIES",
+   "description": "ELECTRONIC INTEGRATED CIRCUITS & MICROASSEMBL, PTS",
+   "flow": "exports",
+   "hs_code": "8542",
+   "hs_level": "HS4",
+   "knowledge_time": "2026-07-01T03:59:00Z",
+   "month": "2025-02-01",
+   "quantity": null,
+   "quantity_unit": null,
+   "stamp_estimated": true,
+   "summary_level": "DET",
+   "value_field": "ALL_VAL_MO",
+   "value_usd": 4200000000.0
+  },
+  {
+   "absent": {
+    "quantity": "not_applicable",
+    "quantity_unit": "not_applicable"
+   },
+   "country_code": "TOTAL",
+   "country_name": "TOTAL FOR ALL COUNTRIES",
+   "description": "ELECTRONIC INTEGRATED CIRCUITS & MICROASSEMBL, PTS",
+   "flow": "exports",
+   "hs_code": "8542",
+   "hs_level": "HS4",
+   "knowledge_time": "2026-07-01T03:59:00Z",
+   "month": "2025-03-01",
+   "quantity": null,
+   "quantity_unit": null,
+   "stamp_estimated": true,
+   "summary_level": "DET",
+   "value_field": "ALL_VAL_MO",
+   "value_usd": 4300000000.0
+  }
+ ]
+}

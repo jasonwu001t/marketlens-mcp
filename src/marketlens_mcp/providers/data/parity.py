@@ -31,6 +31,12 @@ PARITY: dict[str, Mapped | Excluded] = {
     "bea.nipa": Mapped(("macro_bea_table",)),
     "bls.cpi_schedule": Mapped(("macro_release_schedule",)),
     "bls.empsit_schedule": Mapped(("macro_release_schedule",)),
+    "census.trade": Mapped(("macro_census_trade",)),
+    "boj.series": Mapped(("macro_boj_series",)),
+    "boe.series": Mapped(("macro_boe_series",)),
+    "mof.jgb_yields": Mapped(("macro_jgb_yields",)),
+    "regionalfed.surveys": Mapped(("macro_regional_fed_surveys",)),
+    "finra.trace_aggregates": Mapped(("credit_trace_aggregates",)),
     # SEC EDGAR
     "sec.submissions": Mapped(
         (

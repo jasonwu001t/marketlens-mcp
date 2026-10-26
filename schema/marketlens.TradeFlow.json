@@ -1,0 +1,189 @@
+{
+  "$defs": {
+    "AbsenceCode": {
+      "description": "Why a value is None. Never served as 0.",
+      "enum": [
+        "not_provided_by_source",
+        "not_applicable",
+        "not_entitled",
+        "no_data",
+        "insufficient_data",
+        "not_recovered",
+        "no_match",
+        "withheld",
+        "source_error",
+        "unparseable"
+      ],
+      "title": "AbsenceCode",
+      "type": "string"
+    }
+  },
+  "$id": "urn:marketlens:schema:1:marketlens.TradeFlow",
+  "additionalProperties": false,
+  "description": "US goods trade in one HS commodity with one partner for one month (Census).",
+  "properties": {
+    "absent": {
+      "anyOf": [
+        {
+          "additionalProperties": {
+            "$ref": "#/$defs/AbsenceCode"
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Per-row reasons for None fields: field name -> AbsenceCode",
+      "title": "Absent"
+    },
+    "country_code": {
+      "description": "Census country code (5700 China); TOTAL for all countries",
+      "title": "Country Code",
+      "type": "string"
+    },
+    "country_name": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Country Name"
+    },
+    "description": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Census's short description of the code",
+      "title": "Description"
+    },
+    "flow": {
+      "description": "Exports (total value) or general imports",
+      "enum": [
+        "exports",
+        "imports"
+      ],
+      "title": "Flow",
+      "type": "string"
+    },
+    "hs_code": {
+      "description": "Harmonized System code, e.g. 8542 (integrated circuits)",
+      "title": "Hs Code",
+      "type": "string"
+    },
+    "hs_level": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "HS2, HS4, HS6 or HS10",
+      "title": "Hs Level"
+    },
+    "knowledge_time": {
+      "description": "When the value became knowable under the dataset's point-in-time policy",
+      "format": "date-time",
+      "title": "Knowledge Time",
+      "type": "string",
+      "x-role": "available",
+      "x-unit": "UTC"
+    },
+    "month": {
+      "description": "First day of the statistical month",
+      "format": "date",
+      "title": "Month",
+      "type": "string"
+    },
+    "quantity": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "First quantity, in `quantity_unit` (HS10 codes only)",
+      "title": "Quantity",
+      "x-unit": "as_published"
+    },
+    "quantity_unit": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Census's unit code: NO, KG, ...",
+      "title": "Quantity Unit"
+    },
+    "stamp_estimated": {
+      "description": "knowledge_time is an estimate, not the calendar's release",
+      "title": "Stamp Estimated",
+      "type": "boolean"
+    },
+    "summary_level": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "DET a country, CGP a country group",
+      "title": "Summary Level"
+    },
+    "value_field": {
+      "description": "Census's variable: ALL_VAL_MO (exports), GEN_VAL_MO (imports)",
+      "title": "Value Field",
+      "type": "string"
+    },
+    "value_usd": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Not seasonally adjusted",
+      "title": "Value Usd",
+      "x-unit": "USD"
+    }
+  },
+  "required": [
+    "flow",
+    "hs_code",
+    "country_code",
+    "month",
+    "value_field",
+    "stamp_estimated",
+    "knowledge_time"
+  ],
+  "title": "TradeFlow",
+  "type": "object",
+  "x-schema-version": "1.1.0"
+}

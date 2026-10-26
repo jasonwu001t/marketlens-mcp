@@ -121,6 +121,33 @@ SOURCES: tuple[SourceKey, ...] = (
     SourceKey("sifma", "SIFMA", "holidays", tools=("calendar_us_holidays",)),
     SourceKey("opm", "OPM", "holidays", tools=("calendar_us_holidays",)),
     SourceKey("twse", "TWSE / MOPS", "filings", tools=("twse_monthly_revenue",)),
+    SourceKey(
+        "census",
+        "Census",
+        "macro",
+        ("CENSUS_API_KEY",),
+        True,
+        "https://api.census.gov/data/key_signup.html",
+        tools=("macro_census_trade",),
+    ),
+    SourceKey("boj", "The Bank of Japan", "macro", tools=("macro_boj_series",)),
+    SourceKey("boe", "The Bank of England", "macro", tools=("macro_boe_series",)),
+    SourceKey("mof", "Japan's Ministry of Finance", "macro", tools=("macro_jgb_yields",)),
+    SourceKey(
+        "regionalfed",
+        "The Richmond and Kansas City Feds",
+        "macro",
+        tools=("macro_regional_fed_surveys",),
+    ),
+    SourceKey(
+        "finra",
+        "FINRA TRACE",
+        "macro",
+        ("FINRA_API_CLIENT_ID", "FINRA_API_CLIENT_SECRET"),
+        True,
+        "https://developer.finra.org/",
+        tools=("credit_trace_aggregates",),
+    ),
 )
 
 BY_SOURCE: dict[str, SourceKey] = {s.source: s for s in SOURCES}
@@ -135,6 +162,8 @@ KEY_VARIABLES: tuple[str, ...] = (
     "BEA_API_KEY",
     "EIA_API_KEY",
     "CENSUS_API_KEY",
+    "FINRA_API_CLIENT_ID",
+    "FINRA_API_CLIENT_SECRET",
     "SEC_CONTACT_EMAIL",
     "ALPACA_API_KEY",
     "ALPACA_SECRET_KEY",

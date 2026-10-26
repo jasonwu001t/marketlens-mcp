@@ -9,7 +9,20 @@ from data_harness import SPECS, call, context
 from test_banks import fdic_routes, mmf_routes
 from test_calendars import earnings_routes, economic_routes, holiday_routes, surprise_routes
 from test_fed_treasury import FISCAL, fomc_document_routes, fomc_routes, treasury_routes
-from test_macro import BEA, bls_routes, fred_routes
+from test_macro import (
+    BEA,
+    JGB,
+    REGIONAL,
+    TRACE,
+    bls_routes,
+    boe_routes,
+    boj_routes,
+    census_routes,
+    fred_routes,
+    jgb_routes,
+    regional_routes,
+    trace_routes,
+)
 from test_sec import sec_routes
 from test_sec_research import IR_LIST, research_routes
 from test_twse import twse_routes
@@ -18,6 +31,12 @@ ARGS = {
     "macro_series": {"series_ids": ["CPIAUCSL"]},
     "macro_bls_series": {"series_ids": ["LNS14000000"]},
     "macro_bea_table": {"table_name": "T10101"},
+    "macro_census_trade": {"hs_codes": ["8542"], "flow": "exports"},
+    "macro_boj_series": {"database": "FM01", "series_codes": ["STRDCLUCON"]},
+    "macro_boe_series": {"series_codes": ["IUDBEDR"]},
+    "macro_jgb_yields": JGB,
+    "macro_regional_fed_surveys": REGIONAL,
+    "credit_trace_aggregates": TRACE,
     "sec_filings": {"ticker": "TESTCO"},
     "sec_xbrl_facts": {"ticker": "TESTCO"},
     "sec_fundamentals": {"ticker": "TESTCO"},
@@ -77,6 +96,8 @@ def test_no_tool_writes_to_stdout(tmp_path, upstream, keys, frozen_clock, capsys
     fdic_routes(upstream, monkeypatch)  # SEC's ticker list with two banks' holders added
     mmf_routes(upstream)
     twse_routes(upstream)
+    for routes in (census_routes, boj_routes, boe_routes, jgb_routes, regional_routes, trace_routes):
+        routes(upstream)
     capsys.readouterr()
     answered = 0
     for name in SPECS:
@@ -84,7 +105,7 @@ def test_no_tool_writes_to_stdout(tmp_path, upstream, keys, frozen_clock, capsys
         answered += bool(out.rows)
     captured = capsys.readouterr()
     assert captured.out == ""
-    assert answered == 44
+    assert answered == 50
 
 
 def test_the_placeholder_contact_warning_never_reaches_stdout(
