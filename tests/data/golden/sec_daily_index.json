@@ -71,10 +71,10 @@
   {
    "absent": null,
    "accession_number": "9999999995-26-000100",
-   "cik": "0009999904",
+   "cik": "0009999907",
    "company": "Ipoco Synthetic Inc",
    "date_filed": "2026-09-30",
-   "file_url": "https://www.sec.gov/Archives/edgar/data/9999904/9999999995-26-000100.txt",
+   "file_url": "https://www.sec.gov/Archives/edgar/data/9999907/9999999995-26-000100.txt",
    "form": "EFFECT",
    "index_date": "2026-10-01",
    "knowledge_time": "2026-10-02T02:02:00Z"
@@ -92,11 +92,11 @@
   },
   {
    "absent": null,
-   "accession_number": "0009999904-26-000005",
-   "cik": "0009999904",
+   "accession_number": "0009999907-26-000005",
+   "cik": "0009999907",
    "company": "Ipoco Synthetic Inc",
    "date_filed": "2026-10-01",
-   "file_url": "https://www.sec.gov/Archives/edgar/data/9999904/0009999904-26-000005.txt",
+   "file_url": "https://www.sec.gov/Archives/edgar/data/9999907/0009999907-26-000005.txt",
    "form": "S-1/A",
    "index_date": "2026-10-01",
    "knowledge_time": "2026-10-02T02:02:00Z"

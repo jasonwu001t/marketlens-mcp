@@ -2,7 +2,7 @@
 sec_earnings_figures, filings_events, sec_insider_trades, sec_form144,
 sec_ipo_pipeline, sec_daily_index, sec_13f_holdings, sec_fund_nport and
 sec_fund_holdings against a synthetic EDGAR: the fictional companies TESTCO
-(CIK 9999901), EVNTCO (CIK 9999903, the material 8-Ks) and IPOCO (CIK 9999904,
+(CIK 9999901), EVNTCO (CIK 9999903, the material 8-Ks) and IPOCO (CIK 9999907,
 a new issuer), EDGAR's daily index of 2026-10-01, manager CIK 9999950 and fund
 series S000099991 (TFUND)."""
 
@@ -121,15 +121,15 @@ def sec_routes(upstream):
     j(rf"{daily}/QTR4/index\.json", "sec.daily_index_listing__2026_QTR4.json")
     t(rf"{daily}/QTR4/form\.20261001\.idx", "sec.daily_index__20261001.idx")
     upstream.add(rf"{daily}/QTR3/index\.json", httpx.Response(404))
-    # IPOCO (CIK 9999904), a new issuer: its feed, its S-1/A's index and cover, its EFFECT notice
-    j(r"data\.sec\.gov/submissions/CIK0009999904\.json", "sec.submissions__IPOCO.json")
-    t(rf"{ARCH}/9999904/000999990426000005/0009999904-26-000005-index\.htm", "sec.ipo_index__26-000005.htm")
-    t(rf"{ARCH}/9999904/000999990426000005/ipoco-s1a\.htm", "sec.ipo_cover__26-000005.htm")
+    # IPOCO (CIK 9999907), a new issuer: its feed, its S-1/A's index and cover, its EFFECT notice
+    j(r"data\.sec\.gov/submissions/CIK0009999907\.json", "sec.submissions__IPOCO.json")
+    t(rf"{ARCH}/9999907/000999990726000005/0009999907-26-000005-index\.htm", "sec.ipo_index__26-000005.htm")
+    t(rf"{ARCH}/9999907/000999990726000005/ipoco-s1a\.htm", "sec.ipo_cover__26-000005.htm")
     t(
-        rf"{ARCH}/9999904/999999999526000100/9999999995-26-000100-index\.htm",
+        rf"{ARCH}/9999907/999999999526000100/9999999995-26-000100-index\.htm",
         "sec.effect_index__26-000100.htm",
     )
-    t(rf"{ARCH}/9999904/999999999526000100/primary_doc\.xml", "sec.effect__26-000100.xml")
+    t(rf"{ARCH}/9999907/999999999526000100/primary_doc\.xml", "sec.effect__26-000100.xml")
 
 
 @pytest.fixture

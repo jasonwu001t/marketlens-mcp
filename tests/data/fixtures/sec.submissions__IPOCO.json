@@ -1,8 +1,8 @@
-{"_synthetic": true, "cik": "9999904", "entityType": "operating", "sic": "2836",
+{"_synthetic": true, "cik": "9999907", "entityType": "operating", "sic": "2836",
  "sicDescription": "Biological Products, (No Diagnostic Substances)", "name": "Ipoco Synthetic Inc",
  "tickers": [], "exchanges": [],
  "filings": {"recent": {
-  "accessionNumber": ["0009999904-26-000005", "9999999995-26-000100", "0009999904-26-000003", "0009999904-26-000001"],
+  "accessionNumber": ["0009999907-26-000005", "9999999995-26-000100", "0009999907-26-000003", "0009999907-26-000001"],
   "filingDate": ["2026-10-01", "2026-09-30", "2026-09-10", "2026-06-01"],
   "acceptanceDateTime": ["2026-10-01T20:30:00.000Z", "2026-10-01T04:15:00.000Z", "2026-09-10T20:00:00.000Z", "2026-06-01T20:00:00.000Z"],
   "form": ["S-1/A", "EFFECT", "S-1", "DRS"],
