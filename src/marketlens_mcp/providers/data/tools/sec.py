@@ -472,7 +472,7 @@ async def sec_filings(ctx: ToolContext, args: FilingsInputs) -> ToolOutput:
 
     def work(session):
         session.refresh("sec.submissions", identity)
-        return F.records(session.read("sec.submissions", as_of=as_of, **identity))
+        return F.records(session.read("sec.submissions", as_of=as_of, **session.company(args.ticker)))
 
     records, session = await common.run(ctx, s, work, source="sec", subject=("filer", args.ticker))
     forms = set(args.forms or [])
@@ -485,7 +485,7 @@ async def sec_filings(ctx: ToolContext, args: FilingsInputs) -> ToolOutput:
             common.row(
                 Filing,
                 {
-                    "ticker": F.text(r["ticker"]) or args.ticker,
+                    "ticker": args.ticker,
                     "cik": F.text(r["cik"]),
                     "company_name": F.text(r["company_name"]),
                     "form": F.text(r["form"]),
@@ -541,7 +541,7 @@ async def filings_events(ctx: ToolContext, args: EventsInputs) -> ToolOutput:
         index_fresh = session.refresh("sec.submissions", identity)
         # derived from the stored filings index: read again whenever the index was just fetched
         session.refresh("sec.filing_events", identity, force=not index_fresh)
-        return F.records(session.read("sec.filing_events", as_of=as_of, **identity))
+        return F.records(session.read("sec.filing_events", as_of=as_of, **session.company(args.ticker)))
 
     records, session = await common.run(ctx, s, work, source="sec", subject=("filer", args.ticker))
     wanted = set(args.items or [])
@@ -555,7 +555,7 @@ async def filings_events(ctx: ToolContext, args: EventsInputs) -> ToolOutput:
             common.row(
                 FilingEvent,
                 {
-                    "ticker": F.text(r["ticker"]) or args.ticker,
+                    "ticker": args.ticker,
                     "cik": cik,
                     "form": F.text(r["form"]),
                     "filing_date": filed,
@@ -736,7 +736,7 @@ async def sec_pay_vs_performance(ctx: ToolContext, args: PayVsPerformanceInputs)
         index_fresh = session.refresh("sec.submissions", identity)
         # derived from the stored filings index: read again whenever the index was just fetched
         session.refresh("sec.pay_vs_performance", identity, force=not index_fresh)
-        return F.records(session.read("sec.pay_vs_performance", as_of=as_of, **identity))
+        return F.records(session.read("sec.pay_vs_performance", as_of=as_of, **session.company(args.ticker)))
 
     records, session = await common.run(ctx, s, work, source="sec", subject=("filer", args.ticker))
     wanted = set(args.measures or PVP_MEASURES)
@@ -744,7 +744,7 @@ async def sec_pay_vs_performance(ctx: ToolContext, args: PayVsPerformanceInputs)
         common.row(
             PayVsPerformance,
             {
-                "ticker": F.text(r["ticker"]) or args.ticker,
+                "ticker": args.ticker,
                 "cik": F.text(r["cik"]),
                 "fiscal_year": F.integer(r["fiscal_year"]),
                 "measure": F.text(r["measure"]),
@@ -786,10 +786,11 @@ async def sec_xbrl_facts(ctx: ToolContext, args: FactsInputs) -> ToolOutput:
     if args.start and args.end:
         common.window(ctx.tool, args.start, args.end, default_start=args.start, default_end=args.end)
     identity = {"ticker": args.ticker}
-    filters = {**identity, **({"taxonomy": args.taxonomy} if args.taxonomy else {})}
+    taxonomy = {"taxonomy": args.taxonomy} if args.taxonomy else {}
 
     def work(session):
         session.refresh("sec.company_facts", identity)
+        filters = {**session.company(args.ticker, unpadded=True), **taxonomy}  # its CIK unpadded
         return F.records(
             session.read("sec.company_facts", as_of=as_of, vintages=args.include_vintages, **filters)
         )
@@ -809,7 +810,7 @@ async def sec_xbrl_facts(ctx: ToolContext, args: FactsInputs) -> ToolOutput:
             common.row(
                 XbrlFact,
                 {
-                    "ticker": F.text(r["ticker"]) or args.ticker,
+                    "ticker": args.ticker,
                     "cik": f"{int(F.text(r['cik']) or 0):010d}",
                     "taxonomy": F.text(r["taxonomy"]),
                     "metric": F.text(r["metric"]),
@@ -868,7 +869,7 @@ async def sec_fundamentals(ctx: ToolContext, args: FundamentalsInputs) -> ToolOu
         facts_fresh = session.refresh("sec.company_facts", identity)
         # built locally from the stored facts: rebuilt whenever they were just fetched
         session.refresh("sec.fundamentals", identity, force=not facts_fresh)
-        return F.records(session.read("sec.fundamentals", as_of=as_of, **identity))
+        return F.records(session.read("sec.fundamentals", as_of=as_of, **session.company(args.ticker)))
 
     records, session = await common.run(ctx, s, work, source="sec", subject=("filer", args.ticker))
     wanted = set(args.metrics or FUNDAMENTAL_METRICS)
@@ -886,7 +887,7 @@ async def sec_fundamentals(ctx: ToolContext, args: FundamentalsInputs) -> ToolOu
             common.row(
                 FundamentalValue,
                 {
-                    "ticker": F.text(r["ticker"]) or args.ticker,
+                    "ticker": args.ticker,
                     "cik": F.text(r["cik"]),
                     "metric": metric,
                     "unit": unit,
@@ -941,7 +942,7 @@ async def sec_earnings_releases(ctx: ToolContext, args: ReleasesInputs) -> ToolO
 
     def work(session):
         session.refresh("sec.earnings_releases", identity)
-        return F.records(session.read("sec.earnings_releases", as_of=as_of, **identity))
+        return F.records(session.read("sec.earnings_releases", as_of=as_of, **session.company(args.ticker)))
 
     records, session = await common.run(ctx, s, work, source="sec", subject=("filer", args.ticker))
     rows = []
@@ -953,7 +954,7 @@ async def sec_earnings_releases(ctx: ToolContext, args: ReleasesInputs) -> ToolO
             common.row(
                 EarningsRelease,
                 {
-                    "ticker": F.text(r["ticker"]) or args.ticker,
+                    "ticker": args.ticker,
                     "cik": F.text(r["cik"]),
                     "company_name": F.text(r["company_name"]),
                     "form": F.text(r["form"]),
@@ -993,7 +994,8 @@ async def sec_earnings_figures(ctx: ToolContext, args: FiguresInputs) -> ToolOut
 
     def work(session):
         session.refresh("sec.earnings_press_release_figures", identity)
-        return F.records(session.read("sec.earnings_press_release_figures", as_of=as_of, **identity))
+        company = session.company(args.ticker)
+        return F.records(session.read("sec.earnings_press_release_figures", as_of=as_of, **company))
 
     records, session = await common.run(ctx, s, work, source="sec", subject=("filer", args.ticker))
     metrics = set(args.metrics)
@@ -1006,7 +1008,7 @@ async def sec_earnings_figures(ctx: ToolContext, args: FiguresInputs) -> ToolOut
             common.row(
                 EarningsFigure,
                 {
-                    "ticker": F.text(r["ticker"]) or args.ticker,
+                    "ticker": args.ticker,
                     "cik": F.text(r["cik"]),
                     "accession_number": F.text(r["accession_number"]),
                     "accepted_at": accepted,
@@ -1054,7 +1056,8 @@ async def sec_insider_trades(ctx: ToolContext, args: InsiderInputs) -> ToolOutpu
 
     def work(session):
         session.refresh("sec_insider.transactions", identity)
-        return F.records(session.read("sec_insider.transactions", as_of=as_of, **identity))
+        company = session.company(args.ticker)
+        return F.records(session.read("sec_insider.transactions", as_of=as_of, **company))
 
     records, session = await common.run(ctx, s, work, source="sec_insider", subject=("filer", args.ticker))
     forms = set().union(*(FORM_GROUPS[f] for f in args.forms))
@@ -1071,7 +1074,7 @@ async def sec_insider_trades(ctx: ToolContext, args: InsiderInputs) -> ToolOutpu
             common.row(
                 InsiderTransaction,
                 {
-                    "ticker": F.text(r["ticker"]) or args.ticker,
+                    "ticker": args.ticker,
                     "cik": F.text(r["cik"]),
                     "accession_number": F.text(r["accession_number"]),
                     "line": (F.integer(r["line"]) or 0) + 1,
@@ -1198,7 +1201,8 @@ async def sec_form144(ctx: ToolContext, args: Form144Inputs) -> ToolOutput:
 
     def work(session):
         session.refresh("sec.form144", identity)
-        return F.records(session.read("sec.form144", as_of=as_of, **identity))
+        company = session.company(args.ticker, column="issuer_cik")  # the notice's issuer
+        return F.records(session.read("sec.form144", as_of=as_of, **company))
 
     records, session = await common.run(ctx, s, work, source="sec", subject=("issuer", args.ticker))
     rows = []
@@ -1212,7 +1216,7 @@ async def sec_form144(ctx: ToolContext, args: Form144Inputs) -> ToolOutput:
             common.row(
                 Form144Notice,
                 {
-                    "ticker": F.text(r["ticker"]) or args.ticker,
+                    "ticker": args.ticker,
                     "issuer_cik": cik,
                     "issuer_name": F.text(r["issuer_name"]),
                     "accession_number": accession,

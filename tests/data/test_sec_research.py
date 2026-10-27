@@ -215,3 +215,24 @@ def test_fixture_documents_are_synthetic():
         "company.ir_page__TESTCO_investor_day.html",
     ):
         assert "synthetic" in fixture_text(name), name
+
+
+# --- two listed classes of one company ----------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("tool", "company", "extra"),
+    (
+        ("sec_earnings_guidance", "GUIDCO", {}),
+        ("sec_earnings_non_gaap", "GUIDCO", {}),
+        ("sec_segment_facts", "TESTCO", {}),
+        ("sec_foreign_quarterly", "FPICO", {"statement": ["segments"]}),
+    ),
+)
+def test_a_second_listed_class_reads_its_company_rows(tmp_path, edgar, monkeypatch, tool, company, extra):
+    """One payload written under two tickers sharing a CIK (test_sec.CLASS_B): the
+    second class reads the company's rows (bug audit 2026-10-26 #2, B144)."""
+    test_sec.list_class_b(edgar, monkeypatch, tmp_path)
+    second = test_sec.CLASS_B[company][0]
+    first = call(tool, context(tmp_path), ticker=company, **extra)
+    test_sec.same_rows(first, call(tool, context(tmp_path), ticker=second, **extra), second)

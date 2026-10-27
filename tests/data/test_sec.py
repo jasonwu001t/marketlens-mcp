@@ -826,3 +826,98 @@ def test_sec_fund_tools_refuse_a_company(tmp_path, edgar):
 
 def test_fixture_documents_are_synthetic():
     assert "synthetic" in fixture_text("sec.form4__26-000005.xml")
+
+
+# --- two listed classes of one company ----------------------------------------------------------
+
+#: A second listed class of each synthetic company, under the first's CIK in SEC's
+#: company_tickers.json, as SEC lists GOOGL and GOOG, FOXA and FOX, NWSA and NWS, BRK-B
+#: and BRK-A. marketlens-data keys these datasets on the company (a CIK, an accession
+#: number), so the class whose sync runs second writes nothing: its rows are the first
+#: class's (bug audit 2026-10-26 #2, B144).
+CLASS_B = {
+    "TESTCO": ("TESTCOB", 9999901),
+    "EVNTCO": ("EVNTCOB", 9999903),
+    "PVPCO": ("PVPCOB", 9999904),
+    "GUIDCO": ("GUIDCOB", 9999905),
+    "FPICO": ("FPICOB", 9999906),
+}
+
+#: Every per-company tool of this module, with the company whose synthetic filings it reads.
+PER_COMPANY = (
+    ("sec_filings", "TESTCO"),
+    ("sec_xbrl_facts", "TESTCO"),
+    ("sec_fundamentals", "TESTCO"),
+    ("sec_earnings_releases", "TESTCO"),
+    ("sec_earnings_figures", "TESTCO"),
+    ("sec_insider_trades", "TESTCO"),
+    ("sec_form144", "TESTCO"),
+    ("filings_events", "EVNTCO"),
+    ("sec_pay_vs_performance", "PVPCO"),
+)
+
+
+def list_class_b(upstream, monkeypatch, tmp_path):
+    """SEC's company list with each CLASS_B ticker beside its company's first, read
+    afresh: a data directory of this test's own (the list is cached there) and no
+    process memo of the list."""
+    from omni.sources import sec as omni_sec
+
+    tickers = fixture_json("sec.company_tickers.json")
+    for i, (ticker, cik) in enumerate(CLASS_B.values()):
+        tickers[str(90 + i)] = {"cik_str": cik, "ticker": ticker, "title": f"Class B {ticker}"}
+    upstream.add(r"www\.sec\.gov/files/company_tickers\.json", lambda _r: tickers)
+    monkeypatch.setenv("OMNI_DATA_DIR", str(tmp_path / "omni-data"))
+    monkeypatch.setattr(omni_sec, "_ticker_map_cache", None)
+
+
+def same_rows(first, second, ticker: str) -> None:
+    """`second`'s rows are `first`'s, each naming the ticker asked for."""
+    a = [r.model_dump(mode="json") for r in first.rows]
+    b = [r.model_dump(mode="json") for r in second.rows]
+    assert a, "the company has rows"
+    assert {r["ticker"] for r in b} == {ticker}
+    assert [{**r, "ticker": a[0]["ticker"]} for r in b] == a
+
+
+@pytest.fixture
+def two_classes(edgar, monkeypatch, tmp_path):
+    list_class_b(edgar, monkeypatch, tmp_path)
+    return edgar
+
+
+@pytest.mark.parametrize(("tool", "company"), PER_COMPANY)
+def test_a_second_listed_class_reads_its_company_rows(tmp_path, two_classes, tool, company):
+    """One payload written under two tickers sharing a CIK: the second class's sync
+    writes nothing, and its read by ticker answered nothing as a complete answer."""
+    from omni.sources.sec import cik_for
+
+    second = CLASS_B[company][0]
+    assert cik_for(second) == cik_for(company)
+    first = call(tool, context(tmp_path), ticker=company)
+    same_rows(first, call(tool, context(tmp_path), ticker=second), second)
+
+
+@pytest.mark.parametrize(("tool", "company"), PER_COMPANY)
+def test_the_class_that_syncs_second_reads_the_company_rows(tmp_path, two_classes, tool, company):
+    """Whichever class syncs first holds the rows: TESTCOB first, then TESTCO."""
+    second = CLASS_B[company][0]
+    early = call(tool, context(tmp_path), ticker=second)
+    same_rows(early, call(tool, context(tmp_path), ticker=company), company)
+
+
+def test_mode_local_reads_the_company_rows_another_class_stored(tmp_path, two_classes):
+    """Mode local fetches nothing: the company is the one SEC's list on disk names."""
+    first = call("sec_filings", context(tmp_path), ticker="TESTCO")
+    local = call("sec_filings", context(tmp_path, settings={"mode": "local"}), ticker="TESTCOB")
+    same_rows(first, local, "TESTCOB")
+
+
+def test_a_ticker_sec_lists_for_no_company_still_reads_nothing(tmp_path, two_classes):
+    """Only a ticker SEC's list names is read as a company: one it does not is refused
+    as before, and mode local answers nothing stored for it."""
+    call("sec_filings", context(tmp_path), ticker="TESTCO")
+    err = refused("sec_filings", context(tmp_path), ticker="ZZZZ")
+    assert err.code == "data_not_found"
+    local = call("sec_filings", context(tmp_path, settings={"mode": "local"}), ticker="ZZZZ")
+    assert local.rows == []

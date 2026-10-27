@@ -215,6 +215,27 @@ class Session:
             return self.omni.read_raw(dataset_id, as_of=as_of, **filters)
         return self.omni.query(dataset_id, as_of=as_of, mode="local", **filters)
 
+    def company(self, ticker: str, *, column: str = "cik", unpadded: bool = False) -> dict[str, str]:
+        """The filter that reads one company's rows of an SEC dataset keyed on the
+        company (a CIK, an accession number), asked for by ticker: ``{column: CIK}``
+        for the company SEC's list on disk names the ticker under (10 digits, or
+        the integer's digits with ``unpadded``: sec.company_facts), else
+        ``{"ticker": ticker}``. Local only: after a refresh the list is on disk.
+
+        marketlens-data stamps each row with the ticker whose sync wrote it, and a
+        row another ticker's sync wrote first is not written again: a company
+        listing two classes under one CIK (GOOGL and GOOG, FOXA and FOX, NWSA and
+        NWS, BRK-B and BRK-A) has its rows under one of them, or split between the
+        two, and a read by the other's ticker answered nothing. Sync by the ticker,
+        read by this."""
+        try:
+            ref = self.module("omni.sources.sec").ticker_reference().refs.get(ticker)
+        except Exception:  # no list on disk (nothing synced yet), or a marketlens-data without one
+            ref = None
+        if ref is None or ref.kind != "company":
+            return {"ticker": ticker}
+        return {column: str(int(ref.cik)) if unpadded else ref.cik}
+
 
 # --- rows, provenance, output ------------------------------------------------------------------
 

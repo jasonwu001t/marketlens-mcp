@@ -98,7 +98,7 @@ async def sec_earnings_guidance(ctx: ToolContext, args: GuidanceInputs) -> ToolO
 
     def work(session):
         session.refresh("sec.earnings_guidance", identity)
-        return F.records(session.read("sec.earnings_guidance", as_of=as_of, **identity))
+        return F.records(session.read("sec.earnings_guidance", as_of=as_of, **session.company(args.ticker)))
 
     records, session = await common.run(ctx, s, work, source="sec", subject=("filer", args.ticker))
     rows = []
@@ -111,7 +111,7 @@ async def sec_earnings_guidance(ctx: ToolContext, args: GuidanceInputs) -> ToolO
             common.row(
                 EarningsGuidance,
                 {
-                    "ticker": F.text(r["ticker"]) or args.ticker,
+                    "ticker": args.ticker,
                     "cik": F.text(r["cik"]),
                     "accession_number": F.text(r["accession_number"]),
                     "accepted_at": accepted,
@@ -155,7 +155,7 @@ async def sec_earnings_non_gaap(ctx: ToolContext, args: NonGaapInputs) -> ToolOu
 
     def work(session):
         session.refresh("sec.earnings_non_gaap", identity)
-        return F.records(session.read("sec.earnings_non_gaap", as_of=as_of, **identity))
+        return F.records(session.read("sec.earnings_non_gaap", as_of=as_of, **session.company(args.ticker)))
 
     records, session = await common.run(ctx, s, work, source="sec", subject=("filer", args.ticker))
     bases = set(args.basis or ("gaap", "non_gaap", "adjustment"))
@@ -169,7 +169,7 @@ async def sec_earnings_non_gaap(ctx: ToolContext, args: NonGaapInputs) -> ToolOu
             common.row(
                 NonGaapFigure,
                 {
-                    "ticker": F.text(r["ticker"]) or args.ticker,
+                    "ticker": args.ticker,
                     "cik": F.text(r["cik"]),
                     "accession_number": F.text(r["accession_number"]),
                     "accepted_at": accepted,
@@ -225,7 +225,7 @@ async def sec_segment_facts(ctx: ToolContext, args: SegmentInputs) -> ToolOutput
 
     def work(session):
         session.refresh("sec.submissions", identity)
-        index = F.records(session.read("sec.submissions", as_of=as_of, **identity))
+        index = F.records(session.read("sec.submissions", as_of=as_of, **session.company(args.ticker)))
         periodic = sorted(
             (r for r in index if F.text(r["form"]) in _PERIODIC),
             key=lambda r: F.instant(r["knowledge_time"]),
@@ -252,7 +252,7 @@ async def sec_segment_facts(ctx: ToolContext, args: SegmentInputs) -> ToolOutput
             common.row(
                 SegmentFact,
                 {
-                    "ticker": F.text(r["ticker"]) or args.ticker,
+                    "ticker": args.ticker,
                     "cik": F.text(r["cik"]),
                     "accession_number": F.text(r["accn"]),
                     "form": F.text(r["form"]),
@@ -330,7 +330,8 @@ async def sec_foreign_quarterly(ctx: ToolContext, args: ForeignInputs) -> ToolOu
         session.refresh(
             "sec.foreign_quarterly_statements", identity, force=not (index_fresh and releases_fresh)
         )
-        return F.records(session.read("sec.foreign_quarterly_statements", as_of=as_of, **identity))
+        company = session.company(args.ticker)
+        return F.records(session.read("sec.foreign_quarterly_statements", as_of=as_of, **company))
 
     records, session = await common.run(ctx, s, work, source="sec", subject=("filer", args.ticker))
     wanted = set(args.statement or ())
@@ -342,7 +343,7 @@ async def sec_foreign_quarterly(ctx: ToolContext, args: ForeignInputs) -> ToolOu
             common.row(
                 ForeignQuarterlyFigure,
                 {
-                    "ticker": F.text(r["ticker"]) or args.ticker,
+                    "ticker": args.ticker,
                     "cik": F.text(r["cik"]),
                     "form": F.text(r["form"]),
                     "accession_number": F.text(r["accession_number"]),
