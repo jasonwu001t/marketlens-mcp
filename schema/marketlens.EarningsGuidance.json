@@ -20,7 +20,7 @@
   },
   "$id": "urn:marketlens:schema:1:marketlens.EarningsGuidance",
   "additionalProperties": false,
-  "description": "One guidance statement of an earnings press release (EX-99.1): the\ncompany's own outlook for one metric over one period, from its prose or its\nguidance table by a named rule; ``source_text`` is UNTRUSTED company text.\nA margin or tax rate is a fraction (56 % is 0.56).",
+  "description": "One guidance statement of an earnings press release (EX-99.1): the\ncompany's own outlook for one metric over one period, from its prose or its\nguidance table by a named rule; ``source_text`` is UNTRUSTED company text.\nA margin, a tax rate or a growth rate is a fraction (56 % is 0.56; a\ngrowth rate's decline is negative).",
   "properties": {
     "absent": {
       "anyOf": [
@@ -112,7 +112,7 @@
       "x-unit": "as_published"
     },
     "metric": {
-      "description": "revenue, gross_margin, operating_margin, operating_income, opex, tax_rate, capex, eps",
+      "description": "revenue, gross_margin, operating_margin, operating_income, opex, tax_rate, capex, eps, revenue_growth, organic_revenue_growth, eps_growth",
       "title": "Metric",
       "type": "string"
     },
@@ -146,7 +146,7 @@
       "type": "string"
     },
     "unit": {
-      "description": "USD (full dollars), fraction (a margin or rate) or USD/share",
+      "description": "USD (full dollars), fraction (a margin, a rate or a growth rate) or USD/share",
       "title": "Unit",
       "type": "string"
     }

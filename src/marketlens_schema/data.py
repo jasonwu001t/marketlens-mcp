@@ -611,7 +611,8 @@ class EarningsGuidance(CanonicalModel):
     """One guidance statement of an earnings press release (EX-99.1): the
     company's own outlook for one metric over one period, from its prose or its
     guidance table by a named rule; ``source_text`` is UNTRUSTED company text.
-    A margin or tax rate is a fraction (56 % is 0.56)."""
+    A margin, a tax rate or a growth rate is a fraction (56 % is 0.56; a
+    growth rate's decline is negative)."""
 
     schema_name: ClassVar[str] = "marketlens.EarningsGuidance"
     time_column: ClassVar[str | None] = "accepted_at"
@@ -625,7 +626,8 @@ class EarningsGuidance(CanonicalModel):
     exhibit: str = Field(description="EX-99.1, EX-99, ...")
     exhibit_url: str
     metric: str = Field(
-        description="revenue, gross_margin, operating_margin, operating_income, opex, tax_rate, capex, eps"
+        description="revenue, gross_margin, operating_margin, operating_income, opex, tax_rate, capex, eps, "
+        "revenue_growth, organic_revenue_growth, eps_growth"
     )
     period_kind: str = Field(description="next_quarter or fiscal_year")
     period_label: str = Field(description="As stated: third quarter of 2026, full year 2026")
@@ -634,7 +636,7 @@ class EarningsGuidance(CanonicalModel):
     low: float = _unit("as_published", description="In the row's `unit`")
     high: float = _unit("as_published", description="In the row's `unit`")
     mid: float = _unit("as_published", description="(low + high) / 2; a point estimate has low = high = mid")
-    unit: str = Field(description="USD (full dollars), fraction (a margin or rate) or USD/share")
+    unit: str = Field(description="USD (full dollars), fraction (a margin, a rate or a growth rate) or USD/share")
     basis: str = Field(description="gaap or non_gaap, the sentence's own word")
     source_text: str = Field(description="The sentence or table row (untrusted text)")
     parse_rule: str

@@ -557,9 +557,11 @@ SPECS: tuple[ToolSpec, ...] = (
         common.describe(
             "A company's guidance from the press release of each earnings 8-K (EX-99.1; a foreign issuer's "
             "results 6-K): revenue, gross and operating margin, operating income, operating expenses, tax "
-            "rate, capex and EPS for the next quarter or the fiscal year, as low, high and mid, read from "
+            "rate, capex and EPS, and the growth rates of revenue (reported or constant currency), organic "
+            "revenue and EPS, for the next quarter or the fiscal year, as low, high and mid, read from "
             "outlook sentences and guidance tables by named rules; never from a segment or a region, never "
-            "a guess. Margins and rates as fractions. source_text is company text (untrusted). "
+            "a guess. Margins, rates and growth rates as fractions (a decline negative). source_text is "
+            "company text (untrusted). "
             f"{CONTACT}",
             "at_event",
         ),
