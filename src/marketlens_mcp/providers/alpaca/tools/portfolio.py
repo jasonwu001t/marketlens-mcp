@@ -8,6 +8,7 @@ from __future__ import annotations
 import base64
 import binascii
 import json
+import re
 from datetime import date as Date
 from typing import Annotated, Literal
 
@@ -54,6 +55,9 @@ ACTIVITIES_PAGE_MAX = 100
 ORDERS_PAGE_MAX = 500
 LOCATES_PAGE_MAX = 10_000
 ORDER_CURSOR_PREFIX = "o1."
+#: GET /v2/orders pages from an order (exclusive), not from a submission time (after and until are exclusive,
+#: so the orders submitted with a page's last were lost); Alpaca takes neither cursor with after or until.
+ORDER_CURSORS = ("before_order_id", "after_order_id")
 #: Alpaca's activity types (trading API spec, ActivityType).
 ACTIVITY_TYPES = frozenset(
     [
@@ -263,14 +267,24 @@ def _order_token(position: dict[str, str]) -> str:
 
 
 def _order_position(token: str) -> dict[str, str]:
+    """The page a token names: the order it follows (before_order_id, after_order_id), or a submission time
+    (until, after) in a token issued before the order-id cursors."""
     try:
         if not token.startswith(ORDER_CURSOR_PREFIX):
             raise ValueError
         pos = json.loads(base64.urlsafe_b64decode(token[len(ORDER_CURSOR_PREFIX) :].encode()))
-        if not isinstance(pos, dict) or len(pos) != 1 or not set(pos) <= {"until", "after"}:
+        if (
+            not isinstance(pos, dict)
+            or len(pos) != 1
+            or not set(pos) <= set(ORDER_CURSORS) | {"until", "after"}
+        ):
             raise ValueError
-        (value,) = pos.values()
-        parse_instant(str(value))
+        ((key, value),) = pos.items()
+        if key in ORDER_CURSORS:
+            if not re.fullmatch(_ID, str(value)):
+                raise ValueError
+        else:
+            parse_instant(str(value))
         return {k: str(v) for k, v in pos.items()}
     except (ValueError, binascii.Error, json.JSONDecodeError) as e:
         raise ToolError(
@@ -400,19 +414,37 @@ async def portfolio_orders(ctx: ToolContext, args: OrdersIn) -> ToolOutput:
         "side": args.side,
         "nested": args.nested,
     }
+    # Alpaca takes an order cursor without after or until: past the first page the cursor stands in for the
+    # bound the pages move away from (until when newest first), and the bound they move towards is kept here
+    far = args.after if args.direction == "desc" else args.until
+    far_t = parse_instant(far) if far else None
+
+    def inside(order: Order) -> bool:
+        t = order.submitted_at or order.created_at
+        return far_t is None or (t > far_t if args.direction == "desc" else t < far_t)
+
     skips = Skips(Order.schema_name)
     async with AlpacaClient(ctx) as api:
 
         async def fetch_page(token: str | None, limit: int):
             size = min(limit, ORDERS_PAGE_MAX)
-            params = {**base, **(_order_position(token) if token else {}), "limit": size}
+            position = _order_position(token) if token else {}
+            by_order = bool(position.keys() & set(ORDER_CURSORS))
+            params = {**base, **position, "limit": size}
+            if by_order:
+                params.update(after=None, until=None)
             data = await api.get("trading", "/v2/orders", params, decimals=True) or []
             rows = collect(skips, data, lambda r: m.order(r, env), lambda r: str(r.get("id")))
-            if len(data) < size or not data:
+            more = len(data) >= size and bool(data)
+            if by_order:
+                kept = [r for r in rows if inside(r)]
+                more = more and len(kept) == len(rows)
+                rows = kept
+            if not more:
                 return rows, None
-            key = "until" if args.direction == "desc" else "after"
-            last = data[-1].get("submitted_at") or data[-1].get("created_at")
-            return rows, (_order_token({key: last}) if last else None)
+            key = "before_order_id" if args.direction == "desc" else "after_order_id"
+            last = data[-1].get("id")
+            return rows, (_order_token({key: str(last)}) if last else None)
 
         page = await ctx.paginate(fetch_page, start_token=args.page_token)
     return _out(

@@ -213,34 +213,105 @@ def _orders(n: int) -> list[dict]:
     return out
 
 
-def test_portfolio_orders_page_by_an_opaque_until_token(specs, ctx, alpaca):
-    items = _orders(520)
+def _alpaca_orders(items: list[dict]):
+    """GET /v2/orders as Alpaca's trading spec has it: after and until exclusive on submitted_at, and
+    before_order_id / after_order_id exclusive on an order's place in submission order, never with
+    after or until (refused here with 422)."""
+    from marketlens_mcp.providers.alpaca.convert import parse_instant, parse_ts
 
     def handler(request: httpx.Request) -> httpx.Response:
         q = dict(request.url.params)
-        kept = [o for o in items if "until" not in q or o["submitted_at"] < q["until"]]
-        return httpx.Response(200, json=kept[: int(q["limit"])])
+        if {"before_order_id", "after_order_id"} & q.keys() and {"after", "until"} & q.keys():
+            return httpx.Response(422, json={"message": "do not combine order-id cursors with after/until"})
+        oldest_first = sorted(items, key=lambda o: (parse_ts(o["submitted_at"]), o["id"]))
+        ids = [o["id"] for o in oldest_first]
+        if "before_order_id" in q:
+            oldest_first = oldest_first[: ids.index(q["before_order_id"])]
+        if "after_order_id" in q:
+            oldest_first = oldest_first[ids.index(q["after_order_id"]) + 1 :]
+        if "after" in q:
+            oldest_first = [
+                o for o in oldest_first if parse_ts(o["submitted_at"]) > parse_instant(q["after"])
+            ]
+        if "until" in q:
+            oldest_first = [
+                o for o in oldest_first if parse_ts(o["submitted_at"]) < parse_instant(q["until"])
+            ]
+        rows = oldest_first[::-1] if q.get("direction", "desc") == "desc" else oldest_first
+        return httpx.Response(200, json=rows[: int(q["limit"])])
 
-    alpaca.add("/v2/orders", handler)
+    return handler
+
+
+def test_portfolio_orders_page_by_an_opaque_order_id_token(specs, ctx, alpaca):
+    items = _orders(520)
+    alpaca.add("/v2/orders", _alpaca_orders(items))
     out = call(specs["portfolio_orders"], ctx, status="closed")
     assert len(out.rows) == 520 and out.pagination.pages_fetched == 2 and out.pagination.complete
-    assert alpaca.params(1)["until"] == items[499]["submitted_at"]
+    assert alpaca.params(1) == {
+        "status": "closed",
+        "direction": "desc",
+        "nested": "true",
+        "before_order_id": items[499]["id"],
+        "limit": "500",
+    }
+
+
+@pytest.mark.parametrize("direction", ["desc", "asc"])
+def test_portfolio_orders_keep_the_orders_submitted_with_a_pages_last(specs, ctx, alpaca, direction):
+    # two orders submitted in the same microsecond straddle the 500-order page boundary
+    items = _orders(520)
+    items[500]["submitted_at"] = items[499]["submitted_at"]
+    items[19]["submitted_at"] = items[20]["submitted_at"]
+    alpaca.add("/v2/orders", _alpaca_orders(items))
+    out = call(specs["portfolio_orders"], ctx, status="closed", direction=direction)
+    assert sorted(o.order_id for o in out.rows) == sorted(o["id"] for o in items)
+    assert out.pagination.pages_fetched == 2 and out.pagination.complete
+
+
+@pytest.mark.parametrize(("direction", "bound"), [("desc", "after"), ("asc", "until")])
+def test_portfolio_orders_keep_the_bound_the_pages_move_towards(specs, ctx, alpaca, direction, bound):
+    # Alpaca's order-id cursors refuse after and until: past the first page the tool keeps that bound itself
+    from marketlens_mcp.providers.alpaca.convert import parse_ts
+
+    items = _orders(1300)
+    at = "2026-10-01T00:20:00Z"
+    alpaca.add("/v2/orders", _alpaca_orders(items))
+    out = call(specs["portfolio_orders"], ctx, status="closed", direction=direction, **{bound: at})
+    cut = datetime(2026, 10, 1, 0, 20, tzinfo=UTC)
+    inside = [o["id"] for o in items if (parse_ts(o["submitted_at"]) > cut) == (bound == "after")]
+    assert sorted(o.order_id for o in out.rows) == sorted(inside)
+    assert out.pagination.pages_fetched == 2 and out.pagination.complete
+    assert alpaca.params(0)[bound] == at and bound not in alpaca.params(1)
 
 
 def test_portfolio_orders_resume_from_a_token(specs, alpaca):
     items = _orders(5)
     alpaca.add("/v2/orders", lambda request: httpx.Response(200, json=items[:2]))
-    first = call(specs["portfolio_orders"], FakeContext(limits=FetchLimits(max_rows=2)))
+    first = call(specs["portfolio_orders"], FakeContext(limits=FetchLimits(max_rows=2)), until="2026-10-02")
     token = first.pagination.next_page_token
-    assert token and items[1]["submitted_at"] not in token  # opaque
+    assert token and items[1]["id"] not in token  # opaque
     alpaca.add("/v2/orders", lambda request: httpx.Response(200, json=[]))
     alpaca.routes.reverse()
-    call(specs["portfolio_orders"], FakeContext(), page_token=token)
-    assert alpaca.params()["until"] == items[1]["submitted_at"]
+    call(specs["portfolio_orders"], FakeContext(), until="2026-10-02", page_token=token)
+    assert alpaca.params()["before_order_id"] == items[1]["id"] and "until" not in alpaca.params()
 
 
-def test_a_forged_order_token_is_refused(specs, ctx, alpaca):
-    bad = "o1." + base64.urlsafe_b64encode(b'{"evil": 1}').decode()
+def test_a_page_token_issued_before_the_order_cursors_still_pages(specs, alpaca):
+    items = _orders(3)
+    alpaca.add("/v2/orders", _alpaca_orders(items))
+    old = "o1." + base64.urlsafe_b64encode(json.dumps({"until": items[0]["submitted_at"]}).encode()).decode()
+    out = call(specs["portfolio_orders"], FakeContext(), status="closed", page_token=old)
+    assert [o.order_id for o in out.rows] == [items[1]["id"], items[2]["id"]]
+    assert alpaca.params()["until"] == items[0]["submitted_at"]
+
+
+@pytest.mark.parametrize(
+    "position",
+    [{"evil": 1}, {"before_order_id": "../v2/account"}, {"before_order_id": "a", "after_order_id": "b"}],
+)
+def test_a_forged_order_token_is_refused(specs, ctx, alpaca, position):
+    bad = "o1." + base64.urlsafe_b64encode(json.dumps(position).encode()).decode()
     with pytest.raises(ToolError) as e:
         call(specs["portfolio_orders"], ctx, page_token=bad)
     assert e.value.code == "invalid_page_token"
