@@ -8,7 +8,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from marketlens_mcp.plugin_api import ToolContext, ToolOutput, ToolSpec
-from marketlens_mcp.results_api import CLOCK_NAMES, ResultSession
+from marketlens_mcp.results_api import CLOCK_NAMES, ResultSession, source_rows
 from marketlens_mcp.worker import query_handler
 from marketlens_schema import BUILTIN_MODELS
 from marketlens_schema.base import AbsenceCode, AbsenceReason, Timeframe
@@ -25,6 +25,7 @@ from ..common import (
     derived_rows_of,
     dynamic_output,
     finite,
+    is_numeric,
     model_output,
     out_time,
     plural,
@@ -58,6 +59,15 @@ _ORDERED = "ORDER BY _ts, _rid"
 _BAR_SPECIAL = ("timeframe", "t", "open", "high", "low", "close", "volume", "trade_count", "vwap", "absent")
 #: The bar columns a row is skipped for when one of them is not finite.
 _BAR_VALUES = ("open", "high", "low", "close", "volume", "vwap")
+#: Each bar column's rule as an agg, for the note on bars resampled without them (vwap's is none of them).
+_BAR_AGG = {
+    "open": "first",
+    "high": "max",
+    "low": "min",
+    "close": "last",
+    "volume": "sum",
+    "trade_count": "sum",
+}
 
 
 class ResampleArgs(BaseModel):
@@ -158,16 +168,34 @@ def _bar_sql(inp: Input, target: str, columns: list[str], values: list[str]) -> 
         "max(high) AS high",
         "min(low) AS low",
         f"last(close {_ORDERED}) AS close",
-        "sum(volume) AS volume",
-        "CASE WHEN count(trade_count) = count(*) THEN sum(trade_count) END AS trade_count",
-        "count(*) FILTER (WHERE volume > 0 AND vwap IS NULL) AS _vwap_missing",
-        "sum(volume) FILTER (WHERE volume > 0) AS _vol",
-        "sum(vwap * volume) FILTER (WHERE volume > 0) AS _pv",
-    ] + [f"last({qi(c)} {_ORDERED}) AS {qi(c)}" for c in carried]
+        # Sums in the input's type (an integer's sum is a HUGEINT), which a query answer of bars keeps.
+        f"CAST(sum(volume) AS {inp.column('volume').type}) AS volume",
+    ]
+    # A query answer of bars may leave out trade_count, vwap or absent: their aggregates and reasons go with them.
+    reasons = []
+    if "trade_count" in columns:
+        inner.append(
+            f"CASE WHEN count(trade_count) = count(*) THEN CAST(sum(trade_count) AS {inp.column('trade_count').type}) "
+            "END AS trade_count"
+        )
+        reasons.append(
+            "CASE WHEN trade_count IS NULL THEN {'key': 'trade_count', 'value': 'not_provided_by_source'} END"
+        )
+    if "vwap" in columns:
+        inner += [
+            "count(*) FILTER (WHERE volume > 0 AND vwap IS NULL) AS _vwap_missing",
+            "sum(volume) FILTER (WHERE volume > 0) AS _vol",
+            "sum(vwap * volume) FILTER (WHERE volume > 0) AS _pv",
+        ]
+        reasons.append(
+            "CASE WHEN _vwap_missing > 0 THEN {'key': 'vwap', 'value': 'not_provided_by_source'} "
+            "WHEN coalesce(_vol, 0) = 0 THEN {'key': 'vwap', 'value': 'insufficient_data'} END"
+        )
+    inner += [f"last({qi(c)} {_ORDERED}) AS {qi(c)}" for c in carried]
     entries = (
-        "list_filter([CASE WHEN trade_count IS NULL THEN {'key': 'trade_count', 'value': 'not_provided_by_source'} END, "
-        "CASE WHEN _vwap_missing > 0 THEN {'key': 'vwap', 'value': 'not_provided_by_source'} "
-        "WHEN coalesce(_vol, 0) = 0 THEN {'key': 'vwap', 'value': 'insufficient_data'} END], e -> e IS NOT NULL)"
+        f"list_filter([{', '.join(reasons)}], e -> e IS NOT NULL)"
+        if reasons
+        else "CAST([] AS STRUCT(key VARCHAR, value VARCHAR)[])"
     )
     outer = []
     for c in columns:
@@ -191,6 +219,38 @@ def _bar_sql(inp: Input, target: str, columns: list[str], values: list[str]) -> 
         f"SELECT {key}time_bucket({tf_interval(target)}, _ts) AS _b, {', '.join(inner)} "
         f"FROM ({_src(inp, values)}) GROUP BY {group_by})) ORDER BY {order}"
     )
+
+
+def _bar_rows(inp: Input) -> str | None:
+    """The bar model whose rows ``inp`` holds or was computed from (a query
+    answer passing bars through: marketlens.QueryRow, rows_of Bar); None
+    for any other result."""
+    src = source_rows(inp.info)
+    return src.model if src is not None and src.model in BAR_MODELS else None
+
+
+def _passes_bars(inp: Input) -> bool:
+    """A result of bars that is not of a bar model but keeps their open, high,
+    low, close and volume (trade_count and vwap, if kept, numeric too): its
+    rows are bars, so the bar rules apply, not agg."""
+    if _bar_rows(inp) is None:
+        return False
+    cols = [inp.column(c) for c in (*_BAR_VALUES, "trade_count")]
+    return all(c is not None for c in cols[:5]) and all(c is None or is_numeric(c) for c in cols)
+
+
+def _partial_bars_note(inp: Input, agg: str, values: list[str]) -> list[str]:
+    """A note when bars that left out some of open, high, low, close and
+    volume had a bar column aggregated with an agg other than its rule."""
+    model = _bar_rows(inp)
+    off = [c for c in values if c in (*_BAR_VALUES, "trade_count") and _BAR_AGG.get(c) != agg]
+    if model is None or not off:
+        return []
+    return [
+        f"{', '.join(off)} of the {model} rows of {inp.rid} {'is' if len(off) == 1 else 'are'} aggregated with "
+        f"{agg}, not by the bar rules, as {inp.rid} does not keep all of open, high, low, close and volume; "
+        "resample the bars (or a results_query answer keeping those columns) for OHLCV bars."
+    ]
 
 
 def _value_columns(inp: Input) -> list[str]:
@@ -263,7 +323,7 @@ def handler(ctx: ToolContext, args: ResampleArgs) -> ToolOutput:
     notes = list(inp.notes)
     target = args.timeframe
     columns = [c.name for c in inp.info.columns]
-    is_bar = inp.model in BAR_MODELS
+    is_bar = inp.model in BAR_MODELS or _passes_bars(inp)
     values: list[str] = []
     with ctx.results.open([inp.rid]) as session:
         source = bar_timeframe(ctx, session, TOOL, inp)
@@ -273,7 +333,7 @@ def handler(ctx: ToolContext, args: ResampleArgs) -> ToolOutput:
             # One bar per time and series: a series_column that merges several
             # tickers would make each bucket's open one ticker's and close another's.
             check_unique_times(session, TOOL, inp, _times(inp))
-            values = list(_BAR_VALUES)
+            values = [c for c in _BAR_VALUES if c in columns]
             sql = _bar_sql(inp, target, columns, values)
         else:
             values = _value_columns(inp)
@@ -283,7 +343,7 @@ def handler(ctx: ToolContext, args: ResampleArgs) -> ToolOutput:
                     f"{TOOL}: {inp.label} has no numeric value column to aggregate.",
                 )
             sql = _generic_sql(inp, target, args.agg, columns, values)
-            notes += _merged_note(session, inp, args.agg)
+            notes += _merged_note(session, inp, args.agg) + _partial_bars_note(inp, args.agg, values)
         skipped, bad_columns = _non_finite(session, inp, values)
         table = session.query(sql)
         # A bucket is known when the last row in it is: at its end, or later (its clock, carried).
@@ -353,15 +413,16 @@ SPEC = ToolSpec(
     capability=CAPABILITY,
     title="Resample",
     description=(
-        "Resample a stored time series to a coarser timeframe, computed locally in DuckDB. Bars: open = first, "
-        "high = max, low = min, close = last, volume = sum, trade_count = sum (None if any bar lacks it), vwap "
-        "= volume-weighted (None when the volume is 0); the target must be coarser than the bars and hold whole "
-        "bars, and a series may not hold two bars at one time (a series_column that merges tickers). Other series (quotes, trades, snapshots, portfolio history, query results): each value column "
-        "aggregated with agg (last, first, mean, sum, min, max) per series and bucket; a timeframe, and a returns "
-        "result's period, become the target; other columns come from the bucket's last row (a knowledge_time: the "
-        "bucket's latest). Rows with a NaN or infinite value are skipped. Buckets are UTC-aligned (weeks "
-        "start Monday 00:00 UTC; t = bucket start). The output has the input's model. Large outputs are stored "
-        "and you get a result_id."
+        "Resample a stored time series to a coarser timeframe, computed locally in DuckDB. Bars (and a query "
+        "answer or aligned result of bars keeping OHLCV; its other columns: the last row): open = first, high = "
+        "max, low = min, close = last, volume = sum, trade_count = sum (None if any bar lacks it), vwap = "
+        "volume-weighted (None when the volume is 0); the target must be coarser than the bars and hold whole bars, "
+        "and a series may not hold two bars at one time (a series_column that merges tickers). Other series "
+        "(quotes, trades, snapshots, portfolio history, query results): each value column aggregated with agg "
+        "(last, first, mean, sum, min, max) per series and bucket; timeframe or period = the target; other columns "
+        "come from the bucket's last row (a knowledge_time: the bucket's latest). Rows with a NaN or infinite value "
+        "are skipped. Buckets are UTC-aligned (weeks start Monday 00:00 UTC; t = bucket start). The output has the "
+        "input's model. Large outputs are stored and you get a result_id."
     ),
     readme="Bars to a coarser timeframe (OHLCV rules stated in the notes); other series by one aggregation.",
     input_model=ResampleArgs,

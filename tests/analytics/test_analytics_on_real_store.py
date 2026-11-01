@@ -21,6 +21,7 @@ from marketlens_mcp.analytics.tools.align import AlignArgs  # noqa: E402
 from marketlens_mcp.analytics.tools.beta import SPEC as BETA  # noqa: E402
 from marketlens_mcp.analytics.tools.correlation import SPEC as CORRELATION  # noqa: E402
 from marketlens_mcp.analytics.tools.drawdown import SPEC as DRAWDOWN  # noqa: E402
+from marketlens_mcp.analytics.tools.resample import BAR_RULES  # noqa: E402
 from marketlens_mcp.analytics.tools.resample import SPEC as RESAMPLE  # noqa: E402
 from marketlens_mcp.analytics.tools.returns import SPEC as RETURNS  # noqa: E402
 from marketlens_mcp.analytics.tools.volatility import SPEC as VOLATILITY  # noqa: E402
@@ -1357,6 +1358,67 @@ def test_an_unsigned_integer_column_is_numeric(real, cast):
     assert {c.name: c.type for c in store.info(answer.result_id).columns}["v"] == cast
     out = call(RETURNS, ctx, result_id=answer.result_id, price_column="v", kind="simple")
     assert [round(r["ret"], 6) for r in out.rows] == [0.1, round(99 / 110 - 1, 6)]
+
+
+def test_a_query_answer_of_bars_is_resampled_by_the_bar_rules(real):
+    """Audit #112: a stored query answer passing bars through (marketlens.QueryRow,
+    rows_of Bar), the step the mixed_timeframes hint asks for, was resampled as
+    a generic series: high, low, volume and vwap were the week's last bar's
+    (low 11, volume 5000) under timeframe 1w. It now follows the bar rules,
+    with or without trade_count, vwap and absent; an answer that leaves out
+    some of open, high, low, close and volume is aggregated with agg, and a
+    note says which bar columns are not by the bar rules."""
+    store, ctx = real
+    (query,) = [s for s in RESULTS_SPECS if s.name == "results_query"]
+    week = bars(
+        "AAPL",
+        [11.0, 12.0, 13.0, 14.0, 15.0],
+        start=utc(2026, 3, 9, 4),
+        highs=[20.0, 14.0, 13.0, 12.5, 12.0],
+        lows=[7.0, 9.0, 8.5, 10.0, 11.0],
+        volumes=[1000.0, 2000.0, 3000.0, 4000.0, 5000.0],
+        vwaps=[10.0, 11.0, None, 13.0, 14.0],
+    )
+    mixed = put_bars(store, week + bars("AAPL", [16.0], start=utc(2026, 3, 13, 15), timeframe="1h"))
+    with pytest.raises(ToolError) as e:
+        call(RESAMPLE, ctx, result_id=mixed, timeframe="1w")
+    assert e.value.code == "mixed_timeframes" and "results_query (store=true)" in e.value.hint
+    (direct,) = call(RESAMPLE, ctx, result_id=put_bars(store, week), timeframe="1w").rows
+    assert (direct["open"], direct["high"], direct["low"], direct["close"], direct["volume"]) == (
+        11.0,
+        20.0,
+        7.0,
+        15.0,
+        15000.0,
+    )
+    assert direct["vwap"] is None and direct["absent"] == {"vwap": "not_provided_by_source"}
+    keys = ["t", "ticker", "timeframe", "open", "high", "low", "close", "volume", "trade_count", "vwap"]
+    for sql, kept in (
+        (f"SELECT * FROM {mixed} WHERE timeframe = '1d'", [*keys, "absent"]),
+        (f"SELECT {', '.join(keys)} FROM {mixed} WHERE timeframe = '1d'", keys),
+        (f"SELECT {', '.join(keys[:8])} FROM {mixed} WHERE timeframe = '1d'", keys[:8]),
+        (f"SELECT {', '.join(keys[:8])}, absent FROM {mixed} WHERE timeframe = '1d'", keys[:8]),
+    ):
+        answer = call(query, ctx, sql=sql, store=True).result_id
+        assert store.info(answer).model == "marketlens.QueryRow"
+        out = call(RESAMPLE, ctx, result_id=answer, timeframe="1w")
+        assert BAR_RULES in out.notes, sql
+        (row,) = out.rows
+        assert {k: row[k] for k in kept} == {k: direct[k] for k in kept}, sql
+        assert set(row) - {"absent"} == {c.name for c in store.info(answer).columns} - {"absent"}
+    partial = call(
+        query,
+        ctx,
+        sql=f"SELECT t, ticker, timeframe, close, volume FROM {mixed} WHERE timeframe = '1d'",
+        store=True,
+    ).result_id
+    out = call(RESAMPLE, ctx, result_id=partial, timeframe="1w")
+    assert BAR_RULES not in out.notes
+    assert any(
+        n.startswith(f"volume of the marketlens.Bar rows of {partial} is aggregated with last")
+        for n in out.notes
+    )
+    assert out.rows[0]["volume"] == 5000.0 and out.rows[0]["close"] == 15.0
 
 
 def test_a_clock_a_query_computes_is_no_lower_bound_and_is_refused(real):
