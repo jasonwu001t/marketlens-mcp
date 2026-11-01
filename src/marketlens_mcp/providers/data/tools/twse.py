@@ -6,6 +6,7 @@ reads MOPS's monthly summary pages and TWSE's OpenAPI. Keyless."""
 from __future__ import annotations
 
 import re
+import time
 from datetime import date
 from typing import Annotated
 
@@ -26,6 +27,8 @@ ROUTE = (
     "+ openapi.twse.com.tw/v1/opendata/t187ap05_L"
 )
 _CODE = re.compile(r"^(?:\d{4,6}(?:\.TWO?)?|[A-Z]{1,6})$")
+#: marketlens-data's first month: from 2013-01 every listed company reports consolidated revenue (IFRSs).
+FIRST = date(2013, 1, 1)
 
 
 def _tickers(values: list[str]) -> list[str]:
@@ -62,6 +65,11 @@ def _months_back(d: date, n: int) -> date:
     return date(index // 12, index % 12 + 1, 1)
 
 
+def _months(first: date, last: date) -> set[date]:
+    n = (last.year - first.year) * 12 + last.month - first.month
+    return {_months_back(last, i) for i in range(n + 1)}
+
+
 async def twse_monthly_revenue(ctx: ToolContext, args: MonthlyRevenueInputs) -> ToolOutput:
     s = runtime.settings_of(ctx.settings)
     as_of = common.as_of_of(args.as_of)
@@ -88,14 +96,28 @@ async def twse_monthly_revenue(ctx: ToolContext, args: MonthlyRevenueInputs) -> 
             )
         # the daily read: the latest month and the one after it
         session.refresh(DATASET, {})
-        if start < _months_back(_month(today), 2):
-            # the history the store lacks from `start`, newest first, a capped number of months a sync
-            session.refresh(DATASET, {"start": start.strftime("%Y-%m")})
+        missing: list[date] = []
+        history = _months_back(_month(today), 2)  # the history job's newest month
+        if start <= history:
+            # the history the store lacks from `start`, newest first, at most 24 months a sync, which
+            # then counts as fresh for the TTL: sync again, while the call's time lasts, as long as
+            # the window has months the store does not hold and the last sync held more
+            params = {"start": start.strftime("%Y-%m")}
+            wanted = _months(max(start, FIRST), min(end, history))
+            until = time.monotonic() + s.call_timeout_seconds
+            session.refresh(DATASET, params)
+            held = twse._held_months(DATASET)
+            while wanted - held and time.monotonic() < until:
+                session.refresh(DATASET, params, force=True)
+                before, held = held, twse._held_months(DATASET)
+                if held == before:  # MOPS served nothing more (or mode is local)
+                    break
+            missing = sorted(wanted - held)
         adr_of = {code: adr for adr, code in twse.adr_codes().items()}
         df = session.read(DATASET, as_of=as_of, company_code=sorted(codes))
-        return F.records(df), adr_of
+        return F.records(df), adr_of, missing
 
-    (records, adr_of), session = await common.run(ctx, s, work, source="twse")
+    (records, adr_of, missing), session = await common.run(ctx, s, work, source="twse")
     rows = []
     for r in records:
         month = F.day(r["month"])
@@ -141,7 +163,17 @@ async def twse_monthly_revenue(ctx: ToolContext, args: MonthlyRevenueInputs) -> 
         session=session,
         authority=["exchange"],
     )
-    return common.output(ctx, s, TaiwanMonthlyRevenue, rows, prov)  # spec risk: external_text (note)
+    notes = []
+    if missing:
+        span = f"{missing[0]:%Y-%m}" + (f" to {missing[-1]:%Y-%m}" if len(missing) > 1 else "")
+        notes.append(
+            f"The store holds no full MOPS summary of {len(missing)} month(s) of the window ({span}), so "
+            "rows of those months may be missing. The history arrives 24 months a sync: call again to "
+            "fetch more (mode local fetches nothing, and a month MOPS does not serve stays missing)."
+        )
+        prov = prov.model_copy(update={"truncated": True, "truncation_note": notes[0]})
+    # spec risk: external_text (note)
+    return common.output(ctx, s, TaiwanMonthlyRevenue, rows, prov, notes=notes)
 
 
 HANDLERS = {"twse_monthly_revenue": twse_monthly_revenue}
@@ -155,8 +187,10 @@ SPECS: tuple[ToolSpec, ...] = (
             "Monthly revenue Taiwan-listed companies (TWSE, TPEx) file by the 10th of the next month on "
             "MOPS: per company and month, the month, the month before, a year before and the year to date "
             "in thousands of NT$ as published, and the changes it states (fractions). Takes Taiwan codes "
-            "(2330, 2317, 6669) or ADR tickers (TSM, ASX, UMC). History from 2013-01; a long first window "
-            "may answer data_timeout while it keeps fetching. Knowable at the statutory deadline "
+            "(2330, 2317, 6669) or ADR tickers (TSM, ASX, UMC). History from 2013-01, fetched 24 months a sync "
+            "while the call's time lasts: a long first window may answer data_timeout while it keeps "
+            "fetching, and an answer still lacking months of the window names them in a note (truncated; "
+            "call again for more). Knowable at the statutory deadline "
             "(stamp_estimated) or the read that first saw it. note is the company's text, untrusted. "
             "Keyless.",
             "lagged",
