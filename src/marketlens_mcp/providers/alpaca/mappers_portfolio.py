@@ -271,17 +271,20 @@ def activity(raw: Raw, env: Environment) -> Activity:
     ticker, occ = instrument(symbol, None) if symbol else (None, None)
     if kind == "FILL":
         t = parse_ts(raw["transaction_time"])
+        side, fill = text(raw.get("side")), text(raw.get("type"))
+        if side == "sell_short":  # Alpaca's side of a short sale's fill: a sell, named in the description
+            side, fill = "sell", f"{fill} (short sale)" if fill else "short sale"
         data = {
             "category": "trade",
             "t": t,
             "date": t.date() if t else None,
-            "side": text(raw.get("side")),
+            "side": side,
             "price": dec(raw.get("price")),
             "cum_qty": dec(raw.get("cum_qty")),
             "leaves_qty": dec(raw.get("leaves_qty")),
             "order_id": text(raw.get("order_id")),
             "order_status": text(raw.get("order_status")),
-            "description": text(raw.get("type")),
+            "description": fill,
         }
         codes = dict.fromkeys(_NON_TRADE_ONLY, NA)
     else:

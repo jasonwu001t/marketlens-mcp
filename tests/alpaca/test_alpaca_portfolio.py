@@ -134,6 +134,20 @@ def test_portfolio_activities_row_cap_note(specs, alpaca):
     assert f'page_token="{items[2]["id"]}"' in out.notes[0]
 
 
+def test_a_short_sale_fill_is_a_sell_named_in_its_description(specs, ctx, alpaca):
+    # Alpaca reports a short sale's fill with side sell_short
+    fill = load_fixture("Activities__page1")[0]
+    short = {**fill, "id": "20261001135509981::short", "side": "sell_short", "type": "partial_fill"}
+    cover = {**fill, "id": "20261002135509981::cover", "side": "buy"}
+    alpaca.add("/v2/account/activities/FILL", [cover, short])
+    out = call(specs["portfolio_activities"], ctx, activity_types=["FILL"])
+    assert [(r.activity_id, r.side, r.description) for r in out.rows] == [
+        ("20261002135509981::cover", "buy", "fill"),
+        ("20261001135509981::short", "sell", "partial_fill (short sale)"),
+    ]
+    assert not any("Skipped" in n for n in out.notes)
+
+
 def test_one_activity_type_uses_the_by_type_route(specs, ctx, alpaca):
     alpaca.fixture("/v2/account/activities/DIV", "Activities__div")
     out = call(specs["portfolio_activities"], ctx, activity_types=["div"], after="2026-09-01")

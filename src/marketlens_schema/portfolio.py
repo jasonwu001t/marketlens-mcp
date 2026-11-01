@@ -206,7 +206,9 @@ class Activity(CanonicalModel):
     date: Date | None = None
     ticker: Ticker | None = None
     occ_symbol: OccSymbol | None = None
-    side: Side | None = None
+    side: Side | None = Field(
+        default=None, description="A fill's side; a short sale is sell, and its description says short sale"
+    )
     qty: DecimalStr | None = unit("by_asset_class", default=None)
     price: DecimalStr | None = unit("USD", default=None)
     cum_qty: DecimalStr | None = unit("by_asset_class", default=None)
