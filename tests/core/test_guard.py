@@ -111,6 +111,43 @@ def test_a_cte_name_used_out_of_its_scope_says_so():
     assert "r_0123456789" in info.value.message
 
 
+@pytest.mark.parametrize(
+    "sql",
+    [
+        "WITH X AS (SELECT 1 AS a) SELECT * FROM x",
+        "WITH x AS (SELECT 1 AS a) SELECT * FROM X",
+        'WITH "X" AS (SELECT 1 AS a) SELECT * FROM x',
+        "WITH Daily AS (SELECT * FROM {A}) SELECT * FROM daily",
+        "WITH a AS (SELECT 1 AS n), B AS (SELECT n FROM A) SELECT * FROM b",
+        "WITH RECURSIVE C(n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM c WHERE n < 3) SELECT * FROM C",
+    ],
+)
+def test_cte_names_match_without_regard_to_ascii_case(two_sessions, sql):
+    """Audit #292: DuckDB matches a WITH name in any ASCII case (quoted too),
+    and the guard refused WITH X ... FROM x as an unknown table."""
+    mine, ids, other = two_sessions
+    sql = expand(sql, ids, other)
+    guard.check(sql, live_ids=mine.live_ids())
+    assert mine.query(sql, max_rows=5).row_count >= 1
+
+
+@pytest.mark.parametrize(
+    "sql",
+    [
+        # DuckDB folds ASCII letters only: É and é are two names, and é is not the CTE.
+        "WITH É AS (SELECT 1 AS a) SELECT * FROM é",
+        # A case variant of a CTE's own name in its body is still the catalog's.
+        "WITH PG_SETTINGS AS (SELECT * FROM pg_settings) SELECT name, setting FROM PG_SETTINGS",
+        "WITH RECURSIVE Pg_Settings AS (SELECT name FROM pg_settings UNION SELECT 'cte') SELECT name FROM PG_SETTINGS",
+        "SELECT name, setting FROM (WITH PG_SETTINGS AS (SELECT 1) SELECT 1) q, pg_settings",
+    ],
+)
+def test_cte_case_folding_still_refuses_what_duckdb_binds_elsewhere(sql):
+    with pytest.raises(QueryRefused) as info:
+        guard.check(sql, live_ids={"r_0123456789"})
+    assert info.value.code == "sql_table"
+
+
 def test_scope_analysis_failure_fails_closed(monkeypatch):
     def broken(_root):
         raise RuntimeError("cannot scope this")

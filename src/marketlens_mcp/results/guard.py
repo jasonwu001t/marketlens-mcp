@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import logging
 import re
+import string
 from collections.abc import Callable, Collection
 from dataclasses import dataclass
 
@@ -178,6 +179,15 @@ _FORBIDDEN_NODES: tuple[type[exp.Expression], ...] = tuple(
 
 _SET_OPERATIONS = tuple(getattr(exp, n) for n in ("Union", "Intersect", "Except") if hasattr(exp, n))
 
+_ASCII_LOWER = str.maketrans(string.ascii_uppercase, string.ascii_lowercase)
+
+
+def _fold(name: str) -> str:
+    """A name as DuckDB matches it: ASCII letters in any case, quoted or not
+    (WITH X ... FROM x); other letters as written (É and é are two names)."""
+    return name.translate(_ASCII_LOWER)
+
+
 #: A Windows path, or an absolute path of two or more segments: "/etc/hosts" is
 #: scrubbed, an echoed "/USD" (one segment, no directory) is not.
 _PATH_RE = re.compile(r"""(?<![\w.\-/<>~:])(?:[A-Za-z]:\\[^\s"'`,;)]+|/[^\s"'`,;)/]+/[^\s"'`,;)]*)""")
@@ -254,12 +264,12 @@ def _binds_to_cte(table: exp.Table) -> bool:
     This is structural on purpose: sqlglot's scope sources are looser than
     DuckDB (both branches of any set operation; an alias such as
     ``c AS pg_settings`` overwrites a real ``pg_settings`` source)."""
-    name = table.name
+    name = _fold(table.name)
     child, node = table, table.parent
     while node is not None:
         if isinstance(node, exp.With):
             if isinstance(child, exp.CTE):
-                if child.alias == name:
+                if _fold(child.alias) == name:
                     body = child.this
                     return (
                         bool(node.args.get("recursive"))
@@ -268,14 +278,14 @@ def _binds_to_cte(table: exp.Table) -> bool:
                         and _inside(table, body.expression)
                     )
                 position = next(i for i, cte in enumerate(node.expressions) if cte is child)
-                if any(cte.alias == name for cte in node.expressions[:position]):
+                if any(_fold(cte.alias) == name for cte in node.expressions[:position]):
                     return True
         else:
             clause = _with_clause(node)
             if (
                 clause is not None
                 and child is not clause
-                and any(cte.alias == name for cte in clause.expressions)
+                and any(_fold(cte.alias) == name for cte in clause.expressions)
             ):
                 return True
         child, node = node, node.parent
@@ -414,7 +424,7 @@ def check(sql: str, *, live_ids: Collection[str], gone: Callable[[str], None] | 
                     "sql_function",
                     f"The function {name}() is not allowed: results_query reads only this session's stored results.",
                 )
-    ctes = frozenset(cte.alias_or_name for cte in root.find_all(exp.CTE))
+    ctes = frozenset(_fold(cte.alias_or_name) for cte in root.find_all(exp.CTE))
     try:
         cte_refs = _cte_references(root)
     except Exception:  # fail closed: no scope analysis, no query
@@ -429,7 +439,7 @@ def check(sql: str, *, live_ids: Collection[str], gone: Callable[[str], None] | 
         bare = (
             isinstance(ident, exp.Identifier) and not table.args.get("db") and not table.args.get("catalog")
         )
-        if bare and name in ctes and id(table) in cte_refs:
+        if bare and _fold(name) in ctes and id(table) in cte_refs:
             continue
         if bare and RESULT_ID_RE.match(name) and name in live:
             if name not in referenced:
@@ -454,7 +464,7 @@ def check(sql: str, *, live_ids: Collection[str], gone: Callable[[str], None] | 
         scope_note = (
             " A WITH name counts only inside the WITH that defines it, after its definition"
             " (inside its own body only in the second branch of WITH RECURSIVE ... UNION [ALL])."
-            if bare and name in ctes
+            if bare and _fold(name) in ctes
             else ""
         )
         raise QueryRefused(
