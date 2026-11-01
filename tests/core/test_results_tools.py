@@ -1464,6 +1464,31 @@ def test_query_answers_intervals_and_nanosecond_timestamps(setup):
     assert isinstance(call(ctx, "results_query", sql=ns_sql, store=True), ResultMarker)
 
 
+def test_query_answers_with_keyword_column_names_are_stored_and_sampled(setup):
+    """Audit #148: an answer with a column named left, right or at (a pairs
+    query, double-quoted as the guard's hint says) failed as internal_error
+    when stored, in the summary's count(left); an interval named at failed
+    even inline, in CAST(at AS VARCHAR)."""
+    ctx, _, _, small, *_ = setup
+    rid = small.result_id
+    pairs = (
+        f'SELECT a.t, a.close AS "left", b.close AS "right" FROM {rid} a JOIN {rid} b USING (t) '
+        "WHERE a.ticker = 'AAPL' AND b.ticker = 'MSFT' ORDER BY a.t"
+    )
+    stored = call(ctx, "results_query", sql=pairs, store=True)
+    assert isinstance(stored, ResultMarker)
+    assert [c.name for c in stored.columns] == ["t", "left", "right"]
+    sample = call(ctx, "results_sample", result_id=stored.result_id, columns=["left", "right"], n=2)
+    assert [set(r) for r in sample.rows] == [{"left", "right"}] * 2
+    gap = f"SELECT t, t - TIMESTAMPTZ '2026-01-01 00:00:00+00' AS \"at\" FROM {rid} WHERE ticker = 'AAPL'"
+    out = call(ctx, "results_query", sql=gap)
+    assert [c.type for c in out.columns] == ["TIMESTAMP WITH TIME ZONE", "VARCHAR"]
+    assert any(
+        n.startswith("Interval column(s) at are text") and 'CAST("at" AS INTERVAL)' in n for n in out.notes
+    )
+    assert isinstance(call(ctx, "results_query", sql=gap, store=True), ResultMarker)
+
+
 def test_query_answers_intervals_inside_a_list_struct_or_map(setup):
     """2026-10-19: only a top-level INTERVAL became text, so a list of them
     (list(t - t0), array_agg(gap)), or one in a struct or map, still showed

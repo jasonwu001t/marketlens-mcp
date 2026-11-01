@@ -15,7 +15,8 @@ import pyarrow as pa
 import pytest
 from coresupport import FIXED_NOW, bar_rows, bar_table, news_rows, provenance
 
-from marketlens_mcp.results.arrow import rows_to_table
+from marketlens_mcp.results import guard
+from marketlens_mcp.results.arrow import duckdb_keywords, rows_to_table
 from marketlens_mcp.results.store import StoreLimits, StoreLockTimeout, StoreRoot
 from marketlens_mcp.results_api import RESULT_ID_RE, ResultInfo, ResultNotFound, ResultStore
 from marketlens_schema import AbsenceCode, AbsenceReason
@@ -76,6 +77,44 @@ def test_varchar_min_max_truncated_to_64(store):
     info = store.put(t, tool="t", model="marketlens.QueryRow", provenance=provenance())
     col = info.columns[0]
     assert len(col.min) == 64 and col.max == "yyy"
+
+
+#: Names that are no bare column although not reserved in DuckDB: its type_function keywords, and the
+#: words the query guard's parser refuses as a name (the ready-made queries pass the guard).
+UNRESERVED_KEYWORD_NAMES = sorted(
+    {k for k, c in duckdb_keywords().items() if c == "type_function"}
+    | {k for k in guard.KEYWORD_NAMES if duckdb_keywords().get(k) != "reserved"}
+)
+
+
+@pytest.mark.parametrize("word", UNRESERVED_KEYWORD_NAMES)
+def test_a_keyword_column_is_summarised_previewed_and_queried(store, word):
+    """Audit #148: sql_ident left type_function keywords (left, right, at, by,
+    join, like, is, ...) bare, so put() failed in its summary with a DuckDB
+    parser error, as did the preview; and the ready-made queries the marker
+    offers for such a column, or one the guard reads as a keyword (values,
+    between), were refused."""
+    times = [dt.datetime(2026, 1, 5, 14, 30, i, tzinfo=dt.UTC) for i in range(3)]
+    timed = pa.table({word: pa.array(times, pa.timestamp("us", tz="UTC")), "g": ["a", "b", "a"]})
+    info = store.put(
+        timed,
+        tool="t",
+        model="marketlens.QueryRow",
+        provenance=provenance(),
+        time_column=word,
+        group_column="g",
+    )
+    assert {c.name: c.nulls for c in info.columns} == {word: 0, "g": 0}
+    grouped = pa.table({word: ["x", "y", "x"], "v": [1.0, 2.0, 3.0]})
+    info2 = store.put(
+        grouped, tool="t", model="marketlens.QueryRow", provenance=provenance(), group_column=word
+    )
+    plain = pa.table({word: [1.0, None, 3.0]})
+    info3 = store.put(plain, tool="t", model="marketlens.QueryRow", provenance=provenance())
+    assert info3.columns[0].min == 1.0 and info3.columns[0].nulls == 1
+    for i in (info, info2, info3):
+        for q in store.marker(i.result_id).queries:
+            store.query(q.sql, max_rows=5)
 
 
 def test_list_is_newest_first_and_session_scoped(tmp_path):

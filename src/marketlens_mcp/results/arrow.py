@@ -27,6 +27,7 @@ from marketlens_schema import CanonicalModel
 
 from ..plugin_api import ToolError
 from ..results_api import ColumnInfo
+from .guard import KEYWORD_NAMES
 
 DECIMAL_TYPE = pa.decimal128(38, 12)
 DECIMAL_SCALE = 12
@@ -218,9 +219,16 @@ def _ident(name: str) -> str:
 
 
 def sql_ident(name: str) -> str:
-    """A column name for SQL the server writes: quoted only when needed
-    (a reserved keyword, or not a plain lower-case identifier)."""
-    if re.fullmatch(r"[a-z_][a-z0-9_]*", name) and duckdb_keywords().get(name) != "reserved":
+    """A column name for SQL the server writes: quoted only when needed (not
+    a plain lower-case identifier, or a keyword DuckDB refuses as a bare
+    column: a reserved one, or a type/function one such as left, at or by; or
+    one the query guard refuses as a name, which the marker's ready-made
+    queries pass)."""
+    if (
+        re.fullmatch(r"[a-z_][a-z0-9_]*", name)
+        and duckdb_keywords().get(name) not in ("reserved", "type_function")
+        and name not in KEYWORD_NAMES
+    ):
         return name
     return '"' + name.replace('"', '""') + '"'
 
