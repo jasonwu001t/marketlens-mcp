@@ -15,6 +15,7 @@ from marketlens_mcp.plugin_api import ToolContext, ToolError, ToolOutput, ToolSp
 from marketlens_schema import AbsenceCode
 from marketlens_schema.data import EarningsCalendarEntry, EarningsSurprise, EconomicEvent, MarketHoliday
 
+from ...alpaca.convert import NEW_YORK
 from .. import frames as F
 from .. import runtime, sources
 from . import common
@@ -41,7 +42,7 @@ class EconomicInputs(Inputs):
 
 
 class EarningsInputs(Inputs):
-    start: date | None = Field(default=None, description="First report date. Default: today.")
+    start: date | None = Field(default=None, description="First report date (Eastern). Default: today.")
     end: date | None = Field(
         default=None, description="Last report date. Default: today + 7. At most 31 days."
     )
@@ -142,7 +143,7 @@ async def _capture_days(ctx: ToolContext, kind: str, dataset_id: str, column: st
 async def calendar_economic(ctx: ToolContext, args: EconomicInputs) -> ToolOutput:
     from datetime import timedelta
 
-    today = ctx.now().date()
+    today = ctx.now().astimezone(NEW_YORK).date()
     start, end = common.window(
         ctx.tool,
         args.start,
@@ -205,7 +206,7 @@ async def calendar_economic(ctx: ToolContext, args: EconomicInputs) -> ToolOutpu
 async def calendar_earnings(ctx: ToolContext, args: EarningsInputs) -> ToolOutput:
     from datetime import timedelta
 
-    today = ctx.now().date()
+    today = ctx.now().astimezone(NEW_YORK).date()
     start, end = common.window(
         ctx.tool,
         args.start,
@@ -328,7 +329,7 @@ async def calendar_earnings_history(ctx: ToolContext, args: HistoryInputs) -> To
 
 
 async def calendar_us_holidays(ctx: ToolContext, args: HolidaysInputs) -> ToolOutput:
-    today = ctx.now().date()
+    today = ctx.now().astimezone(NEW_YORK).date()
     start, end = common.window(
         ctx.tool,
         args.start,

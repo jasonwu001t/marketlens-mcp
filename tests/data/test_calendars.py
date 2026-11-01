@@ -5,7 +5,7 @@ the tools speak event dates."""
 
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, timedelta
 
 import httpx
 import pytest
@@ -252,6 +252,20 @@ def test_local_mode_captures_nothing(tmp_path, upstream, tool):
     out = call(tool, context(tmp_path, settings={"mode": "local"}), start="2026-10-01", end="2026-10-02")
     assert out.rows == [] and upstream.requests == []
     assert out.notes[-1].startswith("mode is local and nothing is stored")
+
+
+@pytest.mark.parametrize(
+    "tool, now, window",
+    [
+        ("calendar_economic", datetime(2026, 10, 2, 1, 0, tzinfo=UTC), ("2026-10-01", "2026-10-08")),
+        ("calendar_earnings", datetime(2026, 10, 2, 1, 0, tzinfo=UTC), ("2026-10-01", "2026-10-08")),
+        ("calendar_us_holidays", datetime(2027, 1, 1, 2, 0, tzinfo=UTC), ("2026-01-01", "2027-12-31")),
+    ],
+)
+def test_default_windows_start_on_the_new_york_date(tmp_path, upstream, tool, now, window):
+    # 21:00 in New York, already the next day in UTC: today is still the New York day
+    out = call(tool, context(tmp_path, settings={"mode": "local"}, now=now))
+    assert (out.provenance.request["start"], out.provenance.request["end"]) == window
 
 
 def test_fixtures_are_marked_synthetic():
