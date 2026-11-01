@@ -1001,12 +1001,13 @@ class YieldCurvePoint(CanonicalModel):
 class TreasuryAuction(CanonicalModel):
     schema_name: ClassVar[str] = "marketlens.TreasuryAuction"
     time_column: ClassVar[str | None] = "auction_date"
-    group_column: ClassVar[str | None] = "security_term"
+    group_column: ClassVar[str | None] = "security"
     value_columns: ClassVar[tuple[str, ...]] = ("high_yield",)
 
     cusip: str
     auction_date: Date
-    security_type: str
+    security: str = Field(description="Term and class (Bill, CMB, Note, FRN, TIPS, Bond), e.g. 10-Year TIPS")
+    security_type: str = Field(description="FiscalData's type: Bill, Note or Bond, a TIPS, FRN or CMB too")
     security_term: str
     issue_date: Date | None = None
     maturity_date: Date | None = None

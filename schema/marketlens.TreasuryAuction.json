@@ -171,11 +171,17 @@
       "title": "Price Per 100",
       "x-unit": "percent_of_par"
     },
+    "security": {
+      "description": "Term and class (Bill, CMB, Note, FRN, TIPS, Bond), e.g. 10-Year TIPS",
+      "title": "Security",
+      "type": "string"
+    },
     "security_term": {
       "title": "Security Term",
       "type": "string"
     },
     "security_type": {
+      "description": "FiscalData's type: Bill, Note or Bond, a TIPS, FRN or CMB too",
       "title": "Security Type",
       "type": "string"
     },
@@ -196,6 +202,7 @@
   "required": [
     "cusip",
     "auction_date",
+    "security",
     "security_type",
     "security_term",
     "knowledge_time"

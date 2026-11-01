@@ -121,7 +121,10 @@ class CurveInputs(Inputs):
 class AuctionsInputs(Inputs):
     start: date | None = Field(default=None, description="First auction date. Default: a year ago.")
     end: date | None = Field(default=None, description="Last auction date. Default: today.")
-    security_types: list[SecurityType] | None = Field(default=None, description="Only these. Default: all.")
+    security_types: list[SecurityType] | None = Field(
+        default=None,
+        description="Only these classes (Bill, Note and Bond leave out CMBs, FRNs and TIPS). Default: all.",
+    )
     as_of: AsOf | None = common.as_of_field()
 
 
@@ -558,10 +561,19 @@ async def treasury_yield_curve(ctx: ToolContext, args: CurveInputs) -> ToolOutpu
     return common.output(ctx, s, YieldCurvePoint, rows, prov)
 
 
-def _security_matches(row: dict, wanted: set[str]) -> bool:
-    kind = (F.text(row["security_type"]) or "").lower()
-    term = (F.text(row["security_term"]) or "").upper()
-    return any(w.lower() == kind or (w in ("TIPS", "FRN") and w in term.split()) for w in wanted)
+def _security_class(row: dict) -> str:
+    """Treasury's class of the security. FiscalData types every auction Bill, Note or Bond and flags a
+    TIPS; marketlens-data stores no FRN or CMB flag, so an FRN is a Note whose results state no high
+    yield (it auctions a discount margin) and a CMB a Bill whose term is in days (a regular bill's is
+    in weeks)."""
+    kind = F.text(row["security_type"]) or ""
+    if F.flag(row.get("inflation_index_security")):  # None in rows fetched before 2026-10-09
+        return "TIPS"
+    if kind == "Note" and F.number(row["high_yield"]) is None and F.number(row["total_accepted"]) is not None:
+        return "FRN"
+    if kind == "Bill" and (F.text(row["security_term"]) or "").endswith("-Day"):
+        return "CMB"
+    return kind
 
 
 async def treasury_auctions(ctx: ToolContext, args: AuctionsInputs) -> ToolOutput:
@@ -573,9 +585,8 @@ async def treasury_auctions(ctx: ToolContext, args: AuctionsInputs) -> ToolOutpu
     wanted = set(args.security_types or [])
     rows = []
     for r in records:
-        if not F.within(F.day(r["auction_date"]), start, end) or (
-            wanted and not _security_matches(r, wanted)
-        ):
+        kind = _security_class(r)
+        if not F.within(F.day(r["auction_date"]), start, end) or (wanted and kind not in wanted):
             continue
         rows.append(
             common.row(
@@ -583,6 +594,7 @@ async def treasury_auctions(ctx: ToolContext, args: AuctionsInputs) -> ToolOutpu
                 {
                     "cusip": F.text(r["cusip"]),
                     "auction_date": F.day(r["auction_date"]),
+                    "security": " ".join(p for p in (F.text(r["security_term"]), kind) if p),
                     "security_type": F.text(r["security_type"]) or "",
                     "security_term": F.text(r["security_term"]) or "",
                     "issue_date": F.day(r["issue_date"]),
@@ -828,7 +840,10 @@ SPECS: tuple[ToolSpec, ...] = (
         common.describe(
             "Treasury auction results from FiscalData: security type and term, offering and accepted amounts "
             "in USD, bid-to-cover (times), high yield, investment and discount rates and coupon (fractions per "
-            "year), price per 100. Keyless.",
+            "year), price per 100. FiscalData types every auction Bill, Note or Bond; security names its term "
+            "and class (10-Year TIPS, 2-Year FRN, 42-Day CMB, 10-Year Note), the class security_types filters "
+            "on: a TIPS (real yields) by its inflation-indexed flag, an FRN by results without a high yield "
+            "(one announced but not yet auctioned reads Note), a CMB by a term in days. Keyless.",
             "lagged",
         ),
         "Treasury auction results",

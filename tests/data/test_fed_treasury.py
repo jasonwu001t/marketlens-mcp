@@ -125,7 +125,13 @@ def test_treasury_auctions_golden(tmp_path, upstream):
     upstream.json_file(rf"{FISCAL}/v1/accounting/od/auctions_query", "fiscaldata.auctions.json")
     out = call("treasury_auctions", context(tmp_path))
     doc = check_golden(out, "treasury_auctions")
-    assert [r["cusip"] for r in doc["rows"]] == ["912797SX6", "912797SY4", "91282CNB3", "91282CNA5"]
+    assert [(r["cusip"], r["security"], r["security_type"]) for r in doc["rows"]] == [
+        ("912797SX6", "13-Week Bill", "Bill"),
+        ("912797SY4", "6-Day CMB", "Bill"),
+        ("91282CND9", "2-Year FRN", "Note"),
+        ("91282CNB3", "9-Year 10-Month TIPS", "Note"),
+        ("91282CNA5", "10-Year Note", "Note"),
+    ]
     bill = doc["rows"][0]
     assert (bill["offering_amount"], bill["high_discount_rate"], bill["bid_to_cover"]) == (
         75000000000.0,
@@ -133,10 +139,27 @@ def test_treasury_auctions_golden(tmp_path, upstream):
         2.85,
     )
     assert bill["absent"] == {"high_yield": "no_data", "interest_rate": "no_data"}
-    tips = call("treasury_auctions", context(tmp_path), security_types=["TIPS"])
-    assert [r.cusip for r in tips.rows] == ["91282CNB3"]
-    notes = call("treasury_auctions", context(tmp_path), security_types=["Note"], start="2026-09-01")
-    assert [r.cusip for r in notes.rows] == ["91282CNB3", "91282CNA5"]
+
+
+def test_treasury_auctions_filter_by_class(tmp_path, upstream):
+    # FiscalData types every auction Bill, Note or Bond: a TIPS is flagged inflation-indexed, an FRN's
+    # results state no high yield (it auctions a discount margin), a CMB's term is in days
+    upstream.json_file(rf"{FISCAL}/v1/accounting/od/auctions_query", "fiscaldata.auctions.json")
+    ctx = context(tmp_path)
+    found = {
+        kind: [
+            r.cusip for r in call("treasury_auctions", ctx, security_types=[kind], start="2024-01-01").rows
+        ]
+        for kind in ("Bill", "CMB", "Note", "FRN", "TIPS", "Bond")
+    }
+    assert found == {
+        "Bill": ["912797SX6"],
+        "CMB": ["912797SY4"],
+        "Note": ["91282CNA5"],
+        "FRN": ["91282CND9"],
+        "TIPS": ["91282CNB3"],
+        "Bond": ["91282CKA8"],
+    }
 
 
 def test_treasury_debt_golden(tmp_path, upstream):

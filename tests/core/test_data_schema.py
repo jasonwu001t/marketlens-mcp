@@ -175,7 +175,7 @@ def test_field_units(model, field, expected):
         (d.FomcStatement, "meeting_date", None, ()),
         (d.ReferenceRate, "date", "rate_type", ("rate",)),
         (d.YieldCurvePoint, "date", "tenor", ("rate",)),
-        (d.TreasuryAuction, "auction_date", "security_term", ("high_yield",)),
+        (d.TreasuryAuction, "auction_date", "security", ("high_yield",)),
         (d.TreasuryDebt, "date", None, ("total_debt",)),
         (d.TreasuryCashBalance, "date", "account_type", ("closing_balance",)),
         (d.EconomicEvent, "release_at", "event_name", ("actual",)),
