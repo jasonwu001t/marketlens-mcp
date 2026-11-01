@@ -11,7 +11,10 @@ import pytest
 from analytics_harness import MINUTE, bars, output_rows, run, unexplained_dynamic, utc
 
 from marketlens_mcp.analytics.tools.resample import BAR_RULES, SPEC
+from marketlens_mcp.analytics.tools.returns import SPEC as RETURNS
+from marketlens_mcp.analytics.tools.volatility import SPEC as VOLATILITY
 from marketlens_mcp.plugin_api import ToolError
+from marketlens_schema.analytics import ReturnPoint, VolatilityPoint
 from marketlens_schema.market import Bar, OptionBar, Trade
 from marketlens_schema.portfolio import PortfolioHistoryPoint
 
@@ -303,3 +306,22 @@ def test_other_series_merged_by_series_column_carry_a_note(store, ctx):
     )
     plain = run(SPEC, ctx, result_id=rid, timeframe="1min", agg="sum")
     assert not any("puts several" in n for n in plain.notes)
+
+
+def test_resampled_returns_are_labelled_with_the_target_period(store, ctx):
+    """Audit #286: daily returns resampled to 1w (agg=sum) kept period='1d', so
+    analytics_volatility annualised the 3 weekly returns with 252 instead of 52
+    (the spacing overrules the label only from 5 gaps)."""
+    prices = store.put_rows(bars("SPY", [100.0 * 1.01 ** (i % 4) for i in range(21)]))
+    daily = store.keep(run(RETURNS, ctx, result_id=prices, period="1d"), "analytics_returns")
+    out = run(SPEC, ctx, result_id=daily, timeframe="1w", agg="sum")
+    rows = output_rows(out, ReturnPoint)
+    assert len(rows) == 3 and {r.period for r in rows} == {"1w"}
+    weekly = store.keep(out, "analytics_resample")
+    (vol,) = output_rows(run(VOLATILITY, ctx, result_id=weekly, window="all"), VolatilityPoint)
+    assert vol.periods_per_year == 52
+    # Consecutive returns (no period) stay without one, as their absence reason says.
+    plain = store.keep(run(RETURNS, ctx, result_id=prices), "analytics_returns")
+    out = run(SPEC, ctx, result_id=plain, timeframe="1w", agg="sum")
+    assert {r.period for r in output_rows(out, ReturnPoint)} == {None}
+    assert out.absent["period"].code == "not_applicable"

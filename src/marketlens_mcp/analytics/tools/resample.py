@@ -18,6 +18,7 @@ from ..common import (
     BAR_MODELS,
     CAPABILITY,
     PROVIDER,
+    RETURNS_MODEL,
     Input,
     bar_timeframe,
     check_unique_times,
@@ -240,6 +241,9 @@ def _generic_sql(inp: Input, target: str, agg: str, columns: list[str], values: 
             outer.append(f"{out_time('_b')} AS {qi(c)}")
         elif c == "timeframe" and inp.column(c).type == "VARCHAR":
             outer.append(f"{ql(target)} AS timeframe")
+        elif c == "period" and inp.model == RETURNS_MODEL:
+            # Returns over the target's buckets; consecutive ones (no period) keep none, as their absence reason says.
+            outer.append(f"CASE WHEN period IS NULL THEN NULL ELSE {ql(target)} END AS period")
         elif c == "absent":
             outer.append(
                 "CASE WHEN _abs IS NULL OR len(_abs) = 0 THEN NULL ELSE map_from_entries(_abs) END AS absent"
@@ -301,9 +305,9 @@ def handler(ctx: ToolContext, args: ResampleArgs) -> ToolOutput:
     else:
         notes.append(
             f"Resample: {', '.join(values)} aggregated with {args.agg} per series and {target} bucket (NULLs "
-            "skipped; UTC-aligned, weeks start Monday 00:00 UTC; t = the bucket start); every other column is "
-            "taken from the bucket's last row by time, but a clock of when each row became known (knowledge_time), "
-            "the bucket's latest."
+            "skipped; UTC-aligned, weeks start Monday 00:00 UTC; t = the bucket start); a timeframe, and a returns "
+            "result's period where it has one, = the target; every other column is taken from the bucket's last row "
+            "by time, but a clock of when each row became known (knowledge_time), the bucket's latest."
         )
         for c in values:
             if table.column(c).null_count:
@@ -353,8 +357,9 @@ SPEC = ToolSpec(
         "high = max, low = min, close = last, volume = sum, trade_count = sum (None if any bar lacks it), vwap "
         "= volume-weighted (None when the volume is 0); the target must be coarser than the bars and hold whole "
         "bars, and a series may not hold two bars at one time (a series_column that merges tickers). Other series (quotes, trades, snapshots, portfolio history, query results): each value column "
-        "aggregated with agg (last, first, mean, sum, min, max) per series and bucket; other columns come from "
-        "the bucket's last row (a knowledge_time: the bucket's latest). Rows with a NaN or infinite value are skipped. Buckets are UTC-aligned (weeks "
+        "aggregated with agg (last, first, mean, sum, min, max) per series and bucket; a timeframe, and a returns "
+        "result's period, become the target; other columns come from the bucket's last row (a knowledge_time: the "
+        "bucket's latest). Rows with a NaN or infinite value are skipped. Buckets are UTC-aligned (weeks "
         "start Monday 00:00 UTC; t = bucket start). The output has the input's model. Large outputs are stored "
         "and you get a result_id."
     ),
