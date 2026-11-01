@@ -31,6 +31,10 @@ NUMERIC_PREFIXES = (
     "TINYINT",
     "HUGEINT",
     "UBIGINT",
+    "UINTEGER",
+    "USMALLINT",
+    "UTINYINT",
+    "UHUGEINT",
 )
 
 

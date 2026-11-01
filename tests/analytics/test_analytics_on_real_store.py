@@ -1345,6 +1345,20 @@ def test_a_stored_query_keeps_its_default_value_column_after_its_parent_is_gone(
     assert after.rows == before.rows and after.rows[0]["price_column"] == "close"
 
 
+@pytest.mark.parametrize("cast", ["UTINYINT", "USMALLINT", "UINTEGER", "UBIGINT"])
+def test_an_unsigned_integer_column_is_numeric(real, cast):
+    """Audit #291: the store named a uint8 or uint16 column UINT8 or UINT16,
+    so analytics_returns refused price_column v of a stored answer as not
+    numeric."""
+    store, ctx = real
+    (query,) = [s for s in RESULTS_SPECS if s.name == "results_query"]
+    rid = put_bars(store, bars("AAPL", [100.0, 110.0, 99.0]))
+    answer = call(query, ctx, sql=f"SELECT t, ticker, CAST(close AS {cast}) AS v FROM {rid}", store=True)
+    assert {c.name: c.type for c in store.info(answer.result_id).columns}["v"] == cast
+    out = call(RETURNS, ctx, result_id=answer.result_id, price_column="v", kind="simple")
+    assert [round(r["ret"], 6) for r in out.rows] == [0.1, round(99 / 110 - 1, 6)]
+
+
 def test_a_clock_a_query_computes_is_no_lower_bound_and_is_refused(real):
     """Review of round 9: analytics_align matched a knowledge_time without
     the role from the later of each row's time and it, as a lower bound, also

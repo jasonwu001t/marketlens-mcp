@@ -158,6 +158,10 @@ def duckdb_type(t: pa.DataType) -> str:
         return "UBIGINT"
     if pa.types.is_uint32(t):
         return "UINTEGER"
+    if pa.types.is_uint16(t):
+        return "USMALLINT"
+    if pa.types.is_uint8(t):
+        return "UTINYINT"
     if pa.types.is_float64(t):
         return "DOUBLE"
     if pa.types.is_float32(t):

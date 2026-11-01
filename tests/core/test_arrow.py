@@ -11,7 +11,7 @@ import pytest
 from coresupport import bar_rows
 
 from marketlens_mcp.plugin_api import ToolError
-from marketlens_mcp.results import arrow
+from marketlens_mcp.results import arrow, marker
 from marketlens_schema import BUILTIN_MODELS
 from marketlens_schema.market import Bar, OptionContract, OptionDeliverable
 from marketlens_schema.portfolio import Account
@@ -164,3 +164,16 @@ def test_duckdb_type_of_an_interval():
     con = duckdb.connect(":memory:")
     answer = con.execute("SELECT INTERVAL 1 HOUR AS i").to_arrow_table()
     assert arrow.duckdb_type(answer.schema.field("i").type) == "INTERVAL"
+
+
+def test_duckdb_type_names_every_integer_width_as_describe_does():
+    """Audit #291: uint16 and uint8 came out as UINT16 and UINT8, which neither
+    the analytics' numeric types nor the marker's value summary know."""
+    types = [pa.int8(), pa.int16(), pa.int32(), pa.int64(), pa.uint8(), pa.uint16(), pa.uint32(), pa.uint64()]
+    table = pa.table({f"c{i}": pa.array([1], t) for i, t in enumerate(types)})
+    con = duckdb.connect(":memory:")
+    con.register("x", table)
+    described = dict(con.execute("SELECT column_name, column_type FROM (DESCRIBE x)").fetchall())
+    assert {f.name: arrow.duckdb_type(f.type) for f in table.schema} == described
+    for name in described.values():
+        assert name.startswith(marker.NUMERIC_PREFIXES), name
