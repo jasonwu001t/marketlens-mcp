@@ -474,7 +474,7 @@ A tool whose key is missing answers with the variable to set and where to get it
 
 The store is a folder of your own: `providers.data.data_dir` if you set it, else `OMNI_DATA_DIR`, else the per-user data folder (`~/Library/Application Support/marketlens-data` on macOS, `%LOCALAPPDATA%\marketlens-data` on Windows, `$XDG_DATA_HOME/marketlens-data` when that is absolute, else `~/.local/share/marketlens-data`, elsewhere), created owner-only. marketlens never lets marketlens-data read a `.env` file.
 
-- `mode: auto` (the default): a slice (one series, one company, one date) older than `ttl_hours` is fetched from the publisher and stored, then the answer is read from the store. A second question within the TTL makes no request (`cached: true` in the provenance).
+- `mode: auto` (the default): a slice (one series, one company, one date) older than `ttl_hours` is fetched from the publisher and stored, then the answer is read from the store. A second question within the TTL makes no request (`cached: true` in the provenance). One exception: EDGAR's daily form index of a recent weekday read before EDGAR posted it (about 22:01 ET) is read again after 15 minutes (`sec_daily_index`, `sec_ipo_pipeline`).
 - `mode: local`: only what is stored is read; nothing is fetched and no key is needed. An empty answer says so.
 
 ### Point in time and `as_of`

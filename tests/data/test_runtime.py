@@ -225,6 +225,82 @@ def test_the_first_tool_call_and_doctor_turn_the_env_file_off(tmp_path, monkeypa
     assert os.environ["OMNI_ENV_FILE"] == ""
 
 
+#: A first data call in a fresh interpreter (no tests/conftest.py, so no OMNI_ENV_FILE
+#: preset): sec_xbrl_frames without a unit, then the store folder bound and the key seen.
+FIRST_FRAMES_CALL = """
+import asyncio, json, os, pathlib, sys
+from datetime import UTC, datetime
+from marketlens_mcp.providers.data import runtime
+from marketlens_mcp.providers.data.tools import all_specs
+from marketlens_mcp.testing import make_context, temp_store
+
+assert "omni" not in sys.modules
+spec = next(s for s in all_specs() if s.name == "sec_xbrl_frames")
+ctx = make_context(
+    store=temp_store(pathlib.Path(sys.argv[1])), settings={"mode": "local"}, capabilities=["filings"],
+    now=datetime(2026, 10, 2, 20, tzinfo=UTC),
+)
+ctx._tool = spec.name
+asyncio.run(spec.handler(ctx, spec.input_model.model_validate({"tag": "Assets", "period": "CY2025Q2I"})))
+print(json.dumps({"store": str(runtime._ready_path), "key": os.environ.get("FRED_API_KEY")}))
+print(json.dumps({"store": str(runtime.default_data_dir()), "key": None}))
+"""
+
+
+def test_a_first_frames_call_reads_no_env_file_of_a_source_checkout(tmp_path):
+    # marketlens-data imported from a source checkout loads the checkout's .env
+    # unless OMNI_ENV_FILE is "", which runtime.ensure sets before it imports it:
+    # sec_xbrl_frames without a unit imported it before ensure, so the .env's store
+    # folder and keys became the server's (bug audit 2026-10-26 #116). A copy of the package as a
+    # checkout whose .env names another store folder and a key.
+    import json
+    import pathlib
+    import shutil
+    import subprocess
+
+    import omni
+
+    import marketlens_mcp
+
+    checkout = tmp_path / "checkout"
+    shutil.copytree(
+        pathlib.Path(omni.__file__).parent,
+        checkout / "src" / "omni",
+        ignore=shutil.ignore_patterns("__pycache__"),
+    )
+    (checkout / "pyproject.toml").write_text("", encoding="utf-8")
+    (checkout / ".env").write_text(
+        f"OMNI_DATA_DIR={tmp_path / 'checkout-store'}\nFRED_API_KEY=fredleakedsynthetic0000\n",
+        encoding="utf-8",
+    )
+    unset = ("OMNI_ENV_FILE", "OMNI_DATA_DIR", "FRED_API_KEY", "XDG_DATA_HOME", "LOCALAPPDATA")
+    env = {k: v for k, v in os.environ.items() if k not in unset}
+    env["HOME"] = env["USERPROFILE"] = str(tmp_path / "home")  # the per-user store folder under tmp_path
+    env["PYTHONPATH"] = os.pathsep.join(
+        [str(checkout / "src"), str(pathlib.Path(marketlens_mcp.__file__).parents[1])]
+    )
+    done = subprocess.run(  # noqa: S603 - this interpreter, a fixed script
+        [sys.executable, "-c", FIRST_FRAMES_CALL, str(tmp_path / "results")],
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=120,
+        check=False,
+    )
+    assert done.returncode == 0, done.stderr
+    seen, expected = (json.loads(line) for line in done.stdout.splitlines()[-2:])
+    assert seen == expected
+
+
+def test_registering_the_data_tools_turns_the_env_file_off(monkeypatch):
+    from marketlens_mcp import config as cfg
+    from marketlens_mcp import registry
+
+    monkeypatch.delenv("OMNI_ENV_FILE")
+    registry.build_catalog(cfg.load_config(), discover=list)
+    assert os.environ["OMNI_ENV_FILE"] == ""
+
+
 # --- freshness, mode local, row cap -----------------------------------------------------------------
 
 

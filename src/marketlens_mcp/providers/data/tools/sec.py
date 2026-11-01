@@ -14,6 +14,7 @@ import os
 import re
 from datetime import date, timedelta
 from typing import Annotated, Literal
+from zoneinfo import ZoneInfo
 
 from pydantic import AfterValidator, Field
 
@@ -209,6 +210,8 @@ class Form144Inputs(Inputs):
 
 
 IPO_STAGES = ("filed", "amended", "effective", "priced", "withdrawn")
+#: The daily index forms marketlens-data's sec.ipo_filings judges.
+IPO_FORMS = ("S-1", "S-1/A", "F-1", "F-1/A", "EFFECT", "424B4", "RW")
 IPO_MAX_DAYS = 31
 
 
@@ -294,7 +297,12 @@ class FramesInputs(Inputs):
         default=None, description="Only these companies (matched by the SEC's CIK). Default: every filer."
     )
     sort: Literal["desc", "asc"] = Field(default="desc", description="By value.")
-    limit: int = Field(default=100, ge=1, le=10000, description="At most this many rows, after sorting.")
+    limit: int = Field(
+        default=100,
+        ge=1,
+        le=10000,
+        description="At most this many rows, after sorting; a note says when there were more.",
+    )
     as_of: AsOf | None = common.as_of_field()
 
 
@@ -596,7 +604,8 @@ async def filings_events(ctx: ToolContext, args: EventsInputs) -> ToolOutput:
 
 
 def _frame_unit_default(tag: str, taxonomy: str) -> str:
-    """The unit marketlens-data configures for a concept it collects, else USD."""
+    """The unit marketlens-data configures for a concept it collects, else USD.
+    Imports marketlens-data: call it in work(), after runtime.ensure."""
     try:
         from omni.sources import sec_xbrl_frames
 
@@ -639,12 +648,16 @@ async def sec_xbrl_frames(ctx: ToolContext, args: FramesInputs) -> ToolOutput:
     s = _settings(ctx)
     as_of = common.as_of_of(args.as_of)
     alias = args.tag == "revenue"
-    unit = args.unit or ("USD" if alias else _frame_unit_default(args.tag, args.taxonomy))
     tags = REVENUE_ALIAS if alias else (args.tag,)
-    identities = [{"taxonomy": args.taxonomy, "tag": t, "unit": unit, "period": args.period} for t in tags]
     asked = list(dict.fromkeys(args.tickers or []))
 
     def work(session):
+        # here, not before common.run: imported before runtime.ensure, marketlens-data
+        # loads its checkout's .env (store folder and keys included)
+        unit = args.unit or ("USD" if alias else _frame_unit_default(args.tag, args.taxonomy))
+        identities = [
+            {"taxonomy": args.taxonomy, "tag": t, "unit": unit, "period": args.period} for t in tags
+        ]
         records = []
         for identity in identities:
             session.refresh("sec.xbrl_frames", identity)
@@ -660,9 +673,9 @@ async def sec_xbrl_frames(ctx: ToolContext, args: FramesInputs) -> ToolOutput:
                     ciks[t] = f"{sec_source.cik_for(t):010d}"
                 except errors.PermanentError:  # not an SEC filer: named in the note as missing
                     ciks[t] = None
-        return records, ciks
+        return records, ciks, unit
 
-    (records, ciks), session = await common.run(
+    (records, ciks, unit), session = await common.run(
         ctx, s, work, source="sec", subject=("frame", f"{args.tag} {args.period}")
     )
     by_cik = {c: t for t, c in ciks.items() if c is not None}
@@ -695,12 +708,17 @@ async def sec_xbrl_frames(ctx: ToolContext, args: FramesInputs) -> ToolOutput:
         )
     rows.sort(key=lambda r: r.cik)
     rows.sort(key=lambda r: r.value, reverse=args.sort == "desc")
-    rows = rows[: args.limit]
-    found = {r.cik for r in rows}
+    found = {r.cik for r in rows}  # before the cut: a ticker cut by limit has a value in the frame
     missing = [t for t in asked if ciks.get(t) not in found]
     notes = (
         [f"No {args.tag} value for {args.period} in the frame for: {', '.join(missing)}."] if missing else []
     )
+    if len(rows) > args.limit:
+        first = "largest" if args.sort == "desc" else "smallest"
+        notes.append(
+            f"The first {args.limit} of {len(rows)} rows by value, {first} first: raise limit to see the rest."
+        )
+    rows = rows[: args.limit]
     if alias:
         notes.append(
             "tag revenue: per filer RevenueFromContractWithCustomerExcludingAssessedTax, or Revenues where the "
@@ -1069,6 +1087,13 @@ async def sec_insider_trades(ctx: ToolContext, args: InsiderInputs) -> ToolOutpu
         # trades. A store written before row_kind has no column and no such rows.
         if form not in forms or r.get("row_kind") == "holding" or not F.within(when, start, end):
             continue
+        # A company's feed also lists the filings it makes as the reporting owner
+        # of another issuer's stock, stored under the company with issuer_cik
+        # naming that issuer: no trade in the company's own stock. A store
+        # written before issuer_cik has no column.
+        issuer = F.text(r.get("issuer_cik"))
+        if issuer and issuer != F.text(r["cik"]):
+            continue
         notice = form.startswith("144")
         rows.append(
             common.row(
@@ -1131,14 +1156,43 @@ def _last_weekday_before(d: date) -> date:
     return d
 
 
+#: How long an empty read of a recent weekday's form index counts as fresh
+#: (seconds), instead of ttl_hours: EDGAR may not have posted it yet.
+UNPOSTED_TTL = 15 * 60
+
+
+def _recent(ctx: ToolContext) -> date:
+    """The first index day EDGAR may not have posted yet (it posts a business
+    day's index at about 22:01 ET), or posted late: the last weekday before
+    today's New York date."""
+    return _last_weekday_before(ctx.now().astimezone(ZoneInfo("America/New_York")).date())
+
+
+def _index_days(session, **where) -> list[date]:
+    """The index days of the stored daily index lines matching ``where``: what
+    the store holds, every vintage, to plan a fetch (as is_fresh), not an answer."""
+    return [F.day(d) for d in session.store.count_by("sec.daily_index", "index_date", where)]
+
+
+def _refresh_index_day(session, day: date, recent: date) -> bool:
+    """session.refresh of one day's form index; True when it brought nothing new.
+    A weekday from ``recent`` on with nothing stored is read again after
+    UNPOSTED_TTL: an empty read of a day not posted yet is not fresh for ttl_hours."""
+    identity = {"index_date": day.isoformat()}
+    if day < recent or day.weekday() >= 5 or _index_days(session, index_date=day):
+        return session.refresh("sec.daily_index", identity)
+    session.refresh("sec.daily_index", identity, UNPOSTED_TTL)
+    return not _index_days(session, index_date=day)
+
+
 async def sec_daily_index(ctx: ToolContext, args: DailyIndexInputs) -> ToolOutput:
     s = _settings(ctx)
     as_of = common.as_of_of(args.as_of)
     day = args.day or _last_weekday_before(_today(ctx))
-    identity = {"index_date": day.isoformat()}
+    recent = _recent(ctx)
 
     def work(session):
-        session.refresh("sec.daily_index", identity)
+        _refresh_index_day(session, day, recent)
         filters = {"index_date": day}
         if args.forms:
             filters["form"] = list(args.forms)
@@ -1266,6 +1320,18 @@ async def sec_form144(ctx: ToolContext, args: Form144Inputs) -> ToolOutput:
     return _output(ctx, s, Form144Notice, rows, prov, notes=notes)  # external_text: the filer's words
 
 
+def _ipo_through(session, since: date) -> date | None:
+    """The last index day the newest sync of sec.ipo_filings from ``since``
+    judged (its archived payload's ``_through``); None when it judged none (no
+    stored line of an IPO form from ``since``) or no payload is kept."""
+    identity = {"since": since.isoformat()}
+    kept = [path for params, path, _at in session.store.raw_entries("sec.ipo_filings") if params == identity]
+    if not kept:
+        return None
+    source, _dataset = session.module("omni.sources.base").resolve("sec.ipo_filings")
+    return F.day(source.load_raw(kept[-1].read_bytes()).get("_through"))
+
+
 async def sec_ipo_pipeline(ctx: ToolContext, args: IpoInputs) -> ToolOutput:
     s = _settings(ctx)
     as_of = common.as_of_of(args.as_of)
@@ -1279,14 +1345,24 @@ async def sec_ipo_pipeline(ctx: ToolContext, args: IpoInputs) -> ToolOutput:
         max_days=IPO_MAX_DAYS,
     )
     days = [start + timedelta(days=i) for i in range((end - start).days + 1)]
+    weekdays = [d for d in days if d.weekday() < 5 and d <= today]
+    recent = _recent(ctx)
 
     def work(session):
         # the pipeline is read from the stored daily index: each weekday's file first
         fetched = False
-        for d in days:
-            if d.weekday() < 5 and d <= today:
-                fetched |= not session.refresh("sec.daily_index", {"index_date": d.isoformat()})
-        session.refresh("sec.ipo_filings", {"since": start.isoformat()}, force=fetched)
+        for d in weekdays:
+            fetched |= not _refresh_index_day(session, d, recent)
+        # a sync judges about 150 index lines, whole days from `since`: sync again from
+        # the day after the last one judged until the window's last day with an IPO form
+        last = max(_index_days(session, index_date=weekdays, form=list(IPO_FORMS)), default=None)
+        since = start
+        while last is not None and since <= last:
+            session.refresh("sec.ipo_filings", {"since": since.isoformat()}, force=fetched)
+            through = _ipo_through(session, since)
+            if through is None or through < since:  # nothing judged, or no progress
+                break
+            since = through + timedelta(days=1)
         return F.records(session.read("sec.ipo_filings", as_of=as_of))
 
     records, session = await common.run(ctx, s, work, source="sec")
@@ -1778,8 +1854,9 @@ SPECS: tuple[ToolSpec, ...] = (
         common.describe(
             "Insider transactions from Forms 4 (executed: code P buy, S sell, A grant, M exercise, F tax) and "
             "144 (announced sales): insider, role, 10b5-1 flag, shares, price, value in USD, holdings after. "
-            "knowledge_time is EDGAR acceptance, after the transaction date. marketlens-data's insider history "
-            f"starts at filings of 2026-01-01 on a first fetch. {CONTACT}",
+            "Only filings about the company's own stock: one it files as the owner of another issuer's stock is "
+            "left out. knowledge_time is EDGAR acceptance, after the transaction date. marketlens-data's insider "
+            f"history starts at filings of 2026-01-01 on a first fetch. {CONTACT}",
             "lagged",
         ),
         "Form 4 and Form 144 insider transactions",
@@ -1816,7 +1893,9 @@ SPECS: tuple[ToolSpec, ...] = (
             "prospectus (priced) and RW withdrawals (withdrawn), with the cover's proposed ticker, exchange, "
             "price range, offer price and shares offered (best effort; null when not stated), the "
             "registration's file number and the category (operating, spac, trust). Read from EDGAR's daily "
-            f"form index; a company that already files periodic reports is left out. {CONTACT}",
+            "form index, every day of the window judged (about 150 index lines a sync, so a busy window takes "
+            "several); a recent weekday's index read before EDGAR posted it is read again after 15 minutes. A "
+            f"company that already files periodic reports is left out. {CONTACT}",
             "at_event",
         ),
         "IPO filings of new issuers: filed, amended, effective, priced, withdrawn",
@@ -1833,7 +1912,8 @@ SPECS: tuple[ToolSpec, ...] = (
             "Every filing EDGAR disseminated on one business day, from its daily form index: form, company, "
             "CIK, date filed, accession number and the filing's text file URL, one line per filing and company "
             "it is listed under. Filter by forms and cik. knowledge_time is when EDGAR posted the index (about "
-            f"22:01 ET), after each filing's own acceptance. {CONTACT}",
+            "22:01 ET), after each filing's own acceptance; a recent weekday's index read before then is read "
+            f"again after 15 minutes, not ttl_hours. {CONTACT}",
             "lagged",
         ),
         "Every filing of a business day from EDGAR's daily form index",

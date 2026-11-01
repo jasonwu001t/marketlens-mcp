@@ -22,6 +22,9 @@ def register(registry: Registry, ctx: PluginContext) -> None:
         registry.add_capability(spec)
     if not runtime.available():
         return
+    # from the start, not only from the first call's ensure(): an import of omni
+    # before it must not load a .env either
+    runtime.prepare_environment()
     for spec in all_specs():
         registry.add_tool(spec)
 

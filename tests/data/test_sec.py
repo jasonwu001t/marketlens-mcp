@@ -12,7 +12,7 @@ S000099991 (TFUND)."""
 from __future__ import annotations
 
 import gzip
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 import httpx
@@ -406,12 +406,24 @@ def test_sec_xbrl_frames_filters_and_refusals(tmp_path, edgar):
     )
     assert [(r.ticker, r.value) for r in peers.rows] == [("EVNTCO", 300000000.0), ("TESTCO", 500000000.0)]
     assert peers.notes == ["No Revenues value for CY2026Q2 in the frame for: OTHRCO."]
+    # a ticker cut by limit has a value in the frame: the cut has its own note (bug audit 2026-10-26 #147)
+    cut = call(
+        "sec_xbrl_frames", ctx, tag="Revenues", period="CY2026Q2", tickers=["TESTCO", "EVNTCO"], limit=1
+    )
+    assert [r.ticker for r in cut.rows] == ["TESTCO"]
+    assert cut.notes == ["The first 1 of 2 rows by value, largest first: raise limit to see the rest."]
     top = call("sec_xbrl_frames", ctx, tag="Revenues", period="CY2026Q2", limit=1)
     assert [r.cik for r in top.rows] == ["0009999990"]
     before = call("sec_xbrl_frames", ctx, tag="Revenues", period="CY2026Q2", as_of="2026-08-06T00:00:00Z")
     assert before.rows == []  # every filing of the frame was dated later
     # a frame the SEC does not have: no row
     assert call("sec_xbrl_frames", ctx, tag="Revenues", period="CY2026Q3").rows == []
+    # without a unit, the one marketlens-data configures for the concept
+    eps = call("sec_xbrl_frames", ctx, tag="EarningsPerShareDiluted", period="CY2026Q2")
+    assert eps.rows == [] and eps.provenance.request["unit"] == "USD-per-shares"
+    assert str(edgar.requests[-1].url).endswith(
+        "/us-gaap/EarningsPerShareDiluted/USD-per-shares/CY2026Q2.json"
+    )
     import asyncio
 
     from marketlens_mcp import pipeline
@@ -713,6 +725,101 @@ def test_sec_insider_trades_leaves_out_holding_lines(tmp_path, edgar):
     form4 = stored[stored["form"] == "4"]
     assert list(form4["row_kind"]) == ["transaction", "transaction", "holding", "holding"]
     assert [(r.line, r.transaction_code) for r in out.rows] == [(1, "S"), (2, "M")]
+
+
+def test_sec_insider_trades_leaves_out_filings_about_other_issuers(tmp_path, edgar):
+    # A company's feed also lists the Forms 4 it files as the reporting owner of
+    # another issuer's stock (Berkshire's purchases of Lennar as a 10% owner):
+    # marketlens-data keeps them under the feed company, with issuer_cik naming
+    # the other issuer. No trade in the company's own stock, so no row (bug audit 2026-10-26 #114).
+    import omni
+
+    own = "<issuerCik>0009999901</issuerCik><issuerName>Testco Synthetic Corp</issuerName>"
+    other = "<issuerCik>0009999990</issuerCik><issuerName>Otherco Synthetic Inc</issuerName>"
+    edgar.add(
+        rf"{ARCH}/9999901/000999990126000005/form4\.xml",
+        lambda _r: fixture_text("sec.form4__26-000005.xml").replace(own, other),
+    )
+    out = call("sec_insider_trades", context(tmp_path), ticker="TESTCO")
+    stored = omni.query("sec_insider.transactions", mode="local", ticker="TESTCO")
+    form4 = stored[stored["form"] == "4"]
+    assert set(form4["cik"]) == {"0009999901"} and set(form4["issuer_cik"]) == {"0009999990"}
+    assert [(r.form, r.cik) for r in out.rows] == [("144", "0009999901")]  # the notice about TESTCO stays
+
+
+# --- EDGAR's daily index: a day not posted yet ------------------------------------------------------
+
+DAILY = r"www\.sec\.gov/Archives/edgar/daily-index/2026"
+#: 20:30 ET on 2026-10-01, before EDGAR posts that day's index (22:01 ET), and 22:30 ET, after it.
+BEFORE_POSTING = datetime(2026, 10, 2, 0, 30, tzinfo=UTC)
+AFTER_POSTING = datetime(2026, 10, 2, 2, 30, tzinfo=UTC)
+
+
+def _two_hours_apart(tmp_path, edgar, tool, **arguments):
+    """``tool`` before 2026-10-01's index is posted (Q4's folder does not exist yet),
+    synced two hours ago, then again after it is posted, within ttl_hours."""
+    import importlib
+
+    router = importlib.import_module("omni.query.router")
+    unposted = edgar.add(rf"{DAILY}/QTR4/index\.json", httpx.Response(404))
+    with pytest.MonkeyPatch.context() as m:
+        m.setattr(router, "utcnow", lambda: datetime.now(UTC) - timedelta(hours=2))
+        first = call(tool, context(tmp_path, now=BEFORE_POSTING), **arguments)
+    edgar.routes.remove(unposted)  # posted: Q4's listing names form.20261001.idx
+    return first, call(tool, context(tmp_path, now=AFTER_POSTING), **arguments)
+
+
+def test_sec_daily_index_reads_a_recent_day_again_until_it_is_posted(tmp_path, edgar):
+    # An empty read of a recent day counts as fresh for a quarter of an hour, not
+    # ttl_hours: the day may not be posted yet (bug audit 2026-10-26 #117).
+    first, second = _two_hours_apart(tmp_path, edgar, "sec_daily_index")
+    assert first.rows == [] and first.provenance.request["day"] == "2026-10-01"
+    assert len(second.rows) == 6 and second.provenance.cached is False
+
+
+def test_sec_ipo_pipeline_reads_a_recent_day_again_until_it_is_posted(tmp_path, edgar):
+    # the pipeline's refresh of each weekday's index likewise, then the day's filings judged
+    first, second = _two_hours_apart(
+        tmp_path, edgar, "sec_ipo_pipeline", start="2026-09-28", end="2026-10-02"
+    )
+    assert first.rows == []
+    assert [(r.company, r.form) for r in second.rows] == [
+        ("Ipoco Synthetic Inc", "S-1/A"),
+        ("Ipoco Synthetic Inc", "EFFECT"),
+    ]
+
+
+def test_sec_ipo_pipeline_judges_every_day_of_a_busy_window(tmp_path, edgar):
+    # marketlens-data judges about 150 index lines a sync, whole days from `since`:
+    # eight weekdays of 25 S-1 lines each (TESTCO's, an established company) before
+    # IPOCO's filings of 2026-10-01 need a second sync from the day after the last
+    # one judged, else the window's newest days are never judged (bug audit 2026-10-26 #119).
+    days = [f"202609{d:02d}" for d in (21, 22, 23, 24, 25, 28, 29, 30)]
+    edgar.add(
+        rf"{DAILY}/QTR3/index\.json",
+        {
+            "directory": {
+                "item": [
+                    {"last-modified": f"09/{d[6:]}/2026 10:01:30 PM", "name": f"form.{d}.idx", "type": "file"}
+                    for d in days
+                ]
+            }
+        },
+    )
+    head = fixture_text("sec.daily_index__20261001.idx").splitlines()
+    header = "\n".join(head[: next(i for i, line in enumerate(head) if line.startswith("---")) + 1])
+    for d in days:
+        lines = [
+            f"{'S-1':<17}{'Testco Synthetic Corp':<62}{'9999901':<12}{d:<12}"
+            f"edgar/data/9999901/0009999901-26-{d[4:]}{i:02d}.txt"
+            for i in range(25)
+        ]
+        edgar.add(rf"{DAILY}/QTR3/form\.{d}\.idx", "\n".join([header, *lines]) + "\n")
+    out = call("sec_ipo_pipeline", context(tmp_path), start="2026-09-21", end="2026-10-02")
+    assert [(r.company, r.form, r.filing_date.isoformat()) for r in out.rows] == [
+        ("Ipoco Synthetic Inc", "S-1/A", "2026-10-01"),
+        ("Ipoco Synthetic Inc", "EFFECT", "2026-09-30"),
+    ]
 
 
 # --- 13F ----------------------------------------------------------------------------------------------
