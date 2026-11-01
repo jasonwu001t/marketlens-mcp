@@ -165,37 +165,50 @@ def lock_down(con: duckdb.DuckDBPyConnection) -> None:
     con.execute("SET lock_configuration = true")
 
 
-def _holds_interval(t: pa.DataType) -> bool:
-    """An interval, or a list, struct, map or union with one anywhere inside."""
-    return pa.types.is_interval(t) or any(_holds_interval(t.field(i).type) for i in range(t.num_fields))
+def _holds(t: pa.DataType, kind: Callable[[pa.DataType], bool]) -> bool:
+    """A type of ``kind``, or a list, struct, map or union with one anywhere inside."""
+    return kind(t) or any(_holds(t.field(i).type, kind) for i in range(t.num_fields))
 
 
 def _plain_types(table: pa.Table, limits: StoreLimits) -> tuple[pa.Table, list[str]]:
     """Columns that Parquet cannot store or Python cannot read, in a form both
-    can, with a note for each kind: an INTERVAL (Arrow month_day_nano), or a
-    list, struct or map holding one, as DuckDB's text of it, a TIMESTAMP_NS cut
-    to microseconds."""
-    intervals = [i for i, f in enumerate(table.schema) if _holds_interval(f.type)]
+    can, with a note for each kind: an INTERVAL (Arrow month_day_nano) or a
+    UNION (Arrow union), or a list, struct or map holding one, as DuckDB's text
+    of it, a TIMESTAMP_NS cut to microseconds."""
+    intervals = [i for i, f in enumerate(table.schema) if _holds(f.type, pa.types.is_interval)]
+    unions = [
+        i for i, f in enumerate(table.schema) if i not in intervals and _holds(f.type, pa.types.is_union)
+    ]
+    texts = sorted(intervals + unions)
     nanos = [i for i, f in enumerate(table.schema) if pa.types.is_timestamp(f.type) and f.type.unit == "ns"]
     notes = []
-    if intervals:
-        names = [table.schema.field(i).name for i in intervals]
+    if texts:
+        names = [table.schema.field(i).name for i in texts]
         con = connect(limits)
         try:
             lock_down(con)
-            con.register("t", table.select(intervals))
-            first_type = con.execute("DESCRIBE t").fetchone()[1]
+            con.register("t", table.select(texts))
+            types = [r[1] for r in con.execute("DESCRIBE t").fetchall()]
             cast = ", ".join(f"CAST({sql_ident(n)} AS VARCHAR)" for n in names)
             text = con.execute(f"SELECT {cast} FROM t").to_arrow_table()
         finally:
             con.close()
-        for j, i in enumerate(intervals):
+        for j, i in enumerate(texts):
             table = table.set_column(i, pa.field(names[j], pa.string()), text.column(j))
-        shown = ", ".join(names)
-        notes.append(
-            f"Interval column(s) {shown} are text in DuckDB's form ('1 day 02:00:00'); CAST({sql_ident(names[0])} AS "
-            f"{first_type}) reads one back, and epoch() of an interval gives seconds."
-        )
+        if intervals:
+            j = texts.index(intervals[0])
+            shown = ", ".join(table.schema.field(i).name for i in intervals)
+            notes.append(
+                f"Interval column(s) {shown} are text in DuckDB's form ('1 day 02:00:00'); CAST({sql_ident(names[j])} AS "
+                f"{types[j]}) reads one back, and epoch() of an interval gives seconds."
+            )
+        if unions:
+            j = texts.index(unions[0])
+            shown = ", ".join(table.schema.field(i).name for i in unions)
+            notes.append(
+                f"Union column(s) {shown} are text in DuckDB's form, each value without the member it was in "
+                f"({names[j]} was {types[j]}); CAST({sql_ident(names[j])} AS <a member's type>) reads one back."
+            )
     for i in nanos:
         field = table.schema.field(i)
         us = pa.timestamp("us", tz=field.type.tz)

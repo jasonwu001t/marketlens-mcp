@@ -1489,6 +1489,27 @@ def test_query_answers_with_keyword_column_names_are_stored_and_sampled(setup):
     assert isinstance(call(ctx, "results_query", sql=gap, store=True), ResultMarker)
 
 
+def test_query_answers_unions_as_text(setup):
+    """Audit #290: a UNION column (Arrow sparse_union) failed as internal_error
+    when stored, as Parquet has no union type; it is text in DuckDB's form,
+    inline and stored alike, top level or inside a list or struct."""
+    ctx, _, _, small, *_ = setup
+    sql = (
+        "SELECT union_value(a := 1)::UNION(a INT, b VARCHAR) AS un, "
+        "[union_value(b := 'x')::UNION(a INT, b VARCHAR)] AS l, {'k': union_value(a := 2)::UNION(a INT, b DOUBLE)} AS s "
+        f"FROM {small.result_id} LIMIT 1"
+    )
+    out = call(ctx, "results_query", sql=sql)
+    assert out.rows == [{"un": "1", "l": "[x]", "s": "{'k': 2}"}]
+    assert [c.type for c in out.columns] == ["VARCHAR", "VARCHAR", "VARCHAR"]
+    (note,) = [n for n in out.notes if n.startswith("Union column(s) un, l, s are text")]
+    assert "UNION(a INTEGER, b VARCHAR)" in note
+    stored = call(ctx, "results_query", sql=sql, store=True)
+    assert isinstance(stored, ResultMarker)
+    back = call(ctx, "results_query", sql=f"SELECT CAST(un AS INTEGER) AS a FROM {stored.result_id}")
+    assert back.rows == [{"a": 1}]
+
+
 def test_query_answers_intervals_inside_a_list_struct_or_map(setup):
     """2026-10-19: only a top-level INTERVAL became text, so a list of them
     (list(t - t0), array_agg(gap)), or one in a struct or map, still showed
