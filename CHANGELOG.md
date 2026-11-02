@@ -40,6 +40,7 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Changed
 
+- `NonGaapFigure.basis`'s description states the sign of a bridge line: an adjustment is what the GAAP line adds to reach the non-GAAP line, so an operating-expense adjustment is normally negative and a profit adjustment positive, as marketlens-data now stores every filer's (a description only; the schema stays 1.1.0).
 - `NewsItem.publisher`'s description no longer names Alpaca: it is the outlet or publisher that issued the item, as the provider names its source (a description only; the schema stays 1.1.0). The plugin name `official` is reserved for the built-in provider.
 - Linux and macOS are the tested platforms: the classifiers name them instead of "OS Independent", and Windows left the CI matrix (not yet supported). Text I/O still names its encoding everywhere.
 - A fetch cut at `fetch.max_rows` or `fetch.max_pages` without a page token no longer carries the R16 "call again with page_token" note: the tool's own truncation note stands, and a tool that gave none gets "The data is incomplete; narrow the request." (the answer is still flagged `truncated`).

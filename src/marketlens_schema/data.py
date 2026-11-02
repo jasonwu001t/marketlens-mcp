@@ -663,7 +663,11 @@ class NonGaapFigure(CanonicalModel):
         description="gross_profit, gross_margin, operating_expenses, operating_income, operating_margin, "
         "net_income, eps_diluted, stock_based_compensation, amortization_acquisition_intangibles, restructuring"
     )
-    basis: str = Field(description="gaap, non_gaap or adjustment (a bridge line)")
+    basis: str = Field(
+        description="gaap, non_gaap or adjustment (a bridge line: what the GAAP line adds to reach the "
+        "non-GAAP line, so an operating-expense adjustment is normally negative and a profit adjustment "
+        "positive)"
+    )
     reconciles: str = Field(description="The GAAP line this row belongs to (a bridge line's target)")
     fiscal_period_label: str | None = Field(default=None, description="The table column's header, as stated")
     value: float = _unit("as_published", description="In the row's `unit`")
