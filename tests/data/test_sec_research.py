@@ -8,11 +8,15 @@ management report)."""
 
 from __future__ import annotations
 
+from datetime import timedelta
+
 import httpx
 import pytest
 import test_sec
-from data_harness import KEYS, SPECS, call, check_golden, context, fixture_text
+from data_harness import KEYS, NOW, SPECS, call, check_golden, context, fixture_text, freeze_clocks
 from test_sec import ARCH, sec_routes
+
+from marketlens_mcp.providers.data import runtime
 
 IR_URL = "https://ir.testco.example.com/news/investor-day-2026"
 IR_LIST = {
@@ -186,6 +190,40 @@ def test_company_ir_targets_golden(tmp_path, edgar, frozen_clock):
     assert (margin["mid"], margin["basis"], margin["horizon_end"]) == (0.3, "non_gaap", 2029)
     assert {r["authority"] for r in doc["rows"]} == {"company"}
     assert doc["provenance"]["dataset"] == "sec.submissions,company.ir_documents,company.ir_targets"
+
+
+def test_company_ir_targets_serve_only_the_current_document_version(tmp_path, edgar, monkeypatch):
+    """marketlens-data keeps the latest target row per (document, metric,
+    horizon), so a target a newer version of the document no longer states
+    stays the latest row of its key; it is not served from that version on, and
+    was before it (audit #55)."""
+    freeze_clocks(monkeypatch)
+    first = call("company_ir_targets", context(tmp_path), ticker="TESTCO")
+    assert {r.metric for r in first.rows} == {"revenue_cagr", "operating_margin"}
+    page = fixture_text("company.ir_page__TESTCO_investor_day.html")
+    dropped = "<p>The company targets non-GAAP operating margin of approximately 30% by 2029.</p>\n"
+    assert dropped in page
+    edgar.add(
+        r"ir\.testco\.example\.com/news/investor-day-2026",
+        lambda _r: httpx.Response(
+            200, text=page.replace(dropped, ""), headers={"content-type": "text/html; charset=utf-8"}
+        ),
+    )
+    later = NOW + timedelta(hours=1)
+    freeze_clocks(monkeypatch, later)
+    out = call("company_ir_targets", context(tmp_path, settings={"ttl_hours": 0}, now=later), ticker="TESTCO")
+    assert [r.metric for r in out.rows] == ["revenue_cagr"]
+    before = call(
+        "company_ir_targets",
+        context(tmp_path, settings={"mode": "local"}, now=later),
+        ticker="TESTCO",
+        as_of=(NOW + timedelta(minutes=30)).isoformat(),
+    )
+    assert {r.metric for r in before.rows} == {"revenue_cagr", "operating_margin"}
+
+
+def test_company_ir_targets_needs_current_targets():
+    assert "omni.sources.company_ir.current_targets" in runtime.REQUIRED_API
 
 
 def test_research_tool_refusals(tmp_path, edgar):

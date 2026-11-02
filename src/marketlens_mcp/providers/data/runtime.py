@@ -60,6 +60,7 @@ REQUIRED_API: tuple[str, ...] = (
     "omni.sources.base.resolve",
     "omni.sources.base.get_source",
     "omni.sources.base.authority_of",
+    "omni.sources.company_ir.current_targets",
     "omni.store.get_store",
     "omni.store.StoreBackend.count_by",
     "omni.store.StoreBackend.raw_entries",

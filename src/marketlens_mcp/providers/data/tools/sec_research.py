@@ -463,7 +463,12 @@ async def company_ir_targets(ctx: ToolContext, args: IrInputs) -> ToolOutput:
 
     def work(session):
         _ir_refresh(session, args.ticker, targets=True)
-        return F.records(session.read("company.ir_targets", as_of=as_of, ticker=args.ticker))
+        targets = session.read("company.ir_targets", as_of=as_of, ticker=args.ticker)
+        documents = session.read("company.ir_documents", as_of=as_of, ticker=args.ticker)
+        # The store keeps the latest row per (document, metric, horizon): a target a newer
+        # version of the document no longer states stays the latest of its key (audit #55).
+        current = session.module("omni.sources.company_ir").current_targets
+        return F.records(current(targets, documents))
 
     records, session = await common.run(ctx, s, work, source="company", subject=("company", args.ticker))
     rows = []
@@ -644,7 +649,8 @@ SPECS: tuple[ToolSpec, ...] = (
             "The multi-year targets a company's listed investor documents state (revenue CAGR, gross and "
             "operating margin, EPS, capex, free cash flow): low, high and mid (a floor has only a low, a "
             "ceiling only a high), the horizon as stated with its years, the basis, the sentence and the "
-            "rule; never from a table, never a guess. Margins and CAGRs as fractions. Each row carries its "
+            "rule; never from a table, never a guess. Only targets the current version of each document "
+            "states. Margins and CAGRs as fractions. Each row carries its "
             f"document's authority (official for a filed copy, else company). {CONTACT} "
             + common.PIT["at_event"],
             "snapshot",
