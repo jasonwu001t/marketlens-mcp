@@ -151,6 +151,10 @@ async def _history(
     timeframe = getattr(args, "timeframe", None)
     async with AlpacaClient(ctx) as api:
         loc = api.settings.crypto_location
+        # Crypto days are UTC days (window, cap_last_bars and first_bar_note keep their zone=UTC default):
+        # live v1beta3 crypto 1d and 1w bars and snapshot day bars are stamped 00:00Z on both sides of a
+        # clock change (checked 2026-11-01: BTC/USD 1d across 2025-11-02, 1w across 2026-03-08). The pinned
+        # spec's 2022 snapshot example (dailyBar 05:00Z, midnight Chicago) is stale; audit #113 is not a bug.
         win = window(
             ctx,
             args.start,
