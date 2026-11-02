@@ -46,6 +46,19 @@ def test_d1_when_omni_lacks_a_name(tmp_path, monkeypatch):
     assert (err.code, err.message) == ("data_extra_missing", D1)
 
 
+def test_the_store_methods_the_tools_call_are_required(monkeypatch):
+    """The SEC tools call the store's count_by and raw_entries beside is_fresh
+    (audit #117, #119): an omni without one is incomplete, named as a method of
+    its class."""
+    from omni.store import StoreBackend
+
+    wanted = {"omni.store.StoreBackend.count_by", "omni.store.StoreBackend.raw_entries"}
+    assert wanted <= set(runtime.REQUIRED_API)
+    assert runtime.api_problems() == []
+    monkeypatch.delattr(StoreBackend, "raw_entries")
+    assert runtime.api_problems() == ["omni.store.StoreBackend.raw_entries"]
+
+
 # --- D2, D5, D6, D10 ---------------------------------------------------------------------------------
 
 

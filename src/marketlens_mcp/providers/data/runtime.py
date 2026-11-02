@@ -51,6 +51,7 @@ DEFAULTS: dict[str, Any] = {
 }
 
 #: The marketlens-data names the tools use; all of them belong to its public surface.
+#: A store method is named on the store's protocol (``omni.store.StoreBackend.<method>``).
 REQUIRED_API: tuple[str, ...] = (
     "omni.query",
     "omni.read_raw",
@@ -60,6 +61,8 @@ REQUIRED_API: tuple[str, ...] = (
     "omni.sources.base.get_source",
     "omni.sources.base.authority_of",
     "omni.store.get_store",
+    "omni.store.StoreBackend.count_by",
+    "omni.store.StoreBackend.raw_entries",
     "omni.calendars.capture_day",
     "omni.calendars.capture_ticker_history",
     "omni.catalog.series_meta",
@@ -146,19 +149,28 @@ def available() -> bool:
         return False
 
 
+def _resolves(dotted: str) -> bool:
+    """True when ``dotted`` names an attribute of an omni module, or of a class
+    in one (``omni.store.StoreBackend.count_by``)."""
+    parts = dotted.split(".")
+    for cut in range(len(parts) - 1, 0, -1):
+        try:
+            obj = importlib.import_module(".".join(parts[:cut]))
+        except ModuleNotFoundError:
+            continue  # a class, not a module: look one level up
+        except Exception:
+            return False
+        for name in parts[cut:]:
+            if not hasattr(obj, name):
+                return False
+            obj = getattr(obj, name)
+        return True
+    return False
+
+
 def api_problems() -> list[str]:
     """The REQUIRED_API names omni lacks (imports omni)."""
-    missing = []
-    for dotted in REQUIRED_API:
-        module, _, attr = dotted.rpartition(".")
-        try:
-            mod = importlib.import_module(module)
-        except Exception:
-            missing.append(dotted)
-            continue
-        if not hasattr(mod, attr):
-            missing.append(dotted)
-    return missing
+    return [dotted for dotted in REQUIRED_API if not _resolves(dotted)]
 
 
 def distribution() -> tuple[str, str]:
