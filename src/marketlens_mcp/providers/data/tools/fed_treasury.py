@@ -214,7 +214,9 @@ async def fed_fomc_meetings(ctx: ToolContext, args: MeetingsInputs) -> ToolOutpu
             },
         )
         for r in records
-        if F.within(F.day(r["start_date"]), start, end)
+        # "removed": a later calendar no longer lists it (moved or cancelled); rows stored before
+        # marketlens-data recorded a status have none and are scheduled (audit #228)
+        if r.get("status") != "removed" and F.within(F.day(r["start_date"]), start, end)
     ]
     rows.sort(key=lambda r: r.start_date)
     prov = _prov(
@@ -729,7 +731,8 @@ SPECS: tuple[ToolSpec, ...] = (
         "FOMC meetings",
         common.describe(
             "The FOMC meeting calendar from the Federal Reserve: start and end dates, and whether the "
-            "meeting has a Summary of Economic Projections. Keyless.",
+            "meeting has a Summary of Economic Projections. A meeting a later calendar no longer lists "
+            "(moved or cancelled) is left out from that capture on. Keyless.",
             "forward_known",
             stored=False,
         ),

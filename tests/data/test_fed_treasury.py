@@ -6,10 +6,10 @@ keyless."""
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import pytest
-from data_harness import call, check_golden, context, fixture_text, refused
+from data_harness import NOW, call, check_golden, context, fixture_text, freeze_clocks, refused
 
 FED = r"www\.federalreserve\.gov"
 FISCAL = r"api\.fiscaldata\.treasury\.gov/services/api/fiscal_service"
@@ -35,6 +35,35 @@ def test_fed_fomc_meetings_golden(tmp_path, upstream, frozen_clock):
     ]  # the notation vote is not a meeting
     # forward known: an as_of before the capture sees nothing
     assert call("fed_fomc_meetings", context(tmp_path), as_of="2026-01-01").rows == []
+
+
+def test_fed_fomc_meetings_skip_a_meeting_the_calendar_no_longer_lists(tmp_path, upstream, monkeypatch):
+    """marketlens-data stores a meeting a later calendar page no longer lists in
+    its year again, with status "removed" (moved or cancelled), and it stays the
+    latest row of its key: it is no meeting from that capture on, and was one
+    before it (audit #228)."""
+    fomc_routes(upstream)
+    freeze_clocks(monkeypatch)
+    call("fed_fomc_meetings", context(tmp_path))
+    upstream.add(
+        rf"{FED}/monetarypolicy/fomccalendars\.htm",
+        fixture_text("fomc.calendar.html").replace(">8-9*<", ">15-16*<"),
+    )
+    later = NOW + timedelta(hours=1)
+    freeze_clocks(monkeypatch, later)
+    out = call("fed_fomc_meetings", context(tmp_path, settings={"ttl_hours": 0}, now=later))
+
+    def december(rows):
+        return [(r.start_date.isoformat(), r.end_date.isoformat()) for r in rows if r.start_date.month == 12]
+
+    assert december(out.rows) == [("2026-12-15", "2026-12-16")]
+    assert len(out.rows) == 6
+    before = call(
+        "fed_fomc_meetings",
+        context(tmp_path, settings={"mode": "local"}, now=later),
+        as_of=(NOW + timedelta(minutes=30)).isoformat(),
+    )
+    assert december(before.rows) == [("2026-12-08", "2026-12-09")]
 
 
 def test_fed_fomc_statements_golden(tmp_path, upstream):
