@@ -388,7 +388,6 @@ providers:
     data_url: null
   data:
     mode: auto            # auto (fetch and keep) | local (read only what is stored)
-    data_dir: null        # absolute folder for the data store; default: the per-user data folder
     ttl_hours: 12         # how long a fetched slice is reused before it is fetched again
     calendar_ttl_minutes: 60
     call_timeout_seconds: 120
@@ -472,7 +471,9 @@ A tool whose key is missing answers with the variable to set and where to get it
 
 ### Where the data lives, and the two modes
 
-The store is a folder of your own: `providers.data.data_dir` if you set it, else `OMNI_DATA_DIR`, else the per-user data folder (`~/Library/Application Support/marketlens-data` on macOS, `%LOCALAPPDATA%\marketlens-data` on Windows, `$XDG_DATA_HOME/marketlens-data` when that is absolute, else `~/.local/share/marketlens-data`, elsewhere), created owner-only. marketlens never lets marketlens-data read a `.env` file.
+The store is a folder of your own: `providers.data.data_dir` if you set it (it is not in the default file: add it under `providers.data` to keep the store elsewhere), else `OMNI_DATA_DIR`, else the per-user data folder (`~/Library/Application Support/marketlens-data` on macOS, `%LOCALAPPDATA%\marketlens-data` on Windows, `$XDG_DATA_HOME/marketlens-data` when that is absolute, else `~/.local/share/marketlens-data`, elsewhere), created owner-only. marketlens never lets marketlens-data read a `.env` file.
+
+Under a stack that shares one store between marketlens and marketlens-data's other users, the stack's launcher exports `AR_STACK=1`, `OMNI_DATA_DIR` and `AR_DATA_MARKER` (the path of a marker file at the top of its data root), and the store is `OMNI_DATA_DIR` alone: with the data extra installed, the server refuses to start when `OMNI_DATA_DIR` is unset or `providers.data.data_dir` names another folder, and a data tool or `doctor` creates or opens the store only when the marker exists and the store lies under the marker's folder (otherwise the tool answers `data_store` and nothing is created). Without `AR_STACK=1` none of this applies.
 
 - `mode: auto` (the default): a slice (one series, one company, one date) older than `ttl_hours` is fetched from the publisher and stored, then the answer is read from the store. A second question within the TTL makes no request (`cached: true` in the provenance). One exception: EDGAR's daily form index of a recent weekday read before EDGAR posted it (about 22:01 ET) is read again after 15 minutes (`sec_daily_index`, `sec_ipo_pipeline`).
 - `mode: local`: only what is stored is read; nothing is fetched and no key is needed. An empty answer says so.
