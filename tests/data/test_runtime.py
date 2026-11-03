@@ -211,6 +211,24 @@ def test_store_folder_is_created_owner_only(tmp_path, upstream):
     assert os.environ["OMNI_ENV_FILE"] == ""
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX permissions")
+def test_stack_mode_creates_the_store_only_under_the_marked_root(tmp_path, monkeypatch, upstream):
+    upstream.json_file(NYFED, "nyfed.reference_rates.json")
+    root = tmp_path / "root"
+    root.mkdir()
+    (root / ".marker").write_text("{}", encoding="utf-8")
+    store = root / "omni" / "data"
+    monkeypatch.setenv("AR_STACK", "1")
+    monkeypatch.setenv("OMNI_DATA_DIR", str(store))
+    monkeypatch.setenv("AR_DATA_MARKER", str(tmp_path / "unmounted" / ".marker"))
+    err = refused("fed_reference_rates", context(tmp_path))
+    assert err.code == "data_store" and "no data-root marker where AR_DATA_MARKER points" in err.message
+    assert str(tmp_path) not in err.message and not store.exists()
+    monkeypatch.setenv("AR_DATA_MARKER", str(root / ".marker"))
+    call("fed_reference_rates", context(tmp_path))
+    assert stat.S_IMODE(store.stat().st_mode) == 0o700
+
+
 # --- marketlens never lets omni read a .env -----------------------------------------------------------
 # tests/conftest.py sets OMNI_ENV_FILE="" for every test, so each test here first
 # puts back what a user's shell may hold: nothing, or a path to a .env.

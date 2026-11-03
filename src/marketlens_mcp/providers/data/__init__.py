@@ -22,6 +22,8 @@ def register(registry: Registry, ctx: PluginContext) -> None:
         registry.add_capability(spec)
     if not runtime.available():
         return
+    if runtime.in_stack():  # another data_dir, or no OMNI_DATA_DIR, refuses to start (StackModeError)
+        runtime.store_path(runtime.settings_of(ctx.settings))
     # from the start, not only from the first call's ensure(): an import of omni
     # before it must not load a .env either
     runtime.prepare_environment()

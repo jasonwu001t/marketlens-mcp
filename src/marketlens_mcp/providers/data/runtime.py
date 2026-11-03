@@ -4,7 +4,9 @@
   Registration depends on this alone.
 * ``ensure()`` runs before the first omni call: marketlens never lets omni
   read a ``.env`` (``OMNI_ENV_FILE=""``), points omni's store at the folder
-  of ``store_path()``, imports omni and checks the names the tools use.
+  of ``store_path()``, imports omni and checks the names the tools use. In
+  stack mode (``AR_STACK=1``) that folder is ``OMNI_DATA_DIR`` and must lie
+  under the marked data root (see "stack mode" below).
 * Every omni call runs on ONE process-wide worker thread (omni is synchronous
   and its store locks per dataset; one worker removes every ordering doubt).
   ``call()`` waits ``providers.data.call_timeout_seconds``; past that the work
@@ -127,16 +129,72 @@ def store_path(
     *,
     platform: str | None = None,
 ) -> pathlib.Path:
-    """``providers.data.data_dir``, else ``OMNI_DATA_DIR``, else the per-user folder."""
+    """``providers.data.data_dir``, else ``OMNI_DATA_DIR``, else the per-user folder. In stack mode
+    the store is ``OMNI_DATA_DIR`` alone: unset, or a ``data_dir`` naming another folder, raises
+    StackModeError."""
     e = os.environ if env is None else env
     configured = settings.data_dir if isinstance(settings, Settings) else dict(settings or {}).get("data_dir")
-    if configured:
+    stack = in_stack(e)
+    if configured and not stack:
         return pathlib.Path(configured).expanduser()
     value = (e.get("OMNI_DATA_DIR") or "").strip()
-    if value:
-        p = pathlib.Path(value).expanduser()
-        return p if p.is_absolute() else (pathlib.Path.cwd() / p).resolve()
-    return default_data_dir(e, platform=platform)
+    if not value:
+        if stack:
+            raise StackModeError(
+                "AR_STACK=1 and OMNI_DATA_DIR is unset: in stack mode the data store has no default folder. "
+                "The stack's launcher sets it; start marketlens-mcp through it, or set OMNI_DATA_DIR."
+            )
+        return default_data_dir(e, platform=platform)
+    p = pathlib.Path(value).expanduser()
+    p = p if p.is_absolute() else (pathlib.Path.cwd() / p).resolve()
+    if configured and pathlib.Path(configured).expanduser() != p:  # stack mode only (returned above)
+        raise StackModeError(
+            "AR_STACK=1 and providers.data.data_dir names another folder than OMNI_DATA_DIR, the stack's "
+            "data store: remove providers.data.data_dir from the marketlens config."
+        )
+    return p
+
+
+# --- stack mode ----------------------------------------------------------------------------------
+# A stack that runs marketlens beside marketlens-data's other users puts it in stack mode: its
+# launcher exports AR_STACK=1, OMNI_DATA_DIR and AR_DATA_MARKER, the path of a marker file at the top
+# of the stack's data root that only the stack's own initialisation writes. A data drive that is not
+# mounted leaves its mount point empty, so an unguarded mkdir would start a fresh store on the disk
+# beneath it. So under AR_STACK=1 the store is OMNI_DATA_DIR (store_path; the data provider refuses
+# to start on another data_dir), and it is created or opened only under the marker's folder
+# (assert_in_data_root). Outside AR_STACK=1 nothing changes.
+
+
+class StackModeError(RuntimeError):
+    """Stack mode refuses the data store; the message names why, never a path."""
+
+
+def in_stack(env: Mapping[str, str] | None = None) -> bool:
+    return (os.environ if env is None else env).get("AR_STACK") == "1"
+
+
+def assert_in_data_root(path: pathlib.Path) -> None:
+    """Under AR_STACK=1, raise StackModeError unless the marker AR_DATA_MARKER names is a file and
+    ``path``, symlinks resolved, lies under the marker's own folder."""
+    if not in_stack():
+        return
+    marker = os.environ.get("AR_DATA_MARKER")
+    if not marker:
+        raise StackModeError(
+            "AR_STACK=1 and AR_DATA_MARKER is unset: refusing to create or open the data store. The stack's "
+            "launcher sets it; start marketlens-mcp through it. Nothing was created."
+        )
+    if not pathlib.Path(marker).is_file():
+        raise StackModeError(
+            "AR_STACK=1 and there is no data-root marker where AR_DATA_MARKER points: refusing to create or "
+            "open the data store (the data drive is not mounted, or the stack never marked that root). "
+            "Nothing was created."
+        )
+    if not path.resolve().is_relative_to(pathlib.Path(marker).parent.resolve()):
+        raise StackModeError(
+            "AR_STACK=1 and OMNI_DATA_DIR is not under the marked data root (the folder of AR_DATA_MARKER): "
+            "refusing to create or open the data store there. Nothing was created."
+        )
 
 
 # --- the extra ---------------------------------------------------------------------------------
@@ -199,10 +257,15 @@ _ready_path: pathlib.Path | None = None
 
 def ensure(settings: Settings) -> Any:
     """Point omni at the store, import it and check its API. Returns the omni module.
-    Raises ToolError D1 (missing or incomplete) or D8 (the folder cannot be created)."""
+    Raises ToolError D1 (missing or incomplete) or D8 (the folder cannot be created, or stack mode
+    refuses it)."""
     global _ready_path
     with _lock:
-        path = store_path(settings)
+        try:
+            path = store_path(settings)
+            assert_in_data_root(path)
+        except StackModeError as exc:
+            raise ToolError("data_store", str(exc)) from None
         if _ready_path == path and "omni" in sys.modules:
             return sys.modules["omni"]
         prepare_environment()

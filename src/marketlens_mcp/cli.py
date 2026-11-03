@@ -332,11 +332,15 @@ def data_doctor(rt) -> tuple[list[str], int]:
     path = data_runtime.store_path(settings)
     shown = paths.display_path(path)
     try:
+        data_runtime.assert_in_data_root(path)
         paths.ensure_private_dir(path)
         probe = path / ".doctor-probe"
         probe.write_text("ok", encoding="utf-8")
         probe.unlink()
         lines.append(f"data store: ok ({shown}; mode {settings.mode})")
+    except data_runtime.StackModeError as exc:
+        lines.append(f"data store: FAILED ({shown}: {exc})")
+        failures += 1
     except OSError as exc:
         lines.append(f"data store: FAILED ({shown} is not writable: {type(exc).__name__})")
         failures += 1 if settings.mode == "auto" else 0

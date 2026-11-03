@@ -14,6 +14,7 @@ import yaml
 
 from marketlens_mcp import builtins, cli, readme, registry
 from marketlens_mcp import config as cfg
+from marketlens_mcp.plugin_api import ToolError
 from marketlens_mcp.providers import data
 from marketlens_mcp.providers.data import parity, runtime, sources, tools
 
@@ -309,15 +310,16 @@ def test_default_config_text_names_the_data_settings():
     for line in (
         "  data:",
         "    mode: auto            # auto (fetch and keep) | local (read only what is stored)",
-        "    data_dir: null        # absolute folder for the data store; default: the per-user data folder",
         "    ttl_hours: 12         # how long a fetched slice is reused before it is fetched again",
         "    calendar_ttl_minutes: 60",
         "    call_timeout_seconds: 120",
     ):
         assert line in lines, line
+    # data_dir is still a setting (the README says where the store is), but not in the default file:
+    # under a stack (AR_STACK=1) the store is OMNI_DATA_DIR, and another data_dir refuses to start
+    assert "data_dir" not in text
     assert cfg.DEFAULTS["providers"]["data"] == {
         "mode": "auto",
-        "data_dir": None,
         "ttl_hours": 12,
         "calendar_ttl_minutes": 60,
         "call_timeout_seconds": 120,
@@ -440,6 +442,124 @@ def test_settings_defaults_and_overrides():
         {"mode": "local", "ttl_hours": 2, "calendar_ttl_minutes": 5, "call_timeout_seconds": 30}
     )
     assert (s.mode, s.ttl_seconds, s.calendar_ttl_seconds, s.call_timeout_seconds) == ("local", 7200, 300, 30)
+
+
+# --- stack mode: the store is OMNI_DATA_DIR, under the marked data root ------------------------
+# A stack's launcher exports AR_STACK=1, OMNI_DATA_DIR and AR_DATA_MARKER (a marker file at the top
+# of its data root). tests/conftest.py sets AR_STACK and AR_DATA_MARKER empty for every test.
+
+UNSET = (
+    "AR_STACK=1 and OMNI_DATA_DIR is unset: in stack mode the data store has no default folder. The "
+    "stack's launcher sets it; start marketlens-mcp through it, or set OMNI_DATA_DIR."
+)
+MISMATCH = (
+    "AR_STACK=1 and providers.data.data_dir names another folder than OMNI_DATA_DIR, the stack's data "
+    "store: remove providers.data.data_dir from the marketlens config."
+)
+
+
+def test_store_path_in_stack_mode():
+    env = {"HOME": "/h", "AR_STACK": "1", "OMNI_DATA_DIR": "/root/omni/data"}
+    assert runtime.store_path({}, env, platform="linux").as_posix() == "/root/omni/data"
+    same = runtime.store_path({"data_dir": "/root/omni/data/"}, env, platform="linux")
+    assert same.as_posix() == "/root/omni/data"
+    with pytest.raises(runtime.StackModeError) as info:
+        runtime.store_path({"data_dir": "/elsewhere"}, env, platform="linux")
+    assert str(info.value) == MISMATCH
+    for omni_data_dir in (None, "", "  "):
+        unset = {k: v for k, v in env.items() if k != "OMNI_DATA_DIR"}
+        if omni_data_dir is not None:
+            unset["OMNI_DATA_DIR"] = omni_data_dir
+        for settings in ({}, {"data_dir": "/root/omni/data"}):
+            with pytest.raises(runtime.StackModeError) as info:
+                runtime.store_path(settings, unset, platform="linux")
+            assert str(info.value) == UNSET
+    # outside stack mode (AR_STACK anything but 1) the precedence is unchanged
+    for stack in ("", "0", "true"):
+        e = {**env, "AR_STACK": stack}
+        assert runtime.store_path({"data_dir": "/elsewhere"}, e, platform="linux").as_posix() == "/elsewhere"
+        assert runtime.store_path({}, {"HOME": "/h", "AR_STACK": stack}, platform="linux").as_posix() == (
+            "/h/.local/share/marketlens-data"
+        )
+
+
+def test_stack_mode_refuses_to_start_the_data_provider_on_another_data_dir(tmp_path, monkeypatch, capsys):
+    store = tmp_path / "root" / "omni" / "data"
+    monkeypatch.setenv("AR_STACK", "1")
+    monkeypatch.setenv("OMNI_DATA_DIR", str(store))
+    write(tmp_path, f"providers:\n  data:\n    data_dir: '{tmp_path / 'elsewhere'}'\n")
+    refusal = f"built-in marketlens_mcp.providers.data failed to register: StackModeError: {MISMATCH}"
+    with pytest.raises(registry.BuiltinPluginError) as info:
+        catalog(monkeypatch, installed=True)
+    assert str(info.value) == refusal
+    assert cli.main(["serve"]) == 2
+    assert capsys.readouterr().err == f"marketlens-mcp cannot start: {refusal}\n"
+    assert cli.main(["doctor"]) == 1
+    assert capsys.readouterr().out == f"config: FAILED ({refusal})\n"
+    monkeypatch.delenv("OMNI_DATA_DIR")
+    with pytest.raises(registry.BuiltinPluginError, match="OMNI_DATA_DIR is unset"):
+        catalog(monkeypatch, installed=True)
+    # without the extra there is no store to refuse; outside stack mode any data_dir starts
+    assert not set(ALL_TOOLS) & set(catalog(monkeypatch, installed=False).tools)
+    monkeypatch.setenv("AR_STACK", "")
+    assert set(ALL_TOOLS) <= set(catalog(monkeypatch, installed=True).tools)
+    # the stack's own folder starts
+    monkeypatch.setenv("AR_STACK", "1")
+    monkeypatch.setenv("OMNI_DATA_DIR", str(store))
+    write(tmp_path, f"providers:\n  data:\n    data_dir: '{store}'\n")
+    assert set(ALL_TOOLS) <= set(catalog(monkeypatch, installed=True).tools)
+    assert not store.exists()
+
+
+def test_stack_mode_opens_the_store_only_under_the_marked_root(tmp_path, monkeypatch):
+    # past the guard, the missing extra stops ensure() (D1) before it creates the store
+    monkeypatch.setattr(runtime, "available", lambda: False)
+    root = tmp_path / "root"
+    root.mkdir()
+    (root / ".marker").write_text("{}", encoding="utf-8")
+    (tmp_path / "elsewhere").mkdir()
+    (tmp_path / "elsewhere" / "marker").write_text("{}", encoding="utf-8")
+    (root / ".linked-marker").symlink_to(tmp_path / "elsewhere" / "marker")
+    store = root / "omni" / "data"
+    monkeypatch.setenv("AR_STACK", "1")
+    monkeypatch.setenv("OMNI_DATA_DIR", str(store))
+    settings = runtime.settings_of({})
+    # the marked root is the marker's own folder, also when the marker is a symlink
+    for marker in (root / ".marker", root / ".linked-marker"):
+        monkeypatch.setenv("AR_DATA_MARKER", str(marker))
+        with pytest.raises(ToolError) as info:
+            runtime.ensure(settings)
+        assert info.value.code == "data_extra_missing"
+    for name, value, message in [
+        (
+            "AR_DATA_MARKER",
+            "",
+            "AR_STACK=1 and AR_DATA_MARKER is unset: refusing to create or open the data store. The "
+            "stack's launcher sets it; start marketlens-mcp through it. Nothing was created.",
+        ),
+        (
+            "AR_DATA_MARKER",
+            str(tmp_path / "unmounted" / ".marker"),
+            "AR_STACK=1 and there is no data-root marker where AR_DATA_MARKER points: refusing to create or "
+            "open the data store (the data drive is not mounted, or the stack never marked that root). "
+            "Nothing was created.",
+        ),
+        (
+            "OMNI_DATA_DIR",
+            str(tmp_path / "elsewhere" / "data"),
+            "AR_STACK=1 and OMNI_DATA_DIR is not under the marked data root (the folder of "
+            "AR_DATA_MARKER): refusing to create or open the data store there. Nothing was created.",
+        ),
+        ("OMNI_DATA_DIR", "", UNSET),
+    ]:
+        with monkeypatch.context() as m:
+            m.setenv("AR_DATA_MARKER", str(root / ".marker"))
+            m.setenv(name, value)
+            with pytest.raises(ToolError) as info:
+                runtime.ensure(settings)
+            assert (info.value.code, info.value.message) == ("data_store", message)
+    assert not store.exists() and not (tmp_path / "elsewhere" / "data").exists()
+    assert not (tmp_path / "unmounted").exists()
 
 
 # --- keys per source -------------------------------------------------------------------------

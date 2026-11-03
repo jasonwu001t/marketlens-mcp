@@ -39,6 +39,9 @@ for _name in (
     os.environ[_name] = ""
 os.environ["OMNI_ENV_FILE"] = ""
 os.environ["OMNI_TEST_RUN"] = "1"
+# Outside stack mode, whatever the developer's shell exports (a stack's launcher sets AR_STACK=1 and
+# AR_DATA_MARKER); a test of stack mode sets them itself.
+os.environ["AR_STACK"] = os.environ["AR_DATA_MARKER"] = ""
 _OMNI_DATA = tempfile.mkdtemp(prefix="marketlens-test-omni-")
 os.environ["OMNI_DATA_DIR"] = _OMNI_DATA
 atexit.register(shutil.rmtree, _OMNI_DATA, True)

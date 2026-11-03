@@ -120,6 +120,26 @@ def test_doctor_store_failure_counts_in_mode_auto_only(capsys, tmp_path):
     assert "data source fred: optional FRED_API_KEY not set (only fetching needs it; mode is local)" in out
 
 
+def test_doctor_in_stack_mode_creates_the_store_only_under_the_marked_root(capsys, tmp_path, monkeypatch):
+    root = tmp_path / "root"
+    store = root / "omni" / "data"
+    monkeypatch.setenv("AR_STACK", "1")
+    monkeypatch.setenv("OMNI_DATA_DIR", str(store))
+    monkeypatch.setenv("AR_DATA_MARKER", str(root / ".marker"))
+    code, out = doctor(capsys)
+    assert code == 1
+    assert (
+        f"data store: FAILED ({store}: AR_STACK=1 and there is no data-root marker where AR_DATA_MARKER "
+        "points: refusing to create or open the data store (the data drive is not mounted, or the stack "
+        "never marked that root). Nothing was created.)"
+    ) in out.splitlines()
+    assert not root.exists()
+    root.mkdir()
+    (root / ".marker").write_text("{}", encoding="utf-8")
+    code, out = doctor(capsys)
+    assert f"data store: ok ({store}; mode auto)" in out.splitlines()
+
+
 def test_doctor_reports_an_incomplete_omni(capsys, monkeypatch):
     monkeypatch.setattr(runtime, "REQUIRED_API", (*runtime.REQUIRED_API, "omni.calendars.nothing"))
     code, out = doctor(capsys)

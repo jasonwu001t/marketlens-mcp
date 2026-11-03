@@ -56,7 +56,6 @@ providers:
     data_url: null        # override; default https://data.alpaca.markets
   data:
     mode: auto            # auto (fetch and keep) | local (read only what is stored)
-    data_dir: null        # absolute folder for the data store; default: the per-user data folder
     ttl_hours: 12         # how long a fetched slice is reused before it is fetched again
     calendar_ttl_minutes: 60
     call_timeout_seconds: 120
