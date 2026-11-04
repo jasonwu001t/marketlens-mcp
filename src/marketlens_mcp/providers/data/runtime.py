@@ -73,6 +73,7 @@ REQUIRED_API: tuple[str, ...] = (
     "omni.config.MissingCredential",
     "omni.errors.classify",
     "omni.errors.PermanentError",
+    "omni.freshness.declared_windows",
 )
 
 D1_TEXT = (

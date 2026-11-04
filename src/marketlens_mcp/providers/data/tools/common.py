@@ -172,6 +172,21 @@ def sec_contact_notes(settings: runtime.Settings, env: Mapping[str, str]) -> lis
 
 # --- fetch, then read --------------------------------------------------------------------------
 
+#: The refresh windows marketlens-data declares for its scheduled collection, read once.
+_DECLARED: dict[str, int] | None = None
+
+
+def declared_windows(module: Callable[[str], Any]) -> dict[str, int]:
+    """Dataset id -> its declared refresh window in seconds (``omni.freshness.declared_windows``),
+    read once a process; {} when it cannot be read."""
+    global _DECLARED
+    if _DECLARED is None:
+        try:
+            _DECLARED = {str(k): int(v) for k, v in module("omni.freshness").declared_windows().items()}
+        except Exception:  # noqa: BLE001 - the TTL then decides, as before
+            _DECLARED = {}
+    return _DECLARED
+
 
 class Session:
     """What one tool call did against the store (on the worker thread)."""
@@ -201,12 +216,24 @@ class Session:
         Returns True when nothing had to be fetched."""
         if self.settings.mode == "local":
             return True
-        if not force and self.store.is_fresh(dataset_id, dict(params), ttl or self.settings.ttl_seconds):
+        if not force and self.store.is_fresh(dataset_id, dict(params), ttl or self.window(dataset_id)):
             return True
         self.omni.sync(dataset_id, **params)
         self.fetched += 1
         self.fresh = False
         return False
+
+    def window(self, dataset_id: str) -> int:
+        """How long a stored slice of ``dataset_id`` is fresh. In stack mode (AR_STACK=1) the store is
+        the one the stack's scheduled backfill keeps current, on the windows marketlens-data declares
+        for it (``omni.freshness.declared_windows``), so a call reads what is stored instead of syncing
+        live on the one data worker; a dataset no collection declares, and every dataset outside the
+        stack, keeps ``providers.data.ttl_hours``."""
+        if runtime.in_stack():
+            declared = declared_windows(self.module).get(dataset_id)
+            if declared:
+                return declared
+        return self.settings.ttl_seconds
 
     def read(self, dataset_id: str, *, as_of: datetime | None, vintages: bool = False, **filters: Any):
         """The stored rows, point in time (latest vintage per key at as_of), or

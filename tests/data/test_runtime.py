@@ -411,3 +411,36 @@ def test_a_large_answer_is_stored_not_inlined(tmp_path, upstream):
 
 def test_drain_helper_returns(tmp_path):
     drain()
+
+
+# --- the store's own windows in stack mode ----------------------------------------------------------
+
+
+def test_in_stack_mode_a_slice_is_fresh_for_its_datasets_declared_window(monkeypatch):
+    """The stack's backfill keeps the store current on marketlens-data's declared windows, so a
+    call in the stack reads what is stored for that long; outside it, and for a dataset no
+    collection declares, ttl_hours decides as before."""
+    from marketlens_mcp.providers.data.tools import common
+
+    settings = runtime.settings_of({"ttl_hours": 12})
+    session = common.Session(object(), settings)
+    monkeypatch.setattr(common, "_DECLARED", {"fred.series": 86_400 * 3})
+    monkeypatch.setenv("AR_STACK", "")
+    assert session.window("fred.series") == 12 * 3600
+    monkeypatch.setenv("AR_STACK", "1")
+    assert session.window("fred.series") == 86_400 * 3
+    assert session.window("not.declared") == 12 * 3600
+
+
+def test_the_declared_windows_are_marketlens_datas_and_required(monkeypatch):
+    from marketlens_mcp.providers.data.tools import common
+
+    assert "omni.freshness.declared_windows" in runtime.REQUIRED_API
+    monkeypatch.setattr(common, "_DECLARED", None)
+    windows = common.declared_windows(common.Session.module)
+    assert windows and all(isinstance(v, int) and v > 0 for v in windows.values())
+    monkeypatch.setattr(common, "_DECLARED", None)
+
+    def broken(name):
+        raise ImportError(name)
+    assert common.declared_windows(broken) == {}
