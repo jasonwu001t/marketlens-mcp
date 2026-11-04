@@ -196,6 +196,8 @@ class Session:
         self.settings = settings
         self.fetched = 0
         self.fresh = True
+        #: (dataset, its last collection) of each slice this call refreshed (``collected_at``).
+        self.slices: list[tuple[str, datetime | None]] = []
 
     @property
     def store(self) -> Any:
@@ -215,13 +217,43 @@ class Session:
         or always with ``force`` (a dataset built from another one just fetched).
         Returns True when nothing had to be fetched."""
         if self.settings.mode == "local":
+            self._collected(dataset_id, params)
             return True
         if not force and self.store.is_fresh(dataset_id, dict(params), ttl or self.window(dataset_id)):
+            self._collected(dataset_id, params)
             return True
         self.omni.sync(dataset_id, **params)
         self.fetched += 1
         self.fresh = False
+        self._collected(dataset_id, params)
         return False
+
+    def _collected(self, dataset_id: str, params: Mapping[str, Any]) -> None:
+        """Note when the slice was last collected: its sync record (marketlens-data's
+        ``Store.synced_at``), None when it has none or the store keeps no such record."""
+        try:
+            at = self.store.synced_at(dataset_id, dict(params))
+        except Exception:  # noqa: BLE001 - an older marketlens-data, or a store that cannot say: unknown
+            at = None
+        self.slices.append((dataset_id, at))
+
+    def collected_at(self, datasets: Sequence[str]) -> datetime | None:
+        """When what this call read was last collected: the oldest of the slices it refreshed,
+        and of each other dataset read, the dataset's newest sync (``Store.last_sync``); None when
+        nothing records one. A sync that found nothing new still collected: the source had nothing
+        newer then."""
+        known = [at for _, at in self.slices if at is not None]
+        refreshed = {dataset for dataset, _ in self.slices}
+        for dataset in datasets:
+            if dataset in refreshed:
+                continue
+            try:
+                at = self.store.last_sync(dataset)
+            except Exception:  # noqa: BLE001 - not a dataset id, or a store that cannot say
+                at = None
+            if at is not None:
+                known.append(at)
+        return min(known) if known else None
 
     def window(self, dataset_id: str) -> int:
         """How long a stored slice of ``dataset_id`` is fresh. In stack mode (AR_STACK=1) the store is
@@ -356,6 +388,7 @@ def provenance(
         request=request_doc(request),
         pages_fetched=session.fetched if session else 0,
         cached=session.fresh if session else False,
+        collected_at=session.collected_at(datasets) if session else None,
         authority=labels or None,
         lag_days=float((reference - newest).days) if newest is not None else None,
     )

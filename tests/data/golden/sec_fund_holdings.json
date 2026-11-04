@@ -10,6 +10,7 @@
    "official"
   ],
   "cached": false,
+  "collected_at": "synced_by_this_call",
   "dataset": "sec.fund_nport_holdings",
   "delay": "unknown",
   "derived_from": [],

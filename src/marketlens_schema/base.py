@@ -312,6 +312,12 @@ class Provenance(BaseModel):
         default=None,
         description="When the source learned the newest value it served, where the source records it",
     )
+    collected_at: UtcDatetime | None = Field(
+        default=None,
+        description="When the data served was last collected from its source: a live fetch's own time; a "
+        "stored slice's last successful sync, which may have found nothing new (the oldest of the slices "
+        "read, else of the datasets'); a computed result's oldest input's. Null when nothing records it",
+    )
     feed: str | None = Field(
         default=None,
         description='Provider feed, e.g. "iex", "sip", "delayed_sip", "opra", "indicative", crypto location "us"',

@@ -279,13 +279,15 @@ async def news_official(ctx: ToolContext, args: OfficialNewsIn) -> ToolOutput:
             f"{len(from_cache)} of {len(answered)} feed(s) came from this server's cache, fetched within the last "
             "few minutes: " + ", ".join(r.feed.id for r in from_cache) + "."
         )
+    # the oldest read among the feeds answered: a cached feed was read up to cache_seconds ago
+    read_at = min((r.fetched_at for r in answered if r.fetched_at), default=ctx.now())
     provenance = Provenance(
         provider="official",
         route=ROUTE,
         operation="feeds",
         dataset=",".join(r.feed.id for r in answered),
-        # the oldest read among the feeds answered: a cached feed was read up to cache_seconds ago
-        fetched_at=min((r.fetched_at for r in answered if r.fetched_at), default=ctx.now()),
+        fetched_at=read_at,
+        collected_at=read_at,  # each feed is collected when it is read from its publisher
         as_of=win.as_of,
         request=request_of(args, **win.fields()),
         pages_fetched=len(answered) - len(from_cache),

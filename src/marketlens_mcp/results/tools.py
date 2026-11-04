@@ -34,6 +34,7 @@ from ..results_api import (
     RESULT_ID_RE,
     QueryRefused,
     ResultInfo,
+    ResultNotFound,
     RowsOf,
     implied_time,
     known_late,
@@ -66,10 +67,26 @@ def _provenance(ctx: ToolContext, route: str, request: dict, derived_from: list[
         provider="marketlens",
         route=route,
         fetched_at=ctx.now(),
+        collected_at=_collected(ctx, derived_from),
         delay=Delay.UNKNOWN,
         request=request,
         derived_from=derived_from,
     )
+
+
+def _collected(ctx: ToolContext, result_ids: list[str]) -> dt.datetime | None:
+    """The oldest last collection among the stored results a response is computed from
+    (``Provenance.collected_at``): a computed answer is as recently collected as its stalest
+    input. A result gone from the store, or one stored with none, adds nothing."""
+    known = []
+    for rid in result_ids:
+        try:
+            at = ctx.results.info(rid).provenance.collected_at
+        except ResultNotFound:  # dropped or evicted since it was named
+            continue
+        if at is not None:
+            known.append(at)
+    return min(known) if known else None
 
 
 # --- results_query ------------------------------------------------------------------------------

@@ -12,6 +12,7 @@
    "official"
   ],
   "cached": false,
+  "collected_at": "synced_by_this_call",
   "dataset": "fdic.financials",
   "delay": "unknown",
   "derived_from": [],

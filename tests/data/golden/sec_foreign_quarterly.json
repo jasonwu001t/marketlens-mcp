@@ -10,6 +10,7 @@
    "official"
   ],
   "cached": false,
+  "collected_at": "synced_by_this_call",
   "dataset": "sec.submissions,sec.earnings_releases,sec.foreign_quarterly_statements",
   "delay": "unknown",
   "derived_from": [],

@@ -15,6 +15,7 @@
   "as_of": "2026-10-02T06:56:01.882466Z",
   "authority": null,
   "cached": false,
+  "collected_at": "fetched_at",
   "dataset": null,
   "delay": "unknown",
   "derived_from": [],

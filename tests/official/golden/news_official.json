@@ -15,6 +15,7 @@
   "as_of": "2026-10-16T20:00:00Z",
   "authority": null,
   "cached": false,
+  "collected_at": "fetched_at",
   "dataset": "fed.monetary,fed.press,fed.speeches,fed.testimony,sec.press,sec.speeches,sec.litigation,bls.latest,bls.cpi,bls.empsit,bls.ppi,bls.jolts,bls.eci,bea.news,cftc.press,cftc.enforcement,cftc.speeches,ecb.press",
   "delay": "unknown",
   "derived_from": [],

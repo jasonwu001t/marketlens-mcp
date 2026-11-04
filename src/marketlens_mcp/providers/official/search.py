@@ -353,6 +353,7 @@ async def filings_search(ctx: ToolContext, args: FilingsSearchIn) -> ToolOutput:
             route=ROUTE,
             operation="full_text_search",
             fetched_at=now,
+            collected_at=now,  # a live search: collected as this call asked EDGAR
             as_of=now,
             request=request_of(args),
             pages_fetched=pages,

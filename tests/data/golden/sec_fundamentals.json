@@ -10,6 +10,7 @@
    "official"
   ],
   "cached": false,
+  "collected_at": "synced_by_this_call",
   "dataset": "sec.company_facts,sec.fundamentals",
   "delay": "unknown",
   "derived_from": [],

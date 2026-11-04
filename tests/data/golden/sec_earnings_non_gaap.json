@@ -10,6 +10,7 @@
    "official"
   ],
   "cached": false,
+  "collected_at": "synced_by_this_call",
   "dataset": "sec.earnings_non_gaap",
   "delay": "unknown",
   "derived_from": [],

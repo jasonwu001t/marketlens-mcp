@@ -10,6 +10,7 @@
    "official"
   ],
   "cached": false,
+  "collected_at": "synced_by_this_call",
   "dataset": "fiscaldata.debt_to_penny",
   "delay": "unknown",
   "derived_from": [],

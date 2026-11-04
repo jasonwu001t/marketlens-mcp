@@ -10,6 +10,7 @@
    "official"
   ],
   "cached": false,
+  "collected_at": "synced_by_this_call",
   "dataset": "fdic.industry_summary",
   "delay": "unknown",
   "derived_from": [],

@@ -10,6 +10,7 @@
    "official"
   ],
   "cached": false,
+  "collected_at": "synced_by_this_call",
   "dataset": "nyfed.reference_rates",
   "delay": "unknown",
   "derived_from": [],

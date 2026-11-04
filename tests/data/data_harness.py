@@ -210,6 +210,11 @@ def output_doc(out: ToolOutput) -> dict[str, Any]:
     model = out.model if isinstance(out.model, str) else out.model.schema_name
     prov = out.provenance.model_dump(mode="json")
     prov.pop("fetched_at")
+    # A slice this call synced was stamped on marketlens-data's wall clock (unless the test froze
+    # it at NOW): named for what it is, as fetched_at is left out.
+    collected = prov.get("collected_at")
+    if collected is not None and datetime.fromisoformat(collected) > NOW:
+        prov["collected_at"] = "synced_by_this_call"
     return {
         "model": model,
         "rows": [r.model_dump(mode="json") for r in (out.rows or [])],

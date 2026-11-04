@@ -10,6 +10,7 @@
    "official"
   ],
   "cached": false,
+  "collected_at": "synced_by_this_call",
   "dataset": "fiscaldata.tga_balance",
   "delay": "unknown",
   "derived_from": [],

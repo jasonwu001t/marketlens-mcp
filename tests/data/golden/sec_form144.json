@@ -12,6 +12,7 @@
    "official"
   ],
   "cached": false,
+  "collected_at": "synced_by_this_call",
   "dataset": "sec.form144",
   "delay": "unknown",
   "derived_from": [],

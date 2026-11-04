@@ -10,6 +10,7 @@
    "company"
   ],
   "cached": false,
+  "collected_at": "2026-10-02T20:00:00Z",
   "dataset": "sec.submissions,company.ir_documents,company.ir_targets",
   "delay": "unknown",
   "derived_from": [],

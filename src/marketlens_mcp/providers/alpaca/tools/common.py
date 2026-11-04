@@ -423,11 +423,13 @@ def output(
         notes.insert(0, note)
     if skips is not None:
         notes.extend(skips.note())
+    now = ctx.now()
     prov = Provenance(
         provider=provider,
         route=route,
         operation=operation,
-        fetched_at=ctx.now(),
+        fetched_at=now,
+        collected_at=now,  # the answer is the fetch: collected as this call fetched it
         as_of=as_of,
         feed=feed,
         delay=delay,

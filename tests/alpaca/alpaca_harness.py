@@ -331,7 +331,9 @@ def call(spec: ToolSpec, ctx: FakeContext, **arguments) -> ToolOutput:
 def output_doc(out: ToolOutput) -> dict[str, Any]:
     model = out.model if isinstance(out.model, str) else out.model.schema_name
     prov = out.provenance.model_dump(mode="json")
-    prov.pop("fetched_at")
+    fetched = prov.pop("fetched_at")
+    if prov.get("collected_at") == fetched:  # the wall clock, named for what it is: this call's fetch
+        prov["collected_at"] = "fetched_at"
     return {
         "model": model,
         "rows": [r.model_dump(mode="json") for r in (out.rows or [])],

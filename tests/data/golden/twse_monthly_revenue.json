@@ -10,6 +10,7 @@
    "exchange"
   ],
   "cached": false,
+  "collected_at": "synced_by_this_call",
   "dataset": "twse.monthly_revenue",
   "delay": "unknown",
   "derived_from": [],

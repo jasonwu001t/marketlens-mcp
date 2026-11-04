@@ -20,6 +20,7 @@
   "as_of": null,
   "authority": null,
   "cached": false,
+  "collected_at": "fetched_at",
   "dataset": null,
   "delay": "unknown",
   "derived_from": [],

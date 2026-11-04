@@ -853,6 +853,7 @@ def provenance(ctx: ToolContext, tool: str, inputs: Sequence[ResultInfo], args: 
         route=f"duckdb:{tool}",
         fetched_at=ctx.now(),
         as_of=max((p.as_of for p in ps if p.as_of is not None), default=None),
+        collected_at=min((p.collected_at for p in ps if p.collected_at is not None), default=None),
         feed=feeds.pop() if len(feeds) == 1 else None,
         delay=delays.pop() if len(delays) == 1 else Delay.UNKNOWN,
         environment=envs.pop() if len(envs) == 1 else None,

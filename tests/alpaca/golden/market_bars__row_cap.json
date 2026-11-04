@@ -17,6 +17,7 @@
   "as_of": "2026-10-02T20:00:00Z",
   "authority": null,
   "cached": false,
+  "collected_at": "fetched_at",
   "dataset": null,
   "delay": "realtime",
   "derived_from": [],
