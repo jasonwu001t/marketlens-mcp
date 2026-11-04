@@ -134,6 +134,35 @@ def test_macro_series_end_is_inclusive(tmp_path, upstream, keys):
     assert [r.date.isoformat() for r in out.rows] == ["2024-01-01", "2024-02-01"]
 
 
+def test_macro_series_asks_the_store_for_its_window_and_serves_the_same_rows(
+    tmp_path, upstream, keys, monkeypatch
+):
+    """The window is read as such (omni.query(window=)), so marketlens-data opens only the window's
+    months of fred.series instead of every one; the rows are the ones cut in Python before."""
+    import importlib
+
+    router = importlib.import_module("omni.query.router")
+    fred_routes(upstream)
+    whole = call("macro_series", context(tmp_path), series_ids=["CPIAUCSL"])
+    asked = []
+    real = router.query
+
+    def spy(dataset_id, **kwargs):
+        asked.append(kwargs.get("window"))
+        return real(dataset_id, **kwargs)
+
+    monkeypatch.setattr(router, "query", spy)
+    import omni
+
+    monkeypatch.setattr(omni, "query", spy)
+    out = call(
+        "macro_series", context(tmp_path), series_ids=["CPIAUCSL"], start="2024-01-01", end="2024-02-01"
+    )
+    assert asked and all(w is not None for w in asked)
+    expected = [r.model_dump() for r in whole.rows if "2024-01-01" <= str(r.date) <= "2024-02-01"]
+    assert [r.model_dump() for r in out.rows] == expected
+
+
 def test_macro_series_refuses_bad_ids_and_windows(tmp_path):
     from pydantic import ValidationError
 

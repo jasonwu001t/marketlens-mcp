@@ -235,11 +235,25 @@ class Session:
                 return declared
         return self.settings.ttl_seconds
 
-    def read(self, dataset_id: str, *, as_of: datetime | None, vintages: bool = False, **filters: Any):
+    def read(
+        self,
+        dataset_id: str,
+        *,
+        as_of: datetime | None,
+        vintages: bool = False,
+        window: tuple[date | None, date | None] | None = None,
+        **filters: Any,
+    ):
         """The stored rows, point in time (latest vintage per key at as_of), or
-        every stored vintage knowable at as_of when ``vintages``."""
+        every stored vintage knowable at as_of when ``vintages``. ``window`` (from, to:
+        event dates, both inclusive) is read as such by marketlens-data
+        (``omni.query(window=)``), which opens only the window's partitions where a
+        key's date fixes its event_time; the vintages read takes none, so a caller
+        windows those rows itself."""
         if vintages:
             return self.omni.read_raw(dataset_id, as_of=as_of, **filters)
+        if window is not None and (window[0] is not None or window[1] is not None):
+            return self.omni.query(dataset_id, as_of=as_of, mode="local", window=window, **filters)
         return self.omni.query(dataset_id, as_of=as_of, mode="local", **filters)
 
     def company(self, ticker: str, *, column: str = "cik", unpadded: bool = False) -> dict[str, str]:

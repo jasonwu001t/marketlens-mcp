@@ -311,7 +311,13 @@ async def macro_series(ctx: ToolContext, args: SeriesInputs) -> ToolOutput:
         out = []
         for sid in args.series_ids:
             session.refresh("fred.series", {"series_id": sid})
-            df = session.read("fred.series", as_of=as_of, vintages=args.include_vintages, series_id=sid)
+            df = session.read(
+                "fred.series",
+                as_of=as_of,
+                vintages=args.include_vintages,
+                window=(args.start, args.end),
+                series_id=sid,
+            )
             out.append((sid, F.records(df), catalog.get(sid), authority("fred.series", series_id=sid)))
         return out
 
