@@ -219,3 +219,40 @@ def test_bad_config_refuses_to_build(tmp_path, text):
 
     with pytest.raises(ConfigError):
         runtime(tmp_path, text)
+
+
+def test_a_plugin_reads_the_calls_request_meta(tmp_path, monkeypatch):
+    """Plugin API 1.1: the client's `_meta` for a call reaches the handler's
+    context (without `progressToken`); a call without one gives an empty map."""
+    from marketlens_mcp import pipeline
+
+    rt = runtime(
+        tmp_path,
+        "plugins:\n  enabled: [example]\ncapabilities:\n  example: true\n",
+        eps=[EP("example", ex.PLUGIN)],
+    )
+    seen = []
+    real = pipeline.execute
+
+    async def spy(spec, ctx, arguments):
+        seen.append(dict(ctx.request_meta))
+        return await real(spec, ctx, arguments)
+
+    monkeypatch.setattr(pipeline, "execute", spy)
+
+    async def go(c):
+        await c.call_tool("example_things", {"count": 1}, meta={"example.org/trace": "t-1"})
+        await c.call_tool("example_things", {"count": 1})
+
+    run(session(rt, go))
+    assert seen == [{"example.org/trace": "t-1"}, {}]
+
+
+def test_a_test_context_carries_the_request_meta_it_is_given():
+    from marketlens_mcp.testing import make_context
+
+    ctx = make_context(request_meta={"k": "v"})
+    assert ctx.request_meta == {"k": "v"}
+    with pytest.raises(TypeError):
+        ctx.request_meta["k"] = "w"  # read-only
+    assert make_context().request_meta == {}

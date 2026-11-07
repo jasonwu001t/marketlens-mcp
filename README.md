@@ -6,7 +6,7 @@ Where it sits: this package is the public core. It owns the schema, the result s
 
 ## Status
 
-Alpha (0.2.0, unreleased). The tool names, the canonical schema (1.1.0) and the plugin API (1.0) are versioned; see [CHANGELOG.md](CHANGELOG.md).
+Alpha (0.2.0, unreleased). The tool names, the canonical schema (1.1.0) and the plugin API (1.1) are versioned; see [CHANGELOG.md](CHANGELOG.md).
 
 ## How it works
 

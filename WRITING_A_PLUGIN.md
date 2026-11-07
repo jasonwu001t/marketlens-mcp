@@ -184,6 +184,7 @@ What the example shows:
 - **Readable failures** are `ToolError(code, message, hint=, retryable=)`. Any other exception becomes `internal_error` for the model; the traceback goes to the server log only.
 - **`ctx.paginate`** walks the upstream's pages within the owner's limits (`fetch.max_rows`, `fetch.max_pages`); when it stops early, the server marks the answer truncated and adds a note: with the `page_token` to continue when the upstream gave one, otherwise asking for a narrower request (without a token, a `truncation_note` your provenance already carries stands instead).
 - **`ctx.limiter(key, per_minute)`** is a process-wide token bucket shared by every session.
+- **`ctx.request_meta`** (plugin API 1.1) is the calling client's MCP `_meta` for this call, read-only, without `progressToken`; empty when the client sent none. Use it for a per-call value your own client agreed to send (a per-call credential, a trace id), and treat it as untrusted input; declare `api_version=(1, 1)` to rely on it.
 - **`ctx.env(name)`** reads only names declared in `ToolSpec.env` or `PluginInfo.env`; anything else is a `KeyError`. Secrets come from the environment, never from the config file.
 - **Absence**: a value the source does not give is `None` with a reason, per row (`absent`) or for the whole response (`ToolOutput.absent`), never 0.
 

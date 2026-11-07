@@ -27,7 +27,7 @@ def write_config(tmp_path, text):
 
 def test_version(capsys):
     assert main("--version") == 0
-    assert capsys.readouterr().out.strip() == "marketlens-mcp 0.2.0 (schema 1.1.0, plugin API 1.0)"
+    assert capsys.readouterr().out.strip() == "marketlens-mcp 0.2.0 (schema 1.1.0, plugin API 1.1)"
 
 
 def test_tools_json_format(capsys, tmp_path, monkeypatch):
@@ -47,7 +47,7 @@ def test_tools_json_format(capsys, tmp_path, monkeypatch):
         "plugins",
     ]
     assert body["server"] == "marketlens-mcp" and body["version"] == "0.2.0"
-    assert body["schema_version"] == "1.1.0" and body["plugin_api"] == [1, 0]
+    assert body["schema_version"] == "1.1.0" and body["plugin_api"] == [1, 1]
     assert body["config_path"] == "~/.config/marketlens/config.yaml"
     q = next(t for t in body["tools"] if t["name"] == "results_query")
     assert q == {

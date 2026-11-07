@@ -66,7 +66,7 @@ from .results_api import OutputRisk, ResultInfo, ResultStore
 if TYPE_CHECKING:
     import pyarrow as pa
 
-PLUGIN_API_VERSION: tuple[int, int] = (1, 0)
+PLUGIN_API_VERSION: tuple[int, int] = (1, 1)
 ENTRY_POINT_GROUP = "marketlens.plugins"
 
 #: Tool names: snake_case ASCII, domain first ("market_bars"), at most 40
@@ -343,6 +343,16 @@ class ToolContext(Protocol):
 
     @property
     def log(self) -> logging.Logger: ...
+
+    @property
+    def request_meta(self) -> Mapping[str, Any]:
+        """The calling client's MCP ``_meta`` for this call (read-only; API 1.1).
+
+        Whatever the client put there, minus the protocol's own ``progressToken``;
+        empty when it sent none. A plugin may read a key its own client agreed
+        to send (a per-call credential, a trace id). It is the client's word, so
+        it is untrusted input: check it before relying on it."""
+        ...
 
     def env(self, name: str) -> str | None:
         """An environment variable the tool's spec (or its plugin's info)

@@ -81,7 +81,7 @@ def test_good_plugin_loads_when_enabled(tmp_path):
     assert (st.enabled, st.loaded, st.api_version, st.error, st.distribution) == (
         True,
         True,
-        (1, 0),
+        PLUGIN_API_VERSION,
         None,
         "example-dist",
     )
@@ -112,7 +112,7 @@ def test_enabled_but_not_installed(tmp_path):
     [
         ("raiser", ex.RAISES, "register() raised RuntimeError: boom while registering"),
         ("collider", ex.COLLIDES, "tool name 'results_query' is already registered"),
-        ("future", ex.FUTURE, "plugin API 2.0 is not supported by this server (plugin API 1.0)"),
+        ("future", ex.FUTURE, "plugin API 2.0 is not supported by this server (plugin API 1.1)"),
         ("newerminor", ex.NEWER_MINOR, f"plugin API 1.{PLUGIN_API_VERSION[1] + 1} is not supported"),
         ("badmodel", ex.BAD_MODEL, "model schema name 'marketlens.Sneaky' must start with 'badmodel.'"),
         ("redeclares", ex.REDECLARES, "capability 'market' is built in and cannot be declared again"),

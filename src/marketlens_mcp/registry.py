@@ -277,8 +277,10 @@ class ServerToolContext:
         env_source: Mapping[str, str] | None = None,
         clock: Callable[[], datetime] | None = None,
         results_factory: Callable[[], ResultStore] | None = None,
+        request_meta: Mapping[str, Any] | None = None,
     ):
         self._tool = tool
+        self._request_meta = _freeze(dict(request_meta or {}))
         self._session_id = session_id
         self._settings = _freeze(dict(settings))
         self._capabilities = frozenset(capabilities)
@@ -325,6 +327,10 @@ class ServerToolContext:
     @property
     def log(self) -> logging.Logger:
         return self._log
+
+    @property
+    def request_meta(self) -> Mapping[str, Any]:
+        return self._request_meta
 
     def env(self, name: str) -> str | None:
         return self._env(name)

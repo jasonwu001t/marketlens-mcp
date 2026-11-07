@@ -56,6 +56,7 @@ def make_context(
     limits: FetchLimits = FetchLimits(),  # noqa: B008 - frozen dataclass; the contract's signature
     portfolio_environment: Environment = Environment.PAPER,
     now: datetime | None = None,
+    request_meta: Mapping[str, Any] | None = None,
 ) -> ToolContext:
     """A ToolContext for tests. Without ``store``, a store is created on first
     use under the cache directory (``MARKETLENS_CACHE_DIR`` in tests)."""
@@ -79,6 +80,7 @@ def make_context(
         env_names=None,
         env_source=dict(env) if env is not None else None,
         clock=(lambda: now) if now is not None else None,
+        request_meta=request_meta,
     )
 
 

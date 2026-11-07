@@ -163,9 +163,11 @@ class SpecTool(Tool):
         try:
             from fastmcp.server.dependencies import get_context
 
-            mcp_session = get_context().session_id
+            fctx = get_context()
+            mcp_session = fctx.session_id
+            request_meta = _request_meta(fctx)
         except RuntimeError:
-            mcp_session = "local"
+            mcp_session, request_meta = "local", {}
         key = rt.session_key(mcp_session)
         owner = entry.plugin.removeprefix("builtin:")
         return ServerToolContext(
@@ -178,6 +180,7 @@ class SpecTool(Tool):
             results=rt.store_root.session(key),
             log=logging.getLogger(f"marketlens.tool.{entry.spec.name}"),
             env_names=entry.env,
+            request_meta=request_meta,
         )
 
     async def run(self, arguments: dict[str, Any]) -> ToolResult:
@@ -276,3 +279,16 @@ def build_server(rt: Runtime) -> FastMCP:
 
 def sub_servers(mcp: FastMCP) -> list[FastMCP]:
     return list(getattr(mcp, "_marketlens_sub_servers", []))
+
+
+def _request_meta(fctx) -> dict[str, Any]:
+    """The call's MCP ``_meta`` as a plain dict, without ``progressToken``."""
+    try:
+        meta = fctx.request_context.meta
+    except (AttributeError, LookupError, ValueError, RuntimeError):
+        return {}
+    if meta is None:
+        return {}
+    extra = dict(getattr(meta, "model_extra", None) or {})
+    extra.pop("progressToken", None)
+    return {k: v for k, v in extra.items() if isinstance(k, str)}

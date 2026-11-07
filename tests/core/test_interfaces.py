@@ -5,7 +5,9 @@ The snapshot in fixtures/interface_snapshot.json was generated from the
 contract's interface stubs before any implementation was written
 (``python tests/core/test_interfaces.py --write`` with the stubs first on
 PYTHONPATH). Every name, field and signature in it must still exist,
-unchanged; new names are allowed (additive).
+unchanged; new names are allowed (additive). The plugin API's version is the
+one value that moves with an additive change (1.1: ``ToolContext.request_meta``
+and ``make_context(request_meta=)``).
 """
 
 from __future__ import annotations
@@ -138,7 +140,7 @@ def test_testing_helpers_have_the_contract_signatures():
         "settings: 'Mapping[str, Any] | None' = None, capabilities: 'Iterable[str] | None' = None, "
         "env: 'Mapping[str, str] | None' = None, limits: 'FetchLimits' = FetchLimits(max_rows=50000, max_pages=20), "
         "portfolio_environment: 'Environment' = <Environment.PAPER: 'paper'>, "
-        "now: 'datetime | None' = None) -> 'ToolContext'"
+        "now: 'datetime | None' = None, request_meta: 'Mapping[str, Any] | None' = None) -> 'ToolContext'"
     )
     assert str(inspect.signature(testing.call_tool)) == (
         "(spec: 'ToolSpec', ctx: 'ToolContext', **arguments) -> 'ToolResponse'"
