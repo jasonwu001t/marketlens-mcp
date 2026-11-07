@@ -1,0 +1,88 @@
+{
+ "absent": {},
+ "model": "marketlens.FundExpenses",
+ "notes": [],
+ "offload": "auto",
+ "pagination": null,
+ "provenance": {
+  "as_of": null,
+  "authority": [
+   "official"
+  ],
+  "cached": false,
+  "collected_at": "synced_by_this_call",
+  "dataset": "sec.fund_expenses",
+  "delay": "unknown",
+  "derived_from": [],
+  "environment": null,
+  "feed": null,
+  "knowledge_time": "2026-09-29T21:30:00Z",
+  "lag_days": 3.0,
+  "operation": null,
+  "pages_fetched": 4,
+  "provider": "sec",
+  "request": {
+   "as_of": null,
+   "include_vintages": false,
+   "ticker": "TFUND"
+  },
+  "route": "omni sec.fund_expenses <- www.sec.gov/dera/data (Mutual Fund Prospectus Risk/Return Summary data sets, 2025 Q1 on)",
+  "schema_version": "1.1.0",
+  "stale": null,
+  "truncated": false,
+  "truncation_note": null,
+  "upstream_request_id": null
+ },
+ "risk": null,
+ "rows": [
+  {
+   "absent": {
+    "fee_waiver": "not_provided_by_source",
+    "net_expense_ratio": "not_provided_by_source"
+   },
+   "accession_number": "0009999970-26-000040",
+   "cik": "0009999970",
+   "class_id": "C000099991",
+   "class_name": "Investor",
+   "conflicts": [],
+   "effective_date": "2026-09-29",
+   "fee_waiver": null,
+   "filing_date": "2026-09-29",
+   "form": "485BPOS",
+   "gross_expense_ratio": 0.0065,
+   "knowledge_time": "2026-09-29T21:30:00Z",
+   "management_fee": 0.0045,
+   "net_expense_ratio": null,
+   "objective": "The fund seeks long-term growth of capital.",
+   "period_end": "2026-09-29",
+   "registrant": "SYNTHETIC FUND TRUST",
+   "series_id": "S000099991",
+   "series_name": "Synthetic Index Fund",
+   "source_file": "2026-09_rr1",
+   "ticker": "TFUND"
+  },
+  {
+   "absent": null,
+   "accession_number": "0009999970-26-000040",
+   "cik": "0009999970",
+   "class_id": "C000099992",
+   "class_name": "Institutional",
+   "conflicts": [],
+   "effective_date": "2026-09-29",
+   "fee_waiver": -0.001,
+   "filing_date": "2026-09-29",
+   "form": "485BPOS",
+   "gross_expense_ratio": 0.0095,
+   "knowledge_time": "2026-09-29T21:30:00Z",
+   "management_fee": 0.0045,
+   "net_expense_ratio": 0.0085,
+   "objective": "The fund seeks long-term growth of capital.",
+   "period_end": "2026-09-29",
+   "registrant": "SYNTHETIC FUND TRUST",
+   "series_id": "S000099991",
+   "series_name": "Synthetic Index Fund",
+   "source_file": "2026-09_rr1",
+   "ticker": "TFUNX"
+  }
+ ]
+}

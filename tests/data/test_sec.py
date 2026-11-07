@@ -1,17 +1,20 @@
 """sec_filings, sec_xbrl_facts, sec_xbrl_frames, sec_fundamentals,
 sec_earnings_releases, sec_earnings_figures, filings_events,
 sec_pay_vs_performance, sec_insider_trades, sec_form144, sec_ipo_pipeline,
-sec_daily_index, sec_13f_holdings, sec_fund_nport and sec_fund_holdings
-against a synthetic EDGAR: the fictional companies TESTCO (CIK 9999901),
+sec_daily_index, sec_13f_holdings, sec_fund_nport, sec_fund_holdings and
+sec_fund_expenses against a synthetic EDGAR: the fictional companies TESTCO (CIK 9999901),
 EVNTCO (CIK 9999903, the material 8-Ks), PVPCO (CIK 9999904, two proxies with
 the pay-versus-performance table) and IPOCO (CIK 9999907, a new issuer), a
 synthetic Revenues frame for CY2026Q2 with EDGAR's XBRL index of 2026 Q3,
 EDGAR's daily index of 2026-10-01, manager CIK 9999950 and fund series
-S000099991 (TFUND)."""
+S000099991 (TFUND), whose prospectus fee tables are in three synthetic
+Risk/Return Summary data sets built here in the SEC's layout."""
 
 from __future__ import annotations
 
 import gzip
+import io
+import zipfile
 from datetime import UTC, datetime, timedelta
 from zoneinfo import ZoneInfo
 
@@ -157,6 +160,202 @@ def sec_routes(upstream):
         "sec.effect_index__26-000100.htm",
     )
     t(rf"{ARCH}/9999907/999999999526000100/primary_doc\.xml", "sec.effect__26-000100.xml")
+    rr_routes(upstream)
+
+
+# --- the Risk/Return Summary data sets (sec_fund_expenses) ---------------------------------------
+
+RR_PAGE = r"www\.sec\.gov/dera/data/mutual-fund-prospectus-risk-return-summary-data-sets"
+RR_FILES = "/files/dera/data/mutual-fund-prospectus-risk-return-summary-data-sets"
+RR_HEADERS = {
+    "sub": ["adsh", "cik", "name", "form", "filed", "accepted", "effdate", "pdate", "nciks"],
+    "scn": ["adsh", "seriesid", "seriesname", "classid", "classname", "ticker"],
+    "num": [
+        "adsh",
+        "tag",
+        "version",
+        "ddate",
+        "qtrs",
+        "uom",
+        "series",
+        "class",
+        "measure",
+        "document",
+        "otherdims",
+        "iprx",
+        "value",
+    ],
+    "txt": [
+        "adsh",
+        "tag",
+        "version",
+        "ddate",
+        "qtrs",
+        "series",
+        "class",
+        "measure",
+        "document",
+        "otherdims",
+        "lang",
+        "iprx",
+        "value",
+    ],
+}
+C1, C2 = "C000099991", "C000099992"
+TS = "S000099991"
+_FEES = (
+    "ManagementFeesOverAssets",
+    "ExpensesOverAssets",
+    "FeeWaiverOrReimbursementOverAssets",
+    "NetExpensesOverAssets",
+)
+
+
+def _rr_filing(adsh, form, filed, accepted, fees, objective, *, series=TS, cik="9999970", documents=None):
+    """One filing of a set: its sub row, its classes, its fee facts (class -> the four figures,
+    None for a line the table does not state; `documents` states a class's gross ratio once per
+    document) and its objective."""
+    sub = {
+        "adsh": adsh,
+        "cik": cik,
+        "name": "SYNTHETIC FUND TRUST",
+        "form": form,
+        "filed": filed,
+        "accepted": accepted,
+        "effdate": filed,
+        "nciks": 1,
+    }
+    names = {C1: ("Investor", "TFUND"), C2: ("Institutional", "TFUNX")}
+    scn, num = [], []
+    for klass, figures in fees.items():
+        label, ticker = names.get(klass, ("Class A", ""))
+        scn.append(
+            {
+                "adsh": adsh,
+                "seriesid": series,
+                "seriesname": "Synthetic Index Fund",
+                "classid": klass,
+                "classname": label,
+                "ticker": ticker,
+            }
+        )
+        for tag, value in zip(_FEES, figures, strict=True):
+            if value is not None:
+                num.append(
+                    {
+                        "adsh": adsh,
+                        "tag": tag,
+                        "version": "oef/2026",
+                        "ddate": filed,
+                        "qtrs": 0,
+                        "uom": "pure",
+                        "series": series,
+                        "class": klass,
+                        "iprx": 0,
+                        "value": value,
+                        "otherdims": f"Class={klass};LegalEntity={series};",
+                    }
+                )
+    for klass, values in (documents or {}).items():
+        for document, value in values.items():
+            num.append(
+                {
+                    "adsh": adsh,
+                    "tag": "ExpensesOverAssets",
+                    "version": "oef/2026",
+                    "ddate": filed,
+                    "qtrs": 0,
+                    "uom": "pure",
+                    "series": series,
+                    "document": document,
+                    "iprx": 0,
+                    "value": value,
+                    "otherdims": f"Class={klass};DocumentInformationDocument={document};LegalEntity={series};",
+                }
+            )
+    txt = [
+        {
+            "adsh": adsh,
+            "tag": "ObjectivePrimaryTextBlock",
+            "version": "oef/2026",
+            "ddate": filed,
+            "qtrs": 0,
+            "series": series,
+            "otherdims": f"LegalEntity={series};",
+            "lang": "en-US",
+            "iprx": 0,
+            "value": objective,
+        }
+    ]
+    return {"sub": [sub], "scn": scn, "num": num, "txt": txt}
+
+
+#: The three sets the page lists (synthetic): TFUND's 2025 prospectus, a 2026 supplement whose two
+#: documents state the Institutional class's gross ratio differently, and its 2026 annual update;
+#: another fund's filing rides in the first.
+RR_SETS = {
+    "2025q1_rr1": [
+        _rr_filing(
+            "0009999970-25-000020",
+            "485BPOS",
+            "20250315",
+            "2025-03-15 16:05:00.0",
+            {C1: ("0.0050", "0.0075", None, None), C2: ("0.0050", "0.0100", "-0.0010", "0.0090")},
+            "The fund seeks long-term growth of capital.",
+        ),
+        _rr_filing(
+            "0009999980-25-000001",
+            "485BPOS",
+            "20250310",
+            "2025-03-10 09:00:00.0",
+            {"C000088881": ("0.0010", "0.0020", None, None)},
+            "Another fund's objective.",
+            series="S000088881",
+            cik="9999980",
+        ),
+    ],
+    "2026q3_rr1": [
+        _rr_filing(
+            "0009999970-26-000030",
+            "497",
+            "20260801",
+            "2026-08-01 10:00:00.0",
+            {C1: ("0.0045", "0.0070", None, None), C2: ("0.0045", None, None, None)},
+            "The fund seeks long-term growth of capital.",
+            documents={C2: {"RetailPRO": "0.0098", "InstPRO": "0.0096"}},
+        ),
+    ],
+    "2026-09_rr1": [
+        _rr_filing(
+            "0009999970-26-000040",
+            "485BPOS",
+            "20260929",
+            "2026-09-29 17:30:00.0",
+            {C1: ("0.0045", "0.0065", None, None), C2: ("0.0045", "0.0095", "-0.0010", "0.0085")},
+            "The fund seeks   long-term growth of capital.",
+        ),
+    ],
+}
+
+
+def rr_set(name: str) -> bytes:
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        for table, header in RR_HEADERS.items():
+            rows = [r for filing in RR_SETS[name] for r in filing[table]]
+            lines = ["\t".join(header)] + ["\t".join(str(r.get(c, "")) for c in header) for r in rows]
+            zf.writestr(f"{table}.tsv", "\n".join(lines) + "\n")
+        zf.writestr("readme.htm", "<html><!-- synthetic --></html>")
+    return buf.getvalue()
+
+
+def rr_routes(upstream):
+    links = "".join(f'<li><a href="{RR_FILES}/{n}.zip">{n}</a></li>' for n in ("2023_rr1", *RR_SETS))
+    upstream.add(RR_PAGE, f"<html><body><!-- synthetic --><ul>{links}</ul></body></html>")
+    upstream.add(
+        rf"www\.sec\.gov{RR_FILES}/(\d{{4}}(?:q\d|-\d\d)?_rr1)\.zip",
+        lambda r: rr_set(r.url.path.rsplit("/", 1)[-1][: -len(".zip")]),
+    )
 
 
 @pytest.fixture(autouse=True)
@@ -1028,3 +1227,73 @@ def test_a_ticker_sec_lists_for_no_company_still_reads_nothing(tmp_path, two_cla
     assert err.code == "data_not_found"
     local = call("sec_filings", context(tmp_path, settings={"mode": "local"}), ticker="ZZZZ")
     assert local.rows == []
+
+
+# --- fund prospectus fee tables -------------------------------------------------------------------
+
+
+def _rr_reads(upstream) -> list[str]:
+    return [r.url.path.rsplit("/", 1)[-1] for r in upstream.requests if r.url.path.endswith("_rr1.zip")]
+
+
+def test_sec_fund_expenses_golden(tmp_path, edgar):
+    out = call("sec_fund_expenses", context(tmp_path), ticker="tfund")
+    doc = check_golden(out, "sec_fund_expenses")
+    assert [(r["class_id"], r["ticker"], r["accession_number"]) for r in doc["rows"]] == [
+        (C1, "TFUND", "0009999970-26-000040"),
+        (C2, "TFUNX", "0009999970-26-000040"),
+    ]
+    investor, institutional = doc["rows"]
+    assert (investor["gross_expense_ratio"], investor["net_expense_ratio"]) == (0.0065, None)
+    assert investor["absent"] == {
+        "fee_waiver": "not_provided_by_source",
+        "net_expense_ratio": "not_provided_by_source",
+    }
+    assert (institutional["fee_waiver"], institutional["net_expense_ratio"]) == (-0.001, 0.0085)
+    assert institutional["objective"] == "The fund seeks long-term growth of capital."
+    # EDGAR's acceptance, New York wall time
+    assert institutional["knowledge_time"] == "2026-09-29T21:30:00Z"
+    assert doc["notes"] == [] and not doc["provenance"]["truncated"]
+    # two sets a sync, oldest first, and syncs again while one still reads a set: the third, then none
+    assert _rr_reads(edgar) == ["2025q1_rr1.zip", "2026q3_rr1.zip", "2026-09_rr1.zip"]
+
+
+def test_sec_fund_expenses_as_of_and_vintages(tmp_path, edgar):
+    ctx = context(tmp_path)
+    before = call("sec_fund_expenses", ctx, ticker="TFUND", as_of="2026-09-01")
+    assert [(r.class_id, r.accession_number) for r in before.rows] == [
+        (C1, "0009999970-26-000030"),
+        (C2, "0009999970-26-000030"),
+    ]
+    # the supplement's two documents disagree on the Institutional class's gross ratio
+    assert (before.rows[1].gross_expense_ratio, before.rows[1].conflicts) == (None, ["gross_expense_ratio"])
+    every = call("sec_fund_expenses", ctx, ticker="TFUND", include_vintages=True)
+    assert [(r.class_id, r.filing_date.isoformat()) for r in every.rows] == [
+        (C1, "2025-03-15"),
+        (C1, "2026-08-01"),
+        (C1, "2026-09-29"),
+        (C2, "2025-03-15"),
+        (C2, "2026-08-01"),
+        (C2, "2026-09-29"),
+    ]
+    assert {r.series_id for r in every.rows} == {TS}  # the other fund's filing is not TFUND's
+
+
+def test_sec_fund_expenses_out_of_time_says_newer_sets_may_be_missing(tmp_path, edgar, monkeypatch):
+    import itertools
+    import types
+
+    from marketlens_mcp.providers.data.tools import sec as tool
+
+    ticks = itertools.count(0, 1000)  # each reading of the clock 1,000 s later: out of time at once
+    monkeypatch.setattr(tool, "time", types.SimpleNamespace(monotonic=lambda: next(ticks)))
+    out = call("sec_fund_expenses", context(tmp_path), ticker="TFUND")
+    assert {r.accession_number for r in out.rows} == {"0009999970-26-000030"}
+    assert out.provenance.truncated and out.notes == [tool.FUND_EXPENSES_PENDING]
+    assert _rr_reads(edgar) == ["2025q1_rr1.zip", "2026q3_rr1.zip"]
+
+
+def test_sec_fund_expenses_refuses_a_symbol_with_no_fund(tmp_path, edgar):
+    err = refused("sec_fund_expenses", context(tmp_path), ticker="TESTCO")
+    assert (err.code, err.message) == ("data_not_found", "SEC EDGAR has no fund for TESTCO.")
+    assert _rr_reads(edgar) == []  # nothing read for it

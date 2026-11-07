@@ -14,7 +14,7 @@ MACRO = CapabilitySpec(
     "FRED/ALFRED, BLS and BEA series with vintages and as-of reads (CPI, the unemployment rate, "
     "payrolls, GDP, ...), BLS release schedules and the series catalogue; US trade by commodity and "
     "partner (Census), Bank of Japan and Bank of England series, JGB yields (Ministry of Finance), the Richmond and Kansas City Fed "
-    f"surveys and FINRA's TRACE bond market aggregates. {NEEDS}",
+    f"surveys, FINRA's TRACE bond market aggregates and the TAIEX (Taiwan Stock Exchange). {NEEDS}",
     True,
 )
 FILINGS = CapabilitySpec(
@@ -23,7 +23,7 @@ FILINGS = CapabilitySpec(
     "SEC filings, XBRL facts, XBRL frames (one concept across filers) and point-in-time fundamentals, "
     "earnings releases with their press-release EPS, guidance and non-GAAP reconciliation, segment facts, a "
     "foreign issuer's 6-K quarters, pay versus performance, insider trades, Form 144 notices, the IPO "
-    "pipeline, EDGAR's daily form index, 13F holdings, fund N-PORT reports, the company documents the "
+    "pipeline, EDGAR's daily form index, 13F holdings, fund N-PORT reports and prospectus fee tables, the company documents the "
     "operator lists with their targets, and SEC EDGAR full-text search; and the monthly revenue "
     "Taiwan-listed companies file on MOPS (TWSE / TPEx). Filing text is marked untrusted. The sec_, "
     "company_ and twse_ tools need the data extra (marketlens-mcp[data]); filings_search is built in.",
@@ -34,7 +34,8 @@ FED_TREASURY = CapabilitySpec(
     "Federal Reserve and Treasury",
     "FOMC meetings, statements, economic projections with the dot plot, minutes and the Beige Book, NY Fed "
     "reference rates (SOFR, EFFR, ...), the Treasury par yield curve, Treasury auctions, debt to the penny "
-    "and the Treasury's cash balance; the FDIC's bank financials and industry aggregates and the SEC's money "
+    "and the Treasury's cash balance; the Z.1 Financial Accounts (households' net worth, corporate equities); "
+    "the FDIC's bank financials and industry aggregates and the SEC's money "
     f"market fund statistics. {NEEDS}",
     True,
 )

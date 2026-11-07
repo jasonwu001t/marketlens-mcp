@@ -1,8 +1,8 @@
 """SEC EDGAR: filings, XBRL facts, XBRL frames (one concept across filers),
 point-in-time fundamentals, earnings releases and press-release EPS, material
 filing events, pay versus performance, insider trades, Form 144 notices, the
-IPO pipeline, EDGAR's daily form index, 13F holdings and fund
-N-PORT reports (capability ``filings``). Every fetch names the operator's
+IPO pipeline, EDGAR's daily form index, 13F holdings, fund
+N-PORT reports and fund prospectus fee tables (capability ``filings``). Every fetch names the operator's
 contact in its User-Agent (SEC_CONTACT_EMAIL), as EDGAR's fair-access rule
 asks; unset, marketlens-data sends its placeholder contact and every answer
 says so."""
@@ -12,13 +12,14 @@ from __future__ import annotations
 import json
 import os
 import re
+import time
 from datetime import date, timedelta
 from typing import Annotated, Literal
 from zoneinfo import ZoneInfo
 
 from pydantic import AfterValidator, Field
 
-from marketlens_mcp.plugin_api import ToolContext, ToolOutput, ToolSpec
+from marketlens_mcp.plugin_api import ToolContext, ToolError, ToolOutput, ToolSpec
 from marketlens_schema import AbsenceCode
 from marketlens_schema.data import (
     DailyIndexEntry,
@@ -28,6 +29,7 @@ from marketlens_schema.data import (
     FilingEvent,
     Form144Notice,
     FundamentalValue,
+    FundExpenses,
     FundHolding,
     FundReport,
     InsiderTransaction,
@@ -398,6 +400,17 @@ class NportInputs(Inputs):
     as_of: AsOf | None = common.as_of_field()
 
 
+class FundExpensesInputs(Inputs):
+    ticker: Ticker = Field(
+        description="Fund or ETF symbol, e.g. VOO: every share class of its series is answered."
+    )
+    include_vintages: bool = Field(
+        default=False,
+        description="Every filing's fee table knowable at as_of, not only the latest per share class.",
+    )
+    as_of: AsOf | None = common.as_of_field()
+
+
 class FundHoldingsInputs(Inputs):
     ticker: Ticker = Field(description="Fund or ETF symbol, e.g. VOO.")
     accession_number: Annotated[str, AfterValidator(_accession)] | None = Field(
@@ -426,6 +439,8 @@ ROUTES = {
     "sec_13f_holdings": "omni sec13f.holdings <- www.sec.gov/Archives (13F-HR)",
     "sec_fund_nport": "omni sec.fund_nport <- www.sec.gov/Archives (N-PORT)",
     "sec_fund_holdings": "omni sec.fund_nport_holdings <- www.sec.gov/Archives (N-PORT)",
+    "sec_fund_expenses": "omni sec.fund_expenses <- www.sec.gov/dera/data "
+    "(Mutual Fund Prospectus Risk/Return Summary data sets, 2025 Q1 on)",
 }
 #: marketlens-data's reason for a null fundamental -> why the value is None.
 REASON_CODES = {
@@ -1666,6 +1681,97 @@ async def sec_fund_holdings(ctx: ToolContext, args: FundHoldingsInputs) -> ToolO
     return _output(ctx, s, FundHolding, rows, prov)
 
 
+FUND_EXPENSES = "sec.fund_expenses"
+FUND_EXPENSES_PENDING = (
+    "marketlens-data reads the SEC's Risk/Return Summary data sets oldest first, two a sync, and this "
+    "call ran out of time with sets still to read: a newer prospectus may be missing. Call again "
+    "(the reading goes on meanwhile)."
+)
+
+
+def _rr_sets(session) -> set[str]:
+    """The Risk/Return Summary sets the store has read: those its rows name and those its archived
+    payloads say were read (a set that added no row is still read once)."""
+    stored = session.store.distinct(FUND_EXPENSES, "source_file", limit=100000)
+    return {*map(str, stored), *session.module("omni.sources.sec")._rr_sets_read()}
+
+
+async def sec_fund_expenses(ctx: ToolContext, args: FundExpensesInputs) -> ToolOutput:
+    s = _settings(ctx)
+    as_of = common.as_of_of(args.as_of)
+
+    def work(session):
+        session.refresh("sec.fund_tickers", {})
+        series = _series_of(session, args.ticker)
+        if series is None:  # before the data sets are read: a symbol SEC lists no fund for
+            return None, [], True
+        complete = True
+        if not session.refresh(FUND_EXPENSES, {}):
+            # a sync reads at most two sets, oldest first: sync again while the call's time lasts and
+            # a sync still reads a set, so the newest prospectuses are in the store
+            complete, sets = False, _rr_sets(session)
+            until = time.monotonic() + s.call_timeout_seconds
+            while time.monotonic() < until:
+                session.refresh(FUND_EXPENSES, {}, force=True)
+                before, sets = sets, _rr_sets(session)
+                if sets == before:
+                    complete = True
+                    break
+        df = session.read(FUND_EXPENSES, as_of=as_of, vintages=args.include_vintages, series_id=series)
+        return series, F.records(df), complete
+
+    (series, records, complete), session = await common.run(
+        ctx, s, work, source="sec", subject=("fund", args.ticker)
+    )
+    if series is None:
+        raise ToolError("data_not_found", f"SEC EDGAR has no fund for {args.ticker}.")
+    rows = [
+        common.row(
+            FundExpenses,
+            {
+                "series_id": F.text(r["series_id"]) or "",
+                "class_id": F.text(r["class_id"]) or "",
+                "ticker": F.text(r["ticker"]),
+                "series_name": F.text(r["series_name"]),
+                "class_name": F.text(r["class_name"]),
+                "cik": F.text(r["cik"]) or "",
+                "registrant": F.text(r["registrant"]) or "",
+                "accession_number": F.text(r["accession_number"]) or "",
+                "form": F.text(r["form"]) or "",
+                "management_fee": F.number(r["management_fee"]),
+                "gross_expense_ratio": F.number(r["gross_expense_ratio"]),
+                "fee_waiver": F.number(r["fee_waiver"]),
+                "net_expense_ratio": F.number(r["net_expense_ratio"]),
+                "objective": F.text(r["objective"]),
+                "period_end": F.day(r["period_end"]),
+                "effective_date": F.day(r["effective_date"]),
+                "filing_date": F.day(r["filing_date"]),
+                "conflicts": F.split(r["conflicts"]),
+                "source_file": F.text(r["source_file"]) or "",
+                "knowledge_time": F.instant(r["knowledge_time"]),
+            },
+            # a class without a ticker on EDGAR, and a figure the fee table does not state
+            codes={"ticker": NPS, "fee_waiver": NPS, "net_expense_ratio": NPS},
+        )
+        for r in records
+    ]
+    rows.sort(key=lambda r: (r.class_id, r.knowledge_time))
+    prov = _prov(
+        ctx,
+        "sec_fund_expenses",
+        datasets=(FUND_EXPENSES,),
+        as_of=as_of,
+        rows=rows,
+        session=session,
+        request={"ticker": args.ticker, "include_vintages": args.include_vintages, "as_of": args.as_of},
+    )
+    notes = []
+    if not complete:
+        notes.append(FUND_EXPENSES_PENDING)
+        prov = prov.model_copy(update={"truncated": True, "truncation_note": FUND_EXPENSES_PENDING})
+    return _output(ctx, s, FundExpenses, rows, prov, notes=notes)
+
+
 def _spec(
     name: str,
     title: str,
@@ -1711,6 +1817,7 @@ HANDLERS = {
     "sec_13f_holdings": sec_13f_holdings,
     "sec_fund_nport": sec_fund_nport,
     "sec_fund_holdings": sec_fund_holdings,
+    "sec_fund_expenses": sec_fund_expenses,
 }
 
 SPECS: tuple[ToolSpec, ...] = (
@@ -1969,6 +2076,27 @@ SPECS: tuple[ToolSpec, ...] = (
         "sec",
         "omni sec.fund_nport_holdings <- www.sec.gov/Archives (N-PORT)",
     ),
+    _spec(
+        "sec_fund_expenses",
+        "SEC fund fee tables",
+        common.describe(
+            "A fund's prospectus fee table per share class and its investment objective, as each 485BPOS / "
+            "497 filing tags them in XBRL (the SEC's Risk/Return Summary data sets, 2025 Q1 on): management "
+            "fee, gross and net expense ratios and the fee waiver (negative), fractions of net assets as "
+            "filed, never computed. Every share class of the symbol's series, the latest filing per class "
+            "(or every filing: include_vintages); a figure two documents of a filing state differently is "
+            "empty and named in conflicts. Stamped at EDGAR's acceptance. The sets are read oldest first, two "
+            "a sync, while the call's time lasts: a first call may answer data_timeout, and an answer read "
+            f"before the newest set says so (truncated). objective is untrusted text. {CONTACT}",
+            "vintage",
+        ),
+        "Fund prospectus fee tables and objectives per share class",
+        FundExpensesInputs,
+        FundExpenses,
+        "sec",
+        ROUTES["sec_fund_expenses"],
+        risk="external_text",
+    ),
 )
 
 DATASETS: dict[str, tuple[str, ...]] = {
@@ -1988,4 +2116,5 @@ DATASETS: dict[str, tuple[str, ...]] = {
     "sec_13f_holdings": ("sec13f.holdings",),
     "sec_fund_nport": ("sec.fund_nport",),
     "sec_fund_holdings": ("sec.fund_nport_holdings",),
+    "sec_fund_expenses": (FUND_EXPENSES,),
 }

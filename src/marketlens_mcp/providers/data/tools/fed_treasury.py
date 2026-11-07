@@ -1,7 +1,8 @@
 """The Federal Reserve and the Treasury: FOMC meetings, statements, the
 Summary of Economic Projections (with the dot plot), minutes and the Beige
 Book, NY Fed reference rates, the Treasury par yield curve, auctions, debt and
-the cash balance (capability ``fed_treasury``). Every source here is keyless.
+the cash balance, and the Z.1 Financial Accounts tables marketlens-data
+collects (capability ``fed_treasury``). Every source here is keyless.
 
 The FOMC documents are fetched for the window asked for: a store holding no
 document near the window's start is synced from that start (marketlens-data
@@ -10,15 +11,17 @@ newest stored one, so a first call does not read every page since 2012."""
 
 from __future__ import annotations
 
+import re
 from datetime import date, timedelta
-from typing import Literal
+from typing import Annotated, Literal
 
-from pydantic import Field
+from pydantic import AfterValidator, Field
 
 from marketlens_mcp.plugin_api import ToolContext, ToolOutput, ToolSpec
 from marketlens_schema import AbsenceCode
 from marketlens_schema.data import (
     BeigeBookSection,
+    FinancialAccountsValue,
     FomcMeeting,
     FomcMinutes,
     FomcProjection,
@@ -134,7 +137,53 @@ class DailyInputs(Inputs):
     as_of: AsOf | None = common.as_of_field()
 
 
+_Z1_TABLE = re.compile(r"^[A-Z][A-Z0-9]*(?:[._][A-Za-z0-9]+)*$")
+_Z1_SERIES = re.compile(r"^[A-Z]{2}\d{9}(?:\.Q)?$")
+
+
+def _z1_tables(values: list[str]) -> list[str]:
+    out = []
+    for v in values:
+        t = v.strip().replace("_", ".")
+        if not _Z1_TABLE.match(t):
+            raise ValueError(f"{v!r} is not a Z.1 table id (e.g. S1M.b, F51.1.s)")
+        out.append(t)
+    return list(dict.fromkeys(out))
+
+
+def _z1_series(values: list[str]) -> list[str]:
+    out = []
+    for v in values:
+        t = v.strip().upper()
+        if not _Z1_SERIES.match(t):
+            raise ValueError(f"{v!r} is not a Z.1 series id (e.g. FL152090005.Q)")
+        out.append(t if t.endswith(".Q") else f"{t}.Q")
+    return list(dict.fromkeys(out))
+
+
+Z1Tables = Annotated[list[str], Field(min_length=1, max_length=20), AfterValidator(_z1_tables)]
+Z1Series = Annotated[list[str], Field(min_length=1, max_length=50), AfterValidator(_z1_series)]
+
+
+class Z1Inputs(Inputs):
+    tables: Z1Tables | None = Field(
+        default=None,
+        description="Z.1 tables by the release's id (S1M.b, the old B.101; F51.1.s, the old L.224). Default: "
+        "every table marketlens-data collects.",
+    )
+    series: Z1Series | None = Field(
+        default=None,
+        description="Only these series, e.g. FL152090005.Q (households' net worth). Default: all.",
+    )
+    start: date | None = Field(
+        default=None, description="First quarter end (inclusive). Default: 10 years ago."
+    )
+    end: date | None = Field(default=None, description="Last quarter end (inclusive). Default: today.")
+    as_of: AsOf | None = common.as_of_field()
+
+
 NA = AbsenceCode.NOT_APPLICABLE
+NPS = AbsenceCode.NOT_PROVIDED_BY_SOURCE
 WITHHELD = AbsenceCode.WITHHELD
 RATE_ORDER = ("SOFR", "EFFR", "OBFR", "TGCR", "BGCR")
 TENOR_ORDER = ("1M", "1.5M", "2M", "3M", "4M", "6M", "1Y", "2Y", "3Y", "5Y", "7Y", "10Y", "20Y", "30Y")
@@ -160,6 +209,10 @@ ROUTES = {
     ),
     "treasury_tga": (
         "omni fiscaldata.tga_balance <- api.fiscaldata.treasury.gov/v1/accounting/dts/operating_cash_balance"
+    ),
+    "fed_z1": (
+        "omni fedboard.z1 <- www.federalreserve.gov/releases/z1 (current/z1_csv_files.zip, "
+        "z1_table_mapping.csv, release-dates.htm)"
     ),
 }
 
@@ -694,6 +747,76 @@ async def treasury_tga(ctx: ToolContext, args: DailyInputs) -> ToolOutput:
     return common.output(ctx, s, TreasuryCashBalance, rows, prov)
 
 
+async def fed_z1(ctx: ToolContext, args: Z1Inputs) -> ToolOutput:
+    s = runtime.settings_of(ctx.settings)
+    as_of = common.as_of_of(args.as_of)
+    today = ctx.now().date()
+    start, end = common.window(
+        ctx.tool, args.start, args.end, default_start=common.years_ago(today, 10), default_end=today
+    )
+
+    def work(session: common.Session):
+        from omni import config
+        from omni.sources import _fedboard_z1 as z1
+
+        session.refresh("fedboard.z1", {})
+        configured = config.source_config("fedboard").get("z1_tables")
+        collected = [t.replace("_", ".") for t in z1.table_ids(configured)]
+        return F.records(session.read("fedboard.z1", as_of=as_of)), collected
+
+    (records, collected), session = await common.run(ctx, s, work, source="fedboard")
+    tables = set(args.tables or ())
+    series = set(args.series or ())
+    rows = []
+    for r in records:
+        d = F.day(r["date"])
+        if not F.within(d, start, end):
+            continue
+        if (tables and F.text(r["table"]) not in tables) or (series and F.text(r["series"]) not in series):
+            continue
+        mult = F.integer(r["unit_mult"])
+        rows.append(
+            common.row(
+                FinancialAccountsValue,
+                {
+                    "table": F.text(r["table"]) or "",
+                    "old_table": F.text(r["old_table"]),
+                    "table_title": F.text(r["table_title"]),
+                    "series": F.text(r["series"]) or "",
+                    "line": F.integer(r["line"]),
+                    "description": F.text(r["description"]) or "",
+                    "date": d,
+                    "value": F.number(r["value"]),
+                    "unit": F.text(r["unit"]) or "",
+                    "value_usd": F.scaled(r["value"], 10**mult, 2) if mult is not None else None,
+                    "release_date": F.day(r["release_date"]),
+                    "stamp_estimated": bool(F.flag(r["stamp_estimated"])),
+                    "knowledge_time": F.instant(r["knowledge_time"]),
+                },
+                codes={"old_table": NA, "value_usd": NA, "line": NPS, "table_title": NPS},
+            )
+        )
+    rows.sort(key=lambda r: (r.table, r.line if r.line is not None else 10**6, r.series, r.date))
+    prov = _prov(
+        ctx,
+        "fed_z1",
+        "fedboard",
+        "fedboard.z1",
+        {"tables": args.tables, "series": args.series, "start": start, "end": end, "as_of": args.as_of},
+        as_of,
+        rows,
+        session,
+    )
+    notes = []
+    uncollected = [t for t in args.tables or () if t not in collected]
+    if uncollected:
+        notes.append(
+            "marketlens-data collects only the Z.1 tables its sources.yaml names (fedboard.z1_tables: "
+            f"{', '.join(collected)}), so {', '.join(uncollected)} has no rows: add it there to collect it."
+        )
+    return common.output(ctx, s, FinancialAccountsValue, rows, prov, notes=notes)
+
+
 HANDLERS = {
     "fed_fomc_meetings": fed_fomc_meetings,
     "fed_fomc_statements": fed_fomc_statements,
@@ -705,6 +828,7 @@ HANDLERS = {
     "treasury_auctions": treasury_auctions,
     "treasury_debt": treasury_debt,
     "treasury_tga": treasury_tga,
+    "fed_z1": fed_z1,
 }
 
 
@@ -883,6 +1007,26 @@ SPECS: tuple[ToolSpec, ...] = (
         "fiscaldata",
         "omni fiscaldata.tga_balance <- api.fiscaldata.treasury.gov/v1/accounting/dts/operating_cash_balance",
     ),
+    _spec(
+        "fed_z1",
+        "Z.1 Financial Accounts (Federal Reserve)",
+        common.describe(
+            "The Federal Reserve Board's Z.1 Financial Accounts of the United States, the tables "
+            "marketlens-data collects (sources.yaml fedboard.z1_tables; default S1M.b, the old B.101 "
+            "households and nonprofits balance sheet with net worth, FL152090005.Q, and F51.1.s, the old "
+            "L.224 corporate equities levels): every series and quarter, from the release's per-table CSVs "
+            "and dictionary, value in the dictionary's unit and value_usd with millions multiplied out. "
+            "Figures are the current release's; a quarter is knowable at 12:00 ET of the release that first "
+            "carried it (the release-dates page), one before the page's oldest at that release "
+            "(stamp_estimated); a revised value is a new vintage at the fetch that saw it. Keyless.",
+            "lagged",
+        ),
+        "Z.1 Financial Accounts tables (households' net worth, corporate equities)",
+        Z1Inputs,
+        FinancialAccountsValue,
+        "fedboard",
+        ROUTES["fed_z1"],
+    ),
 )
 
 DATASETS: dict[str, tuple[str, ...]] = {
@@ -896,4 +1040,5 @@ DATASETS: dict[str, tuple[str, ...]] = {
     "treasury_auctions": ("fiscaldata.auctions",),
     "treasury_debt": ("fiscaldata.debt_to_penny",),
     "treasury_tga": ("fiscaldata.tga_balance",),
+    "fed_z1": ("fedboard.z1",),
 }

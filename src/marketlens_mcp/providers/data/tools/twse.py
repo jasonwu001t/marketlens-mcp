@@ -1,7 +1,11 @@
-"""Taiwan-listed companies' monthly revenue (capability ``filings``): every
-company listed on TWSE or TPEx files its previous month's revenue by the 10th
-on MOPS, the market's filing system. marketlens-data's ``twse.monthly_revenue``
-reads MOPS's monthly summary pages and TWSE's OpenAPI. Keyless."""
+"""The Taiwan Stock Exchange: Taiwan-listed companies' monthly revenue
+(capability ``filings``): every company listed on TWSE or TPEx files its
+previous month's revenue by the 10th on MOPS, the market's filing system;
+marketlens-data's ``twse.monthly_revenue`` reads MOPS's monthly summary pages
+and TWSE's OpenAPI. And the TAIEX, TWSE's capitalization-weighted index, per
+session (capability ``macro``, beside the other index levels from official
+sources: FRED's SP500 and NASDAQ100 are macro_series), from marketlens-data's
+``twse.taiex``. Keyless."""
 
 from __future__ import annotations
 
@@ -13,7 +17,7 @@ from typing import Annotated
 from pydantic import AfterValidator, Field
 
 from marketlens_mcp.plugin_api import ToolContext, ToolError, ToolOutput, ToolSpec
-from marketlens_schema.data import TaiwanMonthlyRevenue
+from marketlens_schema.data import IndexLevel, TaiwanMonthlyRevenue
 
 from .. import frames as F
 from .. import runtime
@@ -26,6 +30,13 @@ ROUTE = (
     "omni twse.monthly_revenue <- mopsov.twse.com.tw/nas/t21 (MOPS monthly summaries) "
     "+ openapi.twse.com.tw/v1/opendata/t187ap05_L"
 )
+TAIEX = "twse.taiex"
+TAIEX_ROUTE = (
+    "omni twse.taiex <- openapi.twse.com.tw/v1/indicesReport/MI_5MINS_HIST (the current month) "
+    "+ www.twse.com.tw TAIEX/MI_5MINS_HIST (the monthly history)"
+)
+#: The first month TWSE's TAIEX history page answers.
+TAIEX_FIRST = date(1999, 1, 1)
 _CODE = re.compile(r"^(?:\d{4,6}(?:\.TWO?)?|[A-Z]{1,6})$")
 #: marketlens-data's first month: from 2013-01 every listed company reports consolidated revenue (IFRSs).
 FIRST = date(2013, 1, 1)
@@ -176,7 +187,92 @@ async def twse_monthly_revenue(ctx: ToolContext, args: MonthlyRevenueInputs) -> 
     return common.output(ctx, s, TaiwanMonthlyRevenue, rows, prov, notes=notes)
 
 
-HANDLERS = {"twse_monthly_revenue": twse_monthly_revenue}
+class TaiexInputs(Inputs):
+    start: date | None = Field(default=None, description="First session (inclusive). Default: 30 days ago.")
+    end: date | None = Field(default=None, description="Last session (inclusive). Default: today.")
+    as_of: AsOf | None = common.as_of_field()
+
+
+async def twse_taiex(ctx: ToolContext, args: TaiexInputs) -> ToolOutput:
+    from datetime import timedelta
+
+    s = runtime.settings_of(ctx.settings)
+    as_of = common.as_of_of(args.as_of)
+    today = ctx.now().date()
+    start, end = common.window(
+        ctx.tool, args.start, args.end, default_start=today - timedelta(days=30), default_end=today
+    )
+
+    def work(session: common.Session):
+        from omni.sources import _twse_taiex as taiex
+
+        # the daily read: the current month (the OpenAPI) and the month before (its history page)
+        session.refresh(TAIEX, {})
+        missing: list[date] = []
+        history = _months_back(_month(today), 2)  # the newest month only the history job reads
+        if start <= history:
+            # the history the store lacks from `start`, newest first, at most 36 months a sync: sync
+            # again while the call's time lasts and a sync still adds months (as twse_monthly_revenue)
+            params = {"start": max(_month(start), TAIEX_FIRST).strftime("%Y-%m")}
+            wanted = _months(max(_month(start), TAIEX_FIRST), min(_month(end), history))
+            until = time.monotonic() + s.call_timeout_seconds
+            session.refresh(TAIEX, params)
+            held = taiex.held_months()
+            while wanted - held and time.monotonic() < until:
+                session.refresh(TAIEX, params, force=True)
+                before, held = held, taiex.held_months()
+                if held == before:  # TWSE served nothing more (or mode is local)
+                    break
+            missing = sorted(wanted - held)
+        return F.records(session.read(TAIEX, as_of=as_of)), missing
+
+    (records, missing), session = await common.run(ctx, s, work, source="twse")
+    rows = []
+    for r in records:
+        d = F.day(r["date"])
+        if not F.within(d, start, end):
+            continue
+        rows.append(
+            common.row(
+                IndexLevel,
+                {
+                    "index": "TAIEX",
+                    "date": d,
+                    "open": F.number(r["open"]),
+                    "high": F.number(r["high"]),
+                    "low": F.number(r["low"]),
+                    "close": F.number(r["close"]),
+                    "unit": "index_points",
+                    "publication": F.text(r["publication"]),
+                    "knowledge_time": F.instant(r["knowledge_time"]),
+                },
+            )
+        )
+    rows.sort(key=lambda r: r.date)
+    prov = common.provenance(
+        ctx,
+        provider="twse",
+        route=TAIEX_ROUTE,
+        datasets=(TAIEX,),
+        request={"start": start, "end": end, "as_of": args.as_of},
+        as_of=as_of,
+        rows=rows,
+        session=session,
+        authority=["exchange"],
+    )
+    notes = []
+    if missing:
+        span = f"{missing[0]:%Y-%m}" + (f" to {missing[-1]:%Y-%m}" if len(missing) > 1 else "")
+        notes.append(
+            f"The store holds fewer than a month's sessions of {len(missing)} month(s) of the window "
+            f"({span}), so sessions of those months may be missing. The history arrives 36 months a sync: "
+            "call again to fetch more (mode local fetches nothing)."
+        )
+        prov = prov.model_copy(update={"truncated": True, "truncation_note": notes[0]})
+    return common.output(ctx, s, IndexLevel, rows, prov, notes=notes)
+
+
+HANDLERS = {"twse_monthly_revenue": twse_monthly_revenue, "twse_taiex": twse_taiex}
 
 SPECS: tuple[ToolSpec, ...] = (
     ToolSpec(
@@ -204,6 +300,28 @@ SPECS: tuple[ToolSpec, ...] = (
         golden_test=GOLDEN,
         output_risk="external_text",
     ),
+    ToolSpec(
+        name="twse_taiex",
+        capability="macro",
+        title="TAIEX (Taiwan Stock Exchange)",
+        description=common.describe(
+            "The TAIEX, the Taiwan Stock Exchange's capitalization-weighted stock price index, per session: "
+            "open, high, low and close in index points as TWSE states them (nothing recomputed), from 1999-01. "
+            "The current month comes from TWSE's OpenAPI, earlier months from its monthly history page; a "
+            "window before last month fetches that history, 36 months a sync while the call's time lasts, "
+            "and an answer still lacking months of the window names them in a note (truncated; call again). "
+            "A session is knowable at 14:00 Taipei of its day (the close is the index at 13:30, after the "
+            "closing call): a fixed rule, not a measured posting. Keyless.",
+            "lagged",
+        ),
+        readme="The TAIEX index level per session (Taiwan Stock Exchange)",
+        input_model=TaiexInputs,
+        output_model=IndexLevel,
+        provider="twse",
+        route=TAIEX_ROUTE,
+        handler=twse_taiex,
+        golden_test=GOLDEN,
+    ),
 )
 
-DATASETS: dict[str, tuple[str, ...]] = {"twse_monthly_revenue": (DATASET,)}
+DATASETS: dict[str, tuple[str, ...]] = {"twse_monthly_revenue": (DATASET,), "twse_taiex": (TAIEX,)}

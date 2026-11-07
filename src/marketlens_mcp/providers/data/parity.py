@@ -70,16 +70,11 @@ PARITY: dict[str, Mapped | Excluded] = {
     "sec_insider.transactions": Mapped(("sec_insider_trades",)),
     "sec13f.holdings": Mapped(("sec_13f_holdings",)),
     "sec.fund_nport": Mapped(("sec_fund_nport",)),
-    "sec.fund_expenses": Excluded(
-        "second_wave",
-        "a fund prospectus's fee table and objective; a tool for it is planned for a later release",
-    ),
+    "sec.fund_expenses": Mapped(("sec_fund_expenses",)),
     "sec.fund_nport_holdings": Mapped(("sec_fund_holdings",)),
     # TWSE / MOPS
     "twse.monthly_revenue": Mapped(("twse_monthly_revenue",)),
-    "twse.taiex": Excluded(
-        "second_wave", "the TAIEX index level; a tool for it is planned for a later release"
-    ),
+    "twse.taiex": Mapped(("twse_taiex",)),
     # the Federal Reserve and the Treasury
     "fomc.meetings": Mapped(("fed_fomc_meetings",)),
     "fomc.statement": Mapped(("fed_fomc_statements",)),
@@ -91,6 +86,7 @@ PARITY: dict[str, Mapped | Excluded] = {
     "fiscaldata.auctions": Mapped(("treasury_auctions",)),
     "fiscaldata.debt_to_penny": Mapped(("treasury_debt",)),
     "fiscaldata.tga_balance": Mapped(("treasury_tga",)),
+    "fedboard.z1": Mapped(("fed_z1",)),
     # banks and money market funds
     "fdic.financials": Mapped(("bank_fdic_financials",)),
     "fdic.industry_summary": Mapped(("bank_fdic_industry",)),

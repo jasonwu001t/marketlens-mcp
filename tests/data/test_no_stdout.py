@@ -8,7 +8,7 @@ import logging
 from data_harness import SPECS, call, context
 from test_banks import fdic_routes, mmf_routes
 from test_calendars import earnings_routes, economic_routes, holiday_routes, surprise_routes
-from test_fed_treasury import FISCAL, fomc_document_routes, fomc_routes, treasury_routes
+from test_fed_treasury import FISCAL, fomc_document_routes, fomc_routes, treasury_routes, z1_routes
 from test_macro import (
     BEA,
     JGB,
@@ -61,6 +61,7 @@ ARGS = {
     "sec_13f_holdings": {"filer_cik": "9999950"},
     "sec_fund_nport": {"ticker": "TFUND"},
     "sec_fund_holdings": {"ticker": "TFUND"},
+    "sec_fund_expenses": {"ticker": "TFUND"},
     "fed_fomc_projections": {"start": "2026-09-01"},
     "fed_fomc_minutes": {"start": "2026-09-01"},
     "fed_beige_book": {"start": "2026-10-01", "end": "2026-10-31"},
@@ -87,6 +88,7 @@ def test_no_tool_writes_to_stdout(tmp_path, upstream, keys, frozen_clock, capsys
     fomc_routes(upstream)
     upstream.json_file(r"markets\.newyorkfed\.org/api/rates/all/search\.json", "nyfed.reference_rates.json")
     treasury_routes(upstream)
+    z1_routes(upstream)
     upstream.json_file(rf"{FISCAL}/v1/accounting/od/auctions_query", "fiscaldata.auctions.json")
     upstream.json_file(rf"{FISCAL}/v2/accounting/od/debt_to_penny", "fiscaldata.debt_to_penny.json")
     upstream.json_file(rf"{FISCAL}/v1/accounting/dts/operating_cash_balance", "fiscaldata.tga_balance.json")
@@ -107,7 +109,7 @@ def test_no_tool_writes_to_stdout(tmp_path, upstream, keys, frozen_clock, capsys
         answered += bool(out.rows)
     captured = capsys.readouterr()
     assert captured.out == ""
-    assert answered == 52
+    assert answered == 55
 
 
 def test_the_placeholder_contact_warning_never_reaches_stdout(

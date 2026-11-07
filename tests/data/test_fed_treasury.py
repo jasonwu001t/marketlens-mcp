@@ -1,13 +1,17 @@
 """fed_fomc_meetings, fed_fomc_statements, fed_fomc_projections,
 fed_fomc_minutes, fed_beige_book, fed_reference_rates, treasury_yield_curve,
-treasury_auctions, treasury_debt and treasury_tga against synthetic Federal
-Reserve, NY Fed, Treasury and FiscalData payloads. Every source here is
-keyless."""
+treasury_auctions, treasury_debt, treasury_tga and fed_z1 against synthetic
+Federal Reserve, NY Fed, Treasury and FiscalData payloads (the Z.1 release's
+per-table CSV ZIP, table mapping and release-dates page are built here, in the
+Board's layout, with invented values). Every source here is keyless."""
 
 from __future__ import annotations
 
+import io
+import zipfile
 from datetime import UTC, datetime, timedelta
 
+import httpx
 import pytest
 from data_harness import NOW, call, check_golden, context, fixture_text, freeze_clocks, refused
 
@@ -320,3 +324,134 @@ def test_fed_beige_book_golden(tmp_path, upstream):
     every = call("fed_beige_book", ctx, start="2026-10-01", include_text=False)
     assert len(every.rows) == 13 and every.rows[0].district == "national_summary"
     assert call("fed_beige_book", ctx, start="2026-10-01", as_of="2026-10-14T18:00:00Z").rows == []
+
+
+# --- the Z.1 Financial Accounts ---------------------------------------------------------------------
+
+Z1 = rf"{FED}/releases/z1"
+Z1_UNIT = "Millions of dollars; amounts outstanding end of period, not seasonally adjusted"
+Z1_FILES = {
+    "csv/S1M_b.csv": (
+        "date,FL152000005.Q,FL152090005.Q\n"
+        "1945:Q4,837304,806720\n"
+        "2025:Q3,201000000,180000000\n"
+        "2025:Q4,203778920,182274207\n"
+        "2026:Q1,204671712,183067096\n"
+        "2026:Q2,217751104,ND\n"
+    ),
+    "data_dictionary/S1M_b.txt": (
+        f"FL152000005.Q\tHouseholds and nonprofit organizations; total assets\tLine 1\t"
+        f"S1M.b Households and nonprofit organizations\t{Z1_UNIT}\n"
+        f"FL152090005.Q\tHouseholds and nonprofit organizations; net worth\tLine 42\t"
+        f"S1M.b Households and nonprofit organizations\t{Z1_UNIT}\n"
+    ),
+    "csv/F51_1_s.csv": "date,LM893064105.Q\n2026:Q1,90000000\n2026:Q2,95000000\n",
+    "data_dictionary/F51_1_s.txt": (
+        f"LM893064105.Q\tAll sectors; corporate equities; asset\tLine 1\tF51.1.s Corporate equities\t{Z1_UNIT}\n"
+    ),
+    # a table marketlens-data's sources.yaml does not name: never read
+    "csv/F4_1_s.csv": "date,FL103163003.Q\n2026:Q2,1\n",
+}
+Z1_MAPPING = (
+    "new,old,title\nS1M.b,B.101,Households and nonprofit organizations\nF51.1.s,L.224,Corporate equities\n"
+)
+Z1_MODIFIED = "Fri, 11 Sep 2026 16:00:14 GMT"
+
+
+def _z1_row(quarter: str, folder: str) -> str:
+    return (
+        f'<div class="row"><div class="col-xs-2">{quarter}</div><div class="col-xs-5">'
+        f'<a href="/releases/z1/{folder}/html/default.htm">HTML</a></div></div>'
+    )
+
+
+Z1_DATES = (
+    "<html><body><!-- synthetic -->"
+    + "".join(
+        _z1_row(q, f)
+        for q, f in (
+            ("2026:Q2", "current"),
+            ("2026:Q1", "20260611"),
+            ("2025:Q4", "20260319"),
+            ("2025:Q3", "20260109"),
+        )
+    )
+    + "</body></html>"
+)
+
+
+def z1_routes(upstream):
+    def csv_zip(_request):
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w") as zf:
+            for name, text in Z1_FILES.items():
+                zf.writestr(name, text)
+        return httpx.Response(200, content=buf.getvalue(), headers={"Last-Modified": Z1_MODIFIED})
+
+    upstream.add(rf"{Z1}/release-dates\.htm", Z1_DATES)
+    upstream.add(rf"{Z1}/current/z1_csv_files\.zip", csv_zip)
+    upstream.add(rf"{Z1}/current/z1_table_mapping\.csv", Z1_MAPPING)
+
+
+def test_fed_z1_golden(tmp_path, upstream, frozen_clock):
+    z1_routes(upstream)
+    out = call("fed_z1", context(tmp_path))
+    doc = check_golden(out, "fed_z1")
+    assert [(r["table"], r["series"], r["date"]) for r in doc["rows"]][:5] == [
+        ("F51.1.s", "LM893064105.Q", "2026-03-31"),
+        ("F51.1.s", "LM893064105.Q", "2026-06-30"),
+        ("S1M.b", "FL152000005.Q", "2025-09-30"),
+        ("S1M.b", "FL152000005.Q", "2025-12-31"),
+        ("S1M.b", "FL152000005.Q", "2026-03-31"),
+    ]
+    by = {(r["series"], r["date"]): r for r in doc["rows"]}
+    worth = by[("FL152090005.Q", "2026-03-31")]
+    assert (worth["value"], worth["value_usd"], worth["line"], worth["old_table"]) == (
+        183067096.0,
+        183067096000000.0,
+        42,
+        "B.101",
+    )
+    # the quarter is knowable at 12:00 ET of the release that first carried it
+    assert (worth["knowledge_time"], worth["release_date"], worth["stamp_estimated"]) == (
+        "2026-06-11T16:00:00Z",
+        "2026-09-11",
+        False,
+    )
+    # the current release's quarter, at the ZIP's Last-Modified; ND is no row
+    assert by[("FL152000005.Q", "2026-06-30")]["knowledge_time"] == "2026-09-11T16:00:14Z"
+    assert ("FL152090005.Q", "2026-06-30") not in by
+    assert {r["table"] for r in doc["rows"]} == {"S1M.b", "F51.1.s"}  # F4.1.s is not collected
+    assert doc["provenance"]["authority"] == ["official"] and doc["notes"] == []
+
+
+def test_fed_z1_filters_and_a_quarter_before_the_dates_page(tmp_path, upstream, frozen_clock):
+    z1_routes(upstream)
+    ctx = context(tmp_path)
+    out = call("fed_z1", ctx, tables=["S1M_b"], series=["fl152090005"], start="1945-01-01")
+    assert [(r.date.isoformat(), r.value) for r in out.rows] == [
+        ("1945-12-31", 806720.0),
+        ("2025-09-30", 180000000.0),
+        ("2025-12-31", 182274207.0),
+        ("2026-03-31", 183067096.0),
+    ]
+    first = out.rows[0]
+    assert first.stamp_estimated and first.knowledge_time.isoformat() == "2026-01-09T17:00:00+00:00"
+
+
+def test_fed_z1_as_of_before_the_release(tmp_path, upstream, frozen_clock):
+    z1_routes(upstream)
+    out = call("fed_z1", context(tmp_path), series=["FL152000005.Q"], as_of="2026-09-11T15:00:00Z")
+    assert [r.date.isoformat() for r in out.rows] == ["2025-09-30", "2025-12-31", "2026-03-31"]
+
+
+def test_fed_z1_names_a_table_it_does_not_collect(tmp_path, upstream, frozen_clock):
+    z1_routes(upstream)
+    out = call("fed_z1", context(tmp_path), tables=["F4.1.s"])
+    assert out.rows == []
+    assert out.notes == [
+        "marketlens-data collects only the Z.1 tables its sources.yaml names (fedboard.z1_tables: S1M.b, "
+        "F51.1.s), so F4.1.s has no rows: add it there to collect it."
+    ]
+    with pytest.raises(ValueError, match="not a Z.1 series id"):
+        call("fed_z1", context(tmp_path), series=["NOTASERIES"])

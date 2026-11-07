@@ -27,7 +27,9 @@ FilingSearchHit is built by the built-in official provider (filings_search),
 not the extra; FilingEvent by the extra's filings_events, XbrlFrameValue by
 sec_xbrl_frames, PayVsPerformance by sec_pay_vs_performance, EarningsGuidance,
 NonGaapFigure, EarningsReleaseFigure, ReleaseKpi, SegmentFact, ForeignQuarterlyFigure, IrDocument and IrTarget by
-the tools of the same datasets; TaiwanMonthlyRevenue by twse_monthly_revenue.
+the tools of the same datasets; TaiwanMonthlyRevenue by twse_monthly_revenue,
+IndexLevel by twse_taiex, FundExpenses by sec_fund_expenses and
+FinancialAccountsValue by fed_z1.
 """
 
 from __future__ import annotations
@@ -161,6 +163,30 @@ class TraceAggregate(CanonicalModel):
     metric: str = Field(description="FINRA's field: advances, totalVolume, dealerCustomerVolume, ...")
     value: float | None = _unit("as_published", default=None, description="A count, volume or price")
     stamp_estimated: bool = Field(description="knowledge_time is marketlens-data's conservative rule")
+    knowledge_time: UtcDatetime = _known()
+
+
+class IndexLevel(CanonicalModel):
+    """One session of a stock index as its exchange states it: the open, high,
+    low and close in index points (TAIEX: the Taiwan Stock Exchange's
+    capitalization-weighted index)."""
+
+    schema_name: ClassVar[str] = "marketlens.IndexLevel"
+    time_column: ClassVar[str | None] = "date"
+    group_column: ClassVar[str | None] = "index"
+    value_columns: ClassVar[tuple[str, ...]] = ("close",)
+
+    index: str = Field(description="The index, e.g. TAIEX")
+    date: Date = Field(description="The session's date (the exchange's local date)")
+    open: float | None = _unit("as_published", default=None, description="In the row's `unit`")
+    high: float | None = _unit("as_published", default=None, description="In the row's `unit`")
+    low: float | None = _unit("as_published", default=None, description="In the row's `unit`")
+    close: float | None = _unit("as_published", default=None, description="In the row's `unit`")
+    unit: str = Field(description="index_points: the index's own points, as the exchange states them")
+    publication: Literal["twse_openapi", "twse_history"] = Field(
+        description="Which of the exchange's publications the row was read from (the current month's "
+        "OpenAPI file, or the monthly history page)"
+    )
     knowledge_time: UtcDatetime = _known()
 
 
@@ -1040,6 +1066,50 @@ class FundHolding(CanonicalModel):
     knowledge_time: UtcDatetime = _known()
 
 
+class FundExpenses(CanonicalModel):
+    """One share class's prospectus fee table and its series' investment
+    objective, as one filing states them in its risk/return summary XBRL (the
+    SEC's Mutual Fund Prospectus Risk/Return Summary data sets). Ratios are
+    fractions of net assets as filed; nothing is computed (a net ratio only
+    where the fee table states one). objective is the fund's own text:
+    UNTRUSTED."""
+
+    schema_name: ClassVar[str] = "marketlens.FundExpenses"
+    time_column: ClassVar[str | None] = "filing_date"
+    group_column: ClassVar[str | None] = "class_id"
+    value_columns: ClassVar[tuple[str, ...]] = ("net_expense_ratio", "gross_expense_ratio")
+
+    series_id: str = Field(description="EDGAR's series id, e.g. S000012345")
+    class_id: str = Field(description="EDGAR's class id; empty for a figure stated for the series only")
+    ticker: str | None = Field(default=None, description="The class's ticker as EDGAR records it")
+    series_name: str | None = None
+    class_name: str | None = None
+    cik: str = Field(description="The registrant (the trust), 10 digits")
+    registrant: str = Field(description="The registrant's name as the filing states it")
+    accession_number: str
+    form: str = Field(description="485BPOS, 497, N-1A/A, ...")
+    management_fee: float | None = _unit("fraction", default=None, description="Of net assets, as filed")
+    gross_expense_ratio: float | None = _unit(
+        "fraction", default=None, description="Total annual fund operating expenses, as filed"
+    )
+    fee_waiver: float | None = _unit(
+        "fraction", default=None, description="The fee waiver or reimbursement, negative as filed"
+    )
+    net_expense_ratio: float | None = _unit(
+        "fraction", default=None, description="Expenses after the waiver, as filed (never computed)"
+    )
+    objective: str | None = Field(default=None, description="The investment objective; untrusted text")
+    period_end: Date | None = Field(default=None, description="The facts' date")
+    effective_date: Date | None = Field(default=None, description="The prospectus's effective date")
+    filing_date: Date
+    conflicts: list[str] = Field(
+        default_factory=list,
+        description="Figures two documents of the filing state differently (each then empty)",
+    )
+    source_file: str = Field(description="The SEC data set read, e.g. 2026-10_rr1")
+    knowledge_time: UtcDatetime = _known()
+
+
 # --- the Federal Reserve and the Treasury --------------------------------------------------
 
 
@@ -1140,6 +1210,39 @@ class TreasuryCashBalance(CanonicalModel):
     date: Date
     account_type: str
     closing_balance: float | None = _unit("USD", default=None)
+    knowledge_time: UtcDatetime = _known()
+
+
+class FinancialAccountsValue(CanonicalModel):
+    """One series of one table of the Federal Reserve's Z.1 Financial Accounts
+    of the United States, for one quarter, as the current release states it
+    (the release's per-table CSV and data dictionary)."""
+
+    schema_name: ClassVar[str] = "marketlens.FinancialAccountsValue"
+    time_column: ClassVar[str | None] = "date"
+    group_column: ClassVar[str | None] = "series"
+    value_columns: ClassVar[tuple[str, ...]] = ("value_usd",)
+
+    table: str = Field(description="The release's table id, e.g. S1M.b")
+    old_table: str | None = Field(
+        default=None, description="The table's id before the 2026 renumbering (B.101)"
+    )
+    table_title: str | None = None
+    series: str = Field(description="The Board's series id, e.g. FL152090005.Q")
+    line: int | None = _unit("ordinal", default=None, description="The table's line number")
+    description: str = Field(description="The data dictionary's description of the series")
+    date: Date = Field(description="The quarter's last day")
+    value: float | None = _unit("as_published", default=None, description="In the row's `unit`")
+    unit: str = Field(description="The data dictionary's unit, as stated (Millions of dollars; ...)")
+    value_usd: float | None = _unit(
+        "USD",
+        default=None,
+        description="value in US dollars, millions multiplied out; a unit not in dollars has none",
+    )
+    release_date: Date = Field(description="The release the figure is from")
+    stamp_estimated: bool = Field(
+        description="knowledge_time is the oldest release on the Board's release-dates page, not the quarter's own"
+    )
     knowledge_time: UtcDatetime = _known()
 
 
@@ -1402,6 +1505,7 @@ DATA_MODELS: tuple[type[CanonicalModel], ...] = (
     CentralBankObservation,
     RegionalSurveyIndex,
     TraceAggregate,
+    IndexLevel,
     Filing,
     FilingSearchHit,
     FilingEvent,
@@ -1427,6 +1531,7 @@ DATA_MODELS: tuple[type[CanonicalModel], ...] = (
     InstitutionalHolding,
     FundReport,
     FundHolding,
+    FundExpenses,
     FomcMeeting,
     FomcStatement,
     FomcProjection,
@@ -1437,6 +1542,7 @@ DATA_MODELS: tuple[type[CanonicalModel], ...] = (
     TreasuryAuction,
     TreasuryDebt,
     TreasuryCashBalance,
+    FinancialAccountsValue,
     BankFinancials,
     BankIndustrySummary,
     MoneyMarketFundStatistic,

@@ -56,3 +56,13 @@ are IPOCO (CIK 9999907, a new issuer: its submissions feed, its S-1/A's filing i
 and cover, its EFFECT notice's index and XML) and the filing index page of TESTCO's
 Form 144 (sec.144_index__26-000004.htm). Every name, number and date in them is
 invented.
+
+The TAIEX (test_twse.py): twse.taiex_openapi.json is synthetic, TWSE's OpenAPI
+MI_5MINS_HIST in its layout (English field names, ROC dates) with invented
+levels for 2026-10-01 and 2026-10-02; the monthly history pages are built in
+test_twse.taiex_month, every weekday a session with invented levels, under the
+header row marketlens-data's parser expects. The Z.1 release's per-table CSV
+ZIP, table mapping and release-dates page (test_fed_treasury.py) and the SEC's
+Risk/Return Summary data sets and their listing page (test_sec.py, fund
+S000099991) are built in the tests from invented values in each publisher's
+layout; no file here holds them.

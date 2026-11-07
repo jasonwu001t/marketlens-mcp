@@ -242,6 +242,7 @@
     "marketlens.Filing",
     "marketlens.FilingEvent",
     "marketlens.FilingSearchHit",
+    "marketlens.FinancialAccountsValue",
     "marketlens.FixedIncomeQuote",
     "marketlens.FomcMeeting",
     "marketlens.FomcMinutes",
@@ -249,9 +250,11 @@
     "marketlens.FomcStatement",
     "marketlens.ForeignQuarterlyFigure",
     "marketlens.Form144Notice",
+    "marketlens.FundExpenses",
     "marketlens.FundHolding",
     "marketlens.FundReport",
     "marketlens.FundamentalValue",
+    "marketlens.IndexLevel",
     "marketlens.InsiderTransaction",
     "marketlens.InstitutionalHolding",
     "marketlens.IpoFiling",
@@ -947,6 +950,7 @@
     "marketlens.Filing",
     "marketlens.FilingEvent",
     "marketlens.FilingSearchHit",
+    "marketlens.FinancialAccountsValue",
     "marketlens.FixedIncomeQuote",
     "marketlens.FomcMeeting",
     "marketlens.FomcMinutes",
@@ -954,9 +958,11 @@
     "marketlens.FomcStatement",
     "marketlens.ForeignQuarterlyFigure",
     "marketlens.Form144Notice",
+    "marketlens.FundExpenses",
     "marketlens.FundHolding",
     "marketlens.FundReport",
     "marketlens.FundamentalValue",
+    "marketlens.IndexLevel",
     "marketlens.InsiderTransaction",
     "marketlens.InstitutionalHolding",
     "marketlens.IpoFiling",
@@ -1034,7 +1040,7 @@
   },
   "DATA_MODELS": {
    "kind": "value",
-   "repr": "(<class 'marketlens_schema.data.EconomicObservation'>, <class 'marketlens_schema.data.EconomicSeriesInfo'>, <class 'marketlens_schema.data.ReleaseScheduleEntry'>, <class 'marketlens_schema.data.TradeFlow'>, <class 'marketlens_schema.data.CentralBankObservation'>, <class 'marketlens_schema.data.RegionalSurveyIndex'>, <class 'marketlens_schema.data.TraceAggregate'>, <class 'marketlens_schema.data.Filing'>, <class 'marketlens_schema.data.FilingSearchHit'>, <class 'marketlens_schema.data.FilingEvent'>, <class 'marketlens_schema.data.TaiwanMonthlyRevenue'>, <class 'marketlens_schema.data.XbrlFact'>, <class 'marketlens_schema.data.XbrlFrameValue'>, <class 'marketlens_schema.data.PayVsPerformance'>, <class 'marketlens_schema.data.FundamentalValue'>, <class 'marketlens_schema.data.EarningsRelease'>, <class 'marketlens_schema.data.EarningsFigure'>, <class 'marketlens_schema.data.EarningsGuidance'>, <class 'marketlens_schema.data.NonGaapFigure'>, <class 'marketlens_schema.data.EarningsReleaseFigure'>, <class 'marketlens_schema.data.ReleaseKpi'>, <class 'marketlens_schema.data.SegmentFact'>, <class 'marketlens_schema.data.ForeignQuarterlyFigure'>, <class 'marketlens_schema.data.IrDocument'>, <class 'marketlens_schema.data.IrTarget'>, <class 'marketlens_schema.data.InsiderTransaction'>, <class 'marketlens_schema.data.DailyIndexEntry'>, <class 'marketlens_schema.data.Form144Notice'>, <class 'marketlens_schema.data.IpoFiling'>, <class 'marketlens_schema.data.InstitutionalHolding'>, <class 'marketlens_schema.data.FundReport'>, <class 'marketlens_schema.data.FundHolding'>, <class 'marketlens_schema.data.FomcMeeting'>, <class 'marketlens_schema.data.FomcStatement'>, <class 'marketlens_schema.data.FomcProjection'>, <class 'marketlens_schema.data.FomcMinutes'>, <class 'marketlens_schema.data.BeigeBookSection'>, <class 'marketlens_schema.data.ReferenceRate'>, <class 'marketlens_schema.data.YieldCurvePoint'>, <class 'marketlens_schema.data.TreasuryAuction'>, <class 'marketlens_schema.data.TreasuryDebt'>, <class 'marketlens_schema.data.TreasuryCashBalance'>, <class 'marketlens_schema.data.BankFinancials'>, <class 'marketlens_schema.data.BankIndustrySummary'>, <class 'marketlens_schema.data.MoneyMarketFundStatistic'>, <class 'marketlens_schema.data.EconomicEvent'>, <class 'marketlens_schema.data.EarningsCalendarEntry'>, <class 'marketlens_schema.data.EarningsSurprise'>, <class 'marketlens_schema.data.MarketHoliday'>)"
+   "repr": "(<class 'marketlens_schema.data.EconomicObservation'>, <class 'marketlens_schema.data.EconomicSeriesInfo'>, <class 'marketlens_schema.data.ReleaseScheduleEntry'>, <class 'marketlens_schema.data.TradeFlow'>, <class 'marketlens_schema.data.CentralBankObservation'>, <class 'marketlens_schema.data.RegionalSurveyIndex'>, <class 'marketlens_schema.data.TraceAggregate'>, <class 'marketlens_schema.data.IndexLevel'>, <class 'marketlens_schema.data.Filing'>, <class 'marketlens_schema.data.FilingSearchHit'>, <class 'marketlens_schema.data.FilingEvent'>, <class 'marketlens_schema.data.TaiwanMonthlyRevenue'>, <class 'marketlens_schema.data.XbrlFact'>, <class 'marketlens_schema.data.XbrlFrameValue'>, <class 'marketlens_schema.data.PayVsPerformance'>, <class 'marketlens_schema.data.FundamentalValue'>, <class 'marketlens_schema.data.EarningsRelease'>, <class 'marketlens_schema.data.EarningsFigure'>, <class 'marketlens_schema.data.EarningsGuidance'>, <class 'marketlens_schema.data.NonGaapFigure'>, <class 'marketlens_schema.data.EarningsReleaseFigure'>, <class 'marketlens_schema.data.ReleaseKpi'>, <class 'marketlens_schema.data.SegmentFact'>, <class 'marketlens_schema.data.ForeignQuarterlyFigure'>, <class 'marketlens_schema.data.IrDocument'>, <class 'marketlens_schema.data.IrTarget'>, <class 'marketlens_schema.data.InsiderTransaction'>, <class 'marketlens_schema.data.DailyIndexEntry'>, <class 'marketlens_schema.data.Form144Notice'>, <class 'marketlens_schema.data.IpoFiling'>, <class 'marketlens_schema.data.InstitutionalHolding'>, <class 'marketlens_schema.data.FundReport'>, <class 'marketlens_schema.data.FundHolding'>, <class 'marketlens_schema.data.FundExpenses'>, <class 'marketlens_schema.data.FomcMeeting'>, <class 'marketlens_schema.data.FomcStatement'>, <class 'marketlens_schema.data.FomcProjection'>, <class 'marketlens_schema.data.FomcMinutes'>, <class 'marketlens_schema.data.BeigeBookSection'>, <class 'marketlens_schema.data.ReferenceRate'>, <class 'marketlens_schema.data.YieldCurvePoint'>, <class 'marketlens_schema.data.TreasuryAuction'>, <class 'marketlens_schema.data.TreasuryDebt'>, <class 'marketlens_schema.data.TreasuryCashBalance'>, <class 'marketlens_schema.data.FinancialAccountsValue'>, <class 'marketlens_schema.data.BankFinancials'>, <class 'marketlens_schema.data.BankIndustrySummary'>, <class 'marketlens_schema.data.MoneyMarketFundStatistic'>, <class 'marketlens_schema.data.EconomicEvent'>, <class 'marketlens_schema.data.EarningsCalendarEntry'>, <class 'marketlens_schema.data.EarningsSurprise'>, <class 'marketlens_schema.data.MarketHoliday'>)"
   },
   "DecimalStr": {
    "kind": "other",

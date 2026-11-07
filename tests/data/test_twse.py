@@ -1,5 +1,8 @@
 """twse_monthly_revenue against TWSE's OpenAPI, MOPS's monthly summary pages and
-TWSE's daily market summary (trimmed recordings, fixtures/README). Keyless."""
+TWSE's daily market summary (trimmed recordings, fixtures/README); twse_taiex
+against a synthetic TAIEX OpenAPI file (fixtures/twse.taiex_openapi.json) and
+monthly history pages built here in TWSE's layout, with the header row taken
+from marketlens-data's parser. Keyless."""
 
 from __future__ import annotations
 
@@ -75,6 +78,49 @@ def twse_routes(upstream, *, pages: dict | None = None):
     )
     upstream.add(MOPS, mops)
     upstream.add(r"www\.twse\.com\.tw/rwd/zh/afterTrading/FMTQIK", calendar)
+    taiex_routes(upstream)
+
+
+# --- the TAIEX ----------------------------------------------------------------------------------
+
+TAIEX_OPENAPI = r"openapi\.twse\.com\.tw/v1/indicesReport/MI_5MINS_HIST"
+TAIEX_HISTORY = r"www\.twse\.com\.tw/rwd/zh/TAIEX/MI_5MINS_HIST"
+
+
+def taiex_month(year: int, month: int) -> dict:
+    """TWSE's history page of one month in its layout: every weekday a session, synthetic levels
+    (40,000 + 100 x month + day), ROC dates and thousands separators."""
+    from calendar import monthrange
+    from datetime import date
+
+    from omni.sources import _twse_taiex
+
+    rows = []
+    for day in range(1, monthrange(year, month)[1] + 1):
+        if date(year, month, day).weekday() >= 5:
+            continue
+        base = 40000 + 100 * month + day
+        cells = [f"{base + d:,.2f}" for d in (0.25, 60.5, -40.75, 20.0)]
+        rows.append([f"{year - 1911}/{month:02d}/{day:02d}", *cells])
+    return {"stat": "OK", "title": "synthetic", "fields": list(_twse_taiex._FIELDS), "data": rows}
+
+
+def taiex_routes(upstream, *, gone: tuple[str, ...] = ()):
+    """The OpenAPI's October 2026 (two sessions) and every month's history page up to September
+    2026; a month in `gone` (YYYYMM) answers 404."""
+    from omni.sources import _twse_taiex
+
+    def history(request: httpx.Request):
+        asked = request.url.params["date"]
+        if asked[:6] in gone:
+            return httpx.Response(404)
+        year, month = int(asked[:4]), int(asked[4:6])
+        if (year, month) > (2026, 9):
+            return {"stat": _twse_taiex._NO_ROWS[0]}
+        return taiex_month(year, month)
+
+    upstream.add(TAIEX_OPENAPI, lambda _r: (FIXTURES / "twse.taiex_openapi.json").read_bytes())
+    upstream.add(TAIEX_HISTORY, history)
 
 
 @pytest.fixture
@@ -224,3 +270,57 @@ def test_unknown_tickers_are_refused(tmp_path, upstream, twse_clock):
     err = refused("twse_monthly_revenue", context(tmp_path, now=NOW), tickers=["NVDA"])
     assert err.code == "invalid_arguments" and "TSM=2330" in err.message
     assert upstream.requests == []
+
+
+def _history_months(upstream) -> list[str]:
+    return [r.url.params["date"] for r in upstream.requests if r.url.path.endswith("TAIEX/MI_5MINS_HIST")]
+
+
+def test_twse_taiex_golden(tmp_path, upstream, frozen_clock):
+    twse_routes(upstream)
+    out = call("twse_taiex", context(tmp_path), start="2026-09-28")
+    doc = check_golden(out, "twse_taiex")
+    assert [(r["date"], r["close"], r["publication"]) for r in doc["rows"]] == [
+        ("2026-09-28", 40948.0, "twse_history"),
+        ("2026-09-29", 40949.0, "twse_history"),
+        ("2026-09-30", 40950.0, "twse_history"),
+        ("2026-10-01", 41355.8, "twse_openapi"),
+        ("2026-10-02", 41077.43, "twse_openapi"),
+    ]
+    last = doc["rows"][-1]
+    assert (last["index"], last["unit"], last["open"], last["high"], last["low"]) == (
+        "TAIEX",
+        "index_points",
+        41360.12,
+        41420.66,
+        41015.09,
+    )
+    # knowable at 14:00 Taipei of the session's day
+    assert last["knowledge_time"] == "2026-10-02T06:00:00Z"
+    assert doc["provenance"]["authority"] == ["exchange"] and doc["notes"] == []
+    # the daily read: the OpenAPI's month and the month before's history page, nothing older
+    assert _history_months(upstream) == ["20260901"]
+
+
+def test_twse_taiex_as_of_before_the_close_hides_the_session(tmp_path, upstream, frozen_clock):
+    twse_routes(upstream)
+    ctx = context(tmp_path)
+    out = call("twse_taiex", ctx, start="2026-10-01", as_of="2026-10-02T05:59:00Z")
+    assert [r.date.isoformat() for r in out.rows] == ["2026-10-01"]
+
+
+def test_twse_taiex_an_older_window_reads_the_history(tmp_path, upstream, frozen_clock):
+    twse_routes(upstream)
+    out = call("twse_taiex", context(tmp_path), start="2026-06-01", end="2026-08-31")
+    assert {r.date.strftime("%Y-%m") for r in out.rows} == {"2026-06", "2026-07", "2026-08"}
+    assert out.rows[0].date.isoformat() == "2026-06-01" and out.notes == []
+    assert set(_history_months(upstream)) == {"20260601", "20260701", "20260801", "20260901"}
+
+
+def test_twse_taiex_names_the_months_it_lacks(tmp_path, upstream, frozen_clock):
+    twse_routes(upstream)
+    taiex_routes(upstream, gone=("202607",))  # the latest route wins
+    out = call("twse_taiex", context(tmp_path), start="2026-06-01", end="2026-08-31")
+    assert {r.date.strftime("%Y-%m") for r in out.rows} == {"2026-06", "2026-08"}
+    assert out.provenance.truncated and out.notes == [out.provenance.truncation_note]
+    assert "1 month(s) of the window (2026-07)" in out.notes[0]

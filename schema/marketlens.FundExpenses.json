@@ -1,0 +1,245 @@
+{
+  "$defs": {
+    "AbsenceCode": {
+      "description": "Why a value is None. Never served as 0.",
+      "enum": [
+        "not_provided_by_source",
+        "not_applicable",
+        "not_entitled",
+        "no_data",
+        "insufficient_data",
+        "not_recovered",
+        "no_match",
+        "withheld",
+        "source_error",
+        "unparseable"
+      ],
+      "title": "AbsenceCode",
+      "type": "string"
+    }
+  },
+  "$id": "urn:marketlens:schema:1:marketlens.FundExpenses",
+  "additionalProperties": false,
+  "description": "One share class's prospectus fee table and its series' investment\nobjective, as one filing states them in its risk/return summary XBRL (the\nSEC's Mutual Fund Prospectus Risk/Return Summary data sets). Ratios are\nfractions of net assets as filed; nothing is computed (a net ratio only\nwhere the fee table states one). objective is the fund's own text:\nUNTRUSTED.",
+  "properties": {
+    "absent": {
+      "anyOf": [
+        {
+          "additionalProperties": {
+            "$ref": "#/$defs/AbsenceCode"
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Per-row reasons for None fields: field name -> AbsenceCode",
+      "title": "Absent"
+    },
+    "accession_number": {
+      "title": "Accession Number",
+      "type": "string"
+    },
+    "cik": {
+      "description": "The registrant (the trust), 10 digits",
+      "title": "Cik",
+      "type": "string"
+    },
+    "class_id": {
+      "description": "EDGAR's class id; empty for a figure stated for the series only",
+      "title": "Class Id",
+      "type": "string"
+    },
+    "class_name": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Class Name"
+    },
+    "conflicts": {
+      "description": "Figures two documents of the filing state differently (each then empty)",
+      "items": {
+        "type": "string"
+      },
+      "title": "Conflicts",
+      "type": "array"
+    },
+    "effective_date": {
+      "anyOf": [
+        {
+          "format": "date",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The prospectus's effective date",
+      "title": "Effective Date"
+    },
+    "fee_waiver": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The fee waiver or reimbursement, negative as filed",
+      "title": "Fee Waiver",
+      "x-unit": "fraction"
+    },
+    "filing_date": {
+      "format": "date",
+      "title": "Filing Date",
+      "type": "string"
+    },
+    "form": {
+      "description": "485BPOS, 497, N-1A/A, ...",
+      "title": "Form",
+      "type": "string"
+    },
+    "gross_expense_ratio": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Total annual fund operating expenses, as filed",
+      "title": "Gross Expense Ratio",
+      "x-unit": "fraction"
+    },
+    "knowledge_time": {
+      "description": "When the value became knowable under the dataset's point-in-time policy",
+      "format": "date-time",
+      "title": "Knowledge Time",
+      "type": "string",
+      "x-role": "available",
+      "x-unit": "UTC"
+    },
+    "management_fee": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Of net assets, as filed",
+      "title": "Management Fee",
+      "x-unit": "fraction"
+    },
+    "net_expense_ratio": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Expenses after the waiver, as filed (never computed)",
+      "title": "Net Expense Ratio",
+      "x-unit": "fraction"
+    },
+    "objective": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The investment objective; untrusted text",
+      "title": "Objective"
+    },
+    "period_end": {
+      "anyOf": [
+        {
+          "format": "date",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The facts' date",
+      "title": "Period End"
+    },
+    "registrant": {
+      "description": "The registrant's name as the filing states it",
+      "title": "Registrant",
+      "type": "string"
+    },
+    "series_id": {
+      "description": "EDGAR's series id, e.g. S000012345",
+      "title": "Series Id",
+      "type": "string"
+    },
+    "series_name": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Series Name"
+    },
+    "source_file": {
+      "description": "The SEC data set read, e.g. 2026-10_rr1",
+      "title": "Source File",
+      "type": "string"
+    },
+    "ticker": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The class's ticker as EDGAR records it",
+      "title": "Ticker"
+    }
+  },
+  "required": [
+    "series_id",
+    "class_id",
+    "cik",
+    "registrant",
+    "accession_number",
+    "form",
+    "filing_date",
+    "source_file",
+    "knowledge_time"
+  ],
+  "title": "FundExpenses",
+  "type": "object",
+  "x-schema-version": "1.1.0"
+}

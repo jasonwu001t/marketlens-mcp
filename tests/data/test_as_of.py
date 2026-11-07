@@ -10,7 +10,7 @@ import pytest
 from data_harness import SPECS, call, context
 from test_banks import fdic_routes, mmf_routes
 from test_calendars import earnings_routes, economic_routes, holiday_routes, surprise_routes
-from test_fed_treasury import FISCAL, fomc_document_routes, fomc_routes, treasury_routes
+from test_fed_treasury import FISCAL, fomc_document_routes, fomc_routes, treasury_routes, z1_routes
 from test_macro import (
     BEA,
     JGB,
@@ -83,6 +83,7 @@ CASES = [
     ("company_ir_documents", research_routes, {"ticker": "TESTCO"}),
     ("company_ir_targets", research_routes, {"ticker": "TESTCO"}),
     ("twse_monthly_revenue", twse_routes, {"tickers": ["TSM"], "start": "2026-09-01"}),
+    ("twse_taiex", twse_routes, {}),
     ("sec_insider_trades", sec_routes, {"ticker": "TESTCO"}),
     ("sec_form144", sec_routes, {"ticker": "TESTCO"}),
     ("sec_ipo_pipeline", sec_routes, {}),
@@ -90,6 +91,7 @@ CASES = [
     ("sec_13f_holdings", sec_routes, {"filer_cik": "9999950"}),
     ("sec_fund_nport", sec_routes, {"ticker": "TFUND"}),
     ("sec_fund_holdings", sec_routes, {"ticker": "TFUND"}),
+    ("sec_fund_expenses", sec_routes, {"ticker": "TFUND"}),
     ("fed_fomc_meetings", fomc_routes, {}),
     ("fed_fomc_statements", fomc_routes, {}),
     ("fed_fomc_projections", fomc_document_routes, {"start": "2026-09-01"}),
@@ -104,6 +106,7 @@ CASES = [
         {},
     ),
     ("treasury_yield_curve", treasury_routes, {}),
+    ("fed_z1", z1_routes, {}),
     (
         "treasury_auctions",
         file_route(rf"{FISCAL}/v1/accounting/od/auctions_query", "fiscaldata.auctions.json"),
@@ -132,7 +135,7 @@ def _id(case) -> str:
 
 
 def test_every_tool_has_a_case():
-    assert {tool for tool, *_ in CASES} == set(SPECS) and len(SPECS) == 52
+    assert {tool for tool, *_ in CASES} == set(SPECS) and len(SPECS) == 55
 
 
 @pytest.fixture

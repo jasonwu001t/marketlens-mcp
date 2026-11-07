@@ -1,0 +1,99 @@
+{
+ "absent": {},
+ "model": "marketlens.IndexLevel",
+ "notes": [],
+ "offload": "auto",
+ "pagination": null,
+ "provenance": {
+  "as_of": null,
+  "authority": [
+   "exchange"
+  ],
+  "cached": false,
+  "collected_at": "2026-10-02T20:00:00Z",
+  "dataset": "twse.taiex",
+  "delay": "unknown",
+  "derived_from": [],
+  "environment": null,
+  "feed": null,
+  "knowledge_time": "2026-10-02T06:00:00Z",
+  "lag_days": 0.0,
+  "operation": null,
+  "pages_fetched": 1,
+  "provider": "twse",
+  "request": {
+   "as_of": null,
+   "end": "2026-10-02",
+   "start": "2026-09-28"
+  },
+  "route": "omni twse.taiex <- openapi.twse.com.tw/v1/indicesReport/MI_5MINS_HIST (the current month) + www.twse.com.tw TAIEX/MI_5MINS_HIST (the monthly history)",
+  "schema_version": "1.1.0",
+  "stale": null,
+  "truncated": false,
+  "truncation_note": null,
+  "upstream_request_id": null
+ },
+ "risk": null,
+ "rows": [
+  {
+   "absent": null,
+   "close": 40948.0,
+   "date": "2026-09-28",
+   "high": 40988.5,
+   "index": "TAIEX",
+   "knowledge_time": "2026-09-28T06:00:00Z",
+   "low": 40887.25,
+   "open": 40928.25,
+   "publication": "twse_history",
+   "unit": "index_points"
+  },
+  {
+   "absent": null,
+   "close": 40949.0,
+   "date": "2026-09-29",
+   "high": 40989.5,
+   "index": "TAIEX",
+   "knowledge_time": "2026-09-29T06:00:00Z",
+   "low": 40888.25,
+   "open": 40929.25,
+   "publication": "twse_history",
+   "unit": "index_points"
+  },
+  {
+   "absent": null,
+   "close": 40950.0,
+   "date": "2026-09-30",
+   "high": 40990.5,
+   "index": "TAIEX",
+   "knowledge_time": "2026-09-30T06:00:00Z",
+   "low": 40889.25,
+   "open": 40930.25,
+   "publication": "twse_history",
+   "unit": "index_points"
+  },
+  {
+   "absent": null,
+   "close": 41355.8,
+   "date": "2026-10-01",
+   "high": 41388.02,
+   "index": "TAIEX",
+   "knowledge_time": "2026-10-01T06:00:00Z",
+   "low": 41102.37,
+   "open": 41210.55,
+   "publication": "twse_openapi",
+   "unit": "index_points"
+  },
+  {
+   "absent": null,
+   "close": 41077.43,
+   "date": "2026-10-02",
+   "high": 41420.66,
+   "index": "TAIEX",
+   "knowledge_time": "2026-10-02T06:00:00Z",
+   "low": 41015.09,
+   "open": 41360.12,
+   "publication": "twse_openapi",
+   "unit": "index_points"
+  }
+ ]
+}

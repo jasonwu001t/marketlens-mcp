@@ -1,0 +1,167 @@
+{
+  "$defs": {
+    "AbsenceCode": {
+      "description": "Why a value is None. Never served as 0.",
+      "enum": [
+        "not_provided_by_source",
+        "not_applicable",
+        "not_entitled",
+        "no_data",
+        "insufficient_data",
+        "not_recovered",
+        "no_match",
+        "withheld",
+        "source_error",
+        "unparseable"
+      ],
+      "title": "AbsenceCode",
+      "type": "string"
+    }
+  },
+  "$id": "urn:marketlens:schema:1:marketlens.FinancialAccountsValue",
+  "additionalProperties": false,
+  "description": "One series of one table of the Federal Reserve's Z.1 Financial Accounts\nof the United States, for one quarter, as the current release states it\n(the release's per-table CSV and data dictionary).",
+  "properties": {
+    "absent": {
+      "anyOf": [
+        {
+          "additionalProperties": {
+            "$ref": "#/$defs/AbsenceCode"
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Per-row reasons for None fields: field name -> AbsenceCode",
+      "title": "Absent"
+    },
+    "date": {
+      "description": "The quarter's last day",
+      "format": "date",
+      "title": "Date",
+      "type": "string"
+    },
+    "description": {
+      "description": "The data dictionary's description of the series",
+      "title": "Description",
+      "type": "string"
+    },
+    "knowledge_time": {
+      "description": "When the value became knowable under the dataset's point-in-time policy",
+      "format": "date-time",
+      "title": "Knowledge Time",
+      "type": "string",
+      "x-role": "available",
+      "x-unit": "UTC"
+    },
+    "line": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The table's line number",
+      "title": "Line",
+      "x-unit": "ordinal"
+    },
+    "old_table": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The table's id before the 2026 renumbering (B.101)",
+      "title": "Old Table"
+    },
+    "release_date": {
+      "description": "The release the figure is from",
+      "format": "date",
+      "title": "Release Date",
+      "type": "string"
+    },
+    "series": {
+      "description": "The Board's series id, e.g. FL152090005.Q",
+      "title": "Series",
+      "type": "string"
+    },
+    "stamp_estimated": {
+      "description": "knowledge_time is the oldest release on the Board's release-dates page, not the quarter's own",
+      "title": "Stamp Estimated",
+      "type": "boolean"
+    },
+    "table": {
+      "description": "The release's table id, e.g. S1M.b",
+      "title": "Table",
+      "type": "string"
+    },
+    "table_title": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Table Title"
+    },
+    "unit": {
+      "description": "The data dictionary's unit, as stated (Millions of dollars; ...)",
+      "title": "Unit",
+      "type": "string"
+    },
+    "value": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "In the row's `unit`",
+      "title": "Value",
+      "x-unit": "as_published"
+    },
+    "value_usd": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "value in US dollars, millions multiplied out; a unit not in dollars has none",
+      "title": "Value Usd",
+      "x-unit": "USD"
+    }
+  },
+  "required": [
+    "table",
+    "series",
+    "description",
+    "date",
+    "unit",
+    "release_date",
+    "stamp_estimated",
+    "knowledge_time"
+  ],
+  "title": "FinancialAccountsValue",
+  "type": "object",
+  "x-schema-version": "1.1.0"
+}

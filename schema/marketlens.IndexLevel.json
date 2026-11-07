@@ -1,0 +1,141 @@
+{
+  "$defs": {
+    "AbsenceCode": {
+      "description": "Why a value is None. Never served as 0.",
+      "enum": [
+        "not_provided_by_source",
+        "not_applicable",
+        "not_entitled",
+        "no_data",
+        "insufficient_data",
+        "not_recovered",
+        "no_match",
+        "withheld",
+        "source_error",
+        "unparseable"
+      ],
+      "title": "AbsenceCode",
+      "type": "string"
+    }
+  },
+  "$id": "urn:marketlens:schema:1:marketlens.IndexLevel",
+  "additionalProperties": false,
+  "description": "One session of a stock index as its exchange states it: the open, high,\nlow and close in index points (TAIEX: the Taiwan Stock Exchange's\ncapitalization-weighted index).",
+  "properties": {
+    "absent": {
+      "anyOf": [
+        {
+          "additionalProperties": {
+            "$ref": "#/$defs/AbsenceCode"
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Per-row reasons for None fields: field name -> AbsenceCode",
+      "title": "Absent"
+    },
+    "close": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "In the row's `unit`",
+      "title": "Close",
+      "x-unit": "as_published"
+    },
+    "date": {
+      "description": "The session's date (the exchange's local date)",
+      "format": "date",
+      "title": "Date",
+      "type": "string"
+    },
+    "high": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "In the row's `unit`",
+      "title": "High",
+      "x-unit": "as_published"
+    },
+    "index": {
+      "description": "The index, e.g. TAIEX",
+      "title": "Index",
+      "type": "string"
+    },
+    "knowledge_time": {
+      "description": "When the value became knowable under the dataset's point-in-time policy",
+      "format": "date-time",
+      "title": "Knowledge Time",
+      "type": "string",
+      "x-role": "available",
+      "x-unit": "UTC"
+    },
+    "low": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "In the row's `unit`",
+      "title": "Low",
+      "x-unit": "as_published"
+    },
+    "open": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "In the row's `unit`",
+      "title": "Open",
+      "x-unit": "as_published"
+    },
+    "publication": {
+      "description": "Which of the exchange's publications the row was read from (the current month's OpenAPI file, or the monthly history page)",
+      "enum": [
+        "twse_openapi",
+        "twse_history"
+      ],
+      "title": "Publication",
+      "type": "string"
+    },
+    "unit": {
+      "description": "index_points: the index's own points, as the exchange states them",
+      "title": "Unit",
+      "type": "string"
+    }
+  },
+  "required": [
+    "index",
+    "date",
+    "unit",
+    "publication",
+    "knowledge_time"
+  ],
+  "title": "IndexLevel",
+  "type": "object",
+  "x-schema-version": "1.1.0"
+}
