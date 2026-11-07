@@ -1,6 +1,7 @@
 """What marketlens-data reads out of the filings, beyond the facts (capability
-``filings``): an earnings release's guidance and its GAAP to non-GAAP
-reconciliation, a 10-K or 10-Q's segment facts from its own XBRL, a foreign
+``filings``): an earnings release's guidance, its GAAP to non-GAAP
+reconciliation, its headline income-statement figures and its operating KPIs,
+a 10-K or 10-Q's segment facts from its own XBRL, a foreign
 private issuer's quarters from its results 6-K exhibits, and the company
 documents (investor-day releases, outlooks, letters) the operator lists, with
 the multi-year targets they state. Every SEC request names the operator's
@@ -17,10 +18,12 @@ from marketlens_mcp.plugin_api import ToolContext, ToolOutput, ToolSpec
 from marketlens_schema import AbsenceCode
 from marketlens_schema.data import (
     EarningsGuidance,
+    EarningsReleaseFigure,
     ForeignQuarterlyFigure,
     IrDocument,
     IrTarget,
     NonGaapFigure,
+    ReleaseKpi,
     SegmentFact,
 )
 
@@ -35,22 +38,27 @@ NA = AbsenceCode.NOT_APPLICABLE
 ROUTES = {
     "sec_earnings_guidance": "omni sec.earnings_guidance <- www.sec.gov/Archives (EX-99.1 prose and guidance tables)",
     "sec_earnings_non_gaap": "omni sec.earnings_non_gaap <- www.sec.gov/Archives (EX-99.1 reconciliation tables)",
+    "sec_earnings_release_figures": "omni sec.earnings_release_figures <- www.sec.gov/Archives "
+    "(EX-99.1 income-statement tables)",
+    "sec_release_kpis": "omni sec.release_kpis <- www.sec.gov/Archives (EX-99.1 operating tables) + "
+    "sec.company_facts (RPO)",
     "sec_segment_facts": "omni sec.segment_facts <- www.sec.gov/Archives (a 10-K or 10-Q's own XBRL) + "
     "SEC Financial Statement and Notes data sets",
     "sec_foreign_quarterly": "omni sec.foreign_quarterly_statements <- www.sec.gov/Archives (results 6-K exhibits)",
     "company_ir_documents": "omni company.ir_documents <- the company's site (operator's list) + www.sec.gov/Archives",
     "company_ir_targets": "omni company.ir_targets <- company.ir_documents (sentence rules, computed locally)",
 }
-#: A percentage marketlens-data states in points is served as a fraction.
-_PERCENT = "percent"
+#: A percentage marketlens-data states in points is served as a fraction
+#: (sec.release_kpis names it ``pct``).
+_PERCENTS = ("percent", "pct")
 
 
 def _value(value, unit: str | None) -> float | None:
-    return F.fraction(value) if unit == _PERCENT else F.number(value)
+    return F.fraction(value) if unit in _PERCENTS else F.number(value)
 
 
 def _unit(unit: str | None) -> str | None:
-    return "fraction" if unit == _PERCENT else unit
+    return "fraction" if unit in _PERCENTS else unit
 
 
 def _prov(ctx, tool, *, datasets, request, as_of, rows, session, authority=("official",), provider="sec"):
@@ -199,6 +207,189 @@ async def sec_earnings_non_gaap(ctx: ToolContext, args: NonGaapInputs) -> ToolOu
         request={"ticker": args.ticker, "basis": args.basis, "start": start, "end": end, "as_of": args.as_of},
     )
     return _output(ctx, s, NonGaapFigure, rows, prov)
+
+
+# --- the release's headline figures and operating KPIs ------------------------------------------
+
+
+class ReleaseFigureInputs(GuidanceInputs):
+    metrics: (
+        list[
+            Literal[
+                "revenue",
+                "gross_profit",
+                "gross_margin",
+                "operating_income",
+                "operating_margin",
+                "net_income",
+                "eps_diluted",
+            ]
+        ]
+        | None
+    ) = Field(default=None, min_length=1, description="Only these metrics. Default: all.")
+    basis: list[Literal["gaap", "non_gaap"]] | None = Field(
+        default=None, min_length=1, description="Only these bases. Default: both."
+    )
+    segments: bool = Field(
+        default=True, description="Include the segment rows (false: the company totals only)."
+    )
+
+
+class ReleaseKpiInputs(GuidanceInputs):
+    kpis: list[str] | None = Field(
+        default=None,
+        min_length=1,
+        max_length=50,
+        description="Only these KPI ids (dau, mau, arpu, arr, rpo, backlog, customers, units_delivered, ...). "
+        "Default: all.",
+    )
+
+
+async def sec_earnings_release_figures(ctx: ToolContext, args: ReleaseFigureInputs) -> ToolOutput:
+    s = _settings(ctx)
+    as_of = common.as_of_of(args.as_of)
+    start, end = _window(ctx, args, 3)
+    identity = {"ticker": args.ticker}
+
+    def work(session):
+        session.refresh("sec.earnings_release_figures", identity)
+        return F.records(
+            session.read("sec.earnings_release_figures", as_of=as_of, **session.company(args.ticker))
+        )
+
+    records, session = await common.run(ctx, s, work, source="sec", subject=("filer", args.ticker))
+    metrics = set(args.metrics) if args.metrics else None
+    bases = set(args.basis or ("gaap", "non_gaap"))
+    rows = []
+    for r in records:
+        accepted = F.instant(r["event_time"])
+        segment = F.text(r["segment"])
+        if (
+            not F.within(accepted.date(), start, end)
+            or F.text(r["basis"]) not in bases
+            or (metrics is not None and F.text(r["metric"]) not in metrics)
+            or (segment is not None and not args.segments)
+        ):
+            continue
+        unit = F.text(r["unit"])
+        rows.append(
+            common.row(
+                EarningsReleaseFigure,
+                {
+                    "ticker": args.ticker,
+                    "cik": F.text(r["cik"]),
+                    "accession_number": F.text(r["accession_number"]),
+                    "accepted_at": accepted,
+                    "exhibit": F.text(r["exhibit"]),
+                    "exhibit_url": F.text(r["exhibit_url"]),
+                    "metric": F.text(r["metric"]),
+                    "basis": F.text(r["basis"]),
+                    "segment": segment,
+                    "period_end": F.day(r["period_end"]),
+                    "period_label": F.text(r["period_label"]),
+                    "column": F.text(r["column"]),
+                    "value": _value(r["value"], unit),
+                    "unit": _unit(unit),
+                    "table_caption": F.text(r["table_caption"]) or "",
+                    "section_label": F.text(r["section_label"]),
+                    "row_label": F.text(r["row_label"]) or "",
+                    "source_text": F.text(r["source_text"]) or "",
+                    "parse_rule": F.text(r["parse_rule"]),
+                    "knowledge_time": F.instant(r["knowledge_time"]),
+                },
+                codes={"segment": NA, "section_label": NA},
+            )
+        )
+    rows.sort(
+        key=lambda r: (
+            -r.accepted_at.timestamp(),
+            r.accession_number,
+            r.segment or "",
+            r.metric,
+            r.basis,
+            -r.period_end.toordinal(),
+        )
+    )
+    prov = _prov(
+        ctx,
+        "sec_earnings_release_figures",
+        datasets=("sec.earnings_release_figures",),
+        as_of=as_of,
+        rows=rows,
+        session=session,
+        request={
+            "ticker": args.ticker,
+            "metrics": args.metrics,
+            "basis": args.basis,
+            "segments": args.segments,
+            "start": start,
+            "end": end,
+            "as_of": args.as_of,
+        },
+    )
+    return _output(ctx, s, EarningsReleaseFigure, rows, prov)
+
+
+async def sec_release_kpis(ctx: ToolContext, args: ReleaseKpiInputs) -> ToolOutput:
+    s = _settings(ctx)
+    as_of = common.as_of_of(args.as_of)
+    start, end = _window(ctx, args, 3)
+    identity = {"ticker": args.ticker}
+
+    def work(session):
+        session.refresh("sec.release_kpis", identity)
+        return F.records(session.read("sec.release_kpis", as_of=as_of, **session.company(args.ticker)))
+
+    records, session = await common.run(ctx, s, work, source="sec", subject=("filer", args.ticker))
+    kpis = {k.strip().lower() for k in args.kpis} if args.kpis else None
+    rows = []
+    for r in records:
+        accepted = F.instant(r["event_time"])
+        if not F.within(accepted.date(), start, end) or (kpis is not None and F.text(r["kpi"]) not in kpis):
+            continue
+        unit = F.text(r["unit"])
+        rows.append(
+            common.row(
+                ReleaseKpi,
+                {
+                    "ticker": args.ticker,
+                    "cik": F.text(r["cik"]),
+                    "accession_number": F.text(r["accession_number"]),
+                    "accepted_at": accepted,
+                    "exhibit": F.text(r["exhibit"]),
+                    "exhibit_url": F.text(r["exhibit_url"]),
+                    "company_type": F.text(r["company_type"]),
+                    "kpi": F.text(r["kpi"]),
+                    "value": _value(r["value"], unit),
+                    "unit": _unit(unit),
+                    "period_end": F.day(r["period_end"]),
+                    "period_label": F.text(r["period_label"]),
+                    "column": F.text(r["column"]),
+                    "row_label": F.text(r["row_label"]) or "",
+                    "section_label": F.text(r["section_label"]),
+                    "table_caption": F.text(r["table_caption"]) or "",
+                    "source_text": F.text(r["source_text"]) or "",
+                    "parse_rule": F.text(r["parse_rule"]),
+                    "authority": F.text(r["authority"]),
+                    "knowledge_time": F.instant(r["knowledge_time"]),
+                },
+                codes={"section_label": NA},
+            )
+        )
+    rows.sort(
+        key=lambda r: (-r.accepted_at.timestamp(), r.accession_number, r.kpi, -r.period_end.toordinal())
+    )
+    prov = _prov(
+        ctx,
+        "sec_release_kpis",
+        datasets=("sec.release_kpis",),
+        as_of=as_of,
+        rows=rows,
+        session=session,
+        authority=_authorities(rows),
+        request={"ticker": args.ticker, "kpis": args.kpis, "start": start, "end": end, "as_of": args.as_of},
+    )
+    return _output(ctx, s, ReleaseKpi, rows, prov)
 
 
 # --- segment facts ------------------------------------------------------------------------------
@@ -549,6 +740,8 @@ def _spec(name, title, description, readme, inputs, model, provider, *, risk="ex
 HANDLERS = {
     "sec_earnings_guidance": sec_earnings_guidance,
     "sec_earnings_non_gaap": sec_earnings_non_gaap,
+    "sec_earnings_release_figures": sec_earnings_release_figures,
+    "sec_release_kpis": sec_release_kpis,
     "sec_segment_facts": sec_segment_facts,
     "sec_foreign_quarterly": sec_foreign_quarterly,
     "company_ir_documents": company_ir_documents,
@@ -589,6 +782,43 @@ SPECS: tuple[ToolSpec, ...] = (
         "GAAP to non-GAAP reconciliation lines of earnings releases",
         NonGaapInputs,
         NonGaapFigure,
+        "sec",
+    ),
+    _spec(
+        "sec_earnings_release_figures",
+        "SEC earnings release figures",
+        common.describe(
+            "The headline income statement of each earnings press release (EX-99.1; else one EX-99 variant) "
+            "on release night: revenue, gross profit and margin, operating income and margin, net income and "
+            "diluted EPS, for the company and each segment of a segment table, on the basis the row label or "
+            "the table heading states, in the column of the release's quarter and, as its own row, the same "
+            "quarter a year earlier; read from the tables by named row rules, never from a sentence, a region "
+            "or a pro forma table, never a guess. Dollars in full, margins as fractions. Filters metrics, "
+            "basis, segments. Captions, labels and source_text are company text (untrusted). "
+            f"{CONTACT}",
+            "at_event",
+        ),
+        "Headline income-statement figures of earnings releases, total and by segment",
+        ReleaseFigureInputs,
+        EarningsReleaseFigure,
+        "sec",
+    ),
+    _spec(
+        "sec_release_kpis",
+        "SEC earnings release KPIs",
+        common.describe(
+            "The operating KPIs of each earnings press release (EX-99.1), read from its tables by a "
+            "dictionary per company type (default or bank, by SIC): active users, revenue per user, ARR, RPO, "
+            "backlog, customers, subscribers, units, average selling price, net revenue retention, inventory "
+            "days; a bank's net interest margin, efficiency, CET1 and charge-off ratios, average loans and "
+            "deposits, AUM. The release's period and a year earlier, each its own row. Counts only by a "
+            "stated scale, dollars in full, percentages as fractions. authority company (release), official "
+            f"(RPO from XBRL). Labels are company text (untrusted). {CONTACT}",
+            "at_event",
+        ),
+        "Operating KPIs of earnings releases (users, ARR, RPO, backlog, units, bank ratios)",
+        ReleaseKpiInputs,
+        ReleaseKpi,
         "sec",
     ),
     _spec(
@@ -665,6 +895,8 @@ SPECS: tuple[ToolSpec, ...] = (
 DATASETS: dict[str, tuple[str, ...]] = {
     "sec_earnings_guidance": ("sec.earnings_guidance",),
     "sec_earnings_non_gaap": ("sec.earnings_non_gaap",),
+    "sec_earnings_release_figures": ("sec.earnings_release_figures",),
+    "sec_release_kpis": ("sec.release_kpis",),
     "sec_segment_facts": ("sec.submissions", "sec.segment_facts"),
     "sec_foreign_quarterly": ("sec.submissions", "sec.earnings_releases", "sec.foreign_quarterly_statements"),
     "company_ir_documents": ("sec.submissions", "company.ir_documents"),

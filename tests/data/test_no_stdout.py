@@ -47,6 +47,8 @@ ARGS = {
     "sec_pay_vs_performance": {"ticker": "PVPCO"},
     "sec_earnings_guidance": {"ticker": "GUIDCO"},
     "sec_earnings_non_gaap": {"ticker": "GUIDCO"},
+    "sec_earnings_release_figures": {"ticker": "GUIDCO"},
+    "sec_release_kpis": {"ticker": "GUIDCO"},
     "sec_segment_facts": {"ticker": "TESTCO"},
     "sec_foreign_quarterly": {"ticker": "FPICO"},
     "company_ir_documents": {"ticker": "TESTCO"},
@@ -105,7 +107,7 @@ def test_no_tool_writes_to_stdout(tmp_path, upstream, keys, frozen_clock, capsys
         answered += bool(out.rows)
     captured = capsys.readouterr()
     assert captured.out == ""
-    assert answered == 50
+    assert answered == 52
 
 
 def test_the_placeholder_contact_warning_never_reaches_stdout(

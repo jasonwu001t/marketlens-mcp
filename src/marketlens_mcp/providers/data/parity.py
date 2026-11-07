@@ -58,6 +58,8 @@ PARITY: dict[str, Mapped | Excluded] = {
     "sec.pay_vs_performance": Mapped(("sec_pay_vs_performance",)),
     "sec.earnings_guidance": Mapped(("sec_earnings_guidance",)),
     "sec.earnings_non_gaap": Mapped(("sec_earnings_non_gaap",)),
+    "sec.earnings_release_figures": Mapped(("sec_earnings_release_figures",)),
+    "sec.release_kpis": Mapped(("sec_release_kpis",)),
     "sec.segment_facts": Mapped(("sec_segment_facts",)),
     "sec.foreign_quarterly_statements": Mapped(("sec_foreign_quarterly",)),
     "company.ir_documents": Mapped(("company_ir_documents", "company_ir_targets")),
@@ -68,9 +70,16 @@ PARITY: dict[str, Mapped | Excluded] = {
     "sec_insider.transactions": Mapped(("sec_insider_trades",)),
     "sec13f.holdings": Mapped(("sec_13f_holdings",)),
     "sec.fund_nport": Mapped(("sec_fund_nport",)),
+    "sec.fund_expenses": Excluded(
+        "second_wave",
+        "a fund prospectus's fee table and objective; a tool for it is planned for a later release",
+    ),
     "sec.fund_nport_holdings": Mapped(("sec_fund_holdings",)),
     # TWSE / MOPS
     "twse.monthly_revenue": Mapped(("twse_monthly_revenue",)),
+    "twse.taiex": Excluded(
+        "second_wave", "the TAIEX index level; a tool for it is planned for a later release"
+    ),
     # the Federal Reserve and the Treasury
     "fomc.meetings": Mapped(("fed_fomc_meetings",)),
     "fomc.statement": Mapped(("fed_fomc_statements",)),

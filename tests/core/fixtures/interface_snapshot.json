@@ -150,6 +150,7 @@
     "now": "(self) -> 'datetime'",
     "paginate": "(self, fetch_page: 'FetchPage[T]', *, start_token: 'str | None' = None) -> 'PageResult[T]'",
     "portfolio_environment": "property",
+    "request_meta": "property",
     "results": "property",
     "session_id": "property",
     "settings": "property",
@@ -208,6 +209,105 @@
   }
  },
  "marketlens_mcp.results_api": {
+  "BUILTIN_MODELS": {
+   "keys": [
+    "marketlens.Account",
+    "marketlens.AccountConfig",
+    "marketlens.Activity",
+    "marketlens.Asset",
+    "marketlens.BankFinancials",
+    "marketlens.BankIndustrySummary",
+    "marketlens.Bar",
+    "marketlens.BeigeBookSection",
+    "marketlens.BetaPoint",
+    "marketlens.BetaResult",
+    "marketlens.BrokerWatchlist",
+    "marketlens.CentralBankObservation",
+    "marketlens.ConditionCode",
+    "marketlens.CorporateAction",
+    "marketlens.CorporateActionAnnouncement",
+    "marketlens.CorrelationCell",
+    "marketlens.DailyIndexEntry",
+    "marketlens.DrawdownPoint",
+    "marketlens.DrawdownSummary",
+    "marketlens.EarningsCalendarEntry",
+    "marketlens.EarningsFigure",
+    "marketlens.EarningsGuidance",
+    "marketlens.EarningsRelease",
+    "marketlens.EarningsReleaseFigure",
+    "marketlens.EarningsSurprise",
+    "marketlens.EconomicEvent",
+    "marketlens.EconomicObservation",
+    "marketlens.EconomicSeriesInfo",
+    "marketlens.Filing",
+    "marketlens.FilingEvent",
+    "marketlens.FilingSearchHit",
+    "marketlens.FixedIncomeQuote",
+    "marketlens.FomcMeeting",
+    "marketlens.FomcMinutes",
+    "marketlens.FomcProjection",
+    "marketlens.FomcStatement",
+    "marketlens.ForeignQuarterlyFigure",
+    "marketlens.Form144Notice",
+    "marketlens.FundHolding",
+    "marketlens.FundReport",
+    "marketlens.FundamentalValue",
+    "marketlens.InsiderTransaction",
+    "marketlens.InstitutionalHolding",
+    "marketlens.IpoFiling",
+    "marketlens.IrDocument",
+    "marketlens.IrTarget",
+    "marketlens.Locate",
+    "marketlens.LocateQuote",
+    "marketlens.MarketCalendarDay",
+    "marketlens.MarketClock",
+    "marketlens.MarketHoliday",
+    "marketlens.MoneyMarketFundStatistic",
+    "marketlens.MostActive",
+    "marketlens.Mover",
+    "marketlens.NewsItem",
+    "marketlens.NonGaapFigure",
+    "marketlens.OptionBar",
+    "marketlens.OptionContract",
+    "marketlens.OptionDeliverable",
+    "marketlens.OptionExchange",
+    "marketlens.OptionQuote",
+    "marketlens.OptionSnapshot",
+    "marketlens.OptionTrade",
+    "marketlens.Order",
+    "marketlens.OrderBookLevel",
+    "marketlens.OrderLeg",
+    "marketlens.PayVsPerformance",
+    "marketlens.PortfolioHistoryPoint",
+    "marketlens.Position",
+    "marketlens.ProviderDocument",
+    "marketlens.Quote",
+    "marketlens.ReferenceRate",
+    "marketlens.RegionalSurveyIndex",
+    "marketlens.ReleaseKpi",
+    "marketlens.ReleaseScheduleEntry",
+    "marketlens.ReturnPoint",
+    "marketlens.SegmentFact",
+    "marketlens.Snapshot",
+    "marketlens.StockExchange",
+    "marketlens.TaiwanMonthlyRevenue",
+    "marketlens.TraceAggregate",
+    "marketlens.Trade",
+    "marketlens.TradeFlow",
+    "marketlens.TreasuryAuction",
+    "marketlens.TreasuryCashBalance",
+    "marketlens.TreasuryDebt",
+    "marketlens.VolatilityPoint",
+    "marketlens.XbrlFact",
+    "marketlens.XbrlFrameValue",
+    "marketlens.YieldCurvePoint"
+   ],
+   "kind": "mapping"
+  },
+  "CLOCK_NAMES": {
+   "kind": "value",
+   "repr": "('knowledge_time', 'ingested_at')"
+  },
   "ColumnInfo": {
    "classvars": {},
    "config": {
@@ -247,6 +347,16 @@
     },
     "nulls": {
      "annotation": "int | None",
+     "default": "None",
+     "required": false
+    },
+    "role": {
+     "annotation": "typing.Optional[typing.Literal['available']]",
+     "default": "None",
+     "required": false
+    },
+    "source_model": {
+     "annotation": "str | None",
      "default": "None",
      "required": false
     },
@@ -483,6 +593,11 @@
      "default": null,
      "required": true
     },
+    "rows_of": {
+     "annotation": "marketlens_mcp.results_api.RowsOf | None",
+     "default": "None",
+     "required": false
+    },
     "schema_version": {
      "annotation": "<class 'str'>",
      "default": null,
@@ -639,6 +754,46 @@
     "usage": "(self) -> 'StoreUsage'"
    }
   },
+  "RowsOf": {
+   "classvars": {},
+   "config": {
+    "extra": "'forbid'",
+    "frozen": "True"
+   },
+   "fields": {
+    "adjustment": {
+     "annotation": "str | None",
+     "default": "None",
+     "required": false
+    },
+    "fetched_at": {
+     "annotation": "<class 'datetime.datetime'>",
+     "default": null,
+     "required": true
+    },
+    "lag_seconds": {
+     "annotation": "<class 'int'>",
+     "default": "0",
+     "required": false
+    },
+    "model": {
+     "annotation": "<class 'str'>",
+     "default": null,
+     "required": true
+    },
+    "shown": {
+     "annotation": "<class 'bool'>",
+     "default": "True",
+     "required": false
+    },
+    "span": {
+     "annotation": "str | None",
+     "default": "None",
+     "required": false
+    }
+   },
+   "kind": "model"
+  },
   "STORED_KIND": {
    "kind": "value",
    "repr": "'stored'"
@@ -676,6 +831,38 @@
   "TYPE_CHECKING": {
    "kind": "value",
    "repr": "False"
+  },
+  "UTC": {
+   "kind": "other",
+   "type": "timezone"
+  },
+  "implied_time": {
+   "kind": "function",
+   "signature": "(stamps: 'Sequence[str]') -> 'str | None'"
+  },
+  "known_late": {
+   "kind": "function",
+   "signature": "(src: 'RowsOf') -> 'bool'"
+  },
+  "known_model": {
+   "kind": "function",
+   "signature": "(info: 'ResultInfo') -> 'type[CanonicalModel] | None'"
+  },
+  "known_span": {
+   "kind": "function",
+   "signature": "(info: 'ResultInfo', cls: 'type[CanonicalModel] | None') -> 'str | None'"
+  },
+  "period_rows": {
+   "kind": "function",
+   "signature": "(info: 'ResultInfo') -> 'RowsOf | None'"
+  },
+  "source_rows": {
+   "kind": "function",
+   "signature": "(info: 'ResultInfo') -> 'RowsOf | None'"
+  },
+  "unshown_known": {
+   "kind": "function",
+   "signature": "(info: 'ResultInfo') -> 'str | None'"
   }
  },
  "marketlens_schema": {
@@ -752,6 +939,7 @@
     "marketlens.EarningsFigure",
     "marketlens.EarningsGuidance",
     "marketlens.EarningsRelease",
+    "marketlens.EarningsReleaseFigure",
     "marketlens.EarningsSurprise",
     "marketlens.EconomicEvent",
     "marketlens.EconomicObservation",
@@ -801,6 +989,7 @@
     "marketlens.Quote",
     "marketlens.ReferenceRate",
     "marketlens.RegionalSurveyIndex",
+    "marketlens.ReleaseKpi",
     "marketlens.ReleaseScheduleEntry",
     "marketlens.ReturnPoint",
     "marketlens.SegmentFact",
@@ -823,7 +1012,10 @@
   "CanonicalModel": {
    "classvars": {
     "group_column": "None",
+    "known_at_fetch": "False",
+    "known_at_time": "False",
     "schema_name": "''",
+    "span_column": "None",
     "time_column": "None",
     "value_columns": "()"
    },
@@ -839,6 +1031,10 @@
     }
    },
    "kind": "model"
+  },
+  "DATA_MODELS": {
+   "kind": "value",
+   "repr": "(<class 'marketlens_schema.data.EconomicObservation'>, <class 'marketlens_schema.data.EconomicSeriesInfo'>, <class 'marketlens_schema.data.ReleaseScheduleEntry'>, <class 'marketlens_schema.data.TradeFlow'>, <class 'marketlens_schema.data.CentralBankObservation'>, <class 'marketlens_schema.data.RegionalSurveyIndex'>, <class 'marketlens_schema.data.TraceAggregate'>, <class 'marketlens_schema.data.Filing'>, <class 'marketlens_schema.data.FilingSearchHit'>, <class 'marketlens_schema.data.FilingEvent'>, <class 'marketlens_schema.data.TaiwanMonthlyRevenue'>, <class 'marketlens_schema.data.XbrlFact'>, <class 'marketlens_schema.data.XbrlFrameValue'>, <class 'marketlens_schema.data.PayVsPerformance'>, <class 'marketlens_schema.data.FundamentalValue'>, <class 'marketlens_schema.data.EarningsRelease'>, <class 'marketlens_schema.data.EarningsFigure'>, <class 'marketlens_schema.data.EarningsGuidance'>, <class 'marketlens_schema.data.NonGaapFigure'>, <class 'marketlens_schema.data.EarningsReleaseFigure'>, <class 'marketlens_schema.data.ReleaseKpi'>, <class 'marketlens_schema.data.SegmentFact'>, <class 'marketlens_schema.data.ForeignQuarterlyFigure'>, <class 'marketlens_schema.data.IrDocument'>, <class 'marketlens_schema.data.IrTarget'>, <class 'marketlens_schema.data.InsiderTransaction'>, <class 'marketlens_schema.data.DailyIndexEntry'>, <class 'marketlens_schema.data.Form144Notice'>, <class 'marketlens_schema.data.IpoFiling'>, <class 'marketlens_schema.data.InstitutionalHolding'>, <class 'marketlens_schema.data.FundReport'>, <class 'marketlens_schema.data.FundHolding'>, <class 'marketlens_schema.data.FomcMeeting'>, <class 'marketlens_schema.data.FomcStatement'>, <class 'marketlens_schema.data.FomcProjection'>, <class 'marketlens_schema.data.FomcMinutes'>, <class 'marketlens_schema.data.BeigeBookSection'>, <class 'marketlens_schema.data.ReferenceRate'>, <class 'marketlens_schema.data.YieldCurvePoint'>, <class 'marketlens_schema.data.TreasuryAuction'>, <class 'marketlens_schema.data.TreasuryDebt'>, <class 'marketlens_schema.data.TreasuryCashBalance'>, <class 'marketlens_schema.data.BankFinancials'>, <class 'marketlens_schema.data.BankIndustrySummary'>, <class 'marketlens_schema.data.MoneyMarketFundStatistic'>, <class 'marketlens_schema.data.EconomicEvent'>, <class 'marketlens_schema.data.EarningsCalendarEntry'>, <class 'marketlens_schema.data.EarningsSurprise'>, <class 'marketlens_schema.data.MarketHoliday'>)"
   },
   "DecimalStr": {
    "kind": "other",
@@ -992,6 +1188,11 @@
     "cached": {
      "annotation": "<class 'bool'>",
      "default": "False",
+     "required": false
+    },
+    "collected_at": {
+     "annotation": "typing.Optional[typing.Annotated[datetime.datetime, AfterValidator(func=<function _to_utc>), PlainSerializer(func=<function _iso_z>, return_type=<class 'str'>, when_used='json')]]",
+     "default": "None",
      "required": false
     },
     "dataset": {
@@ -1177,7 +1378,10 @@
   "BetaPoint": {
    "classvars": {
     "group_column": "'series'",
+    "known_at_fetch": "False",
+    "known_at_time": "False",
     "schema_name": "'marketlens.BetaPoint'",
+    "span_column": "None",
     "time_column": "'t'",
     "value_columns": "('beta',)"
    },
@@ -1191,6 +1395,11 @@
      "default": "None",
      "required": false
     },
+    "alpha": {
+     "annotation": "float | None",
+     "default": "None",
+     "required": false
+    },
     "benchmark": {
      "annotation": "<class 'str'>",
      "default": null,
@@ -1201,8 +1410,18 @@
      "default": "None",
      "required": false
     },
+    "n_obs": {
+     "annotation": "int | None",
+     "default": "None",
+     "required": false
+    },
     "period": {
      "annotation": "typing.Optional[typing.Annotated[str, StringConstraints(strip_whitespace=None, to_upper=None, to_lower=None, strict=None, min_length=None, max_length=None, pattern='^(?:(?:[1-9]|[1-5][0-9])min|(?:[1-9]|1[0-9]|2[0-3])h|1d|1w|(?:1|2|3|4|6|12)mo)$', ascii_only=None)]]",
+     "default": "None",
+     "required": false
+    },
+    "r_squared": {
+     "annotation": "float | None",
      "default": "None",
      "required": false
     },
@@ -1215,6 +1434,11 @@
      "annotation": "<class 'str'>",
      "default": null,
      "required": true
+    },
+    "start": {
+     "annotation": "typing.Optional[typing.Annotated[datetime.datetime, AfterValidator(func=<function _to_utc>), PlainSerializer(func=<function _iso_z>, return_type=<class 'str'>, when_used='json')]]",
+     "default": "None",
+     "required": false
     },
     "t": {
      "annotation": "<class 'datetime.datetime'>",
@@ -1232,7 +1456,10 @@
   "BetaResult": {
    "classvars": {
     "group_column": "'series'",
+    "known_at_fetch": "False",
+    "known_at_time": "False",
     "schema_name": "'marketlens.BetaResult'",
+    "span_column": "None",
     "time_column": "None",
     "value_columns": "('beta', 'alpha', 'r_squared')"
    },
@@ -1302,7 +1529,10 @@
   "CorrelationCell": {
    "classvars": {
     "group_column": "None",
+    "known_at_fetch": "False",
+    "known_at_time": "False",
     "schema_name": "'marketlens.CorrelationCell'",
+    "span_column": "None",
     "time_column": "None",
     "value_columns": "('correlation',)"
    },
@@ -1357,7 +1587,10 @@
   "DrawdownPoint": {
    "classvars": {
     "group_column": "'series'",
+    "known_at_fetch": "False",
+    "known_at_time": "False",
     "schema_name": "'marketlens.DrawdownPoint'",
+    "span_column": "None",
     "time_column": "'t'",
     "value_columns": "('drawdown',)"
    },
@@ -1402,7 +1635,10 @@
   "DrawdownSummary": {
    "classvars": {
     "group_column": "'series'",
+    "known_at_fetch": "False",
+    "known_at_time": "False",
     "schema_name": "'marketlens.DrawdownSummary'",
+    "span_column": "None",
     "time_column": "None",
     "value_columns": "('max_drawdown',)"
    },
@@ -1466,7 +1702,10 @@
   "ReturnPoint": {
    "classvars": {
     "group_column": "'series'",
+    "known_at_fetch": "False",
+    "known_at_time": "False",
     "schema_name": "'marketlens.ReturnPoint'",
+    "span_column": "None",
     "time_column": "'t'",
     "value_columns": "('ret',)"
    },
@@ -1516,7 +1755,10 @@
   "VolatilityPoint": {
    "classvars": {
     "group_column": "'series'",
+    "known_at_fetch": "False",
+    "known_at_time": "False",
     "schema_name": "'marketlens.VolatilityPoint'",
+    "span_column": "None",
     "time_column": "'t'",
     "value_columns": "('volatility',)"
    },
@@ -1620,7 +1862,10 @@
   "CanonicalModel": {
    "classvars": {
     "group_column": "None",
+    "known_at_fetch": "False",
+    "known_at_time": "False",
     "schema_name": "''",
+    "span_column": "None",
     "time_column": "None",
     "value_columns": "()"
    },
@@ -1781,6 +2026,11 @@
     "cached": {
      "annotation": "<class 'bool'>",
      "default": "False",
+     "required": false
+    },
+    "collected_at": {
+     "annotation": "typing.Optional[typing.Annotated[datetime.datetime, AfterValidator(func=<function _to_utc>), PlainSerializer(func=<function _iso_z>, return_type=<class 'str'>, when_used='json')]]",
+     "default": "None",
      "required": false
     },
     "dataset": {
@@ -1950,7 +2200,10 @@
   "Asset": {
    "classvars": {
     "group_column": "'ticker'",
+    "known_at_fetch": "False",
+    "known_at_time": "False",
     "schema_name": "'marketlens.Asset'",
+    "span_column": "None",
     "time_column": "None",
     "value_columns": "()"
    },
@@ -2060,7 +2313,10 @@
   "Bar": {
    "classvars": {
     "group_column": "'ticker'",
+    "known_at_fetch": "False",
+    "known_at_time": "True",
     "schema_name": "'marketlens.Bar'",
+    "span_column": "'timeframe'",
     "time_column": "'t'",
     "value_columns": "('close', 'open', 'high', 'low', 'vwap', 'volume')"
    },
@@ -2137,10 +2393,61 @@
    },
    "kind": "model"
   },
+  "ConditionCode": {
+   "classvars": {
+    "group_column": "None",
+    "known_at_fetch": "False",
+    "known_at_time": "True",
+    "schema_name": "'marketlens.ConditionCode'",
+    "span_column": "None",
+    "time_column": "None",
+    "value_columns": "()"
+   },
+   "config": {
+    "extra": "'forbid'",
+    "frozen": "True"
+   },
+   "fields": {
+    "absent": {
+     "annotation": "dict[str, marketlens_schema.base.AbsenceCode] | None",
+     "default": "None",
+     "required": false
+    },
+    "asset_class": {
+     "annotation": "typing.Literal['us_equity', 'us_option']",
+     "default": null,
+     "required": true
+    },
+    "code": {
+     "annotation": "<class 'str'>",
+     "default": null,
+     "required": true
+    },
+    "name": {
+     "annotation": "<class 'str'>",
+     "default": null,
+     "required": true
+    },
+    "tape": {
+     "annotation": "typing.Optional[typing.Literal['A', 'B', 'C']]",
+     "default": "None",
+     "required": false
+    },
+    "tick_type": {
+     "annotation": "typing.Literal['trade', 'quote']",
+     "default": null,
+     "required": true
+    }
+   },
+   "kind": "model"
+  },
   "CorporateAction": {
    "classvars": {
     "group_column": "'ticker'",
+    "known_at_fetch": "False",
+    "known_at_time": "False",
     "schema_name": "'marketlens.CorporateAction'",
+    "span_column": "None",
     "time_column": "None",
     "value_columns": "()"
    },
@@ -2156,6 +2463,11 @@
     },
     "acquiree_ticker": {
      "annotation": "typing.Optional[typing.Annotated[str, StringConstraints(strip_whitespace=None, to_upper=None, to_lower=None, strict=None, min_length=None, max_length=None, pattern='^(?:[A-Z][A-Z0-9]{0,9}(?:-[A-Z0-9]{1,5})?|[A-Z0-9]{2,10}/[A-Z0-9]{2,10})$', ascii_only=None)]]",
+     "default": "None",
+     "required": false
+    },
+    "acquirer_cusip": {
+     "annotation": "str | None",
      "default": "None",
      "required": false
     },
@@ -2206,6 +2518,11 @@
     },
     "isin": {
      "annotation": "typing.Optional[typing.Annotated[str, StringConstraints(strip_whitespace=None, to_upper=None, to_lower=None, strict=None, min_length=None, max_length=None, pattern='^[A-Z]{2}[A-Z0-9]{9}\\\\d$', ascii_only=None)]]",
+     "default": "None",
+     "required": false
+    },
+    "new_cusip": {
+     "annotation": "str | None",
      "default": "None",
      "required": false
     },
@@ -2270,7 +2587,10 @@
   "CorporateActionAnnouncement": {
    "classvars": {
     "group_column": "'initiating_ticker'",
+    "known_at_fetch": "False",
+    "known_at_time": "False",
     "schema_name": "'marketlens.CorporateActionAnnouncement'",
+    "span_column": "None",
     "time_column": "None",
     "value_columns": "()"
    },
@@ -2370,7 +2690,10 @@
   "FixedIncomeQuote": {
    "classvars": {
     "group_column": "'isin'",
+    "known_at_fetch": "False",
+    "known_at_time": "True",
     "schema_name": "'marketlens.FixedIncomeQuote'",
+    "span_column": "None",
     "time_column": "'t'",
     "value_columns": "('bid_price', 'ask_price', 'bid_ytm', 'ask_ytm')"
    },
@@ -2444,7 +2767,10 @@
   "MarketCalendarDay": {
    "classvars": {
     "group_column": "None",
+    "known_at_fetch": "False",
+    "known_at_time": "False",
     "schema_name": "'marketlens.MarketCalendarDay'",
+    "span_column": "None",
     "time_column": "None",
     "value_columns": "()"
    },
@@ -2499,7 +2825,10 @@
   "MarketClock": {
    "classvars": {
     "group_column": "None",
+    "known_at_fetch": "False",
+    "known_at_time": "True",
     "schema_name": "'marketlens.MarketClock'",
+    "span_column": "None",
     "time_column": "'t'",
     "value_columns": "()"
    },
@@ -2544,7 +2873,10 @@
   "MostActive": {
    "classvars": {
     "group_column": "'ticker'",
+    "known_at_fetch": "False",
+    "known_at_time": "False",
     "schema_name": "'marketlens.MostActive'",
+    "span_column": "None",
     "time_column": "None",
     "value_columns": "('volume', 'trade_count')"
    },
@@ -2562,6 +2894,26 @@
      "annotation": "<class 'datetime.datetime'>",
      "default": null,
      "required": true
+    },
+    "change": {
+     "annotation": "float | None",
+     "default": "None",
+     "required": false
+    },
+    "change_basis": {
+     "annotation": "typing.Optional[typing.Literal['last_trade', 'day_close']]",
+     "default": "None",
+     "required": false
+    },
+    "change_pct": {
+     "annotation": "float | None",
+     "default": "None",
+     "required": false
+    },
+    "price": {
+     "annotation": "float | None",
+     "default": "None",
+     "required": false
     },
     "rank": {
      "annotation": "<class 'int'>",
@@ -2594,7 +2946,10 @@
   "Mover": {
    "classvars": {
     "group_column": "'ticker'",
+    "known_at_fetch": "False",
+    "known_at_time": "False",
     "schema_name": "'marketlens.Mover'",
+    "span_column": "None",
     "time_column": "None",
     "value_columns": "('percent_change', 'change', 'price')"
    },
@@ -2654,7 +3009,10 @@
   "NewsItem": {
    "classvars": {
     "group_column": "None",
+    "known_at_fetch": "False",
+    "known_at_time": "False",
     "schema_name": "'marketlens.NewsItem'",
+    "span_column": "None",
     "time_column": "'created_at'",
     "value_columns": "()"
    },
@@ -2724,7 +3082,10 @@
   "OptionBar": {
    "classvars": {
     "group_column": "'occ_symbol'",
+    "known_at_fetch": "False",
+    "known_at_time": "True",
     "schema_name": "'marketlens.OptionBar'",
+    "span_column": "'timeframe'",
     "time_column": "'t'",
     "value_columns": "('close', 'open', 'high', 'low', 'vwap', 'volume')"
    },
@@ -2804,7 +3165,10 @@
   "OptionContract": {
    "classvars": {
     "group_column": "'occ_symbol'",
+    "known_at_fetch": "False",
+    "known_at_time": "False",
     "schema_name": "'marketlens.OptionContract'",
+    "span_column": "None",
     "time_column": "None",
     "value_columns": "()"
    },
@@ -2914,7 +3278,10 @@
   "OptionDeliverable": {
    "classvars": {
     "group_column": "None",
+    "known_at_fetch": "False",
+    "known_at_time": "False",
     "schema_name": "'marketlens.OptionDeliverable'",
+    "span_column": "None",
     "time_column": "None",
     "value_columns": "()"
    },
@@ -2969,7 +3336,10 @@
   "OptionExchange": {
    "classvars": {
     "group_column": "None",
+    "known_at_fetch": "False",
+    "known_at_time": "True",
     "schema_name": "'marketlens.OptionExchange'",
+    "span_column": "None",
     "time_column": "None",
     "value_columns": "()"
    },
@@ -2999,7 +3369,10 @@
   "OptionQuote": {
    "classvars": {
     "group_column": "'occ_symbol'",
+    "known_at_fetch": "False",
+    "known_at_time": "True",
     "schema_name": "'marketlens.OptionQuote'",
+    "span_column": "None",
     "time_column": "'t'",
     "value_columns": "('bid_price', 'ask_price')"
    },
@@ -3074,7 +3447,10 @@
   "OptionSnapshot": {
    "classvars": {
     "group_column": "'occ_symbol'",
+    "known_at_fetch": "True",
+    "known_at_time": "False",
     "schema_name": "'marketlens.OptionSnapshot'",
+    "span_column": "None",
     "time_column": "'t'",
     "value_columns": "('implied_volatility', 'delta', 'last_price', 'bid_price', 'ask_price')"
    },
@@ -3133,6 +3509,11 @@
      "default": "None",
      "required": false
     },
+    "day_t": {
+     "annotation": "typing.Optional[typing.Annotated[datetime.datetime, AfterValidator(func=<function _to_utc>), PlainSerializer(func=<function _iso_z>, return_type=<class 'str'>, when_used='json')]]",
+     "default": "None",
+     "required": false
+    },
     "day_volume": {
      "annotation": "float | None",
      "default": "None",
@@ -3178,6 +3559,16 @@
      "default": null,
      "required": true
     },
+    "open_interest": {
+     "annotation": "int | None",
+     "default": "None",
+     "required": false
+    },
+    "open_interest_date": {
+     "annotation": "datetime.date | None",
+     "default": "None",
+     "required": false
+    },
     "option_type": {
      "annotation": "<enum 'OptionType'>",
      "default": null,
@@ -3185,6 +3576,11 @@
     },
     "prev_close": {
      "annotation": "float | None",
+     "default": "None",
+     "required": false
+    },
+    "prev_t": {
+     "annotation": "typing.Optional[typing.Annotated[datetime.datetime, AfterValidator(func=<function _to_utc>), PlainSerializer(func=<function _iso_z>, return_type=<class 'str'>, when_used='json')]]",
      "default": "None",
      "required": false
     },
@@ -3229,7 +3625,10 @@
   "OptionTrade": {
    "classvars": {
     "group_column": "'occ_symbol'",
+    "known_at_fetch": "False",
+    "known_at_time": "True",
     "schema_name": "'marketlens.OptionTrade'",
+    "span_column": "None",
     "time_column": "'t'",
     "value_columns": "('price', 'size')"
    },
@@ -3289,7 +3688,10 @@
   "OrderBookLevel": {
    "classvars": {
     "group_column": "'ticker'",
+    "known_at_fetch": "False",
+    "known_at_time": "True",
     "schema_name": "'marketlens.OrderBookLevel'",
+    "span_column": "None",
     "time_column": "'t'",
     "value_columns": "('price', 'size')"
    },
@@ -3349,7 +3751,10 @@
   "ProviderDocument": {
    "classvars": {
     "group_column": "None",
+    "known_at_fetch": "False",
+    "known_at_time": "False",
     "schema_name": "'marketlens.ProviderDocument'",
+    "span_column": "None",
     "time_column": "None",
     "value_columns": "()"
    },
@@ -3409,7 +3814,10 @@
   "Quote": {
    "classvars": {
     "group_column": "'ticker'",
+    "known_at_fetch": "False",
+    "known_at_time": "True",
     "schema_name": "'marketlens.Quote'",
+    "span_column": "None",
     "time_column": "'t'",
     "value_columns": "('bid_price', 'ask_price', 'bid_size', 'ask_size')"
    },
@@ -3489,7 +3897,10 @@
   "Snapshot": {
    "classvars": {
     "group_column": "'ticker'",
+    "known_at_fetch": "True",
+    "known_at_time": "False",
     "schema_name": "'marketlens.Snapshot'",
+    "span_column": "None",
     "time_column": "'t'",
     "value_columns": "('last_price', 'change_pct')"
    },
@@ -3530,6 +3941,11 @@
     },
     "change": {
      "annotation": "float | None",
+     "default": "None",
+     "required": false
+    },
+    "change_basis": {
+     "annotation": "typing.Optional[typing.Literal['last_trade', 'day_close']]",
      "default": "None",
      "required": false
     },
@@ -3626,10 +4042,46 @@
    },
    "kind": "model"
   },
+  "StockExchange": {
+   "classvars": {
+    "group_column": "None",
+    "known_at_fetch": "False",
+    "known_at_time": "True",
+    "schema_name": "'marketlens.StockExchange'",
+    "span_column": "None",
+    "time_column": "None",
+    "value_columns": "()"
+   },
+   "config": {
+    "extra": "'forbid'",
+    "frozen": "True"
+   },
+   "fields": {
+    "absent": {
+     "annotation": "dict[str, marketlens_schema.base.AbsenceCode] | None",
+     "default": "None",
+     "required": false
+    },
+    "code": {
+     "annotation": "<class 'str'>",
+     "default": null,
+     "required": true
+    },
+    "name": {
+     "annotation": "<class 'str'>",
+     "default": null,
+     "required": true
+    }
+   },
+   "kind": "model"
+  },
   "Trade": {
    "classvars": {
     "group_column": "'ticker'",
+    "known_at_fetch": "False",
+    "known_at_time": "True",
     "schema_name": "'marketlens.Trade'",
+    "span_column": "None",
     "time_column": "'t'",
     "value_columns": "('price', 'size')"
    },
@@ -3706,7 +4158,10 @@
   "Account": {
    "classvars": {
     "group_column": "None",
+    "known_at_fetch": "False",
+    "known_at_time": "False",
     "schema_name": "'marketlens.Account'",
+    "span_column": "None",
     "time_column": "None",
     "value_columns": "()"
    },
@@ -3901,7 +4356,10 @@
   "AccountConfig": {
    "classvars": {
     "group_column": "None",
+    "known_at_fetch": "False",
+    "known_at_time": "False",
     "schema_name": "'marketlens.AccountConfig'",
+    "span_column": "None",
     "time_column": "None",
     "value_columns": "()"
    },
@@ -3976,7 +4434,10 @@
   "Activity": {
    "classvars": {
     "group_column": "'ticker'",
+    "known_at_fetch": "False",
+    "known_at_time": "False",
     "schema_name": "'marketlens.Activity'",
+    "span_column": "None",
     "time_column": "'t'",
     "value_columns": "()"
    },
@@ -4096,7 +4557,10 @@
   "BrokerWatchlist": {
    "classvars": {
     "group_column": "None",
+    "known_at_fetch": "False",
+    "known_at_time": "False",
     "schema_name": "'marketlens.BrokerWatchlist'",
+    "span_column": "None",
     "time_column": "None",
     "value_columns": "()"
    },
@@ -4146,7 +4610,10 @@
   "Locate": {
    "classvars": {
     "group_column": "'ticker'",
+    "known_at_fetch": "False",
+    "known_at_time": "False",
     "schema_name": "'marketlens.Locate'",
+    "span_column": "None",
     "time_column": "None",
     "value_columns": "()"
    },
@@ -4231,7 +4698,10 @@
   "LocateQuote": {
    "classvars": {
     "group_column": "'ticker'",
+    "known_at_fetch": "False",
+    "known_at_time": "False",
     "schema_name": "'marketlens.LocateQuote'",
+    "span_column": "None",
     "time_column": "None",
     "value_columns": "()"
    },
@@ -4276,7 +4746,10 @@
   "Order": {
    "classvars": {
     "group_column": "'ticker'",
+    "known_at_fetch": "False",
+    "known_at_time": "False",
     "schema_name": "'marketlens.Order'",
+    "span_column": "None",
     "time_column": "'created_at'",
     "value_columns": "()"
    },
@@ -4466,7 +4939,10 @@
   "OrderLeg": {
    "classvars": {
     "group_column": "None",
+    "known_at_fetch": "False",
+    "known_at_time": "False",
     "schema_name": "'marketlens.OrderLeg'",
+    "span_column": "None",
     "time_column": "None",
     "value_columns": "()"
    },
@@ -4575,7 +5051,10 @@
   "PortfolioHistoryPoint": {
    "classvars": {
     "group_column": "None",
+    "known_at_fetch": "False",
+    "known_at_time": "False",
     "schema_name": "'marketlens.PortfolioHistoryPoint'",
+    "span_column": "None",
     "time_column": "'t'",
     "value_columns": "('equity', 'profit_loss', 'profit_loss_pct')"
    },
@@ -4630,7 +5109,10 @@
   "Position": {
    "classvars": {
     "group_column": "'ticker'",
+    "known_at_fetch": "False",
+    "known_at_time": "False",
     "schema_name": "'marketlens.Position'",
+    "span_column": "None",
     "time_column": "None",
     "value_columns": "('market_value', 'unrealized_pl', 'unrealized_plpc')"
    },

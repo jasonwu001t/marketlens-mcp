@@ -1,0 +1,187 @@
+{
+  "$defs": {
+    "AbsenceCode": {
+      "description": "Why a value is None. Never served as 0.",
+      "enum": [
+        "not_provided_by_source",
+        "not_applicable",
+        "not_entitled",
+        "no_data",
+        "insufficient_data",
+        "not_recovered",
+        "no_match",
+        "withheld",
+        "source_error",
+        "unparseable"
+      ],
+      "title": "AbsenceCode",
+      "type": "string"
+    }
+  },
+  "$id": "urn:marketlens:schema:1:marketlens.EarningsReleaseFigure",
+  "additionalProperties": false,
+  "description": "One headline income-statement figure of an earnings press release\n(EX-99.1) on release night: revenue, gross profit, gross margin, operating\nincome, operating margin, net income or diluted EPS, for the company or one\nsegment, read from the release's tables by a named row rule, in the column\nof the release's quarter or, as its own row, the same quarter a year\nearlier. A margin is a fraction (45.2 % is 0.452). ``table_caption``,\n``section_label``, ``row_label`` and ``source_text`` are UNTRUSTED company\ntext.",
+  "properties": {
+    "absent": {
+      "anyOf": [
+        {
+          "additionalProperties": {
+            "$ref": "#/$defs/AbsenceCode"
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Per-row reasons for None fields: field name -> AbsenceCode",
+      "title": "Absent"
+    },
+    "accepted_at": {
+      "description": "The 8-K's EDGAR acceptance",
+      "format": "date-time",
+      "title": "Accepted At",
+      "type": "string",
+      "x-unit": "UTC"
+    },
+    "accession_number": {
+      "title": "Accession Number",
+      "type": "string"
+    },
+    "basis": {
+      "description": "gaap or non_gaap, as the row label or the table heading says it",
+      "title": "Basis",
+      "type": "string"
+    },
+    "cik": {
+      "title": "Cik",
+      "type": "string"
+    },
+    "column": {
+      "description": "current (the release's quarter) or prior_year (the same quarter a year earlier)",
+      "enum": [
+        "current",
+        "prior_year"
+      ],
+      "title": "Column",
+      "type": "string"
+    },
+    "exhibit": {
+      "description": "EX-99.1, EX-99, ...",
+      "title": "Exhibit",
+      "type": "string"
+    },
+    "exhibit_url": {
+      "title": "Exhibit Url",
+      "type": "string"
+    },
+    "knowledge_time": {
+      "description": "When the value became knowable under the dataset's point-in-time policy",
+      "format": "date-time",
+      "title": "Knowledge Time",
+      "type": "string",
+      "x-role": "available",
+      "x-unit": "UTC"
+    },
+    "metric": {
+      "description": "revenue, gross_profit, gross_margin, operating_income, operating_margin, net_income, eps_diluted",
+      "title": "Metric",
+      "type": "string"
+    },
+    "parse_rule": {
+      "title": "Parse Rule",
+      "type": "string"
+    },
+    "period_end": {
+      "description": "The quarter's end, from the column header",
+      "format": "date",
+      "title": "Period End",
+      "type": "string"
+    },
+    "period_label": {
+      "description": "The column header as stated",
+      "title": "Period Label",
+      "type": "string"
+    },
+    "row_label": {
+      "description": "The row's label as filed (untrusted text)",
+      "title": "Row Label",
+      "type": "string"
+    },
+    "section_label": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The label-only row above the row, as filed",
+      "title": "Section Label"
+    },
+    "segment": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The segment as the table names it; null for the company",
+      "title": "Segment"
+    },
+    "source_text": {
+      "description": "The table row (untrusted text)",
+      "title": "Source Text",
+      "type": "string"
+    },
+    "table_caption": {
+      "description": "The table's caption and headings (untrusted text)",
+      "title": "Table Caption",
+      "type": "string"
+    },
+    "ticker": {
+      "title": "Ticker",
+      "type": "string"
+    },
+    "unit": {
+      "description": "USD (full dollars), fraction (a margin) or USD/share",
+      "title": "Unit",
+      "type": "string"
+    },
+    "value": {
+      "description": "In the row's `unit`",
+      "title": "Value",
+      "type": "number",
+      "x-unit": "as_published"
+    }
+  },
+  "required": [
+    "ticker",
+    "cik",
+    "accession_number",
+    "accepted_at",
+    "exhibit",
+    "exhibit_url",
+    "metric",
+    "basis",
+    "period_end",
+    "period_label",
+    "column",
+    "value",
+    "unit",
+    "table_caption",
+    "row_label",
+    "source_text",
+    "parse_rule",
+    "knowledge_time"
+  ],
+  "title": "EarningsReleaseFigure",
+  "type": "object",
+  "x-schema-version": "1.1.0"
+}

@@ -26,7 +26,7 @@ Conventions of base.py hold, plus:
 FilingSearchHit is built by the built-in official provider (filings_search),
 not the extra; FilingEvent by the extra's filings_events, XbrlFrameValue by
 sec_xbrl_frames, PayVsPerformance by sec_pay_vs_performance, EarningsGuidance,
-NonGaapFigure, SegmentFact, ForeignQuarterlyFigure, IrDocument and IrTarget by
+NonGaapFigure, EarningsReleaseFigure, ReleaseKpi, SegmentFact, ForeignQuarterlyFigure, IrDocument and IrTarget by
 the tools of the same datasets; TaiwanMonthlyRevenue by twse_monthly_revenue.
 """
 
@@ -679,6 +679,97 @@ class NonGaapFigure(CanonicalModel):
     knowledge_time: UtcDatetime = _known()
 
 
+class EarningsReleaseFigure(CanonicalModel):
+    """One headline income-statement figure of an earnings press release
+    (EX-99.1) on release night: revenue, gross profit, gross margin, operating
+    income, operating margin, net income or diluted EPS, for the company or one
+    segment, read from the release's tables by a named row rule, in the column
+    of the release's quarter or, as its own row, the same quarter a year
+    earlier. A margin is a fraction (45.2 % is 0.452). ``table_caption``,
+    ``section_label``, ``row_label`` and ``source_text`` are UNTRUSTED company
+    text."""
+
+    schema_name: ClassVar[str] = "marketlens.EarningsReleaseFigure"
+    time_column: ClassVar[str | None] = "accepted_at"
+    group_column: ClassVar[str | None] = "metric"
+    value_columns: ClassVar[tuple[str, ...]] = ("value",)
+
+    ticker: str
+    cik: str
+    accession_number: str
+    accepted_at: UtcDatetime = _unit("UTC", description="The 8-K's EDGAR acceptance")
+    exhibit: str = Field(description="EX-99.1, EX-99, ...")
+    exhibit_url: str
+    metric: str = Field(
+        description="revenue, gross_profit, gross_margin, operating_income, operating_margin, net_income, "
+        "eps_diluted"
+    )
+    basis: str = Field(description="gaap or non_gaap, as the row label or the table heading says it")
+    segment: str | None = Field(
+        default=None, description="The segment as the table names it; null for the company"
+    )
+    period_end: Date = Field(description="The quarter's end, from the column header")
+    period_label: str = Field(description="The column header as stated")
+    column: Literal["current", "prior_year"] = Field(
+        description="current (the release's quarter) or prior_year (the same quarter a year earlier)"
+    )
+    value: float = _unit("as_published", description="In the row's `unit`")
+    unit: str = Field(description="USD (full dollars), fraction (a margin) or USD/share")
+    table_caption: str = Field(description="The table's caption and headings (untrusted text)")
+    section_label: str | None = Field(default=None, description="The label-only row above the row, as filed")
+    row_label: str = Field(description="The row's label as filed (untrusted text)")
+    source_text: str = Field(description="The table row (untrusted text)")
+    parse_rule: str
+    knowledge_time: UtcDatetime = _known()
+
+
+class ReleaseKpi(CanonicalModel):
+    """One operating KPI of an earnings press release (EX-99.1): active users,
+    revenue per user, ARR, RPO, backlog, customers, subscribers, units, average
+    selling price, net revenue retention, inventory days, a bank's net interest
+    margin, efficiency, CET1 and net charge-off ratios, average loans and
+    deposits, assets under management; read from the release's tables by the
+    dictionary of the company's type, in the column of the release's period or,
+    as its own row, the same period a year earlier. RPO may instead come from
+    the company's us-gaap XBRL fact (``exhibit`` XBRL, authority official). A
+    percentage is a fraction (a 3.1 % margin is 0.031). The labels, caption and
+    ``source_text`` are UNTRUSTED company text."""
+
+    schema_name: ClassVar[str] = "marketlens.ReleaseKpi"
+    time_column: ClassVar[str | None] = "accepted_at"
+    group_column: ClassVar[str | None] = "kpi"
+    value_columns: ClassVar[tuple[str, ...]] = ("value",)
+
+    ticker: str
+    cik: str
+    accession_number: str
+    accepted_at: UtcDatetime = _unit(
+        "UTC", description="The 8-K's EDGAR acceptance (an XBRL row: its filing's)"
+    )
+    exhibit: str = Field(description="EX-99.1, EX-99, ...; XBRL for a fact")
+    exhibit_url: str
+    company_type: str = Field(description="default or bank, by the company's SIC")
+    kpi: str = Field(description="A KPI id of the company type's dictionary: dau, arr, rpo, backlog, ...")
+    value: float = _unit("as_published", description="In the row's `unit`")
+    unit: str = Field(
+        description="count, USD (full dollars), USD/user, USD/unit, fraction (a percentage) or days"
+    )
+    period_end: Date = Field(description="The period's end (or the instant), from the column header")
+    period_label: str = Field(description="The column header as stated")
+    column: Literal["current", "prior_year"] = Field(
+        description="current (the release's period) or prior_year (the same period a year earlier)"
+    )
+    row_label: str = Field(description="The row's label as filed (the concept for an XBRL row)")
+    section_label: str | None = Field(default=None, description="The label-only row above the row, as filed")
+    table_caption: str = Field(description="The table's caption and headings (untrusted text)")
+    source_text: str = Field(description="The table row (untrusted text)")
+    parse_rule: str
+    authority: Literal["official", "company"] = Field(
+        description="company (the release's own table) or official (an XBRL fact)"
+    )
+    knowledge_time: UtcDatetime = _known()
+
+
 class SegmentFact(CanonicalModel):
     """One dimensional XBRL fact of a 10-K or 10-Q: a concept's value for one
     business segment, product, region or revenue-disaggregation line, as the
@@ -1323,6 +1414,8 @@ DATA_MODELS: tuple[type[CanonicalModel], ...] = (
     EarningsFigure,
     EarningsGuidance,
     NonGaapFigure,
+    EarningsReleaseFigure,
+    ReleaseKpi,
     SegmentFact,
     ForeignQuarterlyFigure,
     IrDocument,

@@ -1,0 +1,184 @@
+{
+  "$defs": {
+    "AbsenceCode": {
+      "description": "Why a value is None. Never served as 0.",
+      "enum": [
+        "not_provided_by_source",
+        "not_applicable",
+        "not_entitled",
+        "no_data",
+        "insufficient_data",
+        "not_recovered",
+        "no_match",
+        "withheld",
+        "source_error",
+        "unparseable"
+      ],
+      "title": "AbsenceCode",
+      "type": "string"
+    }
+  },
+  "$id": "urn:marketlens:schema:1:marketlens.ReleaseKpi",
+  "additionalProperties": false,
+  "description": "One operating KPI of an earnings press release (EX-99.1): active users,\nrevenue per user, ARR, RPO, backlog, customers, subscribers, units, average\nselling price, net revenue retention, inventory days, a bank's net interest\nmargin, efficiency, CET1 and net charge-off ratios, average loans and\ndeposits, assets under management; read from the release's tables by the\ndictionary of the company's type, in the column of the release's period or,\nas its own row, the same period a year earlier. RPO may instead come from\nthe company's us-gaap XBRL fact (``exhibit`` XBRL, authority official). A\npercentage is a fraction (a 3.1 % margin is 0.031). The labels, caption and\n``source_text`` are UNTRUSTED company text.",
+  "properties": {
+    "absent": {
+      "anyOf": [
+        {
+          "additionalProperties": {
+            "$ref": "#/$defs/AbsenceCode"
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Per-row reasons for None fields: field name -> AbsenceCode",
+      "title": "Absent"
+    },
+    "accepted_at": {
+      "description": "The 8-K's EDGAR acceptance (an XBRL row: its filing's)",
+      "format": "date-time",
+      "title": "Accepted At",
+      "type": "string",
+      "x-unit": "UTC"
+    },
+    "accession_number": {
+      "title": "Accession Number",
+      "type": "string"
+    },
+    "authority": {
+      "description": "company (the release's own table) or official (an XBRL fact)",
+      "enum": [
+        "official",
+        "company"
+      ],
+      "title": "Authority",
+      "type": "string"
+    },
+    "cik": {
+      "title": "Cik",
+      "type": "string"
+    },
+    "column": {
+      "description": "current (the release's period) or prior_year (the same period a year earlier)",
+      "enum": [
+        "current",
+        "prior_year"
+      ],
+      "title": "Column",
+      "type": "string"
+    },
+    "company_type": {
+      "description": "default or bank, by the company's SIC",
+      "title": "Company Type",
+      "type": "string"
+    },
+    "exhibit": {
+      "description": "EX-99.1, EX-99, ...; XBRL for a fact",
+      "title": "Exhibit",
+      "type": "string"
+    },
+    "exhibit_url": {
+      "title": "Exhibit Url",
+      "type": "string"
+    },
+    "knowledge_time": {
+      "description": "When the value became knowable under the dataset's point-in-time policy",
+      "format": "date-time",
+      "title": "Knowledge Time",
+      "type": "string",
+      "x-role": "available",
+      "x-unit": "UTC"
+    },
+    "kpi": {
+      "description": "A KPI id of the company type's dictionary: dau, arr, rpo, backlog, ...",
+      "title": "Kpi",
+      "type": "string"
+    },
+    "parse_rule": {
+      "title": "Parse Rule",
+      "type": "string"
+    },
+    "period_end": {
+      "description": "The period's end (or the instant), from the column header",
+      "format": "date",
+      "title": "Period End",
+      "type": "string"
+    },
+    "period_label": {
+      "description": "The column header as stated",
+      "title": "Period Label",
+      "type": "string"
+    },
+    "row_label": {
+      "description": "The row's label as filed (the concept for an XBRL row)",
+      "title": "Row Label",
+      "type": "string"
+    },
+    "section_label": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The label-only row above the row, as filed",
+      "title": "Section Label"
+    },
+    "source_text": {
+      "description": "The table row (untrusted text)",
+      "title": "Source Text",
+      "type": "string"
+    },
+    "table_caption": {
+      "description": "The table's caption and headings (untrusted text)",
+      "title": "Table Caption",
+      "type": "string"
+    },
+    "ticker": {
+      "title": "Ticker",
+      "type": "string"
+    },
+    "unit": {
+      "description": "count, USD (full dollars), USD/user, USD/unit, fraction (a percentage) or days",
+      "title": "Unit",
+      "type": "string"
+    },
+    "value": {
+      "description": "In the row's `unit`",
+      "title": "Value",
+      "type": "number",
+      "x-unit": "as_published"
+    }
+  },
+  "required": [
+    "ticker",
+    "cik",
+    "accession_number",
+    "accepted_at",
+    "exhibit",
+    "exhibit_url",
+    "company_type",
+    "kpi",
+    "value",
+    "unit",
+    "period_end",
+    "period_label",
+    "column",
+    "row_label",
+    "table_caption",
+    "source_text",
+    "parse_rule",
+    "authority",
+    "knowledge_time"
+  ],
+  "title": "ReleaseKpi",
+  "type": "object",
+  "x-schema-version": "1.1.0"
+}

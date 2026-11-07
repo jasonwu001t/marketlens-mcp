@@ -76,6 +76,8 @@ CASES = [
     ("sec_pay_vs_performance", sec_routes, {"ticker": "PVPCO"}),
     ("sec_earnings_guidance", research_routes, {"ticker": "GUIDCO"}),
     ("sec_earnings_non_gaap", research_routes, {"ticker": "GUIDCO"}),
+    ("sec_earnings_release_figures", research_routes, {"ticker": "GUIDCO"}),
+    ("sec_release_kpis", research_routes, {"ticker": "GUIDCO"}),
     ("sec_segment_facts", research_routes, {"ticker": "TESTCO"}),
     ("sec_foreign_quarterly", research_routes, {"ticker": "FPICO"}),
     ("company_ir_documents", research_routes, {"ticker": "TESTCO"}),
@@ -130,7 +132,7 @@ def _id(case) -> str:
 
 
 def test_every_tool_has_a_case():
-    assert {tool for tool, *_ in CASES} == set(SPECS) and len(SPECS) == 50
+    assert {tool for tool, *_ in CASES} == set(SPECS) and len(SPECS) == 52
 
 
 @pytest.fixture

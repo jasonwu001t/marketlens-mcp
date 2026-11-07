@@ -1,7 +1,8 @@
-"""sec_earnings_guidance, sec_earnings_non_gaap, sec_segment_facts,
-sec_foreign_quarterly, company_ir_documents and company_ir_targets against a
-synthetic EDGAR: GUIDCO (CIK 9999905, an earnings 8-K whose release states an
-outlook and a GAAP to non-GAAP reconciliation), TESTCO's 10-Q 0009999901-26-000010
+"""sec_earnings_guidance, sec_earnings_non_gaap, sec_earnings_release_figures,
+sec_release_kpis, sec_segment_facts, sec_foreign_quarterly, company_ir_documents
+and company_ir_targets against a synthetic EDGAR: GUIDCO (CIK 9999905, an
+earnings 8-K whose release states an outlook, a GAAP to non-GAAP reconciliation
+and an operating data table), TESTCO's 10-Q 0009999901-26-000010
 (its own XBRL with segment facts) and its investor-day page on a synthetic
 company host, and FPICO (CIK 9999906, a foreign issuer's results 6-K with a
 management report)."""
@@ -106,6 +107,71 @@ def test_sec_earnings_non_gaap_golden(tmp_path, edgar):
     assert {r["fiscal_period_label"] for r in doc["rows"]} == {"Three Months Ended June 27, 2026"}
     only = call("sec_earnings_non_gaap", context(tmp_path), ticker="GUIDCO", basis=["adjustment"])
     assert {r.basis for r in only.rows} == {"adjustment"} and len(only.rows) < len(doc["rows"])
+
+
+# --- the release's headline figures and operating KPIs -------------------------------------------
+
+
+def test_sec_earnings_release_figures_golden(tmp_path, edgar):
+    out = call("sec_earnings_release_figures", context(tmp_path), ticker="GUIDCO")
+    doc = check_golden(out, "sec_earnings_release_figures")
+    rows = {(r["metric"], r["basis"], r["column"]): r for r in doc["rows"]}
+    assert rows[("gross_profit", "gaap", "current")]["value"] == 6.203e9
+    assert rows[("gross_profit", "non_gaap", "prior_year")]["value"] == 3.326e9
+    assert rows[("operating_margin", "gaap", "prior_year")]["value"] == -0.02
+    margin = rows[("gross_margin", "non_gaap", "current")]
+    assert (margin["value"], margin["unit"], margin["period_end"]) == (0.56, "fraction", "2026-06-27")
+    assert margin["period_label"] == "Three Months Ended June 27, 2026" and margin["segment"] is None
+    assert {r["accepted_at"] for r in doc["rows"]} == {"2026-08-04T20:05:00Z"}
+    assert doc["provenance"]["dataset"] == "sec.earnings_release_figures"
+    assert doc["provenance"]["authority"] == ["official"]
+    assert SPECS["sec_earnings_release_figures"].output_risk == "external_text"
+    only = call(
+        "sec_earnings_release_figures",
+        context(tmp_path),
+        ticker="GUIDCO",
+        metrics=["operating_income"],
+        basis=["non_gaap"],
+    )
+    assert {(r.metric, r.basis) for r in only.rows} == {("operating_income", "non_gaap")} and len(
+        only.rows
+    ) == 2
+    before = call(
+        "sec_earnings_release_figures", context(tmp_path), ticker="GUIDCO", as_of="2026-08-04T20:00:00Z"
+    )
+    assert before.rows == []
+
+
+def test_sec_release_kpis_golden(tmp_path, edgar):
+    out = call("sec_release_kpis", context(tmp_path), ticker="GUIDCO")
+    doc = check_golden(out, "sec_release_kpis")
+    rows = {(r["kpi"], r["column"]): r for r in doc["rows"]}
+    assert set(rows) == {
+        (kpi, column)
+        for kpi in ("backlog", "units_delivered", "average_selling_price")
+        for column in ("current", "prior_year")
+    }
+    assert (rows[("units_delivered", "current")]["value"], rows[("units_delivered", "current")]["unit"]) == (
+        2.15e6,
+        "count",
+    )
+    assert rows[("backlog", "prior_year")]["value"] == 7.1e9
+    assert rows[("average_selling_price", "current")]["unit"] == "USD/unit"
+    assert rows[("backlog", "current")]["period_end"] == "2026-06-27"
+    assert {r["authority"] for r in doc["rows"]} == {"company"}
+    assert {r["company_type"] for r in doc["rows"]} == {"default"}
+    assert doc["provenance"]["dataset"] == "sec.release_kpis"
+    assert doc["provenance"]["authority"] == ["company"]
+    assert SPECS["sec_release_kpis"].output_risk == "external_text"
+    only = call("sec_release_kpis", context(tmp_path), ticker="GUIDCO", kpis=["Backlog"])
+    assert {r.kpi for r in only.rows} == {"backlog"} and len(only.rows) == 2
+
+
+def test_a_kpi_percentage_is_a_fraction():
+    from marketlens_mcp.providers.data.tools import sec_research
+
+    assert sec_research._value(3.1, "pct") == 0.031 and sec_research._unit("pct") == "fraction"
+    assert sec_research._value(98, "days") == 98 and sec_research._unit("days") == "days"
 
 
 # --- segment facts ---------------------------------------------------------------------------------
@@ -237,6 +303,9 @@ def test_research_tool_refusals(tmp_path, edgar):
         ("sec_segment_facts", {"ticker": "TESTCO", "filings": 0}),
         ("sec_segment_facts", {"ticker": "TESTCO", "axis_kind": ["region"]}),
         ("sec_earnings_non_gaap", {"ticker": "GUIDCO", "basis": ["adjusted"]}),
+        ("sec_earnings_release_figures", {"ticker": "GUIDCO", "metrics": ["ebitda"]}),
+        ("sec_earnings_release_figures", {"ticker": "GUIDCO", "basis": ["adjustment"]}),
+        ("sec_release_kpis", {"ticker": "GUIDCO", "kpis": []}),
         ("sec_foreign_quarterly", {"ticker": "FPICO", "statement": ["notes"]}),
         ("company_ir_targets", {"ticker": "NOT A TICKER!"}),
     ):
@@ -263,6 +332,8 @@ def test_fixture_documents_are_synthetic():
     (
         ("sec_earnings_guidance", "GUIDCO", {}),
         ("sec_earnings_non_gaap", "GUIDCO", {}),
+        ("sec_earnings_release_figures", "GUIDCO", {}),
+        ("sec_release_kpis", "GUIDCO", {}),
         ("sec_segment_facts", "TESTCO", {}),
         ("sec_foreign_quarterly", "FPICO", {"statement": ["segments"]}),
     ),

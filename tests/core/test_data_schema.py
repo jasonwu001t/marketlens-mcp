@@ -32,6 +32,8 @@ NAMES = [
     "EarningsFigure",
     "EarningsGuidance",
     "NonGaapFigure",
+    "EarningsReleaseFigure",
+    "ReleaseKpi",
     "SegmentFact",
     "ForeignQuarterlyFigure",
     "IrDocument",
