@@ -443,4 +443,5 @@ def test_the_declared_windows_are_marketlens_datas_and_required(monkeypatch):
 
     def broken(name):
         raise ImportError(name)
+
     assert common.declared_windows(broken) == {}

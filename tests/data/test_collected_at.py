@@ -51,8 +51,12 @@ def _key(**params):
 
 
 def test_the_oldest_refreshed_slice_is_the_answers():
-    store = _Store({("fred.series", _key(series_id="DGS10")): T,
-                    ("fred.series", _key(series_id="GDPC1")): T - timedelta(days=40)})
+    store = _Store(
+        {
+            ("fred.series", _key(series_id="DGS10")): T,
+            ("fred.series", _key(series_id="GDPC1")): T - timedelta(days=40),
+        }
+    )
     s = _Session(store)
     s.refresh("fred.series", {"series_id": "DGS10"})
     s.refresh("fred.series", {"series_id": "GDPC1"})
@@ -60,8 +64,9 @@ def test_the_oldest_refreshed_slice_is_the_answers():
 
 
 def test_a_dataset_read_without_a_refresh_states_its_newest_sync():
-    store = _Store({("sec.company_facts", _key(ticker="AAPL")): T},
-                   {"sec.submissions": T - timedelta(hours=5)})
+    store = _Store(
+        {("sec.company_facts", _key(ticker="AAPL")): T}, {"sec.submissions": T - timedelta(hours=5)}
+    )
     s = _Session(store)
     s.refresh("sec.company_facts", {"ticker": "AAPL"})
     assert s.collected_at(["sec.company_facts", "sec.submissions"]) == T - timedelta(hours=5)
@@ -79,7 +84,8 @@ def test_a_sync_this_call_made_is_stated_as_its_record():
     s = _Session(store)
 
     def sync(dataset_id, **params):
-        store.slices[(dataset_id, _key(**params))] = T     # the sync's own record
+        store.slices[(dataset_id, _key(**params))] = T  # the sync's own record
+
     s.omni = SimpleNamespace(sync=sync)
     assert s.refresh("fred.series", {"series_id": "DGS10"}) is False
     assert s.collected_at(["fred.series"]) == T
@@ -95,7 +101,7 @@ def test_a_local_read_states_the_record_it_did_not_refresh():
 
 def test_a_store_that_keeps_no_slice_record_is_unknown():
     class Older(_Store):
-        synced_at = None                    # an older marketlens-data: no Store.synced_at
+        synced_at = None  # an older marketlens-data: no Store.synced_at
 
     s = _Session(Older())
     s.refresh("fred.series", {"series_id": "DGS10"})

@@ -32,8 +32,9 @@ def _put(store, symbol, collected):
         table_of(type(rows[0]), rows),
         tool="market_bars",
         model=type(rows[0]).schema_name,
-        provenance=Provenance(provider="synthetic", route="GET /v2/stocks/bars", fetched_at=M0,
-                              collected_at=collected),
+        provenance=Provenance(
+            provider="synthetic", route="GET /v2/stocks/bars", fetched_at=M0, collected_at=collected
+        ),
     ).result_id
 
 

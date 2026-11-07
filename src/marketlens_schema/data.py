@@ -636,7 +636,9 @@ class EarningsGuidance(CanonicalModel):
     low: float = _unit("as_published", description="In the row's `unit`")
     high: float = _unit("as_published", description="In the row's `unit`")
     mid: float = _unit("as_published", description="(low + high) / 2; a point estimate has low = high = mid")
-    unit: str = Field(description="USD (full dollars), fraction (a margin, a rate or a growth rate) or USD/share")
+    unit: str = Field(
+        description="USD (full dollars), fraction (a margin, a rate or a growth rate) or USD/share"
+    )
     basis: str = Field(description="gaap or non_gaap, the sentence's own word")
     source_text: str = Field(description="The sentence or table row (untrusted text)")
     parse_rule: str
