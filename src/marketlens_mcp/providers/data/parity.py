@@ -162,6 +162,11 @@ PARITY: dict[str, Mapped | Excluded] = {
     "reddit.posts": Excluded("not_planned", "third-party user text"),
     "kalshi.markets": Excluded("not_planned", "prediction-market odds; accrue only by polling"),
     "polymarket.markets": Excluded("not_planned", "prediction-market odds; accrue only by polling"),
+    "alpaca.option_iv_daily": Excluded(
+        "not_planned",
+        "Alpaca's at-the-money implied volatility, accrued only by a daily collection; "
+        "today's chain is read live by the built-in Alpaca provider",
+    ),
     "sec.fund_tickers": Excluded("internal", _INTERNAL),
     "sec.ftd_cusips": Excluded("internal", _INTERNAL),
 }

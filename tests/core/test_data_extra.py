@@ -714,15 +714,15 @@ def test_readiness_in_local_mode_needs_no_key():
 
 
 def test_parity_list_shape():
-    assert len(parity.PARITY) == 115
+    assert len(parity.PARITY) == 116
     mapped = {k: v for k, v in parity.PARITY.items() if isinstance(v, parity.Mapped)}
     excluded = {k: v for k, v in parity.PARITY.items() if isinstance(v, parity.Excluded)}
-    assert (len(mapped), len(excluded)) == (57, 58)
+    assert (len(mapped), len(excluded)) == (57, 59)
     kinds = [v.kind for v in excluded.values()]
     assert {k: kinds.count(k) for k in set(kinds)} == {
         "covered": 7,
         "second_wave": 41,
-        "not_planned": 8,
+        "not_planned": 9,
         "internal": 2,
     }
     specs = {s.name for s in tools.all_specs()}
