@@ -714,13 +714,13 @@ def test_readiness_in_local_mode_needs_no_key():
 
 
 def test_parity_list_shape():
-    assert len(parity.PARITY) == 116
+    assert len(parity.PARITY) == 117
     mapped = {k: v for k, v in parity.PARITY.items() if isinstance(v, parity.Mapped)}
     excluded = {k: v for k, v in parity.PARITY.items() if isinstance(v, parity.Excluded)}
-    assert (len(mapped), len(excluded)) == (57, 59)
+    assert (len(mapped), len(excluded)) == (57, 60)
     kinds = [v.kind for v in excluded.values()]
     assert {k: kinds.count(k) for k in set(kinds)} == {
-        "covered": 7,
+        "covered": 8,
         "second_wave": 41,
         "not_planned": 9,
         "internal": 2,
@@ -742,6 +742,8 @@ def test_parity_list_shape():
     assert parity.PARITY["alpaca.news"] == parity.Excluded(
         "covered", "read directly from Alpaca by the built-in Alpaca provider"
     )
+    # Splits, mergers, spin-offs and the rest: reference_corporate_actions reads every type live.
+    assert parity.PARITY["alpaca.corporate_events"] == parity.PARITY["alpaca.corporate_actions"]
     # Schedule 13D/G stakes, 13F cover pages and Form ADV: official SEC data that no tool reads yet.
     for dataset_id in ("sec_ownership.stakes", "sec13f.covers", "sec.advisers"):
         assert parity.PARITY[dataset_id] == parity.Excluded(

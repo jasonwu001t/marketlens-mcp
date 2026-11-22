@@ -104,6 +104,7 @@ PARITY: dict[str, Mapped | Excluded] = {
     "alpaca.stock_bars_intraday": Excluded("covered", _COVERED),
     "alpaca.stock_snapshot": Excluded("covered", _COVERED),
     "alpaca.corporate_actions": Excluded("covered", _COVERED),
+    "alpaca.corporate_events": Excluded("covered", _COVERED),
     "alpaca.news": Excluded("covered", _COVERED),
     "alpaca.option_bars": Excluded("covered", _COVERED),
     "alpaca.option_chain_snapshot": Excluded("covered", _COVERED),
