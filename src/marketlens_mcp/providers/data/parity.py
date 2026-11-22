@@ -148,6 +148,8 @@ PARITY: dict[str, Mapped | Excluded] = {
     "sec_ownership.stakes": Excluded("second_wave", _LATER),
     "sec13f.covers": Excluded("second_wave", _LATER),
     "sec.advisers": Excluded("second_wave", _LATER),
+    "sec.fund_advisers": Excluded("second_wave", _LATER),
+    "sec13f.other_managers": Excluded("second_wave", _LATER),
     "sec.fails_to_deliver": Excluded("second_wave", _LATER),
     "cboe.put_call_ratio": Excluded(
         "not_planned",

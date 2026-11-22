@@ -714,14 +714,15 @@ def test_readiness_in_local_mode_needs_no_key():
 
 
 def test_parity_list_shape():
-    assert len(parity.PARITY) == 117
+    # 119 since 2026-11-22: sec.fund_advisers and sec13f.other_managers, second wave.
+    assert len(parity.PARITY) == 119
     mapped = {k: v for k, v in parity.PARITY.items() if isinstance(v, parity.Mapped)}
     excluded = {k: v for k, v in parity.PARITY.items() if isinstance(v, parity.Excluded)}
-    assert (len(mapped), len(excluded)) == (57, 60)
+    assert (len(mapped), len(excluded)) == (57, 62)
     kinds = [v.kind for v in excluded.values()]
     assert {k: kinds.count(k) for k in set(kinds)} == {
         "covered": 8,
-        "second_wave": 41,
+        "second_wave": 43,
         "not_planned": 9,
         "internal": 2,
     }
@@ -744,8 +745,15 @@ def test_parity_list_shape():
     )
     # Splits, mergers, spin-offs and the rest: reference_corporate_actions reads every type live.
     assert parity.PARITY["alpaca.corporate_events"] == parity.PARITY["alpaca.corporate_actions"]
-    # Schedule 13D/G stakes, 13F cover pages and Form ADV: official SEC data that no tool reads yet.
-    for dataset_id in ("sec_ownership.stakes", "sec13f.covers", "sec.advisers"):
+    # Schedule 13D/G stakes, 13F cover pages and their other included managers, Form ADV and
+    # Form N-CEN's fund advisers: official SEC data that no tool reads yet.
+    for dataset_id in (
+        "sec_ownership.stakes",
+        "sec13f.covers",
+        "sec13f.other_managers",
+        "sec.advisers",
+        "sec.fund_advisers",
+    ):
         assert parity.PARITY[dataset_id] == parity.Excluded(
             "second_wave", "official source planned for a later release"
         ), dataset_id
