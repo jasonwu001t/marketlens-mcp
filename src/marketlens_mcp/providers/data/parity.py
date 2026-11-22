@@ -151,6 +151,11 @@ PARITY: dict[str, Mapped | Excluded] = {
     "sec.fund_advisers": Excluded("second_wave", _LATER),
     "sec13f.other_managers": Excluded("second_wave", _LATER),
     "sec.fails_to_deliver": Excluded("second_wave", _LATER),
+    "nasdaq.earnings_forecast": Excluded(
+        "second_wave",
+        "Nasdaq.com's analyst EPS forecasts per fiscal year (vendor consensus), captured daily "
+        "for the index funds' holdings; a tool reading it is planned",
+    ),
     "cboe.put_call_ratio": Excluded(
         "not_planned",
         "the CSV archive ends in 2019; later sessions come only from scraping a fragile HTML page",
