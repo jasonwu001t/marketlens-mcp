@@ -714,15 +714,16 @@ def test_readiness_in_local_mode_needs_no_key():
 
 
 def test_parity_list_shape():
-    # 119 since 2026-11-22: sec.fund_advisers and sec13f.other_managers, second wave.
-    assert len(parity.PARITY) == 119
+    # 119 since 2026-11-22: sec.fund_advisers and sec13f.other_managers, second wave; 120 with
+    # nasdaq.earnings_forecast (the Nasdaq-100 thesis's consensus), second wave too.
+    assert len(parity.PARITY) == 120
     mapped = {k: v for k, v in parity.PARITY.items() if isinstance(v, parity.Mapped)}
     excluded = {k: v for k, v in parity.PARITY.items() if isinstance(v, parity.Excluded)}
-    assert (len(mapped), len(excluded)) == (57, 62)
+    assert (len(mapped), len(excluded)) == (57, 63)
     kinds = [v.kind for v in excluded.values()]
     assert {k: kinds.count(k) for k in set(kinds)} == {
         "covered": 8,
-        "second_wave": 43,
+        "second_wave": 44,
         "not_planned": 9,
         "internal": 2,
     }
@@ -757,6 +758,9 @@ def test_parity_list_shape():
         assert parity.PARITY[dataset_id] == parity.Excluded(
             "second_wave", "official source planned for a later release"
         ), dataset_id
+    # Nasdaq.com's analyst forecasts: vendor consensus no tool reads yet (2026-11-22).
+    assert parity.PARITY["nasdaq.earnings_forecast"].kind == "second_wave"
+    assert "vendor consensus" in parity.PARITY["nasdaq.earnings_forecast"].reason
     # Retired in marketlens-data (2026-10-09): its prices were a vendor's, so no
     # official source is planned for it.
     assert parity.PARITY["cme.fed_funds_futures"] == parity.Excluded(
