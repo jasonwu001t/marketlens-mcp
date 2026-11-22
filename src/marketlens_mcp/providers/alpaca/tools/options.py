@@ -2,16 +2,32 @@
 by underlying. The feed of the latest/snapshot endpoints is
 ``providers.alpaca.options_feed`` (indicative by default: delayed; opra needs a
 subscription). The historical bars and trades are OPRA's, with no feed choice:
-without real-time OPRA access Alpaca serves them up to 15 minutes ago."""
+without real-time OPRA access Alpaca serves them up to 15 minutes ago.
+
+options_chain with no expiration filter reads ONE expiration. Alpaca's contract
+list (``GET /v2/options/contracts``, trading API, up to 10,000 contracts a page,
+filtered as the call is: type, strikes, root, expiring from today in New York
+on) names every listed expiration; only the nearest one's snapshots are read,
+and its open interest is joined from that same list, so a whole chain is never
+paged to find the expirations. The notes list every expiration with its
+contract count, for the next call's ``expiration``. SPY's whole chain (about
+12,000 contracts in November 2026) is 13 snapshot pages of 1,000 and two
+contract pages; its nearest expiration alone is those two contract pages and
+one snapshot page (tests/alpaca/test_alpaca_options.py counts them). With
+``all_expirations=true``, an exact ``expiration`` or an expiration range the
+chain is read as asked, then the open interest of what it spans."""
 
 from __future__ import annotations
 
+import contextlib
+from collections import Counter
+from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
-from typing import Literal
+from typing import Literal, NamedTuple
 
 from pydantic import Field, model_validator
 
-from marketlens_mcp.plugin_api import ToolContext, ToolError, ToolOutput
+from marketlens_mcp.plugin_api import PageResult, ToolContext, ToolError, ToolOutput
 from marketlens_schema.base import AbsenceCode, Delay
 from marketlens_schema.market import OptionBar, OptionQuote, OptionSnapshot, OptionTrade
 
@@ -24,6 +40,7 @@ from ..convert import (
     iso_z,
     parse_date,
     parse_instant,
+    parse_occ,
     path_symbol,
     timeframe_to_alpaca,
 )
@@ -130,6 +147,11 @@ class ChainIn(Inputs):
     )
     expiration_from: date | None = Field(None, description="Earliest expiration date, inclusive.")
     expiration_to: date | None = Field(None, description="Latest expiration date, inclusive.")
+    all_expirations: bool = Field(
+        False,
+        description="With no expiration filter, read every listed expiration (the whole chain: large) instead "
+        "of the nearest one. Not with expiration.",
+    )
     root_symbol: str | None = Field(None, max_length=10, description="OCC root, for adjusted contracts.")
     page_token: str | None = Field(None, max_length=2000, description=CONTINUE_DOC)
 
@@ -138,7 +160,14 @@ class ChainIn(Inputs):
         check_option_filters(
             self.strike_min, self.strike_max, self.expiration_from, self.expiration_to, self.expiration
         )
+        if self.all_expirations and self.expiration:
+            raise ValueError("pass expiration (one expiration) or all_expirations (every one), not both")
         return self
+
+    @property
+    def nearest_only(self) -> bool:
+        """No expiration filter and no all_expirations: the default read of the nearest expiration."""
+        return not (self.all_expirations or self.expiration or self.expiration_from or self.expiration_to)
 
 
 def history_window(
@@ -326,25 +355,29 @@ async def options_latest_quotes(ctx: ToolContext, args: LatestIn) -> ToolOutput:
     return await _latest(ctx, args, "quotes")
 
 
-async def _open_interest(
-    ctx: ToolContext, api: AlpacaClient, args: ChainIn, rows: list[OptionSnapshot]
-) -> tuple[list[OptionSnapshot], list[str]]:
-    """Fill open_interest and open_interest_date from GET /v2/options/contracts,
-    asked for exactly the underlying, type, root, expirations and strikes the
-    rows span. A contract missing from that list is no_match, or withheld when
-    the list stopped at the fetch limit before it was complete; a failed lookup
-    leaves the chain as it is, with source_error and a note."""
-    if not rows:
-        return rows, []
-    params = {
-        "underlying_symbols": alpaca_symbol(args.underlying),
-        "type": args.option_type,
-        "root_symbol": args.root_symbol,
-        "expiration_date_gte": min(r.expiration_date for r in rows).isoformat(),
-        "expiration_date_lte": max(r.expiration_date for r in rows).isoformat(),
-        "strike_price_gte": min(r.strike for r in rows),
-        "strike_price_lte": max(r.strike for r in rows),
-    }
+class _Listed(NamedTuple):
+    """One contract of Alpaca's contract list, as options_chain reads it."""
+
+    symbol: str
+    expiration: date | None
+    open_interest: int | None
+    open_interest_date: date | None
+
+
+def _expiration_of(contract: dict, symbol: str) -> date | None:
+    """The contract's expiration_date, else its OCC symbol's; None when neither reads."""
+    with contextlib.suppress(TypeError, ValueError):
+        if day := parse_date(contract.get("expiration_date")):
+            return day
+    with contextlib.suppress(TypeError, ValueError):
+        return parse_occ(symbol).expiration
+    return None
+
+
+async def _contracts(ctx: ToolContext, api: AlpacaClient, params: dict) -> PageResult[_Listed]:
+    """Every page of GET /v2/options/contracts for ``params`` (trading API, up
+    to 10,000 contracts a page): each contract's OCC symbol, expiration and open
+    interest. A ToolError is the caller's to handle."""
 
     async def fetch_page(token: str | None, limit: int):
         data = await api.get(
@@ -355,25 +388,72 @@ async def _open_interest(
         out = []
         for c in data.get("option_contracts") or []:
             try:
-                out.append(
-                    (
-                        str(c["symbol"]),
-                        integer(c.get("open_interest")),
-                        parse_date(c.get("open_interest_date")),
-                    )
-                )
+                symbol = str(c["symbol"])
+                oi, oi_date = integer(c.get("open_interest")), parse_date(c.get("open_interest_date"))
             except (KeyError, TypeError, ValueError, ArithmeticError):
                 continue
+            out.append(_Listed(symbol, _expiration_of(c, symbol), oi, oi_date))
         return out, data.get("next_page_token") or None
 
+    return await ctx.paginate(fetch_page)
+
+
+def _contract_filters(args: ChainIn) -> dict:
+    """The call's own filters, as the contract list takes them."""
+    return {
+        "underlying_symbols": alpaca_symbol(args.underlying),
+        "type": args.option_type,
+        "root_symbol": args.root_symbol,
+        "strike_price_gte": args.strike_min,
+        "strike_price_lte": args.strike_max,
+    }
+
+
+async def _open_interest(
+    ctx: ToolContext, api: AlpacaClient, args: ChainIn, rows: list[OptionSnapshot]
+) -> tuple[list[OptionSnapshot], list[str]]:
+    """Fill open_interest and open_interest_date from GET /v2/options/contracts,
+    asked for exactly the underlying, type, root, expirations and strikes the
+    rows span (an explicit expiration filter, or all_expirations). A contract
+    missing from that list is no_match, or withheld when the list stopped at the
+    fetch limit before it was complete; a failed lookup leaves the chain as it
+    is, with source_error and a note."""
+    if not rows:
+        return rows, []
+    params = {
+        **_contract_filters(args),
+        "expiration_date_gte": min(r.expiration_date for r in rows).isoformat(),
+        "expiration_date_lte": max(r.expiration_date for r in rows).isoformat(),
+        "strike_price_gte": min(r.strike for r in rows),
+        "strike_price_lte": max(r.strike for r in rows),
+    }
     try:
-        listed = await ctx.paginate(fetch_page)
+        listed = await _contracts(ctx, api, params)
     except ToolError as e:
-        failed = dict.fromkeys(OI_FIELDS, AbsenceCode.SOURCE_ERROR)
-        note = f"open_interest is null: Alpaca's contract list failed ({e.code}: {e.message})"
-        return [_with(r, {}, failed) for r in rows], [note]
-    found = {occ: (oi, day) for occ, oi, day in listed.rows}
-    unseen = AbsenceCode.NO_MATCH if listed.complete else AbsenceCode.WITHHELD
+        return _open_interest_failed(rows, e)
+    found = {c.symbol: (c.open_interest, c.open_interest_date) for c in listed.rows}
+    return _join_open_interest(rows, found, complete=listed.complete, read=len(listed.rows))
+
+
+def _open_interest_failed(rows: list[OptionSnapshot], e: ToolError) -> tuple[list[OptionSnapshot], list[str]]:
+    if not rows:
+        return rows, []
+    failed = dict.fromkeys(OI_FIELDS, AbsenceCode.SOURCE_ERROR)
+    note = f"open_interest is null: Alpaca's contract list failed ({e.code}: {e.message})"
+    return [_with(r, {}, failed) for r in rows], [note]
+
+
+def _join_open_interest(
+    rows: list[OptionSnapshot],
+    found: dict[str, tuple[int | None, date | None]],
+    *,
+    complete: bool,
+    read: int,
+) -> tuple[list[OptionSnapshot], list[str]]:
+    """Each row's open interest from the contract list read (``found``: OCC
+    symbol -> open interest and its date). A row the list lacks is no_match when
+    the list was read whole, else withheld (``read`` contracts were read)."""
+    unseen = AbsenceCode.NO_MATCH if complete else AbsenceCode.WITHHELD
     out, unmatched = [], 0
     for r in rows:
         if r.occ_symbol not in found:
@@ -385,15 +465,132 @@ async def _open_interest(
         out.append(_with(r, values, missing))
     if not unmatched:
         return out, []
-    if listed.complete:
+    if complete:
         return out, [
             f"open_interest is null (no_match) for {unmatched} contract(s) Alpaca's contract list did not return."
         ]
     return out, [
         f"open_interest is null (withheld) for {unmatched} contract(s): Alpaca's contract list stopped at the "
-        f"fetch limit after {len(listed.rows)} contracts, before reaching them; narrow the chain by expiration, "
+        f"fetch limit after {read} contracts, before reaching them; narrow the chain by expiration, "
         "strike or option_type to fill them."
     ]
+
+
+@dataclass(frozen=True)
+class _Listing:
+    """What the contract list says of the expirations options_chain's default
+    read chooses from: those from ``today`` (New York) on with a contract
+    matching the call's filters, each with its contract count, and every
+    contract read with its open interest. ``complete``: the list was read to
+    its end; ``nearest_sure``: every contract up to the chosen expiration was
+    read, so it is the nearest listed one and its open interest is whole.
+    ``error``: the list failed."""
+
+    today: date
+    counts: dict[date, int] = field(default_factory=dict)
+    found: dict[str, tuple[int | None, date | None]] = field(default_factory=dict)
+    complete: bool = True
+    nearest_sure: bool = True
+    read: int = 0
+    error: ToolError | None = None
+
+    @property
+    def chosen(self) -> date | None:
+        return min(self.counts) if self.counts else None
+
+
+async def _list_expirations(ctx: ToolContext, api: AlpacaClient, args: ChainIn) -> _Listing:
+    """The expirations listed from today in New York on, from the contract list
+    (up to 10,000 contracts a page, filtered as the call is), never by paging
+    snapshots. A list stopped at the fetch limit is asked again up to the
+    nearest expiration it reached: Alpaca does not promise the list's order, so
+    an earlier one could lie past the cut."""
+    today = ctx.now().astimezone(NEW_YORK).date()
+    params = {**_contract_filters(args), "expiration_date_gte": today.isoformat()}
+    try:
+        listed = await _contracts(ctx, api, params)
+        contracts = {c.symbol: c for c in listed.rows if c.expiration is not None and c.expiration >= today}
+        read, nearest_sure = len(listed.rows), listed.complete
+        if not listed.complete and contracts:
+            first = min(c.expiration for c in contracts.values())
+            check = await _contracts(ctx, api, {**params, "expiration_date_lte": first.isoformat()})
+            contracts.update(
+                {c.symbol: c for c in check.rows if c.expiration is not None and c.expiration >= today}
+            )
+            read, nearest_sure = len(check.rows), check.complete
+    except ToolError as e:
+        return _Listing(today, complete=False, nearest_sure=False, error=e)
+    return _Listing(
+        today,
+        counts=dict(sorted(Counter(c.expiration for c in contracts.values()).items())),
+        found={c.symbol: (c.open_interest, c.open_interest_date) for c in contracts.values()},
+        complete=listed.complete,
+        nearest_sure=nearest_sure,
+        read=read,
+    )
+
+
+def _many(n: int, word: str) -> str:
+    return f"{n} {word}" if n == 1 else f"{n} {word}s"
+
+
+def _has_filters(args: ChainIn) -> bool:
+    return (
+        bool(args.option_type or args.root_symbol)
+        or args.strike_min is not None
+        or args.strike_max is not None
+    )
+
+
+def _listing_notes(args: ChainIn, listing: _Listing, page: PageResult, rows: list, skips: Skips) -> list[str]:
+    """What the default read did and why, and every listed expiration with its
+    contract count, so the caller can ask for another one."""
+    if listing.error is not None:
+        e = listing.error
+        return [
+            f"No expiration filter was given, but Alpaca's contract list, which names the expirations, failed "
+            f"({e.code}: {e.message}), so every expiration was read, as with all_expirations=true."
+        ]
+    chosen = listing.chosen
+    if chosen is None:
+        return []
+    today = listing.today.isoformat()
+    matching = " matching the filters" if _has_filters(args) else ""
+    if chosen == listing.today:
+        why = "which is today in New York (0DTE: it expires today)"
+    elif matching:
+        why = f"the first on or after {today} (today in New York) with a contract matching the filters"
+    else:
+        why = f"the first listed on or after {today} (today in New York)"
+    n = listing.counts[chosen]
+    notes = [
+        f"No expiration filter was given, so only the nearest listed expiration was read: {chosen.isoformat()}, "
+        f"{why}, {_many(n, 'contract')} listed. Ask for another with expiration=YYYY-MM-DD from the list below, "
+        f"or pass all_expirations=true for every one ({_many(len(listing.counts), 'expiration')}, "
+        f"{_many(sum(listing.counts.values()), 'contract')}).",
+        f"Listed expirations from {today} on, with their contracts{matching}: "
+        + ", ".join(f"{d.isoformat()} ({c})" for d, c in listing.counts.items())
+        + ".",
+    ]
+    if not listing.complete:
+        cut = (
+            "Alpaca's contract list stopped at the fetch limit (fetch.max_rows, fetch.max_pages), so the "
+            "expirations above may be incomplete; narrow by strike_min, strike_max or option_type to list them all."
+        )
+        if not listing.nearest_sure:
+            cut += f" An expiration before {chosen.isoformat()} may also be missing."
+        notes.append(cut)
+    if page.next_page_token:
+        notes.append(
+            f'To continue, call options_chain again with expiration="{chosen.isoformat()}" and the page_token, so '
+            "the next page is of the same expiration."
+        )
+    if not rows and not skips.labels:
+        notes.append(
+            f"Alpaca's chain returned no snapshot for the {n} contract(s) listed for {chosen.isoformat()}: ask for "
+            "another expiration from the list."
+        )
+    return notes
 
 
 def _with(row: OptionSnapshot, values: dict, codes: dict) -> OptionSnapshot:
@@ -490,6 +687,11 @@ async def options_snapshots(ctx: ToolContext, args: SnapshotsIn) -> ToolOutput:
 
 
 async def options_chain(ctx: ToolContext, args: ChainIn) -> ToolOutput:
+    """With no expiration filter (and all_expirations false) the contract list
+    names the expirations and only the nearest one's snapshots are read, its
+    open interest joined from that same list; otherwise the chain is read as
+    asked, then the open interest of what it spans. A contract list that fails
+    in the default read leaves the whole chain to read, as all_expirations."""
     skips = Skips(OptionSnapshot.schema_name)
     async with AlpacaClient(ctx) as api:
         feed, delay = option_feed(api.settings.options_feed)
@@ -506,30 +708,47 @@ async def options_chain(ctx: ToolContext, args: ChainIn) -> ToolOutput:
             "expiration_date_lte": hi.isoformat() if hi else None,
             "root_symbol": args.root_symbol,
         }
-        page = await _snapshots(
-            ctx,
-            api,
-            f"/v1beta1/options/snapshots/{path_symbol(args.underlying)}",
-            params,
-            args.underlying,
-            args.page_token,
-            skips,
-        )
-        rows, oi_notes = await _open_interest(ctx, api, args, page.rows)
+        listing = await _list_expirations(ctx, api, args) if args.nearest_only else None
+        chosen = listing.chosen if listing is not None else None
+        if listing is not None and listing.error is None and chosen is None:
+            page: PageResult = PageResult([], 0, None, False, False)  # nothing listed: no snapshot to read
+        else:
+            if chosen is not None:
+                params["expiration_date"] = chosen.isoformat()
+            page = await _snapshots(
+                ctx,
+                api,
+                f"/v1beta1/options/snapshots/{path_symbol(args.underlying)}",
+                params,
+                args.underlying,
+                args.page_token,
+                skips,
+            )
+        if listing is None:
+            rows, oi_notes = await _open_interest(ctx, api, args, page.rows)
+        elif listing.error is not None:
+            rows, oi_notes = _open_interest_failed(page.rows, listing.error)
+        else:
+            rows, oi_notes = _join_open_interest(
+                page.rows, listing.found, complete=listing.nearest_sure, read=listing.read
+            )
+    listed = _listing_notes(args, listing, page, rows, skips) if listing is not None else []
+    no_chain = [] if chosen is not None else _no_chain_note(args, rows, skips)
     return output(
         ctx,
         OptionSnapshot,
         rows,
         route="GET /v1beta1/options/snapshots/{underlying_symbol}",
         operation="OptionChain",
-        request=request_of(args, feed=feed),
+        request=request_of(args, feed=feed, expiration=chosen.isoformat() if chosen else None),
         feed=feed,
         delay=delay,
-        # the open-interest lookup reads the trading API of this account (none for an empty chain)
-        environment=ctx.portfolio_environment if rows else None,
+        # the contract list (expirations, open interest) is read from the trading API of this account: always
+        # in the default read, else only for a non-empty chain's open interest
+        environment=ctx.portfolio_environment if listing is not None or rows else None,
         as_of=latest_t(rows),
         page=page,
-        notes=[GREEKS_NOTE, *_no_chain_note(args, rows, skips), *stale_day_bar_note(rows), *oi_notes],
+        notes=[*listed, GREEKS_NOTE, *no_chain, *stale_day_bar_note(rows), *oi_notes],
         skips=skips,
     )
 
@@ -622,9 +841,15 @@ SPECS = (
         capability="market",
         title="Option chain",
         description="The option chain of one underlying: a snapshot row per contract with greeks and implied "
-        "volatility, filtered by type, strike range (USD) and expiration (exact or from/to). Chains are large; "
-        "filter by expiration and strike. " + DAY_BAR_DOC + " " + OI_DOC + _SIZE,
-        readme="Chain snapshots for an underlying",
+        "volatility, filtered by type, strike range (USD) and expiration (exact or from/to). With no expiration "
+        "filter only the nearest listed expiration is read (the first from today in New York with a contract "
+        "matching the filters), and a note lists every listed expiration with its contract count: ask for another "
+        "with expiration, or pass all_expirations=true for the whole chain (large). "
+        + DAY_BAR_DOC
+        + " "
+        + OI_DOC
+        + _SIZE,
+        readme="Chain snapshots for an underlying (nearest expiration by default)",
         input_model=ChainIn,
         output_model=OptionSnapshot,
         route=f"GET /v1beta1/options/snapshots/{{underlying_symbol}}{_R}",

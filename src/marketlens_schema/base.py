@@ -326,7 +326,8 @@ class Provenance(BaseModel):
     environment: Environment | None = Field(
         default=None,
         description="paper or live: the brokerage account a read from the provider's trading API went "
-        "through (a portfolio read, a reference read, or options_chain's open-interest lookup)",
+        "through (a portfolio read, a reference read, or options_chain's contract list: its expirations and "
+        "open interest)",
     )
     request: dict[str, RequestValue] = Field(
         default_factory=dict, description="The normalised request parameters; never a secret"

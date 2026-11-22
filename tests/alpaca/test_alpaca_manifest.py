@@ -147,6 +147,7 @@ KEY_INPUTS = {
         "expiration",
         "expiration_from",
         "expiration_to",
+        "all_expirations",
         "root_symbol",
         "page_token",
     },
