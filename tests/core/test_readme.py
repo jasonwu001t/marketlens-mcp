@@ -132,3 +132,24 @@ def test_linux_and_macos_are_the_supported_platforms():
     ci = repo / ".github" / "workflows" / "test.yml"
     if ci.exists():  # not in the sdist
         assert "windows" not in ci.read_text(encoding="utf-8")
+
+
+def test_ci_tests_both_ends_of_the_sqlglot_range():
+    """CI resolves the newest sqlglot pyproject.toml allows, and an install pinned to
+    the README's resolved set the lowest: the guard's tests failed on CI while they
+    passed on such an install (2026-11-22, sqlglot 30.33 against 30.21). The range is
+    the one the tests pass on, and CI runs them on its lowest end too."""
+    import pathlib
+    import re
+    import tomllib
+
+    repo = pathlib.Path(__file__).resolve().parents[2]
+    deps = tomllib.loads((repo / "pyproject.toml").read_text(encoding="utf-8"))["project"]["dependencies"]
+    spec = next(d for d in deps if d.startswith("sqlglot"))
+    low, high = re.fullmatch(r"sqlglot>=([0-9.]+),<([0-9.]+)", spec).groups()
+    text = (repo / "README.md").read_text(encoding="utf-8")
+    assert f"| `sqlglot` | `>={low},<{high}` |" in text
+    assert f"sqlglot=={low}.0" in text
+    ci = repo / ".github" / "workflows" / "test.yml"
+    if ci.exists():  # not in the sdist
+        assert f'uv pip install "sqlglot=={low}.0"' in ci.read_text(encoding="utf-8")

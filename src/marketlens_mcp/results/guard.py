@@ -93,7 +93,10 @@ DENIED_SUFFIXES = ("_scan",)
 #: keywords of sqlglot's DuckDB dialect that the guard's parser or DuckDB
 #: refuses there, and that sqlglot does not quote when it writes the statement
 #: back (order, table, list, struct, filter, window and limit are quoted, so
-#: they work as names). Probed with sqlglot 30.21 and DuckDB 1.5.
+#: they work as names). Probed with sqlglot 30.21 and 30.33, the ends of the
+#: range pyproject.toml allows, and DuckDB 1.5: 30.33 writes 32 of them back
+#: double-quoted (end, left, group, ...), so they run there; they stay for 30.21,
+#: which writes them bare. tests/core/test_guard.py holds the set to both.
 KEYWORD_NAMES = frozenset({
     "all", "alter", "and", "anti", "any", "as", "asc", "asof", "at", "authorization", "between", "binary",
     "by", "case", "check", "collation", "concurrently", "create", "cross", "current_user", "desc", "describe",

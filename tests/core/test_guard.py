@@ -10,6 +10,7 @@ import re
 import duckdb
 import pytest
 from coresupport import bar_rows, provenance
+from sqlglot import exp
 
 from marketlens_mcp.results import guard
 from marketlens_mcp.results.arrow import rows_to_table
@@ -319,9 +320,39 @@ def test_a_percent_or_with_ties_limit_is_wrapped_not_lowered(two_sessions):
     assert out.row_count == 5 and out.truncated is True
 
 
+def names_the_keyword_and_the_fix(hint: str | None, word: str) -> bool:
+    """A keyword hint's meaning, whatever the sqlglot installed: it names the word as a
+    keyword and gives both ways out, another name or the word double-quoted."""
+    return (
+        hint is not None
+        and re.search(rf"\b{re.escape(word)}\b", hint) is not None
+        and "keyword" in hint
+        and "rename" in hint
+        and f'"{word}"' in hint
+    )
+
+
+def written_double_quoted(sql: str, word: str) -> bool:
+    """Whether the installed sqlglot writes ``word``, used bare as a name in ``sql``, back
+    double-quoted, so DuckDB never sees it bare: 30.33 does for end, left and group, 30.21
+    does not. The parsed tree marks it unquoted either way; only the writer differs."""
+    bare = [
+        ident
+        for ident in guard.check(sql, live_ids={"r_0123456789"} | _ids_in(sql)).ast.find_all(exp.Identifier)
+        if ident.name.lower() == word and not ident.args.get("quoted")
+    ]
+    return bool(bare) and all(ident.sql(dialect="duckdb").startswith('"') for ident in bare)
+
+
+def _ids_in(sql: str) -> set[str]:
+    return set(re.findall(r"\br_[0-9a-f]{10}\b", sql))
+
+
 def test_a_keyword_used_as_a_with_name_gets_a_hint(two_sessions):
     """2026-10-20: a WITH query named map failed as "Expecting (. Line 3,
-    Col: 21." with nothing saying that map is a keyword (a DuckDB function)."""
+    Col: 21." with nothing saying that map is a keyword (a DuckDB function).
+    sqlglot's own message stays as it wrote it (its wording is its own); the
+    hint names the keyword and the fix."""
     mine, ids, _ = two_sessions
     sql = (
         f"WITH h AS (SELECT ticker FROM {ids[0]}),\n"
@@ -331,7 +362,8 @@ def test_a_keyword_used_as_a_with_name_gets_a_hint(two_sessions):
     with pytest.raises(QueryRefused) as info:
         guard.check(sql, live_ids=mine.live_ids())
     assert info.value.code == "sql_parse"
-    assert info.value.message == "The SQL does not parse: Expecting (. Line 3, Col: 21."
+    assert info.value.message.startswith("The SQL does not parse: ")
+    assert names_the_keyword_and_the_fix(info.value.hint, "map")
     assert info.value.hint == guard.keyword_hint(["map"])
     assert info.value.hint == (
         "map is a SQL keyword here, so it cannot be a bare name (a WITH name, alias or column): "
@@ -383,23 +415,48 @@ def test_double_quoted_keywords_run(two_sessions):
 
 
 @pytest.mark.parametrize(
-    ("sql", "word", "start"),
+    ("sql", "word"),
     [
-        ('SELECT end FROM (SELECT 1 AS "end") s', "end", 'Parser Error: syntax error at or near "end"'),
-        ('SELECT left FROM (SELECT 1 AS "left") s', "left", "Parser Error: syntax error at or near"),
-        ("SELECT close FROM {A} AS group", "group", 'Parser Error: syntax error at or near "group"'),
+        ('SELECT end FROM (SELECT 1 AS "end") s', "end"),
+        ('SELECT left FROM (SELECT 1 AS "left") s', "left"),
+        ("SELECT close FROM {A} AS group", "group"),
+        # Bare on every supported sqlglot, so DuckDB's refusal and its hint are
+        # reached whichever is installed.
+        ("SELECT true.close FROM {A} AS true", "true"),
     ],
 )
-def test_duckdb_refusing_a_keyword_name_gets_a_hint(two_sessions, sql, word, start):
-    """sqlglot reads these and DuckDB's parser does not: end is a column of
-    the correlation and beta results."""
+def test_a_keyword_name_duckdb_refuses_runs_quoted_or_gets_a_hint(two_sessions, sql, word):
+    """sqlglot reads these and DuckDB's parser refuses them bare: end is a column
+    of the correlation and beta results. sqlglot 30.21 writes them back bare and
+    DuckDB's refusal carries the hint; 30.33 writes end, left and group back
+    double-quoted, and the query runs (CI failed on 2026-11-22 when it did). The
+    reader never gets a bare syntax error either way."""
     mine, ids, other = two_sessions
-    with pytest.raises(QueryRefused) as info:
-        mine.query(expand(sql, ids, other), max_rows=5)
-    assert info.value.code == "sql_error"
-    assert info.value.message.startswith(start)
-    assert info.value.hint == guard.keyword_hint([word])
+    sql = expand(sql, ids, other)
+    try:
+        out = mine.query(sql, max_rows=5)
+    except QueryRefused as refused:
+        assert refused.code == "sql_error"
+        assert refused.message.startswith("Parser Error:")
+        assert names_the_keyword_and_the_fix(refused.hint, word)
+    else:
+        assert out.row_count >= 1
+        assert written_double_quoted(sql, word), "it ran only because sqlglot quoted the word"
     assert mine.query('SELECT r.end FROM (SELECT 1 AS "end") r', max_rows=5).row_count == 1
+
+
+def test_a_duckdb_parser_error_names_the_bare_keywords_of_the_statement():
+    """The hint for DuckDB's parser error reads the statement sqlglot parsed, so
+    it names the keyword whatever sqlglot writes back: a qualified column (r.end)
+    and a double-quoted name are not bare."""
+    error = 'Parser Error: syntax error at or near "end"'
+    ast = guard.check('SELECT end, "group" FROM (SELECT 1 AS "end", 2 AS "group") r', live_ids=set()).ast
+    hint = guard.error_hint(error, ast)
+    assert names_the_keyword_and_the_fix(hint, "end")
+    assert "group" not in hint
+    qualified = guard.check('SELECT r.end FROM (SELECT 1 AS "end") r', live_ids=set()).ast
+    assert guard.error_hint(error, qualified) is None
+    assert guard.error_hint("Binder Error: something else", ast) is None
 
 
 @pytest.mark.parametrize(
@@ -430,9 +487,16 @@ NAME_PROBES = (
 )
 
 
-def test_every_keyword_name_breaks_unquoted_and_runs_quoted():
-    """KEYWORD_NAMES is what sqlglot 30.21 and DuckDB 1.5 refuse as a bare
-    name: a version that accepts one of them fails here, and the word goes."""
+def test_every_keyword_name_is_refused_bare_and_runs_quoted():
+    """KEYWORD_NAMES is what sqlglot's DuckDB dialect or DuckDB 1.5 refuses as a
+    bare name. Each word, bare, breaks in at least one name position, as the
+    reader wrote it or through the guard's rewrite (current_user becomes the
+    CURRENT_USER function there): a word that runs everywhere fails here, and the
+    word goes. Double-quoted, each runs through the guard in every position: the
+    fix the hint gives works. Whether the guard's rewrite runs a bare one DuckDB
+    refuses depends on the sqlglot installed (30.33 writes end, left, group and
+    29 more back double-quoted; 30.21 writes them bare), so where it runs, it is
+    only because sqlglot quoted it."""
     con = duckdb.connect()
     con.execute("CREATE TABLE r_0123456789 AS SELECT 1 AS a, 2 AS b")
 
@@ -444,9 +508,27 @@ def test_every_keyword_name_breaks_unquoted_and_runs_quoted():
             return False
         return True
 
+    def duckdb_refuses(sql: str) -> bool:
+        try:
+            con.execute(sql).fetchall()
+        except duckdb.Error:
+            return True
+        return False
+
+    def refused_as_written(sql: str) -> bool:
+        try:
+            guard.check(sql, live_ids={"r_0123456789"})
+        except QueryRefused:
+            return True
+        return duckdb_refuses(sql)
+
     for w in sorted(guard.KEYWORD_NAMES):
-        assert not all(runs(p.format(q=w, w=w)) for p in NAME_PROBES), w
+        bare = [p.format(q=w, w=w) for p in NAME_PROBES]
+        assert any(refused_as_written(sql) or not runs(sql) for sql in bare), w
         assert all(runs(p.format(q=f'"{w}"', w=w)) for p in NAME_PROBES), w
+        for sql in bare:
+            if duckdb_refuses(sql) and runs(sql):
+                assert written_double_quoted(sql, w), (w, sql)
     for w in ("order", "table", "list", "struct", "filter", "window", "limit"):
         assert w not in guard.KEYWORD_NAMES
         assert all(runs(p.format(q=w, w=w)) for p in NAME_PROBES), w

@@ -32,6 +32,16 @@ jobs:
           MARKETLENS_CHECK_GENERATED: "1"
           PYTHONWARNDEFAULTENCODING: "1"   # with filterwarnings, an open() without encoding fails
         run: uv run --no-sync pytest      # tests/data is skipped: the data extra is not installed here
+      - name: The query guard on the lowest sqlglot pyproject.toml allows
+        # The step above runs the newest sqlglot the range allows; this one the
+        # lowest, which the README's resolved set pins, so both ends of the range
+        # are tested (tests/core/test_readme.py).
+        if: matrix.os == 'ubuntu-latest' && matrix.python == '3.13'
+        env:
+          PYTHONWARNDEFAULTENCODING: "1"
+        run: |
+          uv pip install "sqlglot==30.21.0"
+          uv run --no-sync pytest tests/core/test_guard.py tests/core/test_results_tools.py
 
   data:
     # The data extra's tests, against marketlens-data from PyPI. Turned on by the

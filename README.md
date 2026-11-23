@@ -222,7 +222,7 @@ Direct dependencies (`pyproject.toml`):
 | `httpx` | `>=0.28.1,<1` | Every upstream HTTP call |
 | `duckdb` | `>=1.5.5,<2` | The result store's query engine, the SQL guard's sandbox, the analytics |
 | `pyarrow` | `>=25.0` | Rows in canonical types, Parquet files in the result store |
-| `sqlglot` | `>=30.21,<31` | Parsing model-written SQL before `results_query` runs it |
+| `sqlglot` | `>=30.21,<30.34` | Parsing model-written SQL before `results_query` runs it. The range the query guard's tests pass on: 30.21 (the lowest, the resolved set below) and 30.33; from 30.33 sqlglot writes keywords used as names (`end`, `left`, `group`) back double-quoted, so they run. A newer sqlglot joins the range once the tests pass on it |
 | `pyyaml` | `>=6.0.3,<7` | The config file |
 | `tzdata` | `>=2025.2`, Windows only | Time zones |
 | `marketlens-data` | `>=0.1,<0.2`, the `data` extra (not on PyPI yet; see [Install](#install)) | Fetching official publishers and keeping them point in time; it brings its own (pandas, DuckDB, the publishers' parsers) |

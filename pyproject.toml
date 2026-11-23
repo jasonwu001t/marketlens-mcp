@@ -31,7 +31,7 @@ dependencies = [
   "httpx>=0.28.1,<1",
   "duckdb>=1.5.5,<2",
   "pyarrow>=25.0",
-  "sqlglot>=30.21,<31",
+  "sqlglot>=30.21,<30.34",  # the range the guard's tests pass on (README, Dependencies)
   "pyyaml>=6.0.3,<7",
   "tzdata>=2025.2; sys_platform == 'win32'",
 ]
