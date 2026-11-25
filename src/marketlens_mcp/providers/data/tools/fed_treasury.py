@@ -299,6 +299,10 @@ async def fed_fomc_statements(ctx: ToolContext, args: StatementsInputs) -> ToolO
                 "url": F.text(r["url"]),
                 "text": F.text(r["text"]) if args.include_text else None,
                 "n_paragraphs": F.integer(r["n_paragraphs"]) or 0,
+                # the decided range, a percent in omni: absent from a statement stating
+                # none, and from one stored before marketlens-data read it
+                "range_low": F.fraction(r.get("range_low")),
+                "range_high": F.fraction(r.get("range_high")),
                 "knowledge_time": F.instant(r["knowledge_time"]),
             },
             codes={"text": AbsenceCode.NO_DATA if args.include_text else WITHHELD},
@@ -871,8 +875,9 @@ SPECS: tuple[ToolSpec, ...] = (
         "FOMC statements",
         common.describe(
             "Post-meeting FOMC policy statements (text and link; the Fed's own words, marked untrusted), "
-            "knowable at 2 p.m. Washington time on the meeting's last day. include_text=false lists dates "
-            "and links only. Keyless.",
+            "with the target range for the federal funds rate each says the Committee decided "
+            "(range_low, range_high, fractions), knowable at 2 p.m. Washington time on the meeting's "
+            "last day. include_text=false lists dates, links and ranges only. Keyless.",
             "lagged",
         ),
         "FOMC statement text",

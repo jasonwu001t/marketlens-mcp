@@ -716,15 +716,16 @@ def test_readiness_in_local_mode_needs_no_key():
 def test_parity_list_shape():
     # 119 since 2026-11-22: sec.fund_advisers and sec13f.other_managers, second wave; 120 with
     # nasdaq.earnings_forecast (the Nasdaq-100 thesis's consensus), second wave too; 126 with
-    # Webull's six vendor datasets (2026-11-24), not planned: one person's subscription.
-    assert len(parity.PARITY) == 126
+    # Webull's six vendor datasets (2026-11-24), not planned: one person's subscription; 127
+    # with the Labor Department's weekly claims (2026-11-25), second wave (needs DOL_API_KEY).
+    assert len(parity.PARITY) == 127
     mapped = {k: v for k, v in parity.PARITY.items() if isinstance(v, parity.Mapped)}
     excluded = {k: v for k, v in parity.PARITY.items() if isinstance(v, parity.Excluded)}
-    assert (len(mapped), len(excluded)) == (57, 69)
+    assert (len(mapped), len(excluded)) == (57, 70)
     kinds = [v.kind for v in excluded.values()]
     assert {k: kinds.count(k) for k in set(kinds)} == {
         "covered": 8,
-        "second_wave": 44,
+        "second_wave": 45,
         "not_planned": 15,
         "internal": 2,
     }
@@ -741,6 +742,9 @@ def test_parity_list_shape():
             assert dataset_id in by_tool[tool] or tool == "macro_series_catalog", (dataset_id, tool)
     assert parity.PARITY["eia.series"] == parity.Excluded(
         "second_wave", "official source planned for a later release (needs EIA_API_KEY)"
+    )
+    assert parity.PARITY["dol.weekly_claims"] == parity.Excluded(
+        "second_wave", "official source planned for a later release (needs DOL_API_KEY)"
     )
     assert parity.PARITY["alpaca.news"] == parity.Excluded(
         "covered", "read directly from Alpaca by the built-in Alpaca provider"

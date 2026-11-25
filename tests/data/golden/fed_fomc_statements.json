@@ -16,7 +16,7 @@
   "derived_from": [],
   "environment": null,
   "feed": null,
-  "knowledge_time": "2026-09-16T19:00:00Z",
+  "knowledge_time": "2026-09-16T18:00:00Z",
   "lag_days": 16.0,
   "operation": null,
   "pages_fetched": 1,
@@ -38,18 +38,22 @@
  "rows": [
   {
    "absent": null,
-   "knowledge_time": "2026-09-16T19:00:00Z",
+   "knowledge_time": "2026-09-16T18:00:00Z",
    "meeting_date": "2026-09-16",
    "n_paragraphs": 3,
-   "text": "Synthetic statement for testing. Recent indicators suggest that economic activity has continued to expand at a solid pace. Job gains have picked up, and the unemployment rate has remained low.\n\nThe Committee seeks to achieve maximum employment and inflation at the rate of 2 percent over the longer run. In support of its goals, the Committee decided to lower the target range for the federal funds rate.\n\nIn assessing the appropriate stance of monetary policy, the Committee will continue to monitor the implications of incoming information for the economic outlook.",
+   "range_high": 0.0425,
+   "range_low": 0.04,
+   "text": "Synthetic statement for testing. Recent indicators suggest that economic activity has continued to expand at a solid pace. Job gains have picked up, and the unemployment rate has remained low.\n\nThe Committee seeks to achieve maximum employment and inflation at the rate of 2 percent over the longer run. In support of its goals, the Committee decided to lower the target range for the federal funds rate by 1/4 percentage point to 4 to 4‑1/4 percent.\n\nIn assessing the appropriate stance of monetary policy, the Committee will continue to monitor the implications of incoming information for the economic outlook.",
    "url": "https://www.federalreserve.gov/newsevents/pressreleases/monetary20260916a.htm"
   },
   {
    "absent": null,
-   "knowledge_time": "2026-07-29T19:00:00Z",
+   "knowledge_time": "2026-07-29T18:00:00Z",
    "meeting_date": "2026-07-29",
    "n_paragraphs": 3,
-   "text": "Synthetic statement for testing. Recent indicators suggest that economic activity has continued to expand at a solid pace. Job gains have slowed, and the unemployment rate has remained low.\n\nThe Committee seeks to achieve maximum employment and inflation at the rate of 2 percent over the longer run. In support of its goals, the Committee decided to maintain the target range for the federal funds rate.\n\nIn assessing the appropriate stance of monetary policy, the Committee will continue to monitor the implications of incoming information for the economic outlook.",
+   "range_high": 0.045,
+   "range_low": 0.0425,
+   "text": "Synthetic statement for testing. Recent indicators suggest that economic activity has continued to expand at a solid pace. Job gains have slowed, and the unemployment rate has remained low.\n\nThe Committee seeks to achieve maximum employment and inflation at the rate of 2 percent over the longer run. In support of its goals, the Committee decided to maintain the target range for the federal funds rate at 4‑1/4 to 4‑1/2 percent.\n\nIn assessing the appropriate stance of monetary policy, the Committee will continue to monitor the implications of incoming information for the economic outlook.",
    "url": "https://www.federalreserve.gov/newsevents/pressreleases/monetary20260729a.htm"
   }
  ]
