@@ -24,6 +24,12 @@ _COVERED = "read directly from Alpaca by the built-in Alpaca provider"
 _LATER = "official source planned for a later release"
 _INTERNAL = "a reference list omni uses to resolve symbols, not a research dataset"
 
+#: Webull's stored datasets (owner, 2026-11-24): the owner's subscription covers their own use only.
+_WEBULL = (
+    "Webull's vendor data, read with one person's own subscription, which may not be served to anyone "
+    "else; SEC stays the source of truth"
+)
+
 PARITY: dict[str, Mapped | Excluded] = {
     # macro
     "fred.series": Mapped(("macro_series", "macro_series_catalog")),
@@ -175,6 +181,12 @@ PARITY: dict[str, Mapped | Excluded] = {
         "Alpaca's at-the-money implied volatility, accrued only by a daily collection; "
         "today's chain is read live by the built-in Alpaca provider",
     ),
+    "webull.economic_calendar": Excluded("not_planned", _WEBULL),
+    "webull.fundamentals": Excluded("not_planned", _WEBULL),
+    "webull.institution_holding_changes": Excluded("not_planned", _WEBULL),
+    "webull.institution_holdings": Excluded("not_planned", _WEBULL),
+    "webull.institutions": Excluded("not_planned", _WEBULL),
+    "webull.news": Excluded("not_planned", _WEBULL),
     "sec.fund_tickers": Excluded("internal", _INTERNAL),
     "sec.ftd_cusips": Excluded("internal", _INTERNAL),
 }

@@ -715,16 +715,17 @@ def test_readiness_in_local_mode_needs_no_key():
 
 def test_parity_list_shape():
     # 119 since 2026-11-22: sec.fund_advisers and sec13f.other_managers, second wave; 120 with
-    # nasdaq.earnings_forecast (the Nasdaq-100 thesis's consensus), second wave too.
-    assert len(parity.PARITY) == 120
+    # nasdaq.earnings_forecast (the Nasdaq-100 thesis's consensus), second wave too; 126 with
+    # Webull's six vendor datasets (2026-11-24), not planned: one person's subscription.
+    assert len(parity.PARITY) == 126
     mapped = {k: v for k, v in parity.PARITY.items() if isinstance(v, parity.Mapped)}
     excluded = {k: v for k, v in parity.PARITY.items() if isinstance(v, parity.Excluded)}
-    assert (len(mapped), len(excluded)) == (57, 63)
+    assert (len(mapped), len(excluded)) == (57, 69)
     kinds = [v.kind for v in excluded.values()]
     assert {k: kinds.count(k) for k in set(kinds)} == {
         "covered": 8,
         "second_wave": 44,
-        "not_planned": 9,
+        "not_planned": 15,
         "internal": 2,
     }
     specs = {s.name for s in tools.all_specs()}
