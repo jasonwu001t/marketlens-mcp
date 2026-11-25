@@ -74,9 +74,16 @@ def test_fed_fomc_statements_golden(tmp_path, upstream):
     fomc_routes(upstream)
     out = call("fed_fomc_statements", context(tmp_path), start="2026-01-01")
     doc = check_golden(out, "fed_fomc_statements")
+    # 2:00 p.m. Washington time: 18:00 UTC in summer (marketlens-data stamped 19:00 UTC
+    # year-round until 2026-11-25)
     assert [(r["meeting_date"], r["knowledge_time"]) for r in doc["rows"]] == [
-        ("2026-09-16", "2026-09-16T19:00:00Z"),
-        ("2026-07-29", "2026-07-29T19:00:00Z"),
+        ("2026-09-16", "2026-09-16T18:00:00Z"),
+        ("2026-07-29", "2026-07-29T18:00:00Z"),
+    ]
+    # the decided target range, as fractions like fed_reference_rates' target_from/target_to
+    assert [(r["range_low"], r["range_high"]) for r in doc["rows"]] == [
+        (0.04, 0.0425),
+        (0.0425, 0.045),
     ]
     assert "lower the target range" in doc["rows"][0]["text"]
     assert "For media inquiries" not in doc["rows"][0]["text"]
@@ -84,7 +91,7 @@ def test_fed_fomc_statements_golden(tmp_path, upstream):
     assert all(r.text is None and r.absent == {"text": "withheld"} for r in bare.rows)
     assert len(bare.rows) == 2
     # a statement is not knowable before 2 p.m. Washington time on the meeting's last day
-    early = call("fed_fomc_statements", context(tmp_path), as_of="2026-09-16T18:00:00Z")
+    early = call("fed_fomc_statements", context(tmp_path), as_of="2026-09-16T17:59:59Z")
     assert [r.meeting_date.isoformat() for r in early.rows] == ["2026-07-29"]
 
 
@@ -277,7 +284,7 @@ def test_fed_fomc_projections_golden(tmp_path, upstream):
     assert ff["absent"] == {"midpoint": "not_applicable", "participants": "not_applicable"}
     dots = [(r["horizon"], r["midpoint"], r["participants"]) for r in doc["rows"] if r["kind"] == "dots"]
     assert dots[:3] == [("2026", 0.04375, 4), ("2026", 0.04125, 12), ("2026", 0.03875, 2)]
-    assert all(r["knowledge_time"] == "2026-09-16T19:00:00Z" for r in doc["rows"])
+    assert all(r["knowledge_time"] == "2026-09-16T18:00:00Z" for r in doc["rows"])
     core = [r for r in doc["rows"] if r["variable"] == "core_pce_inflation"]
     assert [r["horizon"] for r in core] == ["2026", "2027"], "no longer-run core PCE"
     only = call("fed_fomc_projections", ctx, start="2026-09-01", kind="dots")
@@ -288,7 +295,7 @@ def test_fed_fomc_projections_golden(tmp_path, upstream):
         ("2027", 0.024),
         ("longer_run", 0.02),
     ]
-    early = call("fed_fomc_projections", ctx, start="2026-09-01", as_of="2026-09-16T18:59:00Z")
+    early = call("fed_fomc_projections", ctx, start="2026-09-01", as_of="2026-09-16T17:59:00Z")
     assert early.rows == []
 
 
@@ -301,7 +308,7 @@ def test_fed_fomc_minutes_golden(tmp_path, upstream):
     assert (row["meeting_date"], row["release_date"], row["knowledge_time"]) == (
         "2026-09-16",
         "2026-10-07",
-        "2026-10-07T19:00:00Z",
+        "2026-10-07T18:00:00Z",
     )
     assert row["text"].startswith("September 15–16, 2026") and "Return to text" not in row["text"]
     bare = call("fed_fomc_minutes", ctx, start="2026-09-01", include_text=False)
@@ -323,7 +330,7 @@ def test_fed_beige_book_golden(tmp_path, upstream):
     assert sum("beigebook202610-" in r.url.path for r in upstream.requests) == 13
     every = call("fed_beige_book", ctx, start="2026-10-01", include_text=False)
     assert len(every.rows) == 13 and every.rows[0].district == "national_summary"
-    assert call("fed_beige_book", ctx, start="2026-10-01", as_of="2026-10-14T18:00:00Z").rows == []
+    assert call("fed_beige_book", ctx, start="2026-10-01", as_of="2026-10-14T17:59:59Z").rows == []
 
 
 # --- the Z.1 Financial Accounts ---------------------------------------------------------------------

@@ -16,7 +16,7 @@
   "derived_from": [],
   "environment": null,
   "feed": null,
-  "knowledge_time": "2026-10-07T19:00:00Z",
+  "knowledge_time": "2026-10-07T18:00:00Z",
   "lag_days": 40.0,
   "operation": null,
   "pages_fetched": 2,
@@ -38,7 +38,7 @@
  "rows": [
   {
    "absent": null,
-   "knowledge_time": "2026-10-07T19:00:00Z",
+   "knowledge_time": "2026-10-07T18:00:00Z",
    "meeting_date": "2026-09-16",
    "n_paragraphs": 41,
    "release_date": "2026-10-07",

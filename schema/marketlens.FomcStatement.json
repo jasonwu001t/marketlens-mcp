@@ -20,7 +20,7 @@
   },
   "$id": "urn:marketlens:schema:1:marketlens.FomcStatement",
   "additionalProperties": false,
-  "description": "A post-meeting FOMC statement. ``text`` is UNTRUSTED third-party text.",
+  "description": "A post-meeting FOMC statement. ``text`` is UNTRUSTED third-party text. ``range_low``\nand ``range_high``: the target range for the federal funds rate the statement says the\nCommittee decided (never a dissent's), parsed by marketlens-data from the statement.",
   "properties": {
     "absent": {
       "anyOf": [
@@ -55,6 +55,34 @@
       "title": "N Paragraphs",
       "type": "integer",
       "x-unit": "count"
+    },
+    "range_high": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Upper bound of the target range the Committee decided",
+      "title": "Range High",
+      "x-unit": "fraction_per_year"
+    },
+    "range_low": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Lower bound of the target range the Committee decided",
+      "title": "Range Low",
+      "x-unit": "fraction_per_year"
     },
     "text": {
       "anyOf": [

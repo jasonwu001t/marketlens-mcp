@@ -116,6 +116,7 @@ PARITY: dict[str, Mapped | Excluded] = {
     "alpaca.option_chain_snapshot": Excluded("covered", _COVERED),
     "eia.series": Excluded("second_wave", f"{_LATER} (needs EIA_API_KEY)"),
     "census.eits": Excluded("second_wave", f"{_LATER} (needs CENSUS_API_KEY)"),
+    "dol.weekly_claims": Excluded("second_wave", f"{_LATER} (needs DOL_API_KEY)"),
     "census.indicator_calendar": Excluded("second_wave", _LATER),
     "bls.ppi_schedule": Excluded("second_wave", _LATER),
     "bls.eci_schedule": Excluded("second_wave", _LATER),

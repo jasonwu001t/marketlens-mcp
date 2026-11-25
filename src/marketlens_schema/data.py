@@ -1125,7 +1125,9 @@ class FomcMeeting(CanonicalModel):
 
 
 class FomcStatement(CanonicalModel):
-    """A post-meeting FOMC statement. ``text`` is UNTRUSTED third-party text."""
+    """A post-meeting FOMC statement. ``text`` is UNTRUSTED third-party text. ``range_low``
+    and ``range_high``: the target range for the federal funds rate the statement says the
+    Committee decided (never a dissent's), parsed by marketlens-data from the statement."""
 
     schema_name: ClassVar[str] = "marketlens.FomcStatement"
     time_column: ClassVar[str | None] = "meeting_date"
@@ -1134,6 +1136,16 @@ class FomcStatement(CanonicalModel):
     url: str
     text: str | None = None
     n_paragraphs: int = _unit("count")
+    range_low: float | None = _unit(
+        "fraction_per_year",
+        default=None,
+        description="Lower bound of the target range the Committee decided",
+    )
+    range_high: float | None = _unit(
+        "fraction_per_year",
+        default=None,
+        description="Upper bound of the target range the Committee decided",
+    )
     knowledge_time: UtcDatetime = _known()
 
 
