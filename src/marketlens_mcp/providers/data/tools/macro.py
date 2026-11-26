@@ -1,8 +1,8 @@
 """Economic series: FRED/ALFRED with vintages, BLS, BEA NIPA tables, BLS
 release schedules and the FRED series catalogue; US trade by commodity and
 partner (Census), the Bank of Japan's and the Bank of England's series, the
-Richmond and Kansas City Fed business surveys and FINRA's TRACE market
-aggregates (capability ``macro``)."""
+New York, Richmond, Kansas City and Dallas Fed business surveys and FINRA's
+TRACE market aggregates (capability ``macro``)."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from typing import Annotated, Literal
 
 from pydantic import AfterValidator, Field
 
-from marketlens_mcp.plugin_api import ToolContext, ToolOutput, ToolSpec
+from marketlens_mcp.plugin_api import ToolContext, ToolError, ToolOutput, ToolSpec
 from marketlens_schema import AbsenceCode
 from marketlens_schema.data import (
     CentralBankObservation,
@@ -237,14 +237,33 @@ class JgbInputs(Inputs):
     as_of: AsOf | None = common.as_of_field()
 
 
+#: The surveys of each Reserve Bank marketlens-data collects (its regionalfed.surveys).
+REGIONAL_SURVEYS: dict[str, tuple[str, ...]] = {
+    "newyork": ("manufacturing",),
+    "richmond": ("manufacturing", "services"),
+    "kansascity": ("manufacturing", "services"),
+    "dallas": ("manufacturing",),
+}
+
+
 class RegionalSurveyInputs(Inputs):
-    bank: Literal["richmond", "kansascity", "both"] = Field(default="both", description="Which Reserve Bank.")
-    survey: Literal["manufacturing", "services", "both"] = Field(default="both", description="Which survey.")
+    bank: Literal["all", "newyork", "richmond", "kansascity", "dallas", "both"] = Field(
+        default="all",
+        description="Which Reserve Bank's survey: newyork, the New York Fed's Empire State Manufacturing "
+        "Survey (headline GACDISA, general business conditions); richmond, the Richmond Fed's manufacturing "
+        "and non-manufacturing surveys (headline sa_mfg_composite, the composite index); kansascity, the "
+        "Kansas City Fed's manufacturing and services surveys (headline composite_index_month_sa); dallas, "
+        "the Dallas Fed's Texas Manufacturing Outlook Survey (headline bact, general business activity); "
+        "all (default) every one; both, Richmond and Kansas City.",
+    )
+    survey: Literal["manufacturing", "services", "both"] = Field(
+        default="both", description="Which survey (New York's and Dallas's: manufacturing only)."
+    )
     series: list[str] | None = Field(
         default=None,
         max_length=40,
-        description="Series to keep (default: all), e.g. sa_mfg_composite (Richmond), composite_index_month_sa "
-        "(Kansas City).",
+        description="Series to keep (default: all), the bank's own names, e.g. GACDISA (New York), "
+        "sa_mfg_composite (Richmond), composite_index_month_sa (Kansas City), bact (Dallas).",
     )
     start: date | None = Field(default=None, description="First month (inclusive). Default: all.")
     end: date | None = Field(default=None, description="Last month (inclusive). Default: all.")
@@ -279,8 +298,8 @@ ROUTES.update(
         "boe": "omni boe.series <- www.bankofengland.co.uk/boeapps/database/_iadb-fromshowcolumns.asp",
         "jgb": "omni mof.jgb_yields <- www.mof.go.jp/english/policy/jgbs/reference/interest_rate "
         "(jgbcme.csv, historical/jgbcme_all.csv, linked from index.htm)",
-        "regional": "omni regionalfed.surveys <- the Richmond and Kansas City Feds' survey workbooks and "
-        "release schedules (linked from their survey pages)",
+        "regional": "omni regionalfed.surveys <- the New York, Richmond, Kansas City and Dallas Feds' survey "
+        "data files and release schedules (linked from their survey pages)",
         "trace": "omni finra.trace_aggregates <- api.finra.org/data/group/fixedIncomeMarket "
         "(OAuth token from ews.fintech.finra.org)",
     }
@@ -830,22 +849,32 @@ async def macro_jgb_yields(ctx: ToolContext, args: JgbInputs) -> ToolOutput:
     return common.output(ctx, s, YieldCurvePoint, rows, prov)
 
 
+def regional_jobs(bank: str, survey: str) -> list[tuple[str, str]]:
+    """The (bank, survey) pairs a request names, of those marketlens-data collects; refused when
+    it names none (New York's and Dallas's surveys are manufacturing only)."""
+    banks = {"all": list(REGIONAL_SURVEYS), "both": ["richmond", "kansascity"]}.get(bank, [bank])
+    surveys = ["manufacturing", "services"] if survey == "both" else [survey]
+    jobs = [(b, s) for b in banks for s in surveys if s in REGIONAL_SURVEYS[b]]
+    if not jobs:
+        raise ToolError(
+            "invalid_arguments",
+            f"The {bank} survey marketlens-data collects is manufacturing only: no {survey} survey.",
+        )
+    return jobs
+
+
 async def macro_regional_fed_surveys(ctx: ToolContext, args: RegionalSurveyInputs) -> ToolOutput:
     s = runtime.settings_of(ctx.settings)
     as_of = common.as_of_of(args.as_of)
     _window_check(args.start, args.end)
-    banks = ["richmond", "kansascity"] if args.bank == "both" else [args.bank]
-    surveys = ["manufacturing", "services"] if args.survey == "both" else [args.survey]
+    jobs = regional_jobs(args.bank, args.survey)
     keep = {x.strip() for x in args.series or []}
 
     def work(session: common.Session):
         out = []
-        for bank in banks:
-            for survey in surveys:
-                session.refresh("regionalfed.surveys", {"bank": bank, "survey": survey})
-                out.extend(
-                    F.records(session.read("regionalfed.surveys", as_of=as_of, bank=bank, survey=survey))
-                )
+        for bank, survey in jobs:
+            session.refresh("regionalfed.surveys", {"bank": bank, "survey": survey})
+            out.extend(F.records(session.read("regionalfed.surveys", as_of=as_of, bank=bank, survey=survey)))
         return out
 
     records, session = await common.run(ctx, s, work, source="regionalfed")
@@ -1169,17 +1198,18 @@ SPECS = (
         capability="macro",
         title="Regional Fed business surveys",
         description=common.describe(
-            "The Richmond Fed's manufacturing and non-manufacturing surveys and the Kansas City Fed's "
-            "manufacturing and services surveys, monthly diffusion indexes (composite, shipments or "
-            "production, new orders, employment, prices; Kansas City versus a month ago, a year ago and "
-            "expected in six months), official stand-ins for the licensed PMIs (Empire State, Dallas: "
-            "macro_series). knowledge_time is the release on the bank's schedule "
-            "(Richmond 10:10 ET, Kansas City the end of the listed date), history the schedules no longer "
-            "list a week after the month (release_estimated), and a seasonally adjusted month of an earlier "
-            "year than the newest at the newest year's January release (new seasonal factors). Keyless.",
+            "Regional Fed surveys from each bank's own file, monthly diffusion indexes: the New York Fed's "
+            "Empire State Manufacturing Survey (headline GACDISA, general business conditions), Richmond's "
+            "manufacturing and non-manufacturing (sa_mfg_composite), Kansas City's manufacturing and services "
+            "(composite_index_month_sa) and the Dallas Fed's Texas Manufacturing Outlook Survey (bact, "
+            "general business activity). knowledge_time is the release on the bank's schedule (New York 08:30 "
+            "ET, Richmond 10:10 ET, Kansas City 10:00 CT, Dallas 09:30 CT), never after the fetch; history a "
+            "week after the month (release_estimated); an earlier year's seasonally adjusted month at the "
+            "newest January release. Keyless.",
             "lagged",
         ),
-        readme="Richmond and Kansas City Fed manufacturing and services surveys",
+        readme="Regional Fed manufacturing surveys (New York's Empire State, Richmond, Kansas City, Dallas's "
+        "Texas) and Richmond's and Kansas City's services surveys",
         input_model=RegionalSurveyInputs,
         output_model=RegionalSurveyIndex,
         provider="regionalfed",

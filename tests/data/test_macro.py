@@ -2,14 +2,15 @@
 macro_release_schedule, macro_census_trade, macro_boj_series, macro_boe_series,
 macro_regional_fed_surveys and credit_trace_aggregates against synthetic FRED,
 BLS, BEA, Census, Bank of Japan, Bank of England, Richmond Fed and FINRA
-payloads."""
+payloads, and the New York and Dallas Feds' own trimmed pages and files."""
 
 from __future__ import annotations
 
 import json
+from datetime import UTC, datetime
 
 import pytest
-from data_harness import KEYS, call, check_golden, context, refused
+from data_harness import FIXTURES, KEYS, call, check_golden, context, refused
 
 FRED = r"api\.stlouisfed\.org/fred/series/observations"
 BLS = r"api\.bls\.gov/publicAPI/v2/timeseries/data/"
@@ -656,6 +657,110 @@ def test_macro_regional_fed_surveys_golden(tmp_path, upstream):
         True,
     )
     assert {r["unit"] for r in doc["rows"] if r["series"] == "nsa_mfg_pct_chg_prcs_pd_c"} == {"percent"}
+
+
+# New York's Empire State and Dallas's Texas surveys: the banks' own pages and files of 2026-11-26
+# (fixtures/README), as marketlens-data reads them. A clock after both November releases.
+LATE = datetime(2026, 11, 26, 18, 0, tzinfo=UTC)
+
+
+def newyork_routes(upstream):
+    ny = r"www\.newyorkfed\.org"
+    upstream.text_file(
+        rf"{ny}/survey/empire/empiresurvey_overview", "regionalfed.newyork_empire_overview.html"
+    )
+    upstream.text_file(
+        rf"{ny}/medialibrary/media/survey/empire/data/esms_seasonallyadjusted_diffusion\.csv",
+        "regionalfed.newyork_esms_sa_diffusion.csv",
+    )
+
+
+def dallas_routes(upstream):
+    tx = r"www\.dallasfed\.org"
+    upstream.text_file(rf"{tx}/research/surveys/tmos/data", "regionalfed.dallas_tmos_data.html")
+    upstream.text_file(rf"{tx}/research/surveys/tmos", "regionalfed.dallas_tmos.html")
+    book = (FIXTURES / "regionalfed.dallas_index_sa.xlsx").read_bytes()
+    upstream.add(rf"{tx}/~/media/Documents/research/surveys/tmos/documents/index_sa\.xls", lambda _r: book)
+
+
+def test_macro_regional_fed_surveys_newyork_golden(tmp_path, upstream):
+    """The Empire State survey's general business conditions, the New York Fed's own CSV: each
+    month the overview's schedule lists knowable at 08:30 ET of its day, history a week after
+    its month."""
+    newyork_routes(upstream)
+    out = call("macro_regional_fed_surveys", context(tmp_path, now=LATE), bank="newyork", series=["GACDISA"])
+    doc = check_golden(out, "macro_regional_fed_surveys__newyork")
+    rows = {r["month"]: r for r in doc["rows"]}
+    assert {(r["bank"], r["survey"], r["seasonally_adjusted"]) for r in doc["rows"]} == {
+        ("newyork", "manufacturing", True)
+    }
+    assert (rows["2026-11-01"]["value"], rows["2026-11-01"]["knowledge_time"]) == (
+        7.8,
+        "2026-11-16T13:30:00Z",
+    )
+    assert (rows["2026-10-01"]["value"], rows["2026-10-01"]["knowledge_time"]) == (
+        25.5,
+        "2026-10-15T12:30:00Z",
+    )
+    assert (rows["2001-07-01"]["release"], rows["2001-07-01"]["release_estimated"]) == (
+        "2001-08-08T03:59:00Z",
+        True,
+    )
+    assert [r.url.path for r in upstream.requests] == [
+        "/survey/empire/empiresurvey_overview",
+        "/medialibrary/media/survey/empire/data/esms_seasonallyadjusted_diffusion.csv",
+    ], "the overview is its own schedule"
+
+
+def test_macro_regional_fed_surveys_dallas_golden(tmp_path, upstream):
+    """The Texas Manufacturing Outlook Survey's general business activity, the Dallas Fed's own
+    workbook: October knowable at 09:30 CT on 10-26."""
+    dallas_routes(upstream)
+    out = call(
+        "macro_regional_fed_surveys",
+        context(tmp_path, now=LATE),
+        bank="dallas",
+        series=["bact"],
+        start="2026-08-01",
+    )
+    doc = check_golden(out, "macro_regional_fed_surveys__dallas")
+    assert [(r["month"], r["value"], r["knowledge_time"]) for r in doc["rows"]] == [
+        ("2026-08-01", 11.6, "2026-08-31T14:30:00Z"),
+        ("2026-09-01", 9.8, "2026-09-28T14:30:00Z"),
+        ("2026-10-01", 13.4, "2026-10-26T14:30:00Z"),
+    ]
+    assert {r["label"] for r in doc["rows"]} == {"bact"}
+
+
+@pytest.mark.parametrize(
+    ("bank", "survey", "jobs"),
+    [
+        (
+            "all",
+            "both",
+            [
+                ("newyork", "manufacturing"),
+                ("richmond", "manufacturing"),
+                ("richmond", "services"),
+                ("kansascity", "manufacturing"),
+                ("kansascity", "services"),
+                ("dallas", "manufacturing"),
+            ],
+        ),
+        ("all", "services", [("richmond", "services"), ("kansascity", "services")]),
+        ("both", "manufacturing", [("richmond", "manufacturing"), ("kansascity", "manufacturing")]),
+        ("dallas", "both", [("dallas", "manufacturing")]),
+    ],
+)
+def test_a_request_names_the_surveys_marketlens_data_collects(bank, survey, jobs):
+    from marketlens_mcp.providers.data.tools.macro import regional_jobs
+
+    assert regional_jobs(bank, survey) == jobs
+
+
+def test_a_survey_the_bank_does_not_publish_is_refused(tmp_path):
+    err = refused("macro_regional_fed_surveys", context(tmp_path), bank="newyork", survey="services")
+    assert err.code == "invalid_arguments" and "manufacturing only" in err.message
 
 
 # --- credit_trace_aggregates -----------------------------------------------------------------------

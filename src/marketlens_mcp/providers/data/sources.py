@@ -135,7 +135,7 @@ SOURCES: tuple[SourceKey, ...] = (
     SourceKey("mof", "Japan's Ministry of Finance", "macro", tools=("macro_jgb_yields",)),
     SourceKey(
         "regionalfed",
-        "The Richmond and Kansas City Feds",
+        "The New York, Richmond, Kansas City and Dallas Feds",
         "macro",
         tools=("macro_regional_fed_surveys",),
     ),

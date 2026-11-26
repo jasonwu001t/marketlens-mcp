@@ -126,17 +126,18 @@ class CentralBankObservation(CanonicalModel):
 
 
 class RegionalSurveyIndex(CanonicalModel):
-    """One Richmond or Kansas City Fed business survey index for one month."""
+    """One New York, Richmond, Kansas City or Dallas Fed business survey index for one month."""
 
     schema_name: ClassVar[str] = "marketlens.RegionalSurveyIndex"
     time_column: ClassVar[str | None] = "month"
     group_column: ClassVar[str | None] = "series"
     value_columns: ClassVar[tuple[str, ...]] = ("value",)
 
-    bank: Literal["richmond", "kansascity"]
+    bank: Literal["richmond", "kansascity", "newyork", "dallas"]
     survey: Literal["manufacturing", "services"]
     series: str = Field(
-        description="Richmond's column name (sa_mfg_composite) or index_heading (Kansas City)"
+        description="The bank's column name (Richmond's sa_mfg_composite, New York's GACDISA, Dallas's bact) "
+        "or index_heading (Kansas City)"
     )
     label: str = Field(description="The index as the bank's workbook words it")
     seasonally_adjusted: bool

@@ -1,0 +1,86 @@
+{
+ "absent": {},
+ "model": "marketlens.RegionalSurveyIndex",
+ "notes": [],
+ "offload": "auto",
+ "pagination": null,
+ "provenance": {
+  "as_of": null,
+  "authority": [
+   "official"
+  ],
+  "cached": false,
+  "collected_at": "synced_by_this_call",
+  "dataset": "regionalfed.surveys",
+  "delay": "unknown",
+  "derived_from": [],
+  "environment": null,
+  "feed": null,
+  "knowledge_time": "2026-10-26T14:30:00Z",
+  "lag_days": 56.0,
+  "operation": null,
+  "pages_fetched": 1,
+  "provider": "regionalfed",
+  "request": {
+   "as_of": null,
+   "bank": "dallas",
+   "end": null,
+   "series": [
+    "bact"
+   ],
+   "start": "2026-08-01",
+   "survey": "both"
+  },
+  "route": "omni regionalfed.surveys <- the New York, Richmond, Kansas City and Dallas Feds' survey data files and release schedules (linked from their survey pages)",
+  "schema_version": "1.1.0",
+  "stale": null,
+  "truncated": false,
+  "truncation_note": null,
+  "upstream_request_id": null
+ },
+ "risk": null,
+ "rows": [
+  {
+   "absent": null,
+   "bank": "dallas",
+   "knowledge_time": "2026-08-31T14:30:00Z",
+   "label": "bact",
+   "month": "2026-08-01",
+   "release": "2026-08-31T14:30:00Z",
+   "release_estimated": false,
+   "seasonally_adjusted": true,
+   "series": "bact",
+   "survey": "manufacturing",
+   "unit": "diffusion_index",
+   "value": 11.6
+  },
+  {
+   "absent": null,
+   "bank": "dallas",
+   "knowledge_time": "2026-09-28T14:30:00Z",
+   "label": "bact",
+   "month": "2026-09-01",
+   "release": "2026-09-28T14:30:00Z",
+   "release_estimated": false,
+   "seasonally_adjusted": true,
+   "series": "bact",
+   "survey": "manufacturing",
+   "unit": "diffusion_index",
+   "value": 9.8
+  },
+  {
+   "absent": null,
+   "bank": "dallas",
+   "knowledge_time": "2026-10-26T14:30:00Z",
+   "label": "bact",
+   "month": "2026-10-01",
+   "release": "2026-10-26T14:30:00Z",
+   "release_estimated": false,
+   "seasonally_adjusted": true,
+   "series": "bact",
+   "survey": "manufacturing",
+   "unit": "diffusion_index",
+   "value": 13.4
+  }
+ ]
+}

@@ -13,7 +13,8 @@ MACRO = CapabilitySpec(
     "Economic data",
     "FRED/ALFRED, BLS and BEA series with vintages and as-of reads (CPI, the unemployment rate, "
     "payrolls, GDP, ...), BLS release schedules and the series catalogue; US trade by commodity and "
-    "partner (Census), Bank of Japan and Bank of England series, JGB yields (Ministry of Finance), the Richmond and Kansas City Fed "
+    "partner (Census), Bank of Japan and Bank of England series, JGB yields (Ministry of Finance), the New York, "
+    "Richmond, Kansas City and Dallas Fed "
     f"surveys, FINRA's TRACE bond market aggregates and the TAIEX (Taiwan Stock Exchange). {NEEDS}",
     True,
 )
