@@ -717,15 +717,17 @@ def test_parity_list_shape():
     # 119 since 2026-11-22: sec.fund_advisers and sec13f.other_managers, second wave; 120 with
     # nasdaq.earnings_forecast (the Nasdaq-100 thesis's consensus), second wave too; 126 with
     # Webull's six vendor datasets (2026-11-24), not planned: one person's subscription; 127
-    # with the Labor Department's weekly claims (2026-11-25), second wave (needs DOL_API_KEY).
-    assert len(parity.PARITY) == 127
+    # with the Labor Department's weekly claims (2026-11-25), second wave (needs DOL_API_KEY);
+    # 131 with the G.17's release dates, the WPSR's schedule and the regional Fed banks' survey
+    # schedules (regionalfed.release_schedule, philfed.mbos_schedule) (2026-11-26), second wave.
+    assert len(parity.PARITY) == 131
     mapped = {k: v for k, v in parity.PARITY.items() if isinstance(v, parity.Mapped)}
     excluded = {k: v for k, v in parity.PARITY.items() if isinstance(v, parity.Excluded)}
-    assert (len(mapped), len(excluded)) == (57, 70)
+    assert (len(mapped), len(excluded)) == (57, 74)
     kinds = [v.kind for v in excluded.values()]
     assert {k: kinds.count(k) for k in set(kinds)} == {
         "covered": 8,
-        "second_wave": 45,
+        "second_wave": 49,
         "not_planned": 15,
         "internal": 2,
     }
