@@ -20,7 +20,7 @@
   },
   "$id": "urn:marketlens:schema:1:marketlens.RegionalSurveyIndex",
   "additionalProperties": false,
-  "description": "One Richmond or Kansas City Fed business survey index for one month.",
+  "description": "One New York, Richmond, Kansas City or Dallas Fed business survey index for one month.",
   "properties": {
     "absent": {
       "anyOf": [
@@ -41,7 +41,9 @@
     "bank": {
       "enum": [
         "richmond",
-        "kansascity"
+        "kansascity",
+        "newyork",
+        "dallas"
       ],
       "title": "Bank",
       "type": "string"
@@ -82,7 +84,7 @@
       "type": "boolean"
     },
     "series": {
-      "description": "Richmond's column name (sa_mfg_composite) or index_heading (Kansas City)",
+      "description": "The bank's column name (Richmond's sa_mfg_composite, New York's GACDISA, Dallas's bact) or index_heading (Kansas City)",
       "title": "Series",
       "type": "string"
     },

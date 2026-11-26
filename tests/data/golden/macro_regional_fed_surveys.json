@@ -32,7 +32,7 @@
    "start": null,
    "survey": "manufacturing"
   },
-  "route": "omni regionalfed.surveys <- the Richmond and Kansas City Feds' survey workbooks and release schedules (linked from their survey pages)",
+  "route": "omni regionalfed.surveys <- the New York, Richmond, Kansas City and Dallas Feds' survey data files and release schedules (linked from their survey pages)",
   "schema_version": "1.1.0",
   "stale": null,
   "truncated": false,
