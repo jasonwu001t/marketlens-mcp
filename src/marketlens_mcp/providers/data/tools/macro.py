@@ -602,6 +602,18 @@ async def macro_bea_table(ctx: ToolContext, args: BeaInputs) -> ToolOutput:
     return common.output(ctx, s, EconomicObservation, rows, prov, notes=notes)
 
 
+def _listed(session: common.Session, dataset_id: str, as_of):
+    """A BLS schedule as BLS lists it at ``as_of``: marketlens-data's reader of a release calendar
+    (``omni.releases.calendar_rows``), which leaves out a release a newer capture dropped, cancelled or
+    moved to another period (October 2025's CPI, cancelled in the 2025 lapse in appropriations, kept
+    its old date before); every stored row's newest vintage with a marketlens-data that has no such
+    reader."""
+    reader = getattr(session.module("omni.releases"), "calendar_rows", None)
+    if reader is None:
+        return session.read(dataset_id, as_of=as_of)
+    return reader(dataset_id, as_of=as_of)
+
+
 async def macro_release_schedule(ctx: ToolContext, args: ScheduleInputs) -> ToolOutput:
     from datetime import timedelta
 
@@ -621,7 +633,7 @@ async def macro_release_schedule(ctx: ToolContext, args: ScheduleInputs) -> Tool
         out = []
         for release in releases:
             session.refresh(SCHEDULES[release], {})
-            out.append((release, F.records(session.read(SCHEDULES[release], as_of=as_of))))
+            out.append((release, F.records(_listed(session, SCHEDULES[release], as_of))))
         return out
 
     found, session = await common.run(ctx, s, work, source="bls")
@@ -1090,7 +1102,8 @@ SPECS: tuple[ToolSpec, ...] = (
         title="BLS release schedule",
         description=common.describe(
             "When BLS publishes the CPI and the Employment Situation (jobs report): reference month, release "
-            "date and the official release instant in UTC, from BLS's own schedule pages. Keyless.",
+            "date and the official release instant in UTC, from BLS's own schedule pages; a release BLS has "
+            "since dropped from them (cancelled, or moved to another month) is left out. Keyless.",
             "forward_known",
             stored=False,
         ),

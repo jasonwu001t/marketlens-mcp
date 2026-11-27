@@ -7,7 +7,7 @@ payloads, and the New York and Dallas Feds' own trimmed pages and files."""
 from __future__ import annotations
 
 import json
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 
 import pytest
 from data_harness import FIXTURES, KEYS, call, check_golden, context, refused
@@ -445,6 +445,47 @@ def test_macro_release_schedule_golden(tmp_path, upstream, frozen_clock):
     )
     only = call("macro_release_schedule", context(tmp_path), releases=["cpi"], start="2026-10-01")
     assert [r.start_date.isoformat() for r in only.rows] == ["2026-10-15", "2026-11-13"]
+
+
+def test_macro_release_schedule_leaves_out_a_release_bls_dropped(tmp_path, omni_store):
+    """TEST DATA in the stored shape, modelled on the 2025 lapse in appropriations: BLS's schedule
+    of 2025-09-30 listed October's CPI at 2025-11-13, the one of 2025-11-21 no longer did (cancelled)
+    and moved November's to 12-18. marketlens-data's reader of the calendar
+    (``omni.releases.calendar_rows``) leaves the dropped release out; a store read alone kept it."""
+    from omni.sources.base import resolve
+
+    def row(ref, at, known):
+        return {
+            "source": "bls",
+            "reference_month": ref,
+            "start_date": at.date(),
+            "end_date": at.date(),
+            "scheduled_at": at,
+            "event_time": at,
+            "knowledge_time": known,
+            "ingested_at": known,
+        }
+
+    before, after = datetime(2025, 9, 30, 14, tzinfo=UTC), datetime(2025, 11, 21, 15, tzinfo=UTC)
+    october, november = datetime(2025, 11, 13, 13, 30, tzinfo=UTC), datetime(2025, 12, 18, 13, 30, tzinfo=UTC)
+    rows = [
+        row(date(2025, 10, 1), october, before),
+        row(date(2025, 11, 1), datetime(2025, 12, 10, 13, 30, tzinfo=UTC), before),
+        row(date(2025, 11, 1), november, after),
+        row(date(2025, 12, 1), datetime(2026, 1, 13, 13, 30, tzinfo=UTC), after),
+    ]
+    omni_store.write(resolve("bls.cpi_schedule")[1], "bls.cpi_schedule", rows)
+    out = call(
+        "macro_release_schedule",
+        context(tmp_path, settings={"mode": "local"}),
+        releases=["cpi"],
+        start="2025-11-01",
+        end="2026-01-31",
+    )
+    assert [(r.reference_month.isoformat(), r.start_date.isoformat()) for r in out.rows] == [
+        ("2025-11-01", "2025-12-18"),
+        ("2025-12-01", "2026-01-13"),
+    ]
 
 
 # --- macro_census_trade --------------------------------------------------------------------------
