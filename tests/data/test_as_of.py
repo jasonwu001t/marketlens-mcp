@@ -156,6 +156,23 @@ def reads(monkeypatch):
 
     spy("query")
     spy("read_raw")
+    # A release calendar is read through marketlens-data's own reader (batch 18: it leaves out a release a
+    # newer capture dropped), which reads the store directly; the tool hands it the as_of, so record it there.
+    # Only a tool's own call counts: marketlens-data calls the reader inside its reads too, which the two
+    # spies above already see (or, as before, do not).
+    import sys
+
+    import omni.releases as releases
+
+    real_calendar_rows = getattr(releases, "calendar_rows", None)
+    if real_calendar_rows is not None:
+
+        def calendar_rows(calendar, *args, **kwargs):
+            if sys._getframe(1).f_globals.get("__name__", "").startswith("marketlens_mcp"):
+                seen.append((calendar, kwargs.get("as_of", "as_of not passed")))
+            return real_calendar_rows(calendar, *args, **kwargs)
+
+        monkeypatch.setattr(releases, "calendar_rows", calendar_rows)
     return seen
 
 
